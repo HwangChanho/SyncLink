@@ -1,0 +1,490 @@
+/**
+ * WeekView — 7-day time-grid calendar view.
+ *
+ * Layout (vertical scroll):
+ *  ┌────────────────────────────────────────┐
+ *  │ [Day headers: Sun Mon Tue ... Sat]     │
+ *  ├────────────────────────────────────────┤
+ *  │ [All-day strip: chip chip chip...]     │  ← shown when allDay events exist
+ *  ├──────┬─────────────────────────────────┤
+ *  │ 00   │  Day columns (7 columns)        │
+ *  │ 01   │  EventBlocks positioned by time │
+ *  │ ...  │                                 │
+ *  │ 23   │                                 │
+ *  └──────┴─────────────────────────────────┘
+ *
+ * Overlap handling: events that overlap in time are rendered side-by-side
+ * using a greedy column-assignment algorithm.
+ *
+ * All-day events: rendered as full-width chip rows in the all-day strip above
+ * the time grid, so they never occlude timed events.
+ */
+
+import { useRef } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+} from 'react-native';
+import type { EventSummary } from '@/types';
+import { EventBlock } from './EventBlock';
+import { light as colors } from '@/constants/colors';
+import { spacing, radius } from '@/constants/spacing';
+import { textStyles } from '@/constants/typography';
+
+// ─── Layout constants ─────────────────────────────────────────────────────────
+
+/** Pixel height per hour in the time grid. */
+const HOUR_HEIGHT = 60;
+/** Total pixel height of the 24-hour grid. */
+const TOTAL_HEIGHT = HOUR_HEIGHT * 24;
+/** Width of the hour-label column on the left. */
+const TIME_COL_WIDTH = 44;
+/** Height of each all-day event chip row in the strip. */
+const ALL_DAY_CHIP_HEIGHT = 20;
+/** Vertical padding inside the all-day strip. */
+const ALL_DAY_STRIP_V_PAD = 4;
+
+// ─── Types ─────────────────────────────────────────────────────────────────
+
+interface WeekViewProps {
+  /**
+   * Any date within the target week. The view always shows Sun–Sat of
+   * the week that contains this date.
+   */
+  selectedDate: Date;
+  /**
+   * All fetched events indexed by ISO date key (YYYY-MM-DD).
+   * Pass eventStore.eventsByDate.
+   */
+  eventsByDate: Record<string, EventSummary[]>;
+  /** Called when the user taps an event block. */
+  onEventPress: (event: EventSummary) => void;
+  /** Called when the user taps a day header to drill into DayView. */
+  onDateSelect: (date: Date) => void;
+}
+
+// ─── Date utilities ────────────────────────────────────────────────────────
+
+/** Returns the ISO date key (YYYY-MM-DD) for a Date. */
+function toDateKey(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/** True if two dates share the same calendar day. */
+function isSameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+/**
+ * Returns the 7 dates (Sun–Sat) for the week containing `date`.
+ * Week starts on Sunday (index 0).
+ */
+function getWeekDays(date: Date): Date[] {
+  const dow = date.getDay(); // 0 = Sunday
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(date);
+    d.setDate(date.getDate() - dow + i);
+    // Reset time component to midnight to avoid DST edge cases
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
+}
+
+// ─── Overlap layout ────────────────────────────────────────────────────────
+
+interface LayoutEvent {
+  event: EventSummary;
+  topOffset: number;
+  height: number;
+  widthFraction: number;
+  leftFraction: number;
+}
+
+/**
+ * Computes positions for a list of events within a single day column.
+ * Overlapping events are split into side-by-side sub-columns.
+ *
+ * Algorithm (greedy):
+ *  1. Sort by start time.
+ *  2. Maintain a list of "active columns" tracking the latest end time.
+ *  3. Assign each event to the first column whose latest end ≤ event start.
+ *  4. After all events are assigned, normalize widths based on max column count.
+ */
+function computeLayout(events: EventSummary[]): LayoutEvent[] {
+  if (events.length === 0) return [];
+
+  // Sort by start time; on tie, longer events first
+  const sorted = [...events].sort((a, b) => {
+    const diff = a.startAt.getTime() - b.startAt.getTime();
+    return diff !== 0 ? diff : b.endAt.getTime() - a.endAt.getTime();
+  });
+
+  // Each entry: { event, colIndex, colCount placeholder }
+  const assignments: { event: EventSummary; colIndex: number }[] = [];
+  // Track the end time of the last event assigned to each sub-column
+  const colEndTimes: number[] = [];
+
+  for (const evt of sorted) {
+    const startMs = evt.startAt.getTime();
+    // Find the first available sub-column
+    let assigned = false;
+    for (let c = 0; c < colEndTimes.length; c++) {
+      if ((colEndTimes[c] ?? 0) <= startMs) {
+        assignments.push({ event: evt, colIndex: c });
+        colEndTimes[c] = evt.endAt.getTime();
+        assigned = true;
+        break;
+      }
+    }
+    if (!assigned) {
+      assignments.push({ event: evt, colIndex: colEndTimes.length });
+      colEndTimes.push(evt.endAt.getTime());
+    }
+  }
+
+  const totalCols = colEndTimes.length;
+
+  return assignments.map(({ event, colIndex }) => {
+    // Convert startAt time-of-day to pixel offset
+    const startHour = event.startAt.getHours() + event.startAt.getMinutes() / 60;
+    const endHour = event.endAt.getHours() + event.endAt.getMinutes() / 60;
+    const durationHours = Math.max(endHour - startHour, 0.25); // min 15 min
+
+    return {
+      event,
+      topOffset: startHour * HOUR_HEIGHT,
+      height: durationHours * HOUR_HEIGHT,
+      widthFraction: 1 / totalCols,
+      leftFraction: colIndex / totalCols,
+    };
+  });
+}
+
+// ─── Hour labels ───────────────────────────────────────────────────────────
+
+const DOW_LABELS = ['일', '월', '화', '수', '목', '금', '토'] as const;
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+/**
+ * 7-day time-grid view showing events as positioned blocks.
+ * Scrolls vertically; day headers stay fixed at the top.
+ */
+export function WeekView({
+  selectedDate,
+  eventsByDate,
+  onEventPress,
+  onDateSelect,
+}: WeekViewProps) {
+  const weekDays = getWeekDays(selectedDate);
+  const today = new Date();
+  const scrollRef = useRef<ScrollView>(null);
+
+  // Scroll to 8 AM on mount so mornings are visible by default
+  const handleLayout = () => {
+    scrollRef.current?.scrollTo({ y: HOUR_HEIGHT * 7, animated: false });
+  };
+
+  // Determine if any day this week has all-day events (controls strip visibility)
+  const hasAllDayEvents = weekDays.some((day) =>
+    (eventsByDate[toDateKey(day)] ?? []).some((e) => e.allDay),
+  );
+
+  return (
+    <View style={styles.container}>
+      {/* ─── Day header row (fixed) ─── */}
+      <View style={styles.dayHeaderRow}>
+        {/* Spacer aligning with the time label column */}
+        <View style={{ width: TIME_COL_WIDTH }} />
+        {weekDays.map((day, idx) => {
+          const isToday = isSameDay(day, today);
+          const isSelected = isSameDay(day, selectedDate);
+          return (
+            <TouchableOpacity
+              key={toDateKey(day)}
+              style={styles.dayHeaderCell}
+              onPress={() => onDateSelect(day)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.dowLabel, isToday && styles.activeDowLabel]}>
+                {DOW_LABELS[idx]}
+              </Text>
+              <View style={[
+                styles.dayNumberWrap,
+                isToday && styles.todayCircle,
+                isSelected && !isToday && styles.selectedCircle,
+              ]}>
+                <Text style={[
+                  styles.dayNumber,
+                  isToday && styles.todayNumber,
+                  isSelected && !isToday && styles.selectedNumber,
+                ]}>
+                  {day.getDate()}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* ─── All-day strip (fixed, shown only when all-day events exist) ─── */}
+      {hasAllDayEvents && (
+        <View style={styles.allDayStrip}>
+          {/* Spacer aligning with the time label column */}
+          <View style={{ width: TIME_COL_WIDTH }} />
+          {weekDays.map((day) => {
+            const dateKey = toDateKey(day);
+            const allDayEvts = (eventsByDate[dateKey] ?? []).filter((e) => e.allDay);
+            return (
+              <View key={dateKey} style={styles.allDayCol}>
+                {allDayEvts.map((evt) => (
+                  <TouchableOpacity
+                    key={evt.id}
+                    onPress={() => onEventPress(evt)}
+                    activeOpacity={0.8}
+                    style={[styles.allDayChip, { backgroundColor: evt.color ?? colors.primary }]}
+                  >
+                    {/* Full-width chip label; truncated if title is too long */}
+                    <Text style={styles.allDayChipText} numberOfLines={1}>
+                      {evt.title}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            );
+          })}
+        </View>
+      )}
+
+      {/* ─── Scrollable time grid ─── */}
+      <ScrollView
+        ref={scrollRef}
+        onLayout={handleLayout}
+        showsVerticalScrollIndicator={false}
+        style={styles.scrollView}
+      >
+        <View style={[styles.gridRow, { height: TOTAL_HEIGHT }]}>
+          {/* Hour label column */}
+          <View style={[styles.timeCol, { height: TOTAL_HEIGHT }]}>
+            {HOURS.map((h) => (
+              <View key={h} style={[styles.hourLabelWrap, { top: h * HOUR_HEIGHT - 8 }]}>
+                <Text style={styles.hourLabel}>
+                  {h === 0 ? '' : `${h}:00`}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Event grid area */}
+          <View style={styles.eventsArea}>
+            {/* Hour separator lines */}
+            {HOURS.map((h) => (
+              <View
+                key={h}
+                style={[
+                  styles.hourLine,
+                  { top: h * HOUR_HEIGHT },
+                  h % 6 === 0 && styles.majorHourLine,
+                ]}
+              />
+            ))}
+
+            {/* Vertical column separators */}
+            {weekDays.map((_, idx) => (
+              <View
+                key={idx}
+                style={[
+                  styles.colSeparator,
+                  { left: `${((idx + 1) / 7) * 100}%` },
+                ]}
+              />
+            ))}
+
+            {/* Events for each day column — allDay events go to the strip above */}
+            {weekDays.map((day, idx) => {
+              const dateKey = toDateKey(day);
+              const dayEvents = eventsByDate[dateKey] ?? [];
+              // Exclude allDay events; those are rendered in the all-day strip
+              const timedEvents = dayEvents.filter((e) => !e.allDay);
+              const layouts = computeLayout(timedEvents);
+
+              return (
+                <View
+                  key={dateKey}
+                  style={[
+                    styles.dayCol,
+                    {
+                      left: `${(idx / 7) * 100}%`,
+                      width: `${100 / 7}%`,
+                      height: TOTAL_HEIGHT,
+                    },
+                  ]}
+                >
+                  {layouts.map((lay) => (
+                    <EventBlock
+                      key={lay.event.id}
+                      event={lay.event}
+                      topOffset={lay.topOffset}
+                      height={lay.height}
+                      widthFraction={lay.widthFraction}
+                      leftFraction={lay.leftFraction}
+                      onPress={onEventPress}
+                    />
+                  ))}
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const DAY_HEADER_HEIGHT = 56;
+const DATE_CIRCLE = 28;
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  dayHeaderRow: {
+    flexDirection: 'row',
+    height: DAY_HEADER_HEIGHT,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  dayHeaderCell: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  dowLabel: {
+    ...textStyles.labelSm,
+    color: colors.textSecondary,
+  },
+  activeDowLabel: {
+    color: colors.primary,
+  },
+  dayNumberWrap: {
+    width: DATE_CIRCLE,
+    height: DATE_CIRCLE,
+    borderRadius: DATE_CIRCLE / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  todayCircle: {
+    backgroundColor: colors.primary,
+  },
+  selectedCircle: {
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+  },
+  dayNumber: {
+    ...textStyles.labelLg,
+    color: colors.textPrimary,
+  },
+  todayNumber: {
+    color: colors.textInverse,
+    fontWeight: '700',
+  },
+  selectedNumber: {
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  gridRow: {
+    flexDirection: 'row',
+  },
+  timeCol: {
+    width: TIME_COL_WIDTH,
+    position: 'relative',
+  },
+  hourLabelWrap: {
+    position: 'absolute',
+    right: spacing[2],
+    width: TIME_COL_WIDTH - spacing[2],
+    alignItems: 'flex-end',
+  },
+  hourLabel: {
+    ...textStyles.caption,
+    color: colors.textTertiary,
+  },
+  eventsArea: {
+    flex: 1,
+    position: 'relative',
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: colors.border,
+  },
+  hourLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+  },
+  majorHourLine: {
+    backgroundColor: colors.borderStrong,
+  },
+  colSeparator: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+  },
+  dayCol: {
+    position: 'absolute',
+    top: 0,
+    paddingHorizontal: 1,
+    borderRadius: radius.sm,
+  },
+
+  // ── All-day strip ──────────────────────────────────────────────────────────
+
+  /** Horizontal row between day headers and the time grid. */
+  allDayStrip: {
+    flexDirection: 'row',
+    paddingVertical: ALL_DAY_STRIP_V_PAD,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  /** Per-day column inside the strip; flex: 1 so all 7 columns share equal width. */
+  allDayCol: {
+    flex: 1,
+    gap: 2,
+    paddingHorizontal: 1,
+  },
+  /** Full-width colored chip representing one all-day event. */
+  allDayChip: {
+    height: ALL_DAY_CHIP_HEIGHT,
+    borderRadius: radius.sm,
+    justifyContent: 'center',
+    paddingHorizontal: spacing[1],
+  },
+  /** White text inside the chip, bold for readability on colored backgrounds. */
+  allDayChipText: {
+    ...textStyles.caption,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+});

@@ -1,0 +1,543 @@
+/**
+ * Event creation screen.
+ *
+ * Form fields:
+ *  - Title (required)
+ *  - All-day toggle
+ *  - Start date + time (pre-filled from ?date= query param)
+ *  - End date + time (defaults to start + 1 hour)
+ *  - Repeat type selector
+ *  - Location (optional)
+ *  - Description (optional)
+ *  - Space sharing toggles (one per space the user belongs to)
+ *
+ * On save: calls createEvent → upsertEvent in store → back to calendar.
+ *
+ * Route: /event/create?date=YYYY-MM-DD
+ */
+
+import { useCallback, useState } from 'react';
+import {
+  View, Text, TextInput, ScrollView, Switch, Pressable,
+  ActivityIndicator, Alert, StyleSheet,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import type { RepeatType } from '@/types';
+import { createEvent } from '@/services/eventService';
+import { useEventStore } from '@/stores/eventStore';
+import { useSpaceStore } from '@/stores/spaceStore';
+import { light as colors } from '@/constants/colors';
+import { spacing, radius } from '@/constants/spacing';
+import { textStyles } from '@/constants/typography';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const REPEAT_OPTIONS: { value: RepeatType; label: string }[] = [
+  { value: 'none',    label: '반복 없음' },
+  { value: 'daily',   label: '매일' },
+  { value: 'weekly',  label: '매주' },
+  { value: 'monthly', label: '매월' },
+  { value: 'yearly',  label: '매년' },
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Parse a YYYY-MM-DD string into a local-midnight Date.
+ * Falls back to today if the string is invalid.
+ */
+function parseDateParam(dateStr: string | undefined): Date {
+  if (dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    if (y && m && d) {
+      const date = new Date(y, m - 1, d);
+      if (!isNaN(date.getTime())) return date;
+    }
+  }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today;
+}
+
+/**
+ * Format a Date to a display string for the date/time fields.
+ * allDay=true → "YYYY년 M월 D일"
+ * allDay=false → "YYYY년 M월 D일  HH:MM"
+ */
+function formatField(date: Date, allDay: boolean): string {
+  const y = date.getFullYear();
+  const m = date.getMonth() + 1;
+  const d = date.getDate();
+  if (allDay) return `${y}년 ${m}월 ${d}일`;
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  return `${y}년 ${m}월 ${d}일  ${hh}:${mm}`;
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+/** A labelled form row with a right-side content area. */
+function FormRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={rowStyles.row}>
+      <Text style={rowStyles.label}>{label}</Text>
+      <View style={rowStyles.value}>{children}</View>
+    </View>
+  );
+}
+
+const rowStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 52,
+    paddingVertical: spacing[2],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  label: {
+    ...textStyles.label,
+    color: colors.textSecondary,
+    width: 72,
+    flexShrink: 0,
+  },
+  value: {
+    flex: 1,
+    marginLeft: spacing[3],
+  },
+});
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+export default function EventCreateScreen() {
+  const { date: dateParam } = useLocalSearchParams<{ date?: string }>();
+  const router = useRouter();
+  const { upsertEvent } = useEventStore();
+  const { spaces } = useSpaceStore();
+
+  // ── Form state ─────────────────────────────────────────────────────────────
+
+  const [title, setTitle] = useState('');
+  const [allDay, setAllDay] = useState(false);
+
+  /** Start date — pre-filled from route param. */
+  const [startAt, setStartAt] = useState<Date>(() => {
+    const base = parseDateParam(dateParam);
+    base.setHours(9, 0, 0, 0);
+    return base;
+  });
+
+  /** End date — defaults to start + 1 hour. */
+  const [endAt, setEndAt] = useState<Date>(() => {
+    const base = parseDateParam(dateParam);
+    base.setHours(10, 0, 0, 0);
+    return base;
+  });
+
+  const [repeatType, setRepeatType] = useState<RepeatType>('none');
+  const [location, setLocation] = useState('');
+  const [description, setDescription] = useState('');
+  /** IDs of spaces the user has chosen to share this event to. */
+  const [shareSpaceIds, setShareSpaceIds] = useState<string[]>([]);
+
+  const [isSaving, setIsSaving] = useState(false);
+
+  // ── Handlers ───────────────────────────────────────────────────────────────
+
+  /** Toggle a space in the sharing list. */
+  const toggleSpace = useCallback((spaceId: string) => {
+    setShareSpaceIds((prev) =>
+      prev.includes(spaceId)
+        ? prev.filter((id) => id !== spaceId)
+        : [...prev, spaceId],
+    );
+  }, []);
+
+  /**
+   * Adjust startAt hours/minutes only (keeps the date).
+   * This is a simplified inline time adjuster (+/- 30 min).
+   * A full date-time picker would require a native modal — deferred to TASK-302.
+   */
+  const shiftTime = useCallback((
+    field: 'start' | 'end',
+    deltaMinutes: number,
+  ) => {
+    const setter = field === 'start' ? setStartAt : setEndAt;
+    setter((prev) => {
+      const next = new Date(prev);
+      next.setMinutes(next.getMinutes() + deltaMinutes);
+      return next;
+    });
+  }, []);
+
+  /** Validate and submit the form. */
+  const handleSave = useCallback(async () => {
+    if (!title.trim()) {
+      Alert.alert('입력 오류', '제목을 입력해 주세요.');
+      return;
+    }
+    if (!allDay && endAt <= startAt) {
+      Alert.alert('입력 오류', '종료 시간이 시작 시간보다 늦어야 합니다.');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // exactOptionalPropertyTypes: only spread optional fields when they have a value
+      const newEvent = await createEvent({
+        title: title.trim(),
+        allDay,
+        startAt,
+        endAt: allDay ? new Date(startAt.getFullYear(), startAt.getMonth(), startAt.getDate(), 23, 59, 59) : endAt,
+        repeatType,
+        ...(location.trim()     ? { location:    location.trim() }     : {}),
+        ...(description.trim()  ? { description: description.trim() }  : {}),
+        shareToSpaceIds: shareSpaceIds,
+      });
+
+      // Optimistically add to store so calendar reflects the new event immediately
+      upsertEvent({
+        id: newEvent.id,
+        title: newEvent.title,
+        startAt: newEvent.startAt,
+        endAt: newEvent.endAt,
+        allDay: newEvent.allDay,
+        color: newEvent.color ?? colors.primary,
+        isOwn: true,
+      });
+
+      router.back();
+    } catch (err) {
+      Alert.alert('저장 실패', err instanceof Error ? err.message : '일정을 저장하지 못했습니다.');
+      setIsSaving(false);
+    }
+  }, [
+    title, allDay, startAt, endAt, repeatType,
+    location, description, shareSpaceIds,
+    upsertEvent, router,
+  ]);
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
+  return (
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      {/* Header */}
+      <View style={styles.headerBar}>
+        <Pressable style={styles.headerButton} onPress={() => router.back()}>
+          <Text style={styles.headerCancel}>취소</Text>
+        </Pressable>
+        <Text style={styles.headerTitle}>새 일정</Text>
+        <Pressable
+          style={[styles.headerButton, isSaving && styles.headerButtonDisabled]}
+          onPress={() => void handleSave()}
+          disabled={isSaving}
+        >
+          {isSaving ? (
+            <ActivityIndicator size="small" color={colors.primary} />
+          ) : (
+            <Text style={styles.headerSave}>저장</Text>
+          )}
+        </Pressable>
+      </View>
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Title */}
+        <TextInput
+          style={styles.titleInput}
+          placeholder="제목"
+          placeholderTextColor={colors.textSecondary}
+          value={title}
+          onChangeText={setTitle}
+          autoFocus
+          returnKeyType="done"
+        />
+
+        <View style={styles.form}>
+          {/* All-day toggle */}
+          <FormRow label="종일">
+            <Switch
+              value={allDay}
+              onValueChange={setAllDay}
+              trackColor={{ false: colors.border, true: colors.primaryLight }}
+              thumbColor={allDay ? colors.primary : colors.surface}
+            />
+          </FormRow>
+
+          {/* Start time */}
+          <FormRow label="시작">
+            <View style={styles.timeRow}>
+              <Pressable
+                style={styles.timeChip}
+                onPress={() => shiftTime('start', -30)}
+              >
+                <Ionicons name="remove" size={16} color={colors.textSecondary} />
+              </Pressable>
+              <Text style={styles.timeText}>{formatField(startAt, allDay)}</Text>
+              <Pressable
+                style={styles.timeChip}
+                onPress={() => shiftTime('start', 30)}
+              >
+                <Ionicons name="add" size={16} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+          </FormRow>
+
+          {/* End time */}
+          {!allDay && (
+            <FormRow label="종료">
+              <View style={styles.timeRow}>
+                <Pressable
+                  style={styles.timeChip}
+                  onPress={() => shiftTime('end', -30)}
+                >
+                  <Ionicons name="remove" size={16} color={colors.textSecondary} />
+                </Pressable>
+                <Text style={styles.timeText}>{formatField(endAt, false)}</Text>
+                <Pressable
+                  style={styles.timeChip}
+                  onPress={() => shiftTime('end', 30)}
+                >
+                  <Ionicons name="add" size={16} color={colors.textSecondary} />
+                </Pressable>
+              </View>
+            </FormRow>
+          )}
+
+          {/* Repeat */}
+          <FormRow label="반복">
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={styles.chipRow}>
+                {REPEAT_OPTIONS.map((opt) => (
+                  <Pressable
+                    key={opt.value}
+                    style={[
+                      styles.repeatChip,
+                      repeatType === opt.value && styles.repeatChipSelected,
+                    ]}
+                    onPress={() => setRepeatType(opt.value)}
+                  >
+                    <Text
+                      style={[
+                        styles.repeatChipText,
+                        repeatType === opt.value && styles.repeatChipTextSelected,
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </ScrollView>
+          </FormRow>
+
+          {/* Location */}
+          <FormRow label="위치">
+            <TextInput
+              style={styles.inlineInput}
+              placeholder="위치 추가 (선택)"
+              placeholderTextColor={colors.textSecondary}
+              value={location}
+              onChangeText={setLocation}
+              returnKeyType="done"
+            />
+          </FormRow>
+
+          {/* Description */}
+          <FormRow label="메모">
+            <TextInput
+              style={[styles.inlineInput, styles.multilineInput]}
+              placeholder="메모 추가 (선택)"
+              placeholderTextColor={colors.textSecondary}
+              value={description}
+              onChangeText={setDescription}
+              multiline
+              returnKeyType="default"
+            />
+          </FormRow>
+
+          {/* Space sharing */}
+          {spaces.length > 0 && (
+            <View style={styles.sharingSection}>
+              <Text style={styles.sharingLabel}>공유할 Space</Text>
+              {spaces.map((space) => {
+                const selected = shareSpaceIds.includes(space.id);
+                return (
+                  <Pressable
+                    key={space.id}
+                    style={styles.spaceRow}
+                    onPress={() => toggleSpace(space.id)}
+                  >
+                    <Text style={styles.spaceName}>{space.name}</Text>
+                    <Ionicons
+                      name={selected ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={22}
+                      color={selected ? colors.primary : colors.border}
+                    />
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+
+  // Header
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 56,
+    paddingHorizontal: spacing[4],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  headerButton: {
+    minWidth: 48,
+    alignItems: 'center',
+  },
+  headerButtonDisabled: {
+    opacity: 0.5,
+  },
+  headerTitle: {
+    ...textStyles.labelLg,
+    color: colors.textPrimary,
+    flex: 1,
+    textAlign: 'center',
+  },
+  headerCancel: {
+    ...textStyles.body,
+    color: colors.textSecondary,
+  },
+  headerSave: {
+    ...textStyles.labelLg,
+    color: colors.primary,
+  },
+
+  // Scroll
+  scroll: { flex: 1 },
+  scrollContent: {
+    paddingBottom: spacing[10],
+  },
+
+  // Title input
+  titleInput: {
+    ...textStyles.h3,
+    color: colors.textPrimary,
+    padding: spacing[5],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+
+  // Form rows
+  form: {
+    paddingHorizontal: spacing[5],
+  },
+
+  // Time adjustment row
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+  },
+  timeChip: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.full,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeText: {
+    ...textStyles.body,
+    color: colors.textPrimary,
+    flex: 1,
+    textAlign: 'center',
+  },
+
+  // Repeat chips
+  chipRow: {
+    flexDirection: 'row',
+    gap: spacing[2],
+  },
+  repeatChip: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1],
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  repeatChipSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
+  },
+  repeatChipText: {
+    ...textStyles.labelSm,
+    color: colors.textSecondary,
+  },
+  repeatChipTextSelected: {
+    color: colors.primary,
+  },
+
+  // Inline text input
+  inlineInput: {
+    ...textStyles.body,
+    color: colors.textPrimary,
+    paddingVertical: spacing[1],
+    flex: 1,
+  },
+  multilineInput: {
+    minHeight: 60,
+    textAlignVertical: 'top',
+  },
+
+  // Space sharing
+  sharingSection: {
+    marginTop: spacing[6],
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: spacing[4],
+  },
+  sharingLabel: {
+    ...textStyles.label,
+    color: colors.textSecondary,
+    marginBottom: spacing[3],
+  },
+  spaceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing[3],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  spaceName: {
+    ...textStyles.body,
+    color: colors.textPrimary,
+    flex: 1,
+    marginRight: spacing[2],
+  },
+});

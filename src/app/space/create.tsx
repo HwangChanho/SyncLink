@@ -1,0 +1,317 @@
+/**
+ * Space creation screen.
+ *
+ * Allows the user to create a new Space by providing a name and type.
+ * On success, navigates to the newly created Space's detail screen.
+ *
+ * Accessed via: router.push('/space/create')
+ */
+
+import { useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+import { light as colors } from '@/constants/colors';
+import { spacing, radius, componentHeight } from '@/constants/spacing';
+import { textStyles } from '@/constants/typography';
+import * as spaceService from '@/services/spaceService';
+import { useSpaceStore } from '@/stores/spaceStore';
+import type { SpaceType } from '@/types';
+
+// ─── Space type options ────────────────────────────────────────────────────────
+
+interface SpaceTypeOption {
+  type: SpaceType;
+  label: string;
+  description: string;
+  emoji: string;
+}
+
+const SPACE_TYPE_OPTIONS: SpaceTypeOption[] = [
+  {
+    type: 'couple',
+    label: '커플',
+    description: '연인과 단둘이 (최대 2명)',
+    emoji: '💑',
+  },
+  {
+    type: 'group',
+    label: '그룹',
+    description: '가족, 친구, 팀과 함께',
+    emoji: '👥',
+  },
+];
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function CreateSpaceScreen() {
+  const [name, setName] = useState('');
+  const [selectedType, setSelectedType] = useState<SpaceType>('couple');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const { fetchMySpaces, setActiveSpaceId, setSpaceDetail } = useSpaceStore();
+
+  const handleCreate = async () => {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      Alert.alert('이름 필요', 'Space 이름을 입력해 주세요.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const space = await spaceService.createSpace({
+        name: trimmedName,
+        type: selectedType,
+      });
+
+      // 스토어 캐시 업데이트
+      setSpaceDetail(space);
+      setActiveSpaceId(space.id);
+      // 목록 새로고침 (비동기, 완료 대기 불필요)
+      fetchMySpaces().catch(() => undefined);
+
+      // 생성된 Space 상세 화면으로 이동
+      router.replace(`/space/${space.id}`);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Space 생성에 실패했습니다.';
+      Alert.alert('오류', message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoid}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.cancelButton}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.cancelText}>취소</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>새 Space 만들기</Text>
+          {/* Spacer to center title */}
+          <View style={styles.cancelButton} />
+        </View>
+
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Space name */}
+          <Text style={styles.label}>Space 이름</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="우리만의 공간 이름을 지어주세요"
+            placeholderTextColor={colors.textPlaceholder}
+            value={name}
+            onChangeText={setName}
+            maxLength={30}
+            autoFocus
+            returnKeyType="done"
+            onSubmitEditing={handleCreate}
+          />
+          <Text style={styles.charCount}>{name.length}/30</Text>
+
+          {/* Space type */}
+          <Text style={[styles.label, styles.typeLabel]}>Space 유형</Text>
+          <View style={styles.typeContainer}>
+            {SPACE_TYPE_OPTIONS.map((option) => {
+              const isSelected = selectedType === option.type;
+              return (
+                <TouchableOpacity
+                  key={option.type}
+                  style={[styles.typeCard, isSelected && styles.typeCardSelected]}
+                  onPress={() => setSelectedType(option.type)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.typeEmoji}>{option.emoji}</Text>
+                  <Text
+                    style={[
+                      styles.typeName,
+                      isSelected && styles.typeNameSelected,
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.typeDescription,
+                      isSelected && styles.typeDescriptionSelected,
+                    ]}
+                  >
+                    {option.description}
+                  </Text>
+                  {/* Selection indicator */}
+                  {isSelected && <View style={styles.typeCheckDot} />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Create button */}
+          <TouchableOpacity
+            style={[
+              styles.createButton,
+              (isLoading || !name.trim()) && styles.createButtonDisabled,
+            ]}
+            onPress={handleCreate}
+            disabled={isLoading || !name.trim()}
+            activeOpacity={0.8}
+          >
+            {isLoading ? (
+              <ActivityIndicator color={colors.textInverse} />
+            ) : (
+              <Text style={styles.createButtonText}>Space 만들기</Text>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  keyboardAvoid: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  headerTitle: {
+    ...textStyles.h4,
+    color: colors.textPrimary,
+  },
+  cancelButton: {
+    minWidth: 44,
+  },
+  cancelText: {
+    ...textStyles.body,
+    color: colors.primary,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: spacing[4],
+    paddingTop: spacing[6],
+  },
+  label: {
+    ...textStyles.label,
+    color: colors.textSecondary,
+    marginBottom: spacing[2],
+  },
+  typeLabel: {
+    marginTop: spacing[6],
+  },
+  input: {
+    height: componentHeight.inputField,
+    backgroundColor: colors.inputBackground,
+    borderWidth: 1,
+    borderColor: colors.inputBorder,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing[4],
+    ...textStyles.body,
+    color: colors.textPrimary,
+  },
+  charCount: {
+    ...textStyles.caption,
+    color: colors.textTertiary,
+    textAlign: 'right',
+    marginTop: spacing[1],
+  },
+  typeContainer: {
+    flexDirection: 'row',
+    gap: spacing[3],
+  },
+  typeCard: {
+    flex: 1,
+    padding: spacing[4],
+    borderRadius: radius.lg,
+    borderWidth: 2,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  typeCardSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
+  },
+  typeEmoji: {
+    fontSize: 28,
+    marginBottom: spacing[2],
+  },
+  typeName: {
+    ...textStyles.labelLg,
+    color: colors.textPrimary,
+    marginBottom: spacing[1],
+  },
+  typeNameSelected: {
+    color: colors.primary,
+  },
+  typeDescription: {
+    ...textStyles.caption,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  typeDescriptionSelected: {
+    color: colors.primary,
+  },
+  typeCheckDot: {
+    position: 'absolute',
+    top: spacing[2],
+    right: spacing[2],
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.primary,
+  },
+  createButton: {
+    height: componentHeight.button,
+    backgroundColor: colors.primary,
+    borderRadius: radius.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing[8],
+  },
+  createButtonDisabled: {
+    opacity: 0.5,
+  },
+  createButtonText: {
+    ...textStyles.labelLg,
+    color: colors.textInverse,
+  },
+});
