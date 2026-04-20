@@ -1,52 +1,132 @@
 /**
- * Home tab — Today summary, D-day cards, Upcoming events, NL input bar.
+ * Home tab — Today summary, upcoming events, todos, and Space activity feed.
  *
- * This is a PLACEHOLDER screen.
- * Full implementation: TASK-404 (Sprint 4)
+ * Layout:
+ *  ┌──────────────────────┐
+ *  │ HomeHeader            │  ← 인사 + 날짜
+ *  │ NLInputBar            │  ← AI 자연어 입력 (TASK-302)
+ *  │ TodayEventList        │  ← 오늘 일정
+ *  │ TodayTodoList         │  ← 오늘 할일
+ *  │ SpaceActivityFeed     │  ← Space 실시간 활동
+ *  └──────────────────────┘
  *
- * AI integration points:
- *  - NL input bar at bottom (TASK-302) ✅
- *  - Weekly review card at top (TASK-303, Pro only)
+ * Data loading:
+ *  - Today's events: eventStore.fetchEvents(today)
+ *  - Today's todos: todoStore.fetchTodos({ dueDate: today })
+ *  - Space activity: SpaceActivityFeed manages its own Realtime subscription
+ *
+ * TASK-404 (Sprint 4)
  */
 
-import { View, Text, StyleSheet } from 'react-native';
+import { useEffect } from 'react';
+import { ScrollView, StyleSheet, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useEventStore } from '@/stores/eventStore';
+import { useTodoStore } from '@/stores/todoStore';
 import { NLInputBar } from '@/components/nl/NLInputBar';
+import { HomeHeader }       from '@/components/home/HomeHeader';
+import { TodayEventList }   from '@/components/home/TodayEventList';
+import { TodayTodoList }    from '@/components/home/TodayTodoList';
+import { SpaceActivityFeed } from '@/components/home/SpaceActivityFeed';
 import { light as colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
-import { textStyles } from '@/constants/typography';
+import type { DateRange } from '@/types';
+
+// ─── Helper ───────────────────────────────────────────────────────────────────
+
+/** Returns a DateRange spanning only today (start = 00:00, end = 23:59). */
+function todayRange(): DateRange {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
+  const fetchEvents = useEventStore(s => s.fetchEvents);
+  const isFetchingEvents = useEventStore(s => s.isFetching);
+  const { fetchTodos, isLoading: isFetchingTodos } = useTodoStore();
+
+  const isRefreshing = isFetchingEvents || isFetchingTodos;
+
+  // ── Load today's data on mount ─────────────────────────────────────────
+  const loadTodayData = () => {
+    const range = todayRange();
+    void fetchEvents(range);
+    void fetchTodos({
+      contentType: 'todo',
+      dueAfter:  range.start,
+      dueBefore: range.end,
+    });
+  };
+
+  useEffect(() => {
+    loadTodayData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.content}>
-        <Text style={styles.title}>홈</Text>
-        <Text style={styles.subtitle}>TASK-404에서 구현 예정</Text>
-      </View>
-      {/* NLInputBar: TASK-302 — natural language event creation */}
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      {/* NLInputBar is pinned at the bottom, content scrolls above it */}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={loadTodayData}
+            tintColor={colors.primary}
+          />
+        }
+      >
+        {/* Greeting + date */}
+        <HomeHeader />
+
+        {/* Section spacer */}
+        <NLInputBarSpacer />
+
+        {/* Today's events */}
+        <TodayEventList />
+
+        {/* Today's todos */}
+        <TodayTodoList />
+
+        {/* Space activity feed */}
+        <SpaceActivityFeed />
+      </ScrollView>
+
+      {/* AI natural language input bar — fixed at bottom */}
       <NLInputBar />
     </SafeAreaView>
   );
 }
 
+/**
+ * Spacer that creates the visual gap where the NLInputBar "belongs"
+ * within the scroll content hierarchy (even though it's absolutely positioned).
+ */
+function NLInputBarSpacer() {
+  return null; // NLInputBar handles its own layout
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  safeArea: {
+    flex:            1,
     backgroundColor: colors.background,
   },
-  content: {
+  scroll: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing[4],
   },
-  title: {
-    ...textStyles.h2,
-    color: colors.textPrimary,
-  },
-  subtitle: {
-    ...textStyles.body,
-    color: colors.textSecondary,
-    marginTop: spacing[2],
+  scrollContent: {
+    paddingTop:    spacing[2],
+    paddingBottom: spacing[20],  // space for NLInputBar
   },
 });

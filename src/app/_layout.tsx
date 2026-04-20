@@ -2,6 +2,9 @@
  * Root layout — Expo Router entry point.
  * Handles auth-based routing and session hydration.
  * Also handles deep links for Space invite codes: syncday://join/{code}
+ *
+ * TASK-403: Initializes push notifications after authentication.
+ * Wires notification tap handler for in-app routing.
  */
 
 import { useEffect } from 'react';
@@ -13,6 +16,10 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Linking from 'expo-linking';
 import { useAuthStore } from '@/stores/authStore';
 import { onAuthStateChange, getUserProfile } from '@/services/authService';
+import {
+  initializeNotifications,
+  setupNotificationHandlers,
+} from '@/services/notificationService';
 
 // ─── Auth guard ───────────────────────────────────────────────────────────────
 
@@ -37,7 +44,7 @@ function useAuthGuard() {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function RootLayout() {
-  const { setUser, setLoading } = useAuthStore();
+  const { setUser, setLoading, isAuthenticated } = useAuthStore();
   const router = useRouter();
 
   useAuthGuard();
@@ -61,6 +68,37 @@ export default function RootLayout() {
 
     return unsubscribe;
   }, [setUser, setLoading]);
+
+  // TASK-403: Initialize push notifications after user authenticates.
+  // Non-critical: errors are logged but do not crash the app.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    // Request permission + register Expo push token
+    initializeNotifications().catch(console.error);
+
+    // Wire notification tap → in-app routing
+    // Returns a cleanup function to remove listeners on unmount
+    const cleanup = setupNotificationHandlers(
+      // onNotificationReceived: foreground display handled by the module-level handler
+      (_notification) => { /* no-op: foreground display is automatic */ },
+      // onNotificationTapped: route to the relevant screen
+      (notification) => {
+        const data = notification.data ?? {};
+        // Route based on notification type carried in the data payload
+        if (data['type'] === 'event' && data['eventId']) {
+          router.push(`/event/${String(data['eventId'])}`);
+        } else if (data['type'] === 'space_invite' && data['inviteCode']) {
+          router.push(`/space/join?code=${encodeURIComponent(String(data['inviteCode']))}`);
+        } else if (data['type'] === 'reminder' || data['type'] === 'event_reminder') {
+          // Reminder taps open the calendar tab
+          router.push('/(tabs)/calendar');
+        }
+      },
+    );
+
+    return cleanup;
+  }, [isAuthenticated, router]);
 
   useEffect(() => {
     // Handle deep links for Space invite codes.
@@ -112,6 +150,9 @@ export default function RootLayout() {
           <Stack.Screen name="space/[id]" options={{ presentation: 'modal' }} />
           <Stack.Screen name="space/create" options={{ presentation: 'modal' }} />
           <Stack.Screen name="space/join" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="note/[id]" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="note/new" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="settings/categories" options={{ presentation: 'modal' }} />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>

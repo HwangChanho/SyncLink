@@ -1,129 +1,377 @@
 /**
- * Todo service — adapter over Supabase todos table.
+ * Todo service — CRUD operations on the `todos` table.
  *
- * Handles personal and shared todos + notes.
+ * Responsibilities:
+ *  - Fetch todos / notes with optional filters
+ *  - Create, update, delete todos and notes
+ *  - Toggle completion state (with completedAt timestamp)
+ *  - Batch reorder (sort_order update)
  *
- * Notes are stored as todos with a special 'note' category to avoid
- * a separate table. This decision is logged in DECISIONS.md (ADR-003).
+ * Notes are stored as todos with content_type = 'note' (ADR-003).
+ * getNotes / createNote are convenience wrappers over the core CRUD.
+ *
+ * DB column ↔ domain field mapping:
+ *  - todos.description → Todo.content  (unified field name)
+ *  - todos.is_completed → Todo.isCompleted
+ *  - todos.content_type → Todo.contentType
  */
 
+import { supabase, getCurrentUserId } from '@/lib/supabase';
 import type {
   Todo, TodoSummary, CreateTodoInput, UpdateTodoInput,
+  TodoFilter, NoteFilter, ContentType,
   Note, CreateNoteInput, UpdateNoteInput,
+  TodoRow,
 } from '@/types';
 
-// ─── Filters ──────────────────────────────────────────────────────────────────
+// supabase-js v2 workaround for missing Relationships types
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const supa = supabase as any;
 
-export interface TodoFilter {
-  spaceId?: string;         // filter by space (null = personal only)
-  isCompleted?: boolean;
-  categoryId?: string;
-  dueBefore?: Date;
-  dueAfter?: Date;
-}
-
-// ─── Public API ───────────────────────────────────────────────────────────────
+// ─── Mapper ───────────────────────────────────────────────────────────────────
 
 /**
- * Get todos for the current user, with optional filters.
+ * Maps a raw TodoRow (snake_case) to a typed Todo domain object (camelCase).
+ * The `description` DB column is exposed as `content` in the domain.
+ */
+function toTodo(row: TodoRow): Todo {
+  return {
+    id:           row.id,
+    userId:       row.user_id,
+    spaceId:      row.space_id,
+    title:        row.title,
+    content:      row.description,
+    contentType:  (row.content_type ?? 'todo') as ContentType,
+    dueDate:      row.due_date    ? new Date(row.due_date)    : null,
+    priority:     row.priority,
+    isCompleted:  row.is_completed,
+    completedAt:  row.completed_at ? new Date(row.completed_at) : null,
+    categoryId:   row.category_id,
+    sortOrder:    row.sort_order  ?? 0,
+    eventId:      row.event_id    ?? null,
+    createdAt:    new Date(row.created_at),
+    updatedAt:    new Date(row.updated_at),
+  };
+}
+
+/**
+ * Maps a raw TodoRow to a lightweight TodoSummary for list rendering.
+ */
+function toTodoSummary(row: TodoRow): TodoSummary {
+  return {
+    id:          row.id,
+    title:       row.title,
+    dueDate:     row.due_date ? new Date(row.due_date) : null,
+    priority:    row.priority,
+    isCompleted: row.is_completed,
+    contentType: (row.content_type ?? 'todo') as ContentType,
+    categoryId:  row.category_id,
+  };
+}
+
+/**
+ * Converts a Todo domain object back to a Note shape (for Note-specific callers).
+ */
+function todoToNote(todo: Todo): Note {
+  return {
+    id:        todo.id,
+    userId:    todo.userId,
+    title:     todo.title,
+    content:   todo.content ?? '',
+    createdAt: todo.createdAt,
+    updatedAt: todo.updatedAt,
+  };
+}
+
+// ─── Public API — Todos ───────────────────────────────────────────────────────
+
+/**
+ * Fetch todos for the current user, optionally filtered.
+ *
+ * Default behavior: returns only contentType='todo' items unless
+ * filter.contentType is explicitly set to 'note' or left undefined.
  *
  * @param filter - Optional filter criteria
- * @returns Array of TodoSummary sorted by due_date ASC, then created_at DESC
+ * @returns Array of TodoSummary sorted by sort_order ASC, then created_at DESC
  */
-export async function getTodos(_filter?: TodoFilter): Promise<TodoSummary[]> {
-  throw new Error('Not implemented: getTodos');
+export async function getTodos(filter?: TodoFilter): Promise<TodoSummary[]> {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error('로그인이 필요합니다.');
+
+  let query = supa
+    .from('todos')
+    .select('*')
+    .eq('user_id', userId)
+    // Default to 'todo' unless caller overrides content_type filter
+    .eq('content_type', filter?.contentType ?? 'todo');
+
+  // Optional filters
+  if (filter?.categoryId !== undefined) {
+    query = query.eq('category_id', filter.categoryId);
+  }
+  if (filter?.isCompleted !== undefined) {
+    query = query.eq('is_completed', filter.isCompleted);
+  }
+  if (filter?.dueBefore !== undefined) {
+    query = query.lte('due_date', filter.dueBefore.toISOString().split('T')[0]);
+  }
+  if (filter?.dueAfter !== undefined) {
+    query = query.gte('due_date', filter.dueAfter.toISOString().split('T')[0]);
+  }
+  if (filter?.spaceId !== undefined) {
+    query = query.eq('space_id', filter.spaceId);
+  }
+
+  const { data, error } = await query
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: false }) as {
+      data: TodoRow[] | null;
+      error: Error | null;
+    };
+
+  if (error) throw error;
+  return (data ?? []).map(toTodoSummary);
 }
 
 /**
- * Get a single todo by ID.
+ * Fetch a single todo by ID.
  *
  * @param todoId - UUID of the todo
  * @returns Full Todo object
- * @throws Error if not found or access denied
+ * @throws If not found or access denied
  */
-export async function getTodoById(_todoId: string): Promise<Todo> {
-  throw new Error('Not implemented: getTodoById');
+export async function getTodoById(todoId: string): Promise<Todo> {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error('로그인이 필요합니다.');
+
+  const { data, error } = await supa
+    .from('todos')
+    .select('*')
+    .eq('id', todoId)
+    .eq('user_id', userId)
+    .single() as { data: TodoRow | null; error: Error | null };
+
+  if (error || !data) throw new Error('할일을 찾을 수 없습니다.');
+  return toTodo(data);
 }
 
 /**
- * Create a new todo.
+ * Create a new todo (or note).
  *
  * @param input - Todo creation payload
  * @returns Newly created Todo
  */
-export async function createTodo(_input: CreateTodoInput): Promise<Todo> {
-  throw new Error('Not implemented: createTodo');
+export async function createTodo(input: CreateTodoInput): Promise<Todo> {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error('로그인이 필요합니다.');
+
+  const { data, error } = await supa
+    .from('todos')
+    .insert({
+      user_id:      userId,
+      title:        input.title,
+      description:  input.content ?? null,       // domain 'content' → DB 'description'
+      content_type: input.contentType ?? 'todo',
+      due_date:     input.dueDate?.toISOString().split('T')[0] ?? null,
+      priority:     input.priority ?? 'medium',
+      space_id:     input.spaceId ?? null,
+      category_id:  input.categoryId ?? null,
+      event_id:     input.eventId ?? null,
+      is_completed: false,
+      sort_order:   0,
+    })
+    .select()
+    .single() as { data: TodoRow | null; error: Error | null };
+
+  if (error || !data) throw error ?? new Error('할일 생성에 실패했습니다.');
+  return toTodo(data);
 }
 
 /**
- * Update a todo.
+ * Update a todo's fields (owner only — enforced by RLS).
  *
- * @param todoId - UUID of the todo
- * @param updates - Fields to update
+ * Builds a partial patch from non-undefined fields to avoid overwriting
+ * unchanged values.
+ *
+ * @param todoId  - UUID of the todo
+ * @param updates - Fields to change
  * @returns Updated Todo
  */
-export async function updateTodo(_todoId: string, _updates: UpdateTodoInput): Promise<Todo> {
-  throw new Error('Not implemented: updateTodo');
+export async function updateTodo(todoId: string, updates: UpdateTodoInput): Promise<Todo> {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error('로그인이 필요합니다.');
+
+  // Build patch from only the provided fields
+  const patch: Record<string, unknown> = {};
+  if (updates.title       !== undefined) patch.title        = updates.title;
+  if (updates.content     !== undefined) patch.description  = updates.content ?? null;
+  if (updates.dueDate     !== undefined) patch.due_date     = updates.dueDate?.toISOString().split('T')[0] ?? null;
+  if (updates.priority    !== undefined) patch.priority     = updates.priority;
+  if (updates.categoryId  !== undefined) patch.category_id  = updates.categoryId ?? null;
+  if (updates.isCompleted !== undefined) patch.is_completed = updates.isCompleted;
+  if (updates.eventId     !== undefined) patch.event_id     = updates.eventId ?? null;
+
+  if (Object.keys(patch).length === 0) return getTodoById(todoId);
+
+  const { error } = await supa
+    .from('todos')
+    .update(patch)
+    .eq('id', todoId)
+    .eq('user_id', userId) as { error: Error | null };
+
+  if (error) throw error;
+  return getTodoById(todoId);
 }
 
 /**
- * Toggle todo completion status.
- * Sets completedAt timestamp when marking as complete; clears it on uncheck.
+ * Delete a todo permanently (owner only — enforced by RLS).
  *
  * @param todoId - UUID of the todo
+ */
+export async function deleteTodo(todoId: string): Promise<void> {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error('로그인이 필요합니다.');
+
+  const { error } = await supa
+    .from('todos')
+    .delete()
+    .eq('id', todoId)
+    .eq('user_id', userId) as { error: Error | null };
+
+  if (error) throw error;
+}
+
+/**
+ * Toggle a todo's completion state.
+ * Sets completedAt to now when marking complete; clears it when unchecking.
+ *
+ * @param todoId      - UUID of the todo
  * @param isCompleted - Target completion state
  * @returns Updated Todo
  */
-export async function toggleTodoComplete(_todoId: string, _isCompleted: boolean): Promise<Todo> {
-  throw new Error('Not implemented: toggleTodoComplete');
+export async function toggleTodoComplete(todoId: string, isCompleted: boolean): Promise<Todo> {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error('로그인이 필요합니다.');
+
+  const { error } = await supa
+    .from('todos')
+    .update({
+      is_completed: isCompleted,
+      // Set completedAt on completion; clear on uncheck
+      completed_at: isCompleted ? new Date().toISOString() : null,
+    })
+    .eq('id', todoId)
+    .eq('user_id', userId) as { error: Error | null };
+
+  if (error) throw error;
+  return getTodoById(todoId);
 }
 
 /**
- * Delete a todo.
+ * Batch update sort_order for a list of todos.
+ * Used for drag-to-reorder functionality.
  *
- * @param todoId - UUID of the todo
+ * @param ids - Ordered array of todo IDs (index = new sort_order)
  */
-export async function deleteTodo(_todoId: string): Promise<void> {
-  throw new Error('Not implemented: deleteTodo');
+export async function reorderTodos(ids: string[]): Promise<void> {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error('로그인이 필요합니다.');
+
+  // Build batch upsert: each entry sets sort_order = index position
+  const updates = ids.map((id, index) => ({
+    id,
+    sort_order: index,
+  }));
+
+  // Supabase upsert with onConflict: update sort_order only
+  const { error } = await supa
+    .from('todos')
+    .upsert(updates, { onConflict: 'id', ignoreDuplicates: false })
+    .eq('user_id', userId) as { error: Error | null };
+
+  if (error) throw error;
 }
 
-// ─── Notes ────────────────────────────────────────────────────────────────────
+// ─── Public API — Notes (content_type = 'note' convenience wrappers) ─────────
 
 /**
- * Get all notes for the current user.
+ * Fetch all notes for the current user.
  *
- * @returns Array of Note sorted by updatedAt DESC
+ * @param filter - Optional filter (only spaceId is supported)
+ * @returns Array of Todo with contentType='note', sorted by updatedAt DESC
  */
-export async function getNotes(): Promise<Note[]> {
-  throw new Error('Not implemented: getNotes');
+export async function getNotes(filter?: NoteFilter): Promise<Todo[]> {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error('로그인이 필요합니다.');
+
+  let query = supa
+    .from('todos')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('content_type', 'note');
+
+  if (filter?.spaceId !== undefined) {
+    query = query.eq('space_id', filter.spaceId);
+  }
+
+  const { data, error } = await query
+    .order('updated_at', { ascending: false }) as {
+      data: TodoRow[] | null;
+      error: Error | null;
+    };
+
+  if (error) throw error;
+  return (data ?? []).map(toTodo);
 }
 
 /**
  * Create a new note.
  *
- * @param input - Note creation payload
- * @returns Newly created Note
+ * @param input - Note creation payload (title + content)
+ * @returns Newly created Todo with contentType='note'
  */
-export async function createNote(_input: CreateNoteInput): Promise<Note> {
-  throw new Error('Not implemented: createNote');
+export async function createNote(input: CreateNoteInput): Promise<Todo> {
+  return createTodo({
+    title:       input.title,
+    content:     input.content,
+    contentType: 'note',
+  });
 }
 
 /**
- * Update a note.
+ * Update a note's title or content.
  *
- * @param noteId - UUID of the note
- * @param updates - Fields to update
- * @returns Updated Note
+ * @param noteId  - UUID of the note
+ * @param updates - Fields to change
+ * @returns Updated Todo (contentType='note')
  */
-export async function updateNote(_noteId: string, _updates: UpdateNoteInput): Promise<Note> {
-  throw new Error('Not implemented: updateNote');
+export async function updateNote(noteId: string, updates: UpdateNoteInput): Promise<Todo> {
+  // Build patch omitting undefined fields (required by exactOptionalPropertyTypes)
+  return updateTodo(noteId, {
+    ...(updates.title   !== undefined ? { title:   updates.title   } : {}),
+    ...(updates.content !== undefined ? { content: updates.content } : {}),
+  });
 }
 
 /**
- * Delete a note.
+ * Delete a note permanently.
  *
  * @param noteId - UUID of the note
  */
-export async function deleteNote(_noteId: string): Promise<void> {
-  throw new Error('Not implemented: deleteNote');
+export async function deleteNote(noteId: string): Promise<void> {
+  return deleteTodo(noteId);
 }
+
+// ─── Legacy Note adapter (backward compat) ───────────────────────────────────
+
+/**
+ * @deprecated Use getNotes() which returns Todo[] directly.
+ * Wraps getNotes() and converts to the legacy Note shape.
+ */
+export async function getNotesLegacy(): Promise<Note[]> {
+  const todos = await getNotes();
+  return todos.map(todoToNote);
+}
+
+// Re-export filter types for callers that import from this module
+export type { TodoFilter, NoteFilter };
