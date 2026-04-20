@@ -17,6 +17,7 @@ export type {
   CategoryRow, CategoryInsert, CategoryUpdate,
   AnniversaryRow, AnniversaryInsert,
   AiChatLogRow, AiChatLogInsert,
+  NotificationLogRow, NotificationLogInsert, NotificationTypeDb,
   RepeatTypeDb, NotificationSettings,
 } from './database';
 
@@ -37,9 +38,14 @@ export type {
 // Todo domain types
 export type {
   Todo, TodoSummary, CreateTodoInput, UpdateTodoInput,
-  TodoPriority,
+  TodoPriority, ContentType, TodoFilter, NoteFilter,
   Note, CreateNoteInput, UpdateNoteInput,
 } from './todo';
+
+// Category domain types
+export type {
+  Category, CreateCategoryInput, UpdateCategoryInput,
+} from './category';
 
 // AI types
 export type {

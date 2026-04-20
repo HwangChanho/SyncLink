@@ -199,6 +199,60 @@ export function setupNotificationHandlers(
 }
 
 /**
+ * Schedule a generic local notification (not tied to a specific event).
+ * Use scheduleEventReminder() for event-specific reminders.
+ *
+ * @param params.title   - Notification title
+ * @param params.body    - Notification body
+ * @param params.trigger - When to fire the notification
+ * @param params.data    - Optional payload (accessible when user taps)
+ * @returns Notification ID (for cancellation via cancelNotification)
+ */
+export async function scheduleLocalNotification(params: {
+  title: string;
+  body: string;
+  trigger: Date;
+  data?: Record<string, unknown>;
+}): Promise<string> {
+  const id = await ExpoNotifications.scheduleNotificationAsync({
+    content: {
+      title: params.title,
+      body:  params.body,
+      data:  params.data ?? {},
+      sound: true,
+    },
+    trigger: {
+      type: ExpoNotifications.SchedulableTriggerInputTypes.DATE,
+      date: params.trigger,
+    },
+  });
+  return id;
+}
+
+/**
+ * Initialize push notifications for the current session.
+ *
+ * Should be called once after the user authenticates.
+ * Steps:
+ *  1. Request OS permission
+ *  2. Get Expo push token and persist to the users table
+ *
+ * The foreground handler is configured at module load time (top of file).
+ * Response routing (tap → navigate) is wired in _layout.tsx via setupNotificationHandlers.
+ *
+ * @returns Promise that resolves when initialization is complete (non-throwing)
+ */
+export async function initializeNotifications(): Promise<void> {
+  try {
+    // Register push token (also handles permission request internally)
+    await registerPushToken();
+  } catch (err) {
+    // Non-critical — log but don't crash the app
+    console.warn('[notificationService] initializeNotifications failed:', err);
+  }
+}
+
+/**
  * Update notification settings for the current user.
  * Persists to both AsyncStorage (local) and the users table (remote).
  *

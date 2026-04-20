@@ -180,8 +180,10 @@ describe.skip('TASK-002: spaceService stubs', () => {
 });
 
 // ─── TASK-002: todoService 스텁 검증 ────────────────────────────────────────
+// TASK-400 완료 (Sprint 4) → todoService 전체 구현됨. stub 검증 skip.
+// 실제 동작 테스트는 TASK-410: __tests__/services/todoService.test.ts 에서 진행.
 
-describe('TASK-002: todoService stubs', () => {
+describe.skip('TASK-002: todoService stubs', () => {
   it('all exported functions throw Not implemented', async () => {
     const fns = Object.entries(todoService).filter(([, v]) => typeof v === 'function');
     expect(fns.length).toBeGreaterThanOrEqual(3);

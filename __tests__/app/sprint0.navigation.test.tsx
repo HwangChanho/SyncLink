@@ -71,16 +71,17 @@ import MyScreen from '@/app/(tabs)/my';
 
 describe('TASK-004: Tab screens render without crashing', () => {
 
-  it('HomeScreen renders', () => {
-    const { getByText } = render(<HomeScreen />);
-    // 홈 화면에 "홈" 텍스트가 있어야 함
-    expect(getByText('홈')).toBeTruthy();
+  it('HomeScreen renders without crash', () => {
+    // TASK-404 완전 구현됨 (Sprint 4) — 크래시 없이 렌더링되면 통과.
+    // 상세 UI 검증은 __tests__/screens/HomeScreen.test.tsx 에서 수행.
+    render(<HomeScreen />);
+    expect(true).toBeTruthy();
   });
 
-  it('HomeScreen shows implementation task reference', () => {
+  it('HomeScreen shows today todo section header', () => {
     const { getByText } = render(<HomeScreen />);
-    // placeholder임을 나타내는 텍스트 (TASK-404 참조)
-    expect(getByText(/TASK-404/)).toBeTruthy();
+    // TodayTodoList 컴포넌트가 항상 렌더링하는 섹션 헤더
+    expect(getByText('✅ 오늘 할일')).toBeTruthy();
   });
 
   it('CalendarScreen renders', () => {

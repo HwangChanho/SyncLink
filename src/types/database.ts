@@ -19,6 +19,7 @@ export interface UserRow {
   nickname: string;
   avatar_url: string | null;
   push_token: string | null;
+  push_enabled: boolean;    // master switch for push notifications (005_push_tokens.sql)
   notification_settings: NotificationSettings;
   created_at: string;       // ISO-8601 timestamp
   updated_at: string;
@@ -125,6 +126,12 @@ export interface TodoRow {
   is_completed: boolean;
   completed_at: string | null;
   category_id: string | null;
+  /** 'todo' = regular todo item; 'note' = free-form note (ADR-003). */
+  content_type: 'todo' | 'note';
+  /** User-defined sort position within a category/list. */
+  sort_order: number;
+  /** Optional link to an event (for "related todos" on event detail screen). */
+  event_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -137,7 +144,8 @@ export type TodoUpdate = Partial<Omit<TodoRow, 'id' | 'user_id' | 'created_at'>>
 /** User-defined category for events and todos. */
 export interface CategoryRow {
   id: string;
-  user_id: string;
+  /** null = system default category (개인/업무/기타); non-null = user-defined. */
+  user_id: string | null;
   name: string;
   color: string;            // hex color
   icon: string | null;      // icon name (e.g. 'calendar', 'heart')
@@ -161,6 +169,21 @@ export interface AnniversaryRow {
 }
 
 export type AnniversaryInsert = Omit<AnniversaryRow, 'id' | 'created_at'>;
+
+// ─── NOTIFICATION_LOGS ────────────────────────────────────────────────────────
+
+export type NotificationTypeDb = 'reminder' | 'invite' | 'share';
+
+/** Tracks push notifications sent to users (prevents duplicate delivery). */
+export interface NotificationLogRow {
+  id: string;
+  user_id: string;
+  event_id: string | null;
+  notification_type: NotificationTypeDb;
+  sent_at: string;          // ISO-8601 timestamp
+}
+
+export type NotificationLogInsert = Omit<NotificationLogRow, 'id' | 'sent_at'>;
 
 // ─── AI_CHAT_LOGS ─────────────────────────────────────────────────────────────
 
@@ -229,6 +252,11 @@ export interface Database {
       ai_chat_logs: {
         Row: AiChatLogRow;
         Insert: AiChatLogInsert;
+        Update: never;
+      };
+      notification_logs: {
+        Row: NotificationLogRow;
+        Insert: NotificationLogInsert;
         Update: never;
       };
     };
