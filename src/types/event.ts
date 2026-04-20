@@ -1,0 +1,105 @@
+/**
+ * Event domain types.
+ *
+ * These are the "application layer" types used in components and stores.
+ * They differ from DbRow types: camelCase fields, enriched with relations.
+ */
+
+import type { RepeatTypeDb } from './database';
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+/** How an event repeats. Maps 1:1 to DB enum. */
+export type RepeatType = RepeatTypeDb;
+
+/** Built-in event category types (user can also create custom categories). */
+export type BuiltinCategory =
+  | 'personal'
+  | 'work'
+  | 'date'          // couple-specific
+  | 'family'
+  | 'health'
+  | 'social'
+  | 'travel'
+  | 'holiday'
+  | 'other';
+
+// ─── Core domain type ─────────────────────────────────────────────────────────
+
+/** Full event object used in UI and stores (camelCase, enriched). */
+export interface Event {
+  id: string;
+  userId: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  startAt: Date;
+  endAt: Date;
+  allDay: boolean;
+  repeatType: RepeatType;
+  repeatUntil: Date | null;
+  categoryId: string | null;
+  /** Hex color for display. Falls back to user's space member color if null. */
+  color: string | null;
+  /** IDs of spaces this event is shared to. */
+  sharedSpaceIds: string[];
+  /** Owner's display name (populated from join). */
+  ownerNickname: string;
+  /** True if the current user owns this event. */
+  isOwn: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** Minimal event summary used in calendar grid cells. */
+export interface EventSummary {
+  id: string;
+  title: string;
+  startAt: Date;
+  endAt: Date;
+  allDay: boolean;
+  color: string;
+  isOwn: boolean;
+}
+
+/** Payload when creating a new event (omit server-generated fields). */
+export interface CreateEventInput {
+  title: string;
+  description?: string;
+  location?: string;
+  startAt: Date;
+  endAt: Date;
+  allDay?: boolean;
+  repeatType?: RepeatType;
+  repeatUntil?: Date;
+  categoryId?: string;
+  color?: string;
+  /** Space IDs to share this event to immediately upon creation. */
+  shareToSpaceIds?: string[];
+}
+
+/** Payload when updating an event. */
+export type UpdateEventInput = Partial<CreateEventInput>;
+
+// ─── Date range ───────────────────────────────────────────────────────────────
+
+/**
+ * Inclusive date range used across eventService, freeTimeService, and eventStore.
+ * Promoted from eventService.ts (ADR decision: shared domain type → @/types).
+ */
+export interface DateRange {
+  start: Date;
+  end: Date;
+}
+
+// ─── Time slot (free-time finder) ────────────────────────────────────────────
+
+/** A contiguous free window in a calendar, shared across participants. */
+export interface FreeTimeSlot {
+  startAt: Date;
+  endAt: Date;
+  /** Duration in minutes. */
+  durationMinutes: number;
+  /** User IDs who are all free during this window. */
+  participantIds: string[];
+}
