@@ -1,0 +1,474 @@
+/**
+ * Local NL (Natural Language) parser for Korean event input.
+ *
+ * Target: parse 90% of typical user inputs without any API call.
+ * Performance target: < 10ms per parse.
+ *
+ * Supported patterns:
+ *  - Date: 오늘, 내일, 모레, 이번 주 X요일, 다음 주 X요일, N월 N일, N일/주/달 후, N번째 X요일
+ *  - Time: 오전/오후/밤/저녁/새벽 N시, N시 N분, N:MM, 정오, 자정, 시간 범위
+ *  - Location: ~에서, ~에서 만나, (parenthetical), ~으로/로/에 가/이동
+ *  - Recurrence: 매일, 매주, 매월/매달, 매년/매해
+ */
+
+import type { NLParseResult, Confidence, ParsedField } from '@/types';
+
+// ─── Pattern constants ────────────────────────────────────────────────────────
+
+/**
+ * Regex patterns for Korean date expressions.
+ * Ordered from most to least specific — use in parseLocally() in this order.
+ */
+export const datePatterns = {
+  today:       /오늘/,
+  tomorrow:    /내일/,
+  dayAfter:    /모레/,
+  thisWeekday: /이번\s*주\s*(월|화|수|목|금|토|일)요일/,
+  nextWeekday: /다음\s*주\s*(월|화|수|목|금|토|일)요일/,
+  monthDay:    /(\d{1,2})월\s*(\d{1,2})일/,
+  daysLater:   /(\d+)\s*일\s*후/,
+  weeksLater:  /(\d+)\s*주\s*후/,
+  monthsLater: /(\d+)\s*달\s*후/,
+  nthWeekday:  /(\d+)번째\s*(월|화|수|목|금|토|일)요일/,
+} as const;
+
+/**
+ * Regex patterns for Korean time expressions.
+ * ampm also handles 새벽/저녁/밤 (dawn/evening/night) for full coverage.
+ * "반" (half) = 30 minutes.
+ */
+export const timePatterns = {
+  ampm:        /(새벽|오전|오후|저녁|밤)\s*(\d{1,2})시(?:\s*(\d{1,2})분|\s*(반))?/,
+  hourOnly:    /(\d{1,2})시(?:\s*(\d{1,2})분)?/,
+  colonFormat: /(\d{1,2}):(\d{2})/,
+  noon:        /정오|낮\s*12시/,
+  midnight:    /자정|밤\s*12시/,
+  range:       /(\d{1,2})시(?:\s*(\d{1,2})분)?\s*(?:~|부터|에서)\s*(\d{1,2})시(?:\s*(\d{1,2})분)?/,
+} as const;
+
+/**
+ * Regex patterns for extracting location from text.
+ * meetAt is checked before atPlace (more specific).
+ */
+export const locationExtractor = {
+  atPlace:       /(\S+(?:\s+\S+)?)\s*에서/,
+  meetAt:        /(\S+(?:\s+\S+)?)\s*에서\s*만/,
+  goTo:          /(\S+(?:\s+\S+)?)\s*(?:에|으로|로)\s*(?:가|이동)/,
+  parenthetical: /\(([^)]+)\)/,
+} as const;
+
+/**
+ * Patterns for recurring event expressions.
+ */
+export const recurrencePatterns = {
+  daily:   /매일/,
+  weekly:  /매주/,
+  monthly: /매월|매달/,
+  yearly:  /매년|매해/,
+} as const;
+
+// ─── Private helpers ──────────────────────────────────────────────────────────
+
+/** Maps a Korean weekday character to JS getDay() value (0 = Sunday). */
+function koreanDayToJsDay(dayChar: string): number {
+  const map: Record<string, number> = {
+    '월': 1, '화': 2, '수': 3, '목': 4, '금': 5, '토': 6, '일': 0,
+  };
+  return map[dayChar] ?? 1;
+}
+
+/**
+ * Returns the date of "이번 주 X요일" relative to contextDate.
+ * If the weekday is today or already passed, advances to next week.
+ * (Korean week runs Mon–Sun; Sunday is treated as end-of-week.)
+ */
+function getThisWeekdayDate(contextDate: Date, targetJsDay: number): Date {
+  // Treat Sunday as 7 so Mon=1 … Sun=7 for correct within-week ordering
+  const toOrder = (d: number) => (d === 0 ? 7 : d);
+  const diff = toOrder(targetJsDay) - toOrder(contextDate.getDay());
+
+  const ctx0 = new Date(contextDate);
+  ctx0.setHours(0, 0, 0, 0);
+
+  const target = new Date(ctx0);
+  target.setDate(ctx0.getDate() + diff);
+
+  // If target is today or earlier → jump to next week
+  if (target <= ctx0) {
+    target.setDate(target.getDate() + 7);
+  }
+  return target;
+}
+
+/**
+ * Returns the date of "다음 주 X요일".
+ * Always refers to the following calendar week (Mon–Sun).
+ */
+function getNextWeekdayDate(contextDate: Date, targetJsDay: number): Date {
+  const currentDay = contextDate.getDay();
+  // Days until next Monday: if today is Monday → 7, otherwise (8 - currentDay) % 7
+  const daysToNextMonday = ((1 - currentDay + 7) % 7) || 7;
+
+  const nextMonday = new Date(contextDate);
+  nextMonday.setHours(0, 0, 0, 0);
+  nextMonday.setDate(contextDate.getDate() + daysToNextMonday);
+
+  // Offset from Monday within the week (Mon=0 … Sun=6)
+  const offset = targetJsDay === 0 ? 6 : targetJsDay - 1;
+  const target = new Date(nextMonday);
+  target.setDate(nextMonday.getDate() + offset);
+  return target;
+}
+
+/**
+ * Returns the Nth occurrence of a weekday in the current month.
+ * If that date has already passed, uses the same Nth weekday of next month.
+ */
+function getNthWeekdayOfMonth(contextDate: Date, nth: number, targetJsDay: number): Date {
+  const findInMonth = (year: number, month: number): Date => {
+    const firstOfMonth = new Date(year, month, 1);
+    let daysToFirst = targetJsDay - firstOfMonth.getDay();
+    if (daysToFirst < 0) daysToFirst += 7;
+    return new Date(year, month, 1 + daysToFirst + (nth - 1) * 7);
+  };
+
+  const ctx0 = new Date(contextDate);
+  ctx0.setHours(0, 0, 0, 0);
+
+  const candidate = findInMonth(contextDate.getFullYear(), contextDate.getMonth());
+  if (candidate >= ctx0) return candidate;
+
+  // Already passed → next month
+  const nextMonth = new Date(contextDate.getFullYear(), contextDate.getMonth() + 1, 1);
+  return findInMonth(nextMonth.getFullYear(), nextMonth.getMonth());
+}
+
+/** Convenience factory for ParsedField. */
+function pf<T>(value: T, confidence: Confidence): ParsedField<T> {
+  return { value, confidence };
+}
+
+// ─── Main parser ──────────────────────────────────────────────────────────────
+
+/**
+ * Parse natural language text into structured event fields.
+ *
+ * Entry point used by aiService.ts.  Always returns a result; never throws.
+ * Returns confidence='low' when neither date nor time could be extracted —
+ * the caller should fall back to AI parsing in that case.
+ *
+ * @param text        Raw Korean user input
+ * @param contextDate Reference date for relative expressions (default: now)
+ * @returns           NLParseResult — source is always 'local'
+ *
+ * @example
+ * parseLocally('내일 오후 3시 카페에서 미팅', ctx)
+ * // → { parsed: { title, startAt, endAt, location }, confidence: 'high', ... }
+ */
+export function parseLocally(text: string, contextDate: Date = new Date()): NLParseResult {
+  const startMs = Date.now();
+  const normalized = text.trim();
+
+  // Empty input → low confidence immediately
+  if (!normalized) {
+    return {
+      parsed: {},
+      confidence: 'low',
+      source: 'local',
+      rawInput: text,
+      processingMs: Date.now() - startMs,
+    };
+  }
+
+  // ── Consumed-range tracking for title extraction ───────────────────────────
+  // We replace consumed character ranges with spaces (length-preserving) so
+  // that subsequent patterns can use original indices without recalculating.
+
+  const consumed: Array<[number, number]> = [];
+
+  const consume = (match: RegExpExecArray): void => {
+    consumed.push([match.index, match.index + match[0].length]);
+  };
+
+  /** Returns normalized text with all consumed ranges replaced by spaces. */
+  const workingText = (): string => {
+    const arr = normalized.split('');
+    for (const [s, e] of consumed) {
+      for (let i = s; i < e; i++) arr[i] = ' ';
+    }
+    return arr.join('');
+  };
+
+  // ── State variables ───────────────────────────────────────────────────────
+
+  let parsedDate: Date | null = null;
+  let dateConf: Confidence = 'low';
+  let startHour: number | null = null;
+  let startMin = 0;
+  let endHour: number | null = null;
+  let endMin = 0;
+  let timeConf: Confidence = 'low';
+  let location: string | null = null;
+  let repeatType: 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' = 'none';
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RegExpExecArray | null
+  let m: RegExpExecArray | null;
+
+  // ── Step 1: Recurrence ────────────────────────────────────────────────────
+  // Check most-specific patterns first to avoid partial overlaps (매년 > 매월 > 매주 > 매일).
+
+  if ((m = recurrencePatterns.yearly.exec(normalized))) {
+    repeatType = 'yearly'; consume(m);
+  } else if ((m = recurrencePatterns.monthly.exec(normalized))) {
+    repeatType = 'monthly'; consume(m);
+  } else if ((m = recurrencePatterns.weekly.exec(normalized))) {
+    repeatType = 'weekly'; consume(m);
+  } else if ((m = recurrencePatterns.daily.exec(normalized))) {
+    repeatType = 'daily'; consume(m);
+  }
+
+  // ── Step 2: Time range ────────────────────────────────────────────────────
+  // Must run before location extraction — "X시에서 Y시" contains "에서" which
+  // would otherwise be misidentified as a location marker.
+
+  if ((m = timePatterns.range.exec(normalized))) {
+    startHour = parseInt(m[1]!, 10);
+    startMin  = m[2] ? parseInt(m[2], 10) : 0;
+    endHour   = parseInt(m[3]!, 10);
+    endMin    = m[4] ? parseInt(m[4], 10) : 0;
+    timeConf  = 'high';
+    consume(m);
+  }
+
+  // ── Step 3: Date ──────────────────────────────────────────────────────────
+  // Run patterns against working text (recurrence + time range already consumed).
+  // More-specific patterns first; stop as soon as parsedDate is set.
+
+  const wt3 = workingText();
+
+  // "이번 주 X요일"
+  if (!parsedDate && (m = datePatterns.thisWeekday.exec(wt3))) {
+    parsedDate = getThisWeekdayDate(contextDate, koreanDayToJsDay(m[1]!));
+    dateConf = 'high'; consume(m);
+  }
+
+  // "다음 주 X요일"
+  if (!parsedDate && (m = datePatterns.nextWeekday.exec(wt3))) {
+    parsedDate = getNextWeekdayDate(contextDate, koreanDayToJsDay(m[1]!));
+    dateConf = 'high'; consume(m);
+  }
+
+  // "N번째 X요일" (Nth weekday of month)
+  if (!parsedDate && (m = datePatterns.nthWeekday.exec(wt3))) {
+    parsedDate = getNthWeekdayOfMonth(contextDate, parseInt(m[1]!, 10), koreanDayToJsDay(m[2]!));
+    dateConf = 'medium'; consume(m);
+  }
+
+  // "N달 후"
+  if (!parsedDate && (m = datePatterns.monthsLater.exec(wt3))) {
+    const d = new Date(contextDate);
+    d.setHours(0, 0, 0, 0);
+    d.setMonth(d.getMonth() + parseInt(m[1]!, 10));
+    parsedDate = d; dateConf = 'high'; consume(m);
+  }
+
+  // "N주 후"
+  if (!parsedDate && (m = datePatterns.weeksLater.exec(wt3))) {
+    const d = new Date(contextDate);
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + parseInt(m[1]!, 10) * 7);
+    parsedDate = d; dateConf = 'high'; consume(m);
+  }
+
+  // "N일 후"
+  if (!parsedDate && (m = datePatterns.daysLater.exec(wt3))) {
+    const d = new Date(contextDate);
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + parseInt(m[1]!, 10));
+    parsedDate = d; dateConf = 'high'; consume(m);
+  }
+
+  // "N월 N일"
+  if (!parsedDate && (m = datePatterns.monthDay.exec(wt3))) {
+    parsedDate = new Date(contextDate.getFullYear(), parseInt(m[1]!, 10) - 1, parseInt(m[2]!, 10), 0, 0, 0, 0);
+    dateConf = 'high'; consume(m);
+  }
+
+  // "오늘"
+  if (!parsedDate && (m = datePatterns.today.exec(wt3))) {
+    const d = new Date(contextDate); d.setHours(0, 0, 0, 0);
+    parsedDate = d; dateConf = 'high'; consume(m);
+  }
+
+  // "내일"
+  if (!parsedDate && (m = datePatterns.tomorrow.exec(wt3))) {
+    const d = new Date(contextDate); d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + 1);
+    parsedDate = d; dateConf = 'high'; consume(m);
+  }
+
+  // "모레"
+  if (!parsedDate && (m = datePatterns.dayAfter.exec(wt3))) {
+    const d = new Date(contextDate); d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + 2);
+    parsedDate = d; dateConf = 'high'; consume(m);
+  }
+
+  // ── Step 4: Time (single) ─────────────────────────────────────────────────
+  // Only runs when no range was matched (startHour is still null).
+
+  if (startHour === null) {
+    const wt4 = workingText();
+
+    // Midnight and noon first — most specific, unambiguous
+    if ((m = timePatterns.midnight.exec(wt4))) {
+      startHour = 0; startMin = 0; timeConf = 'high'; consume(m);
+    } else if ((m = timePatterns.noon.exec(wt4))) {
+      startHour = 12; startMin = 0; timeConf = 'high'; consume(m);
+    }
+
+    // AM/PM prefix with optional "반" (half = 30 min)
+    if (startHour === null && (m = timePatterns.ampm.exec(wt4))) {
+      const period = m[1]!;
+      let h = parseInt(m[2]!, 10);
+      // Group 4 captures "반" (half past), group 3 captures numeric minutes
+      const min = m[4] === '반' ? 30 : (m[3] ? parseInt(m[3], 10) : 0);
+
+      if (period === '새벽') {
+        // Early morning: hours stay as-is; 새벽 12시 = midnight
+        if (h === 12) h = 0;
+      } else if (period === '오전') {
+        // 오전 12시 edge case → treat as midnight (0)
+        if (h === 12) h = 0;
+      } else {
+        // 오후 / 저녁 / 밤 → add 12 for PM; 오후 12시 = noon stays at 12
+        if (h !== 12) h += 12;
+      }
+
+      startHour = h; startMin = min; timeConf = 'high'; consume(m);
+    }
+
+    // 24-hour colon format (e.g., "14:30")
+    if (startHour === null && (m = timePatterns.colonFormat.exec(wt4))) {
+      startHour = parseInt(m[1]!, 10);
+      startMin  = parseInt(m[2]!, 10);
+      timeConf  = 'high'; consume(m);
+    }
+
+    // Bare hour — ambiguous AM/PM → medium confidence
+    if (startHour === null && (m = timePatterns.hourOnly.exec(wt4))) {
+      startHour = parseInt(m[1]!, 10);
+      startMin  = m[2] ? parseInt(m[2], 10) : 0;
+      timeConf  = 'medium'; consume(m);
+    }
+  }
+
+  // ── Step 5: Location ──────────────────────────────────────────────────────
+  // Run against working text so already-consumed time/date tokens don't match.
+
+  const wt5 = workingText();
+
+  // meetAt is more specific than atPlace — check first
+  if (!location && (m = locationExtractor.meetAt.exec(wt5))) {
+    const place = (m[1] ?? '').trim();
+    if (place) { location = place; consume(m); }
+  }
+
+  // Parenthetical, e.g. "(강남역)"
+  if (!location && (m = locationExtractor.parenthetical.exec(wt5))) {
+    const place = (m[1] ?? '').trim();
+    if (place) { location = place; consume(m); }
+  }
+
+  // "X에서"
+  if (!location && (m = locationExtractor.atPlace.exec(wt5))) {
+    const place = (m[1] ?? '').trim();
+    if (place) { location = place; consume(m); }
+  }
+
+  // "X으로/로/에 가/이동"
+  if (!location && (m = locationExtractor.goTo.exec(wt5))) {
+    const place = (m[1] ?? '').trim();
+    if (place) { location = place; consume(m); }
+  }
+
+  // ── Step 6: Title — remaining text after all extractions ──────────────────
+
+  const titleRaw = workingText().replace(/\s+/g, ' ').trim();
+
+  // ── Step 7: Overall confidence ────────────────────────────────────────────
+
+  const hasDate = parsedDate !== null;
+  const hasTime = startHour !== null;
+
+  let confidence: Confidence;
+  if (hasDate && hasTime) {
+    confidence = 'high';
+  } else if (hasDate || hasTime) {
+    confidence = 'medium';
+  } else {
+    confidence = 'low';
+  }
+
+  // ── Step 8: Build ParsedEventFields ───────────────────────────────────────
+  // startAt confidence: 'high' only when both date and time are known.
+  // Individual dateConf/timeConf track extraction quality for each component.
+
+  const startAtConf: Confidence = hasDate && hasTime
+    ? (dateConf === 'high' && timeConf === 'high' ? 'high' : 'medium')
+    : 'medium';
+
+  const parsed: NLParseResult['parsed'] = {};
+
+  // startAt: combine date + time (fall back to contextDate if only one is present)
+  let startAtDate: Date | undefined;
+  if (parsedDate !== null && startHour !== null) {
+    startAtDate = new Date(parsedDate);
+    startAtDate.setHours(startHour, startMin, 0, 0);
+  } else if (parsedDate !== null) {
+    startAtDate = new Date(parsedDate); // midnight of the parsed date
+  } else if (startHour !== null) {
+    startAtDate = new Date(contextDate);
+    startAtDate.setHours(startHour, startMin, 0, 0);
+  }
+
+  if (startAtDate !== undefined) {
+    parsed.startAt = pf(startAtDate, startAtConf);
+
+    // endAt: explicit range end, or +1 hour default when time was given
+    if (endHour !== null) {
+      const endAtDate = new Date(startAtDate);
+      endAtDate.setHours(endHour, endMin, 0, 0);
+      parsed.endAt = pf(endAtDate, startAtConf);
+    } else if (startHour !== null) {
+      const endAtDate = new Date(startAtDate);
+      endAtDate.setHours(startAtDate.getHours() + 1, startAtDate.getMinutes(), 0, 0);
+      parsed.endAt = pf(endAtDate, startAtConf);
+    }
+  }
+
+  // allDay hint when only a date (no time) was parsed
+  if (parsedDate !== null && startHour === null) {
+    parsed.allDay = pf(true, 'medium');
+  }
+
+  if (location !== null) {
+    parsed.location = pf(location, 'high');
+  }
+
+  if (repeatType !== 'none') {
+    parsed.repeatType = pf(repeatType, 'high');
+  }
+
+  if (titleRaw) {
+    parsed.title = pf(titleRaw, confidence);
+  }
+
+  return {
+    parsed,
+    confidence,
+    source: 'local',
+    rawInput: text,
+    processingMs: Date.now() - startMs,
+  };
+}
