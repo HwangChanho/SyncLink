@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#6C63FF"
+      "backgroundColor": "#4A6CF7"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -18,15 +18,26 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.syncday.app",
-      "buildNumber": "1"
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "프로필 사진 변경에 사용됩니다.",
+        "NSCameraUsageDescription": "프로필 사진 촬영에 사용됩니다.",
+        "NSUserNotificationsUsageDescription": "일정 리마인더 알림을 전송합니다."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#6C63FF"
+        "backgroundColor": "#4A6CF7"
       },
       "package": "com.syncday.app",
-      "versionCode": 1
+      "versionCode": 1,
+      "permissions": [
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -46,8 +57,14 @@
         "expo-notifications",
         {
           "icon": "./assets/notification-icon.png",
-          "color": "#6C63FF",
+          "color": "#4A6CF7",
           "sounds": []
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "프로필 사진 변경에 사용됩니다."
         }
       ]
     ],
