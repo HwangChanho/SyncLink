@@ -11,7 +11,7 @@
 import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
 import { EventPreviewCard } from './EventPreviewCard';
 import type { NLParseResult } from '@/types';
-import { light as colors } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 
@@ -33,6 +33,10 @@ interface Props {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function ConfirmModal({ visible, result, onConfirm, onEdit, onDismiss }: Props) {
+  // Resolve active theme colors for dark mode support (TASK-700)
+  const colors = useColors();
+  const styles = makeStyles(colors);
+
   return (
     <Modal
       visible={visible}
@@ -78,7 +82,14 @@ export function ConfirmModal({ visible, result, onConfirm, onEdit, onDismiss }: 
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ * Must be called inside the component to react to theme changes.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',
@@ -130,4 +141,5 @@ const styles = StyleSheet.create({
     color: colors.textInverse,
     fontWeight: '600',
   },
-});
+  });
+}

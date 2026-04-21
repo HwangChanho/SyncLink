@@ -27,7 +27,7 @@ import { createEvent } from '@/services/eventService';
 import { useEventStore } from '@/stores/eventStore';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import type { NLParseResult } from '@/types';
-import { light as colors } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 
@@ -68,6 +68,10 @@ function buildPrefillParams(result: NLParseResult): Record<string, string> {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function NLInputBar({ onEventCreated }: Props) {
+  // Resolve active theme colors for dark mode support (TASK-700)
+  const colors = useColors();
+  const styles = makeStyles(colors);
+
   const router = useRouter();
   const upsertEvent = useEventStore(s => s.upsertEvent);
   const { canUseAI, consumeAI } = useSubscriptionStore();
@@ -246,7 +250,14 @@ export function NLInputBar({ onEventCreated }: Props) {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ * Must be called inside the component to react to theme changes.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
   container: {
     paddingHorizontal: spacing[4],
     paddingBottom: spacing[3],
@@ -300,4 +311,5 @@ const styles = StyleSheet.create({
     color: colors.textInverse,
     flex: 1,
   },
-});
+  });
+}

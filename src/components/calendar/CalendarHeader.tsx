@@ -10,7 +10,7 @@
  */
 
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { light as colors } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles, fontWeight } from '@/constants/typography';
 
@@ -76,6 +76,10 @@ export function CalendarHeader({
   onToday,
   onViewModeChange,
 }: CalendarHeaderProps) {
+  // Resolve active theme colors for dark mode support (TASK-700)
+  const colors = useColors();
+  const styles = makeStyles(colors);
+
   return (
     <View style={styles.container}>
       {/* ─── Period navigation row ─── */}
@@ -132,7 +136,14 @@ export function CalendarHeader({
   );
 }
 
-const styles = StyleSheet.create({
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ * Must be called inside the component to react to theme changes.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
   container: {
     backgroundColor: colors.background,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -191,4 +202,5 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: fontWeight.semibold,
   },
-});
+  });
+}

@@ -30,7 +30,7 @@ import {
 } from 'react-native';
 import type { EventSummary } from '@/types';
 import { EventBlock } from './EventBlock';
-import { light as colors } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 
@@ -187,6 +187,10 @@ export function WeekView({
   onEventPress,
   onDateSelect,
 }: WeekViewProps) {
+  // Resolve active theme colors for dark mode support (TASK-700)
+  const colors = useColors();
+  const styles = makeStyles(colors);
+
   const weekDays = getWeekDays(selectedDate);
   const today = new Date();
   const scrollRef = useRef<ScrollView>(null);
@@ -357,7 +361,14 @@ export function WeekView({
 const DAY_HEADER_HEIGHT = 56;
 const DATE_CIRCLE = 28;
 
-const styles = StyleSheet.create({
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ * Must be called inside the component to react to theme changes.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -487,4 +498,5 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
   },
-});
+  });
+}

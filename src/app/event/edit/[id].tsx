@@ -25,7 +25,7 @@ import { getEventById, updateEvent, deleteEvent } from '@/services/eventService'
 import { shareEventToSpace, unshareEventFromSpace } from '@/services/eventShareService';
 import { useEventStore } from '@/stores/eventStore';
 import { useSpaceStore } from '@/stores/spaceStore';
-import { light as colors } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 
@@ -53,39 +53,66 @@ function formatField(date: Date, allDay: boolean): string {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function FormRow({ label, children }: { label: string; children: React.ReactNode }) {
+/**
+ * A labelled form row with a right-side content area.
+ *
+ * @param label    - Row label text
+ * @param children - Right-side content
+ * @param rowStyle - Computed row style from makeRowStyles()
+ */
+function FormRow({
+  label,
+  children,
+  rowStyle,
+}: {
+  label: string;
+  children: React.ReactNode;
+  rowStyle: ReturnType<typeof makeRowStyles>;
+}) {
   return (
-    <View style={rowStyles.row}>
-      <Text style={rowStyles.label}>{label}</Text>
-      <View style={rowStyles.value}>{children}</View>
+    <View style={rowStyle.row}>
+      <Text style={rowStyle.label}>{label}</Text>
+      <View style={rowStyle.value}>{children}</View>
     </View>
   );
 }
 
-const rowStyles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 52,
-    paddingVertical: spacing[2],
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  label: {
-    ...textStyles.label,
-    color: colors.textSecondary,
-    width: 72,
-    flexShrink: 0,
-  },
-  value: {
-    flex: 1,
-    marginLeft: spacing[3],
-  },
-});
+/**
+ * Dynamic row styles factory — receives current theme color tokens.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeRowStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      minHeight: 52,
+      paddingVertical: spacing[2],
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    label: {
+      ...textStyles.label,
+      color: colors.textSecondary,
+      width: 72,
+      flexShrink: 0,
+    },
+    value: {
+      flex: 1,
+      marginLeft: spacing[3],
+    },
+  });
+}
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function EventEditScreen() {
+  // Resolve active theme colors for dark mode support (TASK-700)
+  const colors = useColors();
+  const styles = makeStyles(colors);
+  const rowStyle = makeRowStyles(colors);
+
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { upsertEvent, removeEvent } = useEventStore();
@@ -319,7 +346,7 @@ export default function EventEditScreen() {
 
         <View style={styles.form}>
           {/* All-day */}
-          <FormRow label="종일">
+          <FormRow label="종일" rowStyle={rowStyle}>
             <Switch
               value={allDay}
               onValueChange={setAllDay}
@@ -329,7 +356,7 @@ export default function EventEditScreen() {
           </FormRow>
 
           {/* Start */}
-          <FormRow label="시작">
+          <FormRow label="시작" rowStyle={rowStyle}>
             <View style={styles.timeRow}>
               <Pressable style={styles.timeChip} onPress={() => shiftTime('start', -30)}>
                 <Ionicons name="remove" size={16} color={colors.textSecondary} />
@@ -343,7 +370,7 @@ export default function EventEditScreen() {
 
           {/* End */}
           {!allDay && (
-            <FormRow label="종료">
+            <FormRow label="종료" rowStyle={rowStyle}>
               <View style={styles.timeRow}>
                 <Pressable style={styles.timeChip} onPress={() => shiftTime('end', -30)}>
                   <Ionicons name="remove" size={16} color={colors.textSecondary} />
@@ -357,7 +384,7 @@ export default function EventEditScreen() {
           )}
 
           {/* Repeat */}
-          <FormRow label="반복">
+          <FormRow label="반복" rowStyle={rowStyle}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.chipRow}>
                 {REPEAT_OPTIONS.map((opt) => (
@@ -382,7 +409,7 @@ export default function EventEditScreen() {
           </FormRow>
 
           {/* Location */}
-          <FormRow label="위치">
+          <FormRow label="위치" rowStyle={rowStyle}>
             <TextInput
               style={styles.inlineInput}
               placeholder="위치 추가 (선택)"
@@ -394,7 +421,7 @@ export default function EventEditScreen() {
           </FormRow>
 
           {/* Description */}
-          <FormRow label="메모">
+          <FormRow label="메모" rowStyle={rowStyle}>
             <TextInput
               style={[styles.inlineInput, styles.multilineInput]}
               placeholder="메모 추가 (선택)"
@@ -449,7 +476,14 @@ export default function EventEditScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ * Must be called inside the component to react to theme changes.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,
@@ -620,4 +654,5 @@ const styles = StyleSheet.create({
     ...textStyles.label,
     color: colors.error,
   },
-});
+  });
+}

@@ -7,12 +7,15 @@
 
 import { Tabs } from 'expo-router';
 import { Platform } from 'react-native';
-import { light as colors } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
 import { componentHeight } from '@/constants/spacing';
 
 // TODO (TASK-200+): Replace text placeholders with proper icons (expo/vector-icons)
 
 export default function TabLayout() {
+  // Resolve active theme colors for dark mode support (TASK-700)
+  const colors = useColors();
+
   return (
     <Tabs
       screenOptions={{

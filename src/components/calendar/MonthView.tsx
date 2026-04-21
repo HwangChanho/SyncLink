@@ -17,10 +17,11 @@
  *  - Sundays: rose accent text
  */
 
+import { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import type { EventSummary } from '@/types';
 import { EventDot } from './EventDot';
-import { light as colors } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
 import { spacing, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 
@@ -111,16 +112,24 @@ export function MonthView({
   eventsByDate,
   onDateSelect,
 }: MonthViewProps) {
+  // Resolve active theme colors for dark mode support (TASK-700)
+  const colors = useColors();
+  const styles = makeStyles(colors);
+
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth();
-  const cells = buildMonthCells(year, month);
-  const today = new Date();
 
-  // Split flat cell array into rows of 7 for rendering
-  const weeks: Date[][] = [];
-  for (let i = 0; i < cells.length; i += 7) {
-    weeks.push(cells.slice(i, i + 7));
-  }
+  // useMemo caches the calendar grid — only recomputed when the month changes (TASK-701)
+  const weeks: Date[][] = useMemo(() => {
+    const cells = buildMonthCells(year, month);
+    const result: Date[][] = [];
+    for (let i = 0; i < cells.length; i += 7) {
+      result.push(cells.slice(i, i + 7));
+    }
+    return result;
+  }, [year, month]);
+
+  const today = new Date();
 
   return (
     <View style={styles.container}>
@@ -203,7 +212,14 @@ export function MonthView({
 const CELL_HEIGHT = componentHeight.calendarCell; // 60px
 const DATE_CIRCLE = 30;
 
-const styles = StyleSheet.create({
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ * Must be called inside the component to react to theme changes.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -279,4 +295,5 @@ const styles = StyleSheet.create({
     marginLeft: 1,
     lineHeight: 8,
   },
-});
+  });
+}

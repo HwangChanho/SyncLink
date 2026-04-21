@@ -26,7 +26,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { light as colors } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import {
@@ -65,6 +65,10 @@ const TOGGLES: ToggleConfig[] = [
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function NotificationsSettingsScreen() {
+  // Resolve active theme colors for dark mode support (TASK-700)
+  const colors = useColors();
+  const styles = makeStyles(colors);
+
   const { user, setUser } = useAuthStore();
 
   // Read initial preferences from user profile (fall back to defaults)
@@ -181,7 +185,14 @@ export default function NotificationsSettingsScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ * Must be called inside the component to react to theme changes.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
   safeArea: {
     flex:            1,
     backgroundColor: colors.backgroundAlt,
@@ -245,4 +256,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: spacing[2],
   },
-});
+  });
+}

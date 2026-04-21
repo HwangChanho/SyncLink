@@ -17,7 +17,7 @@ import { useRef } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import type { EventSummary } from '@/types';
 import { EventBlock } from './EventBlock';
-import { light as colors } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
 import { spacing } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 
@@ -111,6 +111,10 @@ interface DayViewProps {
  * Scrolls vertically to cover the full 24 hours.
  */
 export function DayView({ selectedDate: _selectedDate, events, onEventPress }: DayViewProps) {
+  // Resolve active theme colors for dark mode support (TASK-700)
+  const colors = useColors();
+  const styles = makeStyles(colors);
+
   const scrollRef = useRef<ScrollView>(null);
   const layouts = computeLayout(events);
 
@@ -209,7 +213,14 @@ export function DayView({ selectedDate: _selectedDate, events, onEventPress }: D
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ * Must be called inside the component to react to theme changes.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -299,4 +310,5 @@ const styles = StyleSheet.create({
     ...textStyles.bodySm,
     color: colors.textTertiary,
   },
-});
+  });
+}

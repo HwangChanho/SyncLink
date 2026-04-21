@@ -13,7 +13,7 @@ import {
   View, Text, TextInput, TouchableOpacity,
   ScrollView, StyleSheet, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { light as colors } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles, fontSize } from '@/constants/typography';
 
@@ -60,6 +60,10 @@ export function NoteEditor({
   onCancel,
   isSaving = false,
 }: NoteEditorProps) {
+  // Resolve active theme colors for dark mode support (TASK-700)
+  const colors = useColors();
+  const styles = makeStyles(colors);
+
   const [title,   setTitle]   = useState(initialTitle);
   const [content, setContent] = useState(initialContent);
 
@@ -185,7 +189,14 @@ export function NoteEditor({
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ * Must be called inside the component to react to theme changes.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -272,4 +283,5 @@ const styles = StyleSheet.create({
     paddingBottom:     spacing[10],
     minHeight:         300,
   },
-});
+  });
+}

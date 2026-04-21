@@ -10,7 +10,7 @@ import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { useRouter } from 'expo-router';
 import type { Todo } from '@/types';
-import { light as colors } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles, fontSize } from '@/constants/typography';
 
@@ -52,6 +52,10 @@ function formatNoteDate(date: Date): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function NoteCard({ note, width, onDelete: _onDelete }: NoteCardProps) {
+  // Resolve active theme colors for dark mode support (TASK-700)
+  const colors = useColors();
+  const styles = makeStyles(colors);
+
   const router = useRouter();
 
   const preview  = truncateForPreview(note.content);
@@ -75,7 +79,7 @@ export function NoteCard({ note, width, onDelete: _onDelete }: NoteCardProps) {
       {/* Content preview — rendered as markdown for accurate visual representation */}
       {preview ? (
         <View style={styles.previewContainer}>
-          <Markdown style={markdownPreviewStyles}>{preview}</Markdown>
+          <Markdown style={styles.markdownStyles}>{preview}</Markdown>
         </View>
       ) : (
         <Text style={styles.emptyPreview}>내용 없음</Text>
@@ -91,67 +95,78 @@ export function NoteCard({ note, width, onDelete: _onDelete }: NoteCardProps) {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius:    radius.lg,
-    borderWidth:     1,
-    borderColor:     colors.border,
-    padding:         spacing[3],
-    // Minimum height so cards in a 2-column grid look balanced
-    minHeight:       120,
-    // Shadow for depth
-    shadowColor:     '#000',
-    shadowOffset:    { width: 0, height: 1 },
-    shadowOpacity:   0.06,
-    shadowRadius:    2,
-    elevation:       1,
-  },
-  title: {
-    ...textStyles.labelLg,
-    color:        colors.textPrimary,
-    marginBottom: spacing[1],
-  },
-  /** Wraps the Markdown preview — clipped to ~4 lines height. */
-  previewContainer: {
-    flex:       1,
-    maxHeight:  fontSize.sm * 1.5 * 4,  // approx 4 lines
-    overflow:   'hidden',
-  },
-  emptyPreview: {
-    fontSize:  fontSize.sm,
-    color:     colors.textTertiary,
-    fontStyle: 'italic',
-    flex:      1,
-  },
-  footer: {
-    marginTop:  spacing[2],
-    alignItems: 'flex-end',
-  },
-  date: {
-    ...textStyles.caption,
-    color: colors.textTertiary,
-  },
-});
-
 /**
- * Markdown styles for the card preview.
- * Keeps all text small and muted to fit within the compact card layout.
+ * Dynamic styles factory — receives current theme color tokens.
+ * Must be called inside the component to react to theme changes.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ * @returns StyleSheet + markdownPreviewStyles for this component
  */
-const markdownPreviewStyles = {
-  body: {
-    fontSize:   fontSize.sm,
-    color:      colors.textSecondary,
-    lineHeight: fontSize.sm * 1.5,
-  },
-  paragraph: {
-    marginTop:    0,
-    marginBottom: 0,
-  },
-  heading1: { fontSize: fontSize.sm, fontWeight: '700' as const, marginBottom: 0 },
-  heading2: { fontSize: fontSize.sm, fontWeight: '700' as const, marginBottom: 0 },
-  heading3: { fontSize: fontSize.sm, fontWeight: '600' as const, marginBottom: 0 },
-  code_inline: { fontSize: fontSize.sm, backgroundColor: 'transparent' },
-  fence:       { fontSize: fontSize.sm, backgroundColor: 'transparent', padding: 0 },
-  list_item:   { marginBottom: 0 },
-};
+function makeStyles(colors: ReturnType<typeof useColors>) {
+  const sheet = StyleSheet.create({
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius:    radius.lg,
+      borderWidth:     1,
+      borderColor:     colors.border,
+      padding:         spacing[3],
+      // Minimum height so cards in a 2-column grid look balanced
+      minHeight:       120,
+      // Shadow for depth
+      shadowColor:     '#000',
+      shadowOffset:    { width: 0, height: 1 },
+      shadowOpacity:   0.06,
+      shadowRadius:    2,
+      elevation:       1,
+    },
+    title: {
+      ...textStyles.labelLg,
+      color:        colors.textPrimary,
+      marginBottom: spacing[1],
+    },
+    /** Wraps the Markdown preview — clipped to ~4 lines height. */
+    previewContainer: {
+      flex:       1,
+      maxHeight:  fontSize.sm * 1.5 * 4,  // approx 4 lines
+      overflow:   'hidden',
+    },
+    emptyPreview: {
+      fontSize:  fontSize.sm,
+      color:     colors.textTertiary,
+      fontStyle: 'italic',
+      flex:      1,
+    },
+    footer: {
+      marginTop:  spacing[2],
+      alignItems: 'flex-end',
+    },
+    date: {
+      ...textStyles.caption,
+      color: colors.textTertiary,
+    },
+  });
+
+  /**
+   * Markdown styles for the card preview.
+   * Keeps all text small and muted to fit within the compact card layout.
+   */
+  const markdownStyles = {
+    body: {
+      fontSize:   fontSize.sm,
+      color:      colors.textSecondary,
+      lineHeight: fontSize.sm * 1.5,
+    },
+    paragraph: {
+      marginTop:    0,
+      marginBottom: 0,
+    },
+    heading1: { fontSize: fontSize.sm, fontWeight: '700' as const, marginBottom: 0 },
+    heading2: { fontSize: fontSize.sm, fontWeight: '700' as const, marginBottom: 0 },
+    heading3: { fontSize: fontSize.sm, fontWeight: '600' as const, marginBottom: 0 },
+    code_inline: { fontSize: fontSize.sm, backgroundColor: 'transparent' },
+    fence:       { fontSize: fontSize.sm, backgroundColor: 'transparent', padding: 0 },
+    list_item:   { marginBottom: 0 },
+  };
+
+  return { ...sheet, markdownStyles };
+}

@@ -27,11 +27,15 @@
 import { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { light as colors } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
 import { textStyles } from '@/constants/typography';
 import { supabase } from '@/lib/supabase';
 
 export default function AuthCallbackScreen() {
+  // Resolve active theme colors for dark mode support (TASK-700)
+  const colors = useColors();
+  const styles = makeStyles(colors);
+
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
 
@@ -137,26 +141,34 @@ export default function AuthCallbackScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.background,
-    gap: 12,
-  },
-  label: {
-    ...textStyles.bodySm,
-    color: colors.textSecondary,
-  },
-  errorText: {
-    ...textStyles.bodySm,
-    color: colors.error,
-    textAlign: 'center',
-    paddingHorizontal: 24,
-  },
-  retryLink: {
-    ...textStyles.label,
-    color: colors.primary,
-  },
-});
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ * Must be called inside the component to react to theme changes.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.background,
+      gap: 12,
+    },
+    label: {
+      ...textStyles.bodySm,
+      color: colors.textSecondary,
+    },
+    errorText: {
+      ...textStyles.bodySm,
+      color: colors.error,
+      textAlign: 'center',
+      paddingHorizontal: 24,
+    },
+    retryLink: {
+      ...textStyles.label,
+      color: colors.primary,
+    },
+  });
+}

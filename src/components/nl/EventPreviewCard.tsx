@@ -11,7 +11,7 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NLParseResult, Confidence } from '@/types';
-import { light as colors } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 
@@ -51,6 +51,10 @@ interface FieldRowProps {
 }
 
 function FieldRow({ label, value, uncertain }: FieldRowProps) {
+  // Each sub-component calls useColors() directly so it reacts to theme changes
+  const colors = useColors();
+  const styles = makeStyles(colors);
+
   return (
     <View style={[styles.fieldRow, uncertain && styles.fieldRowUncertain]}>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -77,6 +81,10 @@ interface BadgeProps {
 }
 
 function SourceBadge({ source, confidence }: BadgeProps) {
+  // Each sub-component calls useColors() directly so it reacts to theme changes
+  const colors = useColors();
+  const styles = makeStyles(colors);
+
   if (source === 'ai') {
     return (
       <View style={styles.aiBadge}>
@@ -99,6 +107,10 @@ function SourceBadge({ source, confidence }: BadgeProps) {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function EventPreviewCard({ result }: Props) {
+  // Resolve active theme colors for dark mode support (TASK-700)
+  const colors = useColors();
+  const styles = makeStyles(colors);
+
   const { parsed, confidence, source } = result;
 
   // Repeat type label mapping
@@ -157,7 +169,14 @@ export function EventPreviewCard({ result }: Props) {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ * Must be called inside the component to react to theme changes.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
@@ -242,4 +261,5 @@ const styles = StyleSheet.create({
     color: colors.warning,
     fontSize: 10,
   },
-});
+  });
+}
