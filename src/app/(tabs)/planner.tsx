@@ -17,7 +17,7 @@
  * TASK-600 (Sprint 6): 다크모드 대응 — makeStyles(colors) 패턴으로 교체
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, memo } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput,
   TouchableOpacity, ActivityIndicator, Alert,
@@ -51,6 +51,7 @@ const PRIORITY_LABELS: Record<string, string> = {
 
 /**
  * A single todo item row with checkbox, title, priority badge, and swipe-delete.
+ * Wrapped in memo to prevent re-renders when parent re-renders (TASK-701).
  *
  * @param todo     - The todo item to display
  * @param onToggle - Called when the checkbox is pressed
@@ -59,7 +60,7 @@ const PRIORITY_LABELS: Record<string, string> = {
  * @param colors   - Active theme color tokens
  * @param styles   - Pre-computed styles for current theme
  */
-function TodoRow({
+const TodoRow = memo(function TodoRow({
   todo,
   onToggle,
   onEdit,
@@ -126,7 +127,7 @@ function TodoRow({
       </View>
     </Pressable>
   );
-}
+});
 
 /**
  * Category section header row.
@@ -184,13 +185,14 @@ function CategorySectionHeader({
 
 /**
  * Note card for the Notes tab.
+ * Wrapped in memo to prevent re-renders when scrolling (TASK-701).
  *
  * @param note    - Note Todo object
  * @param onPress - Called when card is tapped
  * @param onDelete - Called when delete is long-pressed
  * @param styles  - Pre-computed styles for current theme
  */
-function NoteCard({
+const NoteCard = memo(function NoteCard({
   note,
   onPress,
   onDelete,
@@ -227,7 +229,7 @@ function NoteCard({
       <Text style={styles.noteCardDate}>{updatedLabel}</Text>
     </Pressable>
   );
-}
+});
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -556,22 +558,29 @@ export default function PlannerScreen() {
       );
     }
 
+    // Memoized renderItem to prevent unnecessary re-renders on scroll (TASK-701)
+    const renderNoteItem = ({ item }: { item: Todo }) => (
+      <NoteCard
+        note={item}
+        onPress={(note) => router.push(`/note/${note.id}`)}
+        onDelete={removeNote}
+        styles={styles}
+      />
+    );
+
     return (
       <FlatList
         data={notes}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.id}    // explicit keyExtractor (TASK-701)
         numColumns={2}
         contentContainerStyle={styles.notesGrid}
         columnWrapperStyle={styles.notesRow}
         showsVerticalScrollIndicator={false}
-        renderItem={({ item }) => (
-          <NoteCard
-            note={item}
-            onPress={(note) => router.push(`/note/${note.id}`)}
-            onDelete={removeNote}
-            styles={styles}
-          />
-        )}
+        removeClippedSubviews={true}        // remove off-screen items (TASK-701)
+        maxToRenderPerBatch={10}            // limit batch render size (TASK-701)
+        windowSize={5}                      // keep 5x viewport in memory (TASK-701)
+        initialNumToRender={10}             // initial render count (TASK-701)
+        renderItem={renderNoteItem}
       />
     );
   };

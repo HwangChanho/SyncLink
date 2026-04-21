@@ -17,10 +17,11 @@ import {
   TouchableOpacity,
   ScrollView,
   TextInput,
-  Image,
   ActivityIndicator,
   Alert,
 } from 'react-native';
+// expo-image provides better caching and performance than React Native's Image (TASK-701)
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';

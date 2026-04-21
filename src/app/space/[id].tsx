@@ -21,13 +21,14 @@ import {
   ActivityIndicator,
   Alert,
   Share,
-  Image,
   Modal,
   TextInput,
   Switch,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+// expo-image provides better caching and performance than React Native's Image (TASK-701)
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
