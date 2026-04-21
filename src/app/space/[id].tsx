@@ -30,7 +30,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { light as colors } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import * as spaceService from '@/services/spaceService';
@@ -42,6 +42,8 @@ import type { Space, SpaceMember, Anniversary, FreeTimeSlot } from '@/types';
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SpaceDetailScreen() {
+  const colors = useColors();
+  const styles = makeStyles(colors);
   const { id: spaceId } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuthStore();
   const { spaceDetails, fetchSpaceById, removeSpace, setSpaceDetail } = useSpaceStore();
@@ -133,7 +135,7 @@ export default function SpaceDetailScreen() {
     if (!space) return;
     try {
       await Share.share({
-        message: `SyncDay Space "${space.name}"에 초대합니다!\n초대 코드: ${space.inviteCode}\n앱에서 코드를 입력하거나 링크를 클릭하세요: syncday://join/${space.inviteCode}`,
+        message: `SyncDay Space "${space.name}"에 초대합니다!\n초대 코드: ${space.inviteCode}\n참여 링크: syncday://space/join/${space.inviteCode}`,
         title: `${space.name} 초대`,
       });
     } catch {
@@ -443,6 +445,8 @@ export default function SpaceDetailScreen() {
         onToggleRepeatYearly={setAnniversaryRepeatYearly}
         onSave={handleSaveAnniversary}
         onClose={handleCloseAnniversaryModal}
+        colors={colors}
+        styles={styles}
       />
 
       <ScrollView
@@ -468,7 +472,7 @@ export default function SpaceDetailScreen() {
         </View>
 
         {/* Invite code section */}
-        <SectionCard title="초대 코드">
+        <SectionCard title="초대 코드" colors={colors} styles={styles}>
           <View style={styles.inviteCodeRow}>
             <Text style={styles.inviteCode}>{space.inviteCode}</Text>
             <TouchableOpacity
@@ -498,7 +502,7 @@ export default function SpaceDetailScreen() {
         </SectionCard>
 
         {/* Member list */}
-        <SectionCard title={`멤버 (${space.members.length}명)`}>
+        <SectionCard title={`멤버 (${space.members.length}명)`} colors={colors} styles={styles}>
           {space.members.map(member => (
             <MemberRow
               key={member.userId}
@@ -506,6 +510,8 @@ export default function SpaceDetailScreen() {
               isCurrentUser={member.userId === user?.id}
               canRemove={isOwner && member.userId !== user?.id}
               onRemove={() => handleRemoveMember(member)}
+              colors={colors}
+              styles={styles}
             />
           ))}
           {/* Join button for non-full couple or group spaces */}
@@ -523,6 +529,8 @@ export default function SpaceDetailScreen() {
         {/* Anniversary / D-day section */}
         <SectionCard
           title="기념일"
+          colors={colors}
+          styles={styles}
           action={
             <TouchableOpacity onPress={handleOpenAnniversaryModal}>
               <Text style={styles.sectionActionText}>+ 추가</Text>
@@ -537,13 +545,15 @@ export default function SpaceDetailScreen() {
                 key={anniversary.id}
                 anniversary={anniversary}
                 onDelete={() => handleDeleteAnniversary(anniversary)}
+                colors={colors}
+                styles={styles}
               />
             ))
           )}
         </SectionCard>
 
         {/* Free time finder (TASK-203) */}
-        <SectionCard title="빈 시간 찾기">
+        <SectionCard title="빈 시간 찾기" colors={colors} styles={styles}>
           {/* Date range inputs */}
           <View style={styles.ftDateRow}>
             <View style={styles.ftDateField}>
@@ -616,7 +626,7 @@ export default function SpaceDetailScreen() {
               </Text>
             ) : (
               ftResults.map((slot, idx) => (
-                <FreeTimeSlotRow key={idx} slot={slot} />
+                <FreeTimeSlotRow key={idx} slot={slot} colors={colors} styles={styles} />
               ))
             )
           )}
@@ -644,10 +654,14 @@ function SectionCard({
   title,
   action,
   children,
+  colors: _colors,
+  styles,
 }: {
   title: string;
   action?: React.ReactNode;
   children: React.ReactNode;
+  colors: ReturnType<typeof useColors>;
+  styles: ReturnType<typeof makeStyles>;
 }) {
   return (
     <View style={styles.sectionCard}>
@@ -666,11 +680,15 @@ function MemberRow({
   isCurrentUser,
   canRemove,
   onRemove,
+  colors: _colors,
+  styles,
 }: {
   member: SpaceMember;
   isCurrentUser: boolean;
   canRemove: boolean;
   onRemove: () => void;
+  colors: ReturnType<typeof useColors>;
+  styles: ReturnType<typeof makeStyles>;
 }) {
   return (
     <View style={styles.memberRow}>
@@ -732,6 +750,8 @@ function AnniversaryAddModal({
   onToggleRepeatYearly,
   onSave,
   onClose,
+  colors,
+  styles,
 }: {
   visible: boolean;
   title: string;
@@ -747,6 +767,8 @@ function AnniversaryAddModal({
   onToggleRepeatYearly: (v: boolean) => void;
   onSave: () => void;
   onClose: () => void;
+  colors: ReturnType<typeof useColors>;
+  styles: ReturnType<typeof makeStyles>;
 }) {
   return (
     <Modal
@@ -861,7 +883,15 @@ function AnniversaryAddModal({
  * Renders one free time slot with formatted date, time range, and duration.
  * e.g. "4월 21일 (화)  14:00 – 17:00  (3시간)"
  */
-function FreeTimeSlotRow({ slot }: { slot: FreeTimeSlot }) {
+function FreeTimeSlotRow({
+  slot,
+  colors: _colors,
+  styles,
+}: {
+  slot: FreeTimeSlot;
+  colors: ReturnType<typeof useColors>;
+  styles: ReturnType<typeof makeStyles>;
+}) {
   const KO_WD = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
   function fmt(d: Date): string {
@@ -895,9 +925,13 @@ function FreeTimeSlotRow({ slot }: { slot: FreeTimeSlot }) {
 function AnniversaryRow({
   anniversary,
   onDelete,
+  colors: _colors,
+  styles,
 }: {
   anniversary: Anniversary;
   onDelete: () => void;
+  colors: ReturnType<typeof useColors>;
+  styles: ReturnType<typeof makeStyles>;
 }) {
   const dLabel = formatDday(anniversary.daysFromToday);
 
@@ -944,7 +978,13 @@ function formatDday(days: number): string {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -1420,4 +1460,5 @@ const styles = StyleSheet.create({
     ...textStyles.labelLg,
     color: colors.textInverse,
   },
-});
+  });
+}

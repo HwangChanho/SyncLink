@@ -16,12 +16,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { light as colors } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { useTodoStore } from '@/stores/todoStore';
 
 export default function NoteNewScreen() {
+  const colors = useColors();
+  const styles = makeStyles(colors);
   const router = useRouter();
   const { addTodo } = useTodoStore();
 
@@ -120,7 +122,13 @@ export default function NoteNewScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
   flex: { flex: 1 },
 
   container: {
@@ -179,4 +187,5 @@ const styles = StyleSheet.create({
     minHeight: 300,
     lineHeight: 24,
   },
-});
+  });
+}

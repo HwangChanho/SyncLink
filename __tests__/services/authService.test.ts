@@ -70,6 +70,10 @@ jest.mock('@/lib/supabase', () => ({
       getUser: jest.fn(),
     },
     from: jest.fn(),
+    // Edge Functions client — used by deleteAccount
+    functions: {
+      invoke: jest.fn(),
+    },
   },
 }));
 
@@ -953,9 +957,70 @@ describe('authService', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('deleteAccount', () => {
-    it('미구현: "계정 삭제 기능은 준비 중입니다." 에러 throw', async () => {
-      // Sprint 5에서 Edge Function으로 구현 예정
-      await expect(deleteAccount()).rejects.toThrow('계정 삭제 기능은 준비 중입니다.');
+    const mockSession = {
+      access_token: 'test-access-token',
+      refresh_token: 'test-refresh-token',
+      user: { id: 'user-123', email: 'test@test.com', created_at: new Date().toISOString() },
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+    };
+
+    beforeEach(() => {
+      // Reset mocks before each test
+      (supabase.auth.getSession as jest.Mock).mockReset();
+      (supabase.functions.invoke as jest.Mock).mockReset();
+      (supabase.auth.signOut as jest.Mock).mockReset();
+    });
+
+    it('세션 없음: "로그인이 필요합니다." 에러 throw', async () => {
+      (supabase.auth.getSession as jest.Mock).mockResolvedValue({
+        data: { session: null },
+        error: null,
+      });
+
+      await expect(deleteAccount()).rejects.toThrow('로그인이 필요합니다.');
+    });
+
+    it('세션 에러: "로그인이 필요합니다." 에러 throw', async () => {
+      (supabase.auth.getSession as jest.Mock).mockResolvedValue({
+        data: { session: null },
+        error: new Error('session error'),
+      });
+
+      await expect(deleteAccount()).rejects.toThrow('로그인이 필요합니다.');
+    });
+
+    it('Edge Function 성공: delete-account 호출 후 signOut', async () => {
+      // Arrange
+      (supabase.auth.getSession as jest.Mock).mockResolvedValue({
+        data: { session: mockSession },
+        error: null,
+      });
+      (supabase.functions.invoke as jest.Mock).mockResolvedValue({ error: null });
+      (supabase.auth.signOut as jest.Mock).mockResolvedValue({ error: null });
+
+      // Act
+      await deleteAccount();
+
+      // Assert: Edge Function called with correct auth header
+      expect(supabase.functions.invoke).toHaveBeenCalledWith('delete-account', {
+        headers: { Authorization: `Bearer ${mockSession.access_token}` },
+      });
+      // Assert: local sign-out performed after successful deletion
+      expect(supabase.auth.signOut).toHaveBeenCalled();
+    });
+
+    it('Edge Function 에러: "계정 삭제에 실패했습니다." 에러 throw', async () => {
+      (supabase.auth.getSession as jest.Mock).mockResolvedValue({
+        data: { session: mockSession },
+        error: null,
+      });
+      (supabase.functions.invoke as jest.Mock).mockResolvedValue({
+        error: new Error('Function returned error'),
+      });
+
+      await expect(deleteAccount()).rejects.toThrow();
+      // signOut should NOT be called when deletion fails
+      expect(supabase.auth.signOut).not.toHaveBeenCalled();
     });
   });
 });

@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { light as colors } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import {
@@ -22,6 +22,8 @@ import {
 type Provider = 'google' | 'kakao' | 'apple';
 
 export default function LoginScreen() {
+  const colors = useColors();
+  const styles = makeStyles(colors);
   const [loading, setLoading] = useState<Provider | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -124,7 +126,13 @@ function isCancelError(err: unknown): boolean {
   return msg === 'cancelled' || msg.includes('canceled') || msg.includes('user_cancelled');
 }
 
-const styles = StyleSheet.create({
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   content: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
@@ -156,4 +164,5 @@ const styles = StyleSheet.create({
     ...textStyles.caption, color: colors.textTertiary,
     textAlign: 'center', marginTop: spacing[8], paddingHorizontal: spacing[4],
   },
-});
+  });
+}

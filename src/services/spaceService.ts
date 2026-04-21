@@ -302,6 +302,81 @@ export async function regenerateInviteCode(spaceId: string): Promise<string> {
 }
 
 /**
+ * Get a space's summary information by invite code, without joining.
+ * Used by the Space Join screen to display space info before the user confirms.
+ *
+ * @param code - 6-char alphanumeric invite code (case-insensitive)
+ * @returns SpaceSummary for the matching space
+ * @throws Error if the code doesn't match any space
+ */
+export async function getSpaceByInviteCode(code: string): Promise<SpaceSummary> {
+  const { data: spaceRow, error } = await supa
+    .from('spaces')
+    .select('*')
+    .eq('invite_code', code.toUpperCase())
+    .single() as { data: SpaceRow | null; error: Error | null };
+
+  if (error || !spaceRow) {
+    throw new Error('유효하지 않은 초대 코드입니다. 코드를 다시 확인해 주세요.');
+  }
+
+  // Count current members
+  const { data: members, error: countError } = await supa
+    .from('space_members')
+    .select('space_id')
+    .eq('space_id', spaceRow.id) as { data: Array<{ space_id: string }> | null; error: Error | null };
+
+  if (countError) throw countError;
+
+  return toSpaceSummary(spaceRow, (members ?? []).length);
+}
+
+/**
+ * Join a space by its ID (idempotent — safe to call even if already a member).
+ * Unlike joinSpaceByInviteCode, this does NOT re-check couple limits.
+ * Use after calling getSpaceByInviteCode to preview the space.
+ *
+ * @param spaceId - UUID of the space to join
+ * @throws Error if not authenticated
+ */
+export async function joinSpace(spaceId: string): Promise<void> {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error('로그인이 필요합니다.');
+
+  // Fetch current membership count for color assignment
+  const { data: currentMembers, error: fetchError } = await supa
+    .from('space_members')
+    .select('user_id')
+    .eq('space_id', spaceId) as { data: Array<{ user_id: string }> | null; error: Error | null };
+
+  if (fetchError) throw fetchError;
+
+  const memberList = currentMembers ?? [];
+
+  // Already a member — idempotent: do nothing
+  if (memberList.some(m => m.user_id === userId)) return;
+
+  // Assign a color based on existing member count
+  const colorIndex = memberList.length % memberEventColors.length;
+  const memberColor = memberEventColors[colorIndex] as string;
+
+  // ON CONFLICT DO NOTHING: safe to call multiple times
+  const { error: insertError } = await supa
+    .from('space_members')
+    .insert({
+      space_id: spaceId,
+      user_id: userId,
+      role: 'member',
+      color: memberColor,
+    }) as { error: Error | null };
+
+  // Unique constraint violation = already a member → treat as success
+  if (insertError && !insertError.message?.includes('unique')) {
+    throw insertError;
+  }
+}
+
+/**
  * Leave a space (removes the current user from space_members).
  * If the user is the owner and there are other members, ownership is transferred
  * to the next oldest member (earliest joined_at).

@@ -4,11 +4,14 @@
  * Shows:
  *  - Personalized greeting with user nickname
  *  - Today's date in Korean format
+ *
+ * TASK-600 (Sprint 6): 다크모드 대응 — makeStyles(colors) 패턴으로 교체
  */
 
 import { View, Text, StyleSheet } from 'react-native';
 import { useAuthStore } from '@/stores/authStore';
-import { light as colors } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
+import type { ColorTokens } from '@/hooks/useColors';
 import { spacing } from '@/constants/spacing';
 import { textStyles, fontSize } from '@/constants/typography';
 
@@ -35,6 +38,8 @@ function getGreeting(): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function HomeHeader() {
+  const colors    = useColors();
+  const styles    = makeStyles(colors);
   const user      = useAuthStore(s => s.user);
   const nickname  = user?.nickname ?? '사용자';
   const greeting  = getGreeting();
@@ -52,24 +57,31 @@ export function HomeHeader() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: spacing[4],
-    paddingTop:        spacing[4],
-    paddingBottom:     spacing[2],
-  },
-  greeting: {
-    fontSize:   fontSize.xl,
-    fontWeight: '400',
-    color:      colors.textPrimary,
-  },
-  name: {
-    fontWeight: '700',
-    color:      colors.primary,
-  },
-  date: {
-    ...textStyles.bodySm,
-    color:     colors.textSecondary,
-    marginTop: spacing[0.5],
-  },
-});
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeStyles(colors: ColorTokens) {
+  return StyleSheet.create({
+    container: {
+      paddingHorizontal: spacing[4],
+      paddingTop:        spacing[4],
+      paddingBottom:     spacing[2],
+    },
+    greeting: {
+      fontSize:   fontSize.xl,
+      fontWeight: '400',
+      color:      colors.textPrimary,
+    },
+    name: {
+      fontWeight: '700',
+      color:      colors.primary,
+    },
+    date: {
+      ...textStyles.bodySm,
+      color:     colors.textSecondary,
+      marginTop: spacing[0.5],
+    },
+  });
+}

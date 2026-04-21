@@ -9,6 +9,7 @@
  *
  * Route: /note/[id]
  * TASK-402 (Sprint 4)
+ * TASK-600 (Sprint 6): 다크모드 대응 — makeStyles(colors) 패턴으로 교체
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -21,7 +22,8 @@ import Markdown from 'react-native-markdown-display';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { light as colors } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
+import type { ColorTokens } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { useTodoStore } from '@/stores/todoStore';
@@ -30,6 +32,11 @@ import type { Todo } from '@/types';
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function NoteDetailScreen() {
+  // Dark mode: resolve current theme colors and build dynamic styles
+  const colors = useColors();
+  const styles = makeStyles(colors);
+  const markdownBodyStyles = makeMarkdownStyles(colors);
+
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { notes, editNote, removeNote } = useTodoStore();
@@ -254,147 +261,159 @@ function formatDate(date: Date): string {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeStyles(colors: ColorTokens) {
+  return StyleSheet.create({
+    flex: { flex: 1 },
 
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  centered: {
-    flex: 1,
-    backgroundColor: colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing[4],
-  },
-  notFoundText: {
-    ...textStyles.body,
-    color: colors.textSecondary,
-  },
-  backBtn: {
-    paddingVertical: spacing[2],
-    paddingHorizontal: spacing[4],
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  backBtnText: {
-    ...textStyles.label,
-    color: colors.textSecondary,
-  },
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    centered: {
+      flex: 1,
+      backgroundColor: colors.background,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing[4],
+    },
+    notFoundText: {
+      ...textStyles.body,
+      color: colors.textSecondary,
+    },
+    backBtn: {
+      paddingVertical: spacing[2],
+      paddingHorizontal: spacing[4],
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    backBtnText: {
+      ...textStyles.label,
+      color: colors.textSecondary,
+    },
 
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: componentHeight.navHeader,
-    paddingHorizontal: spacing[3],
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    gap: spacing[2],
-  },
-  headerBtn: {
-    padding: spacing[1],
-  },
-  headerTitle: {
-    ...textStyles.labelLg,
-    color: colors.textPrimary,
-    flex: 1,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[1],
-  },
-  savePill: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[1.5],
-    borderRadius: radius.full,
-  },
-  savePillText: {
-    ...textStyles.labelLg,
-    color: colors.textInverse,
-  },
-  buttonDisabled: { opacity: 0.5 },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      height: componentHeight.navHeader,
+      paddingHorizontal: spacing[3],
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      gap: spacing[2],
+    },
+    headerBtn: {
+      padding: spacing[1],
+    },
+    headerTitle: {
+      ...textStyles.labelLg,
+      color: colors.textPrimary,
+      flex: 1,
+    },
+    headerRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing[1],
+    },
+    savePill: {
+      backgroundColor: colors.primary,
+      paddingHorizontal: spacing[4],
+      paddingVertical: spacing[1.5],
+      borderRadius: radius.full,
+    },
+    savePillText: {
+      ...textStyles.labelLg,
+      color: colors.textInverse,
+    },
+    buttonDisabled: { opacity: 0.5 },
 
-  // Editor (edit mode)
-  editorContent: {
-    padding: spacing[4],
-    flexGrow: 1,
-  },
-  titleInput: {
-    ...textStyles.h3,
-    color: colors.textPrimary,
-    paddingVertical: spacing[2],
-    marginBottom: spacing[2],
-  },
-  divider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginBottom: spacing[3],
-    marginTop: spacing[1],
-  },
-  bodyInput: {
-    ...textStyles.body,
-    color: colors.textPrimary,
-    minHeight: 300,
-    lineHeight: 24,
-  },
+    // Editor (edit mode)
+    editorContent: {
+      padding: spacing[4],
+      flexGrow: 1,
+    },
+    titleInput: {
+      ...textStyles.h3,
+      color: colors.textPrimary,
+      paddingVertical: spacing[2],
+      marginBottom: spacing[2],
+    },
+    divider: {
+      height: 1,
+      backgroundColor: colors.border,
+      marginBottom: spacing[3],
+      marginTop: spacing[1],
+    },
+    bodyInput: {
+      ...textStyles.body,
+      color: colors.textPrimary,
+      minHeight: 300,
+      lineHeight: 24,
+    },
 
-  // Viewer (view mode)
-  viewContent: {
-    padding: spacing[5],
-    paddingBottom: spacing[10],
-  },
-  viewTitle: {
-    ...textStyles.h2,
-    color: colors.textPrimary,
-    marginBottom: spacing[1],
-  },
-  viewDate: {
-    ...textStyles.caption,
-    color: colors.textTertiary,
-    marginBottom: spacing[4],
-  },
-  viewBody: {
-    ...textStyles.bodyLg,
-    color: colors.textPrimary,
-    lineHeight: 26,
-  },
-});
+    // Viewer (view mode)
+    viewContent: {
+      padding: spacing[5],
+      paddingBottom: spacing[10],
+    },
+    viewTitle: {
+      ...textStyles.h2,
+      color: colors.textPrimary,
+      marginBottom: spacing[1],
+    },
+    viewDate: {
+      ...textStyles.caption,
+      color: colors.textTertiary,
+      marginBottom: spacing[4],
+    },
+    viewBody: {
+      ...textStyles.bodyLg,
+      color: colors.textPrimary,
+      lineHeight: 26,
+    },
+  });
+}
 
 /**
- * Markdown styles for the note view body.
+ * Markdown styles factory for the note view body.
  * Maps common markdown elements to the app's design tokens.
+ * Computed at render time to respond to theme changes.
+ *
+ * @param colors - Active theme color tokens from useColors()
  */
-const markdownBodyStyles = {
-  body: {
-    color:      colors.textPrimary,
-    fontSize:   18,
-    lineHeight: 26,
-  },
-  heading1: { color: colors.textPrimary, fontWeight: '700' as const, marginTop: 16, marginBottom: 8 },
-  heading2: { color: colors.textPrimary, fontWeight: '700' as const, marginTop: 12, marginBottom: 6 },
-  heading3: { color: colors.textPrimary, fontWeight: '600' as const, marginTop: 8,  marginBottom: 4 },
-  paragraph: { marginTop: 0, marginBottom: 12 },
-  strong: { fontWeight: '700' as const },
-  em:     { fontStyle: 'italic' as const },
-  code_inline: {
-    backgroundColor: colors.surfaceAlt,
-    color:           colors.textPrimary,
-    borderRadius:    4,
-    paddingHorizontal: 4,
-  },
-  fence: {
-    backgroundColor: colors.surfaceAlt,
-    borderRadius:    8,
-    padding:         12,
-  },
-  blockquote: {
-    borderLeftWidth: 3,
-    borderLeftColor: colors.border,
-    paddingLeft:     12,
-    opacity:         0.7,
-  },
-};
+function makeMarkdownStyles(colors: ColorTokens) {
+  return {
+    body: {
+      color:      colors.textPrimary,
+      fontSize:   18,
+      lineHeight: 26,
+    },
+    heading1: { color: colors.textPrimary, fontWeight: '700' as const, marginTop: 16, marginBottom: 8 },
+    heading2: { color: colors.textPrimary, fontWeight: '700' as const, marginTop: 12, marginBottom: 6 },
+    heading3: { color: colors.textPrimary, fontWeight: '600' as const, marginTop: 8,  marginBottom: 4 },
+    paragraph: { marginTop: 0, marginBottom: 12 },
+    strong: { fontWeight: '700' as const },
+    em:     { fontStyle: 'italic' as const },
+    code_inline: {
+      backgroundColor: colors.surfaceAlt,
+      color:           colors.textPrimary,
+      borderRadius:    4,
+      paddingHorizontal: 4,
+    },
+    fence: {
+      backgroundColor: colors.surfaceAlt,
+      borderRadius:    8,
+      padding:         12,
+    },
+    blockquote: {
+      borderLeftWidth: 3,
+      borderLeftColor: colors.border,
+      paddingLeft:     12,
+      opacity:         0.7,
+    },
+  };
+}

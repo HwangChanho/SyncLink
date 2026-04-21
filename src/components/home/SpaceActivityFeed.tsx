@@ -6,6 +6,8 @@
  * Tapping an activity item navigates to the event detail screen.
  *
  * Manages its own Realtime subscription (self-contained).
+ *
+ * TASK-600 (Sprint 6): 다크모드 대응 — makeStyles(colors) 패턴으로 교체
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -13,7 +15,8 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { subscribeToSharedEvents } from '@/services/eventRealtimeService';
 import type { EventSummary } from '@/types';
-import { light as colors } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
+import type { ColorTokens } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles, fontSize } from '@/constants/typography';
 
@@ -57,6 +60,8 @@ function formatRelative(date: Date): string {
 const MAX_ITEMS = 10;
 
 export function SpaceActivityFeed() {
+  const colors = useColors();
+  const styles = makeStyles(colors);
   const router = useRouter();
   const [activities, setActivities] = useState<ActivityItem[]>([]);
 
@@ -96,7 +101,7 @@ export function SpaceActivityFeed() {
       },
     );
     return unsubscribe;
-  }, [addActivity]);
+  }, [addActivity, colors.border]);
 
   return (
     <View style={styles.container}>
@@ -153,76 +158,83 @@ export function SpaceActivityFeed() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  container: {
-    marginHorizontal: spacing[4],
-    marginBottom:     spacing[6],
-  },
-  header: {
-    flexDirection:  'row',
-    justifyContent: 'space-between',
-    alignItems:     'center',
-    marginBottom:   spacing[2],
-  },
-  headerTitle: {
-    ...textStyles.h4,
-    color: colors.textPrimary,
-  },
-  liveIndicator: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           spacing[1],
-  },
-  liveDot: {
-    width:           6,
-    height:          6,
-    borderRadius:    3,
-    backgroundColor: '#22C55E', // green — live
-  },
-  liveText: {
-    ...textStyles.caption,
-    color: '#22C55E',
-  },
-  emptyContainer: {
-    paddingVertical: spacing[3],
-    alignItems:      'center',
-  },
-  emptyText: {
-    ...textStyles.bodySm,
-    color: colors.textTertiary,
-  },
-  list: {
-    backgroundColor: colors.surface,
-    borderRadius:    radius.md,
-    borderWidth:     1,
-    borderColor:     colors.border,
-    overflow:        'hidden',
-  },
-  activityRow: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    padding:        spacing[3],
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  colorDot: {
-    width:        10,
-    height:       10,
-    borderRadius: 5,
-    marginRight:  spacing[3],
-    flexShrink:   0,
-  },
-  activityContent: {
-    flex: 1,
-  },
-  activityLabel: {
-    fontSize:   fontSize.sm,
-    color:      colors.textPrimary,
-    lineHeight: fontSize.sm * 1.4,
-  },
-  activityTime: {
-    ...textStyles.caption,
-    color:     colors.textTertiary,
-    marginTop: spacing[0.5],
-  },
-});
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeStyles(colors: ColorTokens) {
+  return StyleSheet.create({
+    container: {
+      marginHorizontal: spacing[4],
+      marginBottom:     spacing[6],
+    },
+    header: {
+      flexDirection:  'row',
+      justifyContent: 'space-between',
+      alignItems:     'center',
+      marginBottom:   spacing[2],
+    },
+    headerTitle: {
+      ...textStyles.h4,
+      color: colors.textPrimary,
+    },
+    liveIndicator: {
+      flexDirection: 'row',
+      alignItems:    'center',
+      gap:           spacing[1],
+    },
+    liveDot: {
+      width:           6,
+      height:          6,
+      borderRadius:    3,
+      backgroundColor: '#22C55E', // green — live
+    },
+    liveText: {
+      ...textStyles.caption,
+      color: '#22C55E',
+    },
+    emptyContainer: {
+      paddingVertical: spacing[3],
+      alignItems:      'center',
+    },
+    emptyText: {
+      ...textStyles.bodySm,
+      color: colors.textTertiary,
+    },
+    list: {
+      backgroundColor: colors.surface,
+      borderRadius:    radius.md,
+      borderWidth:     1,
+      borderColor:     colors.border,
+      overflow:        'hidden',
+    },
+    activityRow: {
+      flexDirection:  'row',
+      alignItems:     'center',
+      padding:        spacing[3],
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    colorDot: {
+      width:        10,
+      height:       10,
+      borderRadius: 5,
+      marginRight:  spacing[3],
+      flexShrink:   0,
+    },
+    activityContent: {
+      flex: 1,
+    },
+    activityLabel: {
+      fontSize:   fontSize.sm,
+      color:      colors.textPrimary,
+      lineHeight: fontSize.sm * 1.4,
+    },
+    activityTime: {
+      ...textStyles.caption,
+      color:     colors.textTertiary,
+      marginTop: spacing[0.5],
+    },
+  });
+}

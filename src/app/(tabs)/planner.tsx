@@ -14,6 +14,7 @@
  *      - 빠른 작성 FAB (Floating Action Button)
  *
  * TASK-400 (Sprint 4)
+ * TASK-600 (Sprint 6): 다크모드 대응 — makeStyles(colors) 패턴으로 교체
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -26,7 +27,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { light as colors } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
+import type { ColorTokens } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { useTodoStore } from '@/stores/todoStore';
@@ -37,13 +39,6 @@ import { getCategories } from '@/services/categoryService';
 
 /** Tab type for the planner top tabs. */
 type PlannerTab = 'todo' | 'notes';
-
-/** Priority color mapping for visual badges. */
-const PRIORITY_COLORS: Record<string, string> = {
-  high:   colors.error,
-  medium: colors.warning,
-  low:    colors.success,
-};
 
 /** Priority labels in Korean. */
 const PRIORITY_LABELS: Record<string, string> = {
@@ -57,23 +52,35 @@ const PRIORITY_LABELS: Record<string, string> = {
 /**
  * A single todo item row with checkbox, title, priority badge, and swipe-delete.
  *
- * @param todo - The todo item to display
+ * @param todo     - The todo item to display
  * @param onToggle - Called when the checkbox is pressed
- * @param onEdit - Called when the row is tapped (open edit modal)
+ * @param onEdit   - Called when the row is tapped (open edit modal)
  * @param onDelete - Called when the delete action is triggered
+ * @param colors   - Active theme color tokens
+ * @param styles   - Pre-computed styles for current theme
  */
 function TodoRow({
   todo,
   onToggle,
   onEdit,
   onDelete,
+  colors,
+  styles,
 }: {
   todo: Todo;
   onToggle: (id: string) => void;
   onEdit: (todo: Todo) => void;
   onDelete: (id: string) => void;
+  colors: ColorTokens;
+  styles: ReturnType<typeof makeStyles>;
 }) {
-  const priorityColor = PRIORITY_COLORS[todo.priority] ?? colors.textTertiary;
+  // Priority color mapping — uses live color tokens
+  const priorityColorMap: Record<string, string> = {
+    high:   colors.error,
+    medium: colors.warning,
+    low:    colors.success,
+  };
+  const priorityColor = priorityColorMap[todo.priority] ?? colors.textTertiary;
 
   return (
     <Pressable
@@ -124,10 +131,13 @@ function TodoRow({
 /**
  * Category section header row.
  *
- * @param category - Category object or null for uncategorized
- * @param count    - Number of items in this category
- * @param isExpanded - Whether completed items are shown
+ * @param category       - Category object or null for uncategorized
+ * @param count          - Total items in this category
+ * @param completedCount - Completed items count
+ * @param isExpanded     - Whether completed items are shown
  * @param onToggleExpand - Toggle show/hide completed
+ * @param colors         - Active theme color tokens
+ * @param styles         - Pre-computed styles for current theme
  */
 function CategorySectionHeader({
   category,
@@ -135,12 +145,16 @@ function CategorySectionHeader({
   completedCount,
   isExpanded,
   onToggleExpand,
+  colors,
+  styles,
 }: {
   category: Category | null;
   count: number;
   completedCount: number;
   isExpanded: boolean;
   onToggleExpand: () => void;
+  colors: ColorTokens;
+  styles: ReturnType<typeof makeStyles>;
 }) {
   const name = category?.name ?? '미분류';
   const color = category?.color ?? colors.textTertiary;
@@ -174,15 +188,18 @@ function CategorySectionHeader({
  * @param note    - Note Todo object
  * @param onPress - Called when card is tapped
  * @param onDelete - Called when delete is long-pressed
+ * @param styles  - Pre-computed styles for current theme
  */
 function NoteCard({
   note,
   onPress,
   onDelete,
+  styles,
 }: {
   note: Todo;
   onPress: (note: Todo) => void;
   onDelete: (id: string) => void;
+  styles: ReturnType<typeof makeStyles>;
 }) {
   // Show first ~100 chars of content as preview
   const preview = note.content?.slice(0, 100) ?? '';
@@ -235,17 +252,28 @@ function formatRelativeDate(date: Date): string {
 /**
  * Simple inline edit modal for a todo item.
  * Shows title input, priority selector, due date input.
+ *
+ * @param todo    - The todo being edited (null = not open)
+ * @param visible - Whether the modal is visible
+ * @param onClose - Called when the modal should close
+ * @param onSave  - Called with the updated title
+ * @param colors  - Active theme color tokens
+ * @param styles  - Pre-computed styles for current theme
  */
 function EditTodoModal({
   todo,
   visible,
   onClose,
   onSave,
+  colors,
+  styles,
 }: {
   todo: Todo | null;
   visible: boolean;
   onClose: () => void;
   onSave: (id: string, updates: Partial<Todo>) => Promise<void>;
+  colors: ColorTokens;
+  styles: ReturnType<typeof makeStyles>;
 }) {
   const [title, setTitle] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -312,6 +340,10 @@ function EditTodoModal({
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function PlannerScreen() {
+  // Dark mode: resolve current theme colors and build dynamic styles
+  const colors = useColors();
+  const styles = makeStyles(colors);
+
   const { todos, notes, isLoading, error, fetchTodos, fetchNotes, addTodo, editTodo, removeTodo, removeNote, toggleTodo, clearError } = useTodoStore();
 
   const [activeTab, setActiveTab] = useState<PlannerTab>('todo');
@@ -467,6 +499,8 @@ export default function PlannerScreen() {
                 completedCount={completedTodos.length}
                 isExpanded={isExpanded}
                 onToggleExpand={() => toggleExpand(key)}
+                colors={colors}
+                styles={styles}
               />
 
               {/* Incomplete todos */}
@@ -477,6 +511,8 @@ export default function PlannerScreen() {
                   onToggle={toggleTodo}
                   onEdit={setEditingTodo}
                   onDelete={removeTodo}
+                  colors={colors}
+                  styles={styles}
                 />
               ))}
 
@@ -488,6 +524,8 @@ export default function PlannerScreen() {
                   onToggle={toggleTodo}
                   onEdit={setEditingTodo}
                   onDelete={removeTodo}
+                  colors={colors}
+                  styles={styles}
                 />
               ))}
             </View>
@@ -531,6 +569,7 @@ export default function PlannerScreen() {
             note={item}
             onPress={(note) => router.push(`/note/${note.id}`)}
             onDelete={removeNote}
+            styles={styles}
           />
         )}
       />
@@ -623,6 +662,8 @@ export default function PlannerScreen() {
         visible={editingTodo !== null}
         onClose={() => setEditingTodo(null)}
         onSave={editTodo}
+        colors={colors}
+        styles={styles}
       />
     </SafeAreaView>
   );
@@ -630,307 +671,316 @@ export default function PlannerScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ * Called inside the component to react to theme changes.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ * @returns StyleSheet object for the planner screen and sub-components
+ */
+function makeStyles(colors: ColorTokens) {
+  return StyleSheet.create({
+    flex: { flex: 1 },
 
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
 
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: componentHeight.navHeader,
-    paddingHorizontal: spacing[4],
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  headerTitle: {
-    ...textStyles.h3,
-    color: colors.textPrimary,
-    flex: 1,
-  },
-  headerAction: {
-    padding: spacing[1],
-  },
+    // Header
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      height: componentHeight.navHeader,
+      paddingHorizontal: spacing[4],
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    headerTitle: {
+      ...textStyles.h3,
+      color: colors.textPrimary,
+      flex: 1,
+    },
+    headerAction: {
+      padding: spacing[1],
+    },
 
-  // Tab bar
-  tabBar: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.background,
-  },
-  tabItem: {
-    flex: 1,
-    paddingVertical: spacing[3],
-    alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  tabItemActive: {
-    borderBottomColor: colors.primary,
-  },
-  tabLabel: {
-    ...textStyles.labelLg,
-    color: colors.textSecondary,
-  },
-  tabLabelActive: {
-    color: colors.primary,
-  },
+    // Tab bar
+    tabBar: {
+      flexDirection: 'row',
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      backgroundColor: colors.background,
+    },
+    tabItem: {
+      flex: 1,
+      paddingVertical: spacing[3],
+      alignItems: 'center',
+      borderBottomWidth: 2,
+      borderBottomColor: 'transparent',
+    },
+    tabItemActive: {
+      borderBottomColor: colors.primary,
+    },
+    tabLabel: {
+      ...textStyles.labelLg,
+      color: colors.textSecondary,
+    },
+    tabLabelActive: {
+      color: colors.primary,
+    },
 
-  // List
-  listContainer: { flex: 1 },
-  listContent: {
-    paddingTop: spacing[2],
-    paddingBottom: spacing[20],
-  },
+    // List
+    listContainer: { flex: 1 },
+    listContent: {
+      paddingTop: spacing[2],
+      paddingBottom: spacing[20],
+    },
 
-  // Category section
-  categorySection: {
-    marginBottom: spacing[2],
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[2],
-    gap: spacing[2],
-    backgroundColor: colors.backgroundAlt,
-  },
-  categoryDot: {
-    width: 8,
-    height: 8,
-    borderRadius: radius.full,
-  },
-  sectionTitle: {
-    ...textStyles.labelLg,
-    color: colors.textPrimary,
-    flex: 1,
-  },
-  sectionCount: {
-    ...textStyles.caption,
-    color: colors.textTertiary,
-  },
-  completedToggle: {
-    paddingHorizontal: spacing[2],
-  },
-  completedToggleText: {
-    ...textStyles.caption,
-    color: colors.primary,
-  },
+    // Category section
+    categorySection: {
+      marginBottom: spacing[2],
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: spacing[4],
+      paddingVertical: spacing[2],
+      gap: spacing[2],
+      backgroundColor: colors.backgroundAlt,
+    },
+    categoryDot: {
+      width: 8,
+      height: 8,
+      borderRadius: radius.full,
+    },
+    sectionTitle: {
+      ...textStyles.labelLg,
+      color: colors.textPrimary,
+      flex: 1,
+    },
+    sectionCount: {
+      ...textStyles.caption,
+      color: colors.textTertiary,
+    },
+    completedToggle: {
+      paddingHorizontal: spacing[2],
+    },
+    completedToggleText: {
+      ...textStyles.caption,
+      color: colors.primary,
+    },
 
-  // Todo row
-  todoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    gap: spacing[3],
-    backgroundColor: colors.background,
-  },
-  todoRowPressed: {
-    backgroundColor: colors.backgroundAlt,
-  },
-  checkboxContainer: {
-    justifyContent: 'center',
-  },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: radius.sm,
-    borderWidth: 2,
-    borderColor: colors.borderStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxChecked: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  todoTitle: {
-    ...textStyles.body,
-    color: colors.textPrimary,
-    flex: 1,
-  },
-  todoTitleCompleted: {
-    textDecorationLine: 'line-through',
-    color: colors.textTertiary,
-  },
-  priorityBadge: {
-    paddingHorizontal: spacing[2],
-    paddingVertical: spacing[0.5],
-    borderRadius: radius.sm,
-  },
-  priorityText: {
-    ...textStyles.labelSm,
-  },
+    // Todo row
+    todoRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: spacing[4],
+      paddingVertical: spacing[3],
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      gap: spacing[3],
+      backgroundColor: colors.background,
+    },
+    todoRowPressed: {
+      backgroundColor: colors.backgroundAlt,
+    },
+    checkboxContainer: {
+      justifyContent: 'center',
+    },
+    checkbox: {
+      width: 22,
+      height: 22,
+      borderRadius: radius.sm,
+      borderWidth: 2,
+      borderColor: colors.borderStrong,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    checkboxChecked: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    todoTitle: {
+      ...textStyles.body,
+      color: colors.textPrimary,
+      flex: 1,
+    },
+    todoTitleCompleted: {
+      textDecorationLine: 'line-through',
+      color: colors.textTertiary,
+    },
+    priorityBadge: {
+      paddingHorizontal: spacing[2],
+      paddingVertical: spacing[0.5],
+      borderRadius: radius.sm,
+    },
+    priorityText: {
+      ...textStyles.labelSm,
+    },
 
-  // Notes grid
-  notesGrid: {
-    padding: spacing[3],
-    paddingBottom: spacing[20],
-  },
-  notesRow: {
-    gap: spacing[3],
-    marginBottom: spacing[3],
-  },
-  noteCard: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing[4],
-    minHeight: 120,
-    gap: spacing[1],
-  },
-  noteCardPressed: {
-    backgroundColor: colors.backgroundAlt,
-  },
-  noteCardTitle: {
-    ...textStyles.labelLg,
-    color: colors.textPrimary,
-  },
-  noteCardPreview: {
-    ...textStyles.bodySm,
-    color: colors.textSecondary,
-    flex: 1,
-  },
-  noteCardDate: {
-    ...textStyles.caption,
-    color: colors.textTertiary,
-    marginTop: spacing[1],
-  },
+    // Notes grid
+    notesGrid: {
+      padding: spacing[3],
+      paddingBottom: spacing[20],
+    },
+    notesRow: {
+      gap: spacing[3],
+      marginBottom: spacing[3],
+    },
+    noteCard: {
+      flex: 1,
+      backgroundColor: colors.surface,
+      borderRadius: radius.xl,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: spacing[4],
+      minHeight: 120,
+      gap: spacing[1],
+    },
+    noteCardPressed: {
+      backgroundColor: colors.backgroundAlt,
+    },
+    noteCardTitle: {
+      ...textStyles.labelLg,
+      color: colors.textPrimary,
+    },
+    noteCardPreview: {
+      ...textStyles.bodySm,
+      color: colors.textSecondary,
+      flex: 1,
+    },
+    noteCardDate: {
+      ...textStyles.caption,
+      color: colors.textTertiary,
+      marginTop: spacing[1],
+    },
 
-  // Quick add bar
-  quickAddBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.background,
-  },
-  quickAddInput: {
-    flex: 1,
-    height: componentHeight.buttonSm,
-    backgroundColor: colors.inputBackground,
-    borderWidth: 1,
-    borderColor: colors.inputBorder,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing[4],
-    ...textStyles.body,
-    color: colors.textPrimary,
-  },
-  quickAddBtn: {
-    width: componentHeight.buttonSm,
-    height: componentHeight.buttonSm,
-    borderRadius: radius.full,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+    // Quick add bar
+    quickAddBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing[2],
+      paddingHorizontal: spacing[4],
+      paddingVertical: spacing[3],
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      backgroundColor: colors.background,
+    },
+    quickAddInput: {
+      flex: 1,
+      height: componentHeight.buttonSm,
+      backgroundColor: colors.inputBackground,
+      borderWidth: 1,
+      borderColor: colors.inputBorder,
+      borderRadius: radius.full,
+      paddingHorizontal: spacing[4],
+      ...textStyles.body,
+      color: colors.textPrimary,
+    },
+    quickAddBtn: {
+      width: componentHeight.buttonSm,
+      height: componentHeight.buttonSm,
+      borderRadius: radius.full,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
 
-  // FAB
-  fab: {
-    position: 'absolute',
-    right: spacing[5],
-    bottom: spacing[8],
-    width: 56,
-    height: 56,
-    borderRadius: radius.full,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
+    // FAB
+    fab: {
+      position: 'absolute',
+      right: spacing[5],
+      bottom: spacing[8],
+      width: 56,
+      height: 56,
+      borderRadius: radius.full,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      elevation: 4,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+    },
 
-  // Empty states
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing[3],
-    padding: spacing[6],
-  },
-  emptyText: {
-    ...textStyles.h4,
-    color: colors.textSecondary,
-  },
-  emptySubText: {
-    ...textStyles.bodySm,
-    color: colors.textTertiary,
-    textAlign: 'center',
-  },
+    // Empty states
+    centered: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing[3],
+      padding: spacing[6],
+    },
+    emptyText: {
+      ...textStyles.h4,
+      color: colors.textSecondary,
+    },
+    emptySubText: {
+      ...textStyles.bodySm,
+      color: colors.textTertiary,
+      textAlign: 'center',
+    },
 
-  // Edit modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
-  modalSheet: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: radius['2xl'],
-    borderTopRightRadius: radius['2xl'],
-    padding: spacing[6],
-    gap: spacing[4],
-  },
-  modalTitle: {
-    ...textStyles.h4,
-    color: colors.textPrimary,
-  },
-  modalInput: {
-    height: componentHeight.inputField,
-    backgroundColor: colors.inputBackground,
-    borderWidth: 1,
-    borderColor: colors.inputBorder,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing[4],
-    ...textStyles.body,
-    color: colors.textPrimary,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: spacing[3],
-  },
-  modalCancelBtn: {
-    flex: 1,
-    height: componentHeight.buttonSm,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalCancelText: {
-    ...textStyles.labelLg,
-    color: colors.textSecondary,
-  },
-  modalSaveBtn: {
-    flex: 1,
-    height: componentHeight.buttonSm,
-    borderRadius: radius.md,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalSaveText: {
-    ...textStyles.labelLg,
-    color: colors.textInverse,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-});
+    // Edit modal
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.4)',
+      justifyContent: 'flex-end',
+    },
+    modalSheet: {
+      backgroundColor: colors.background,
+      borderTopLeftRadius: radius['2xl'],
+      borderTopRightRadius: radius['2xl'],
+      padding: spacing[6],
+      gap: spacing[4],
+    },
+    modalTitle: {
+      ...textStyles.h4,
+      color: colors.textPrimary,
+    },
+    modalInput: {
+      height: componentHeight.inputField,
+      backgroundColor: colors.inputBackground,
+      borderWidth: 1,
+      borderColor: colors.inputBorder,
+      borderRadius: radius.md,
+      paddingHorizontal: spacing[4],
+      ...textStyles.body,
+      color: colors.textPrimary,
+    },
+    modalActions: {
+      flexDirection: 'row',
+      gap: spacing[3],
+    },
+    modalCancelBtn: {
+      flex: 1,
+      height: componentHeight.buttonSm,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    modalCancelText: {
+      ...textStyles.labelLg,
+      color: colors.textSecondary,
+    },
+    modalSaveBtn: {
+      flex: 1,
+      height: componentHeight.buttonSm,
+      borderRadius: radius.md,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    modalSaveText: {
+      ...textStyles.labelLg,
+      color: colors.textInverse,
+    },
+    buttonDisabled: {
+      opacity: 0.5,
+    },
+  });
+}

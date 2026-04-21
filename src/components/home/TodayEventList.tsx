@@ -3,13 +3,17 @@
  *
  * Reads from eventStore.eventsByDate[today].
  * Tapping an event navigates to the event detail screen.
+ *
+ * TASK-600 (Sprint 6): 다크모드 대응 — makeStyles(colors) 패턴으로 교체
  */
 
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useEventStore } from '@/stores/eventStore';
 import type { EventSummary } from '@/types';
-import { light as colors, palette } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
+import type { ColorTokens } from '@/hooks/useColors';
+import { palette } from '@/constants/colors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 
@@ -31,9 +35,11 @@ function formatTime(date: Date): string {
 interface EventRowProps {
   event: EventSummary;
   onPress: () => void;
+  colors: ColorTokens;
+  styles: ReturnType<typeof makeStyles>;
 }
 
-function EventRow({ event, onPress }: EventRowProps) {
+function EventRow({ event, onPress, colors, styles }: EventRowProps) {
   const timeLabel = event.allDay
     ? '종일'
     : `${formatTime(event.startAt)} – ${formatTime(event.endAt)}`;
@@ -61,6 +67,8 @@ function EventRow({ event, onPress }: EventRowProps) {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function TodayEventList() {
+  const colors = useColors();
+  const styles = makeStyles(colors);
   const router       = useRouter();
   const eventsByDate = useEventStore(s => s.eventsByDate);
 
@@ -94,6 +102,8 @@ export function TodayEventList() {
               key={event.id}
               event={event}
               onPress={() => router.push(`/event/${event.id}`)}
+              colors={colors}
+              styles={styles}
             />
           ))}
         </ScrollView>
@@ -104,71 +114,78 @@ export function TodayEventList() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  container: {
-    marginHorizontal: spacing[4],
-    marginBottom:     spacing[4],
-  },
-  header: {
-    flexDirection:  'row',
-    justifyContent: 'space-between',
-    alignItems:     'center',
-    marginBottom:   spacing[2],
-  },
-  headerTitle: {
-    ...textStyles.h4,
-    color: colors.textPrimary,
-  },
-  headerCount: {
-    ...textStyles.caption,
-    color: colors.textTertiary,
-  },
-  row: {
-    flexDirection:    'row',
-    alignItems:       'center',
-    backgroundColor:  colors.surface,
-    borderRadius:     radius.md,
-    borderWidth:      1,
-    borderColor:      colors.border,
-    marginBottom:     spacing[2],
-    overflow:         'hidden',
-  },
-  colorBar: {
-    width:  4,
-    alignSelf: 'stretch',
-  },
-  rowContent: {
-    flex:            1,
-    paddingVertical: spacing[2],
-    paddingLeft:     spacing[3],
-    paddingRight:    spacing[2],
-  },
-  eventTitle: {
-    ...textStyles.labelLg,
-    color: colors.textPrimary,
-  },
-  eventTime: {
-    ...textStyles.caption,
-    color:     colors.textSecondary,
-    marginTop: spacing[0.5],
-  },
-  sharedBadge: {
-    backgroundColor: palette.violet100,
-    borderRadius:    radius.sm,
-    paddingVertical:   spacing[0.5],
-    paddingHorizontal: spacing[1.5],
-    marginRight:       spacing[2],
-  },
-  sharedBadgeText: {
-    ...textStyles.labelSm,
-    color: colors.primary,
-  },
-  emptyContainer: {
-    paddingVertical: spacing[3],
-    alignItems:      'center',
-  },
-  emptyText: {
-    ...textStyles.bodySm,
-    color: colors.textTertiary,
-  },
-});
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeStyles(colors: ColorTokens) {
+  return StyleSheet.create({
+    container: {
+      marginHorizontal: spacing[4],
+      marginBottom:     spacing[4],
+    },
+    header: {
+      flexDirection:  'row',
+      justifyContent: 'space-between',
+      alignItems:     'center',
+      marginBottom:   spacing[2],
+    },
+    headerTitle: {
+      ...textStyles.h4,
+      color: colors.textPrimary,
+    },
+    headerCount: {
+      ...textStyles.caption,
+      color: colors.textTertiary,
+    },
+    row: {
+      flexDirection:    'row',
+      alignItems:       'center',
+      backgroundColor:  colors.surface,
+      borderRadius:     radius.md,
+      borderWidth:      1,
+      borderColor:      colors.border,
+      marginBottom:     spacing[2],
+      overflow:         'hidden',
+    },
+    colorBar: {
+      width:  4,
+      alignSelf: 'stretch',
+    },
+    rowContent: {
+      flex:            1,
+      paddingVertical: spacing[2],
+      paddingLeft:     spacing[3],
+      paddingRight:    spacing[2],
+    },
+    eventTitle: {
+      ...textStyles.labelLg,
+      color: colors.textPrimary,
+    },
+    eventTime: {
+      ...textStyles.caption,
+      color:     colors.textSecondary,
+      marginTop: spacing[0.5],
+    },
+    sharedBadge: {
+      backgroundColor: palette.violet100,
+      borderRadius:    radius.sm,
+      paddingVertical:   spacing[0.5],
+      paddingHorizontal: spacing[1.5],
+      marginRight:       spacing[2],
+    },
+    sharedBadgeText: {
+      ...textStyles.labelSm,
+      color: colors.primary,
+    },
+    emptyContainer: {
+      paddingVertical: spacing[3],
+      alignItems:      'center',
+    },
+    emptyText: {
+      ...textStyles.bodySm,
+      color: colors.textTertiary,
+    },
+  });
+}

@@ -24,7 +24,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { light as colors } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import * as spaceService from '@/services/spaceService';
@@ -36,6 +36,8 @@ const CODE_LENGTH = 6;
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function JoinSpaceScreen() {
+  const colors = useColors();
+  const styles = makeStyles(colors);
   const params = useLocalSearchParams<{ code?: string }>();
   const [code, setCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -158,7 +160,13 @@ export default function JoinSpaceScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -243,4 +251,5 @@ const styles = StyleSheet.create({
     ...textStyles.labelLg,
     color: colors.textInverse,
   },
-});
+  });
+}

@@ -22,7 +22,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { light as colors } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import * as spaceService from '@/services/spaceService';
@@ -56,6 +56,8 @@ const SPACE_TYPE_OPTIONS: SpaceTypeOption[] = [
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function CreateSpaceScreen() {
+  const colors = useColors();
+  const styles = makeStyles(colors);
   const [name, setName] = useState('');
   const [selectedType, setSelectedType] = useState<SpaceType>('couple');
   const [isLoading, setIsLoading] = useState(false);
@@ -193,7 +195,13 @@ export default function CreateSpaceScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -314,4 +322,5 @@ const styles = StyleSheet.create({
     ...textStyles.labelLg,
     color: colors.textInverse,
   },
-});
+  });
+}

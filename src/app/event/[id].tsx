@@ -36,7 +36,7 @@ import type { ReactionEmoji } from '@/types';
 import { useEventStore } from '@/stores/eventStore';
 import { useSpaceStore } from '@/stores/spaceStore';
 import { useAuthStore } from '@/stores/authStore';
-import { light as colors } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 
@@ -74,6 +74,8 @@ const REPEAT_LABELS: Record<string, string> = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function EventDetailScreen() {
+  const colors = useColors();
+  const styles = makeStyles(colors);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { removeEvent } = useEventStore();
@@ -581,7 +583,14 @@ export default function EventDetailScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ * Called inside the component to react to theme changes.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,
@@ -859,4 +868,5 @@ const styles = StyleSheet.create({
   commentSendDisabled: {
     opacity: 0.5,
   },
-});
+  });
+}

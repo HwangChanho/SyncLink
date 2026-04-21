@@ -460,14 +460,47 @@ export async function updateNotificationPreferences(
 
 /**
  * Permanently delete the authenticated user's account.
- * This is a Level 4 operation — requires explicit confirmation in UI.
  *
- * Note: Actual deletion requires a Supabase Edge Function with the service role key
- * since the client anon key cannot delete auth.users rows.
- * TODO: Implement delete-account Edge Function in Sprint 5.
+ * Flow:
+ *  1. Get the current session to extract the access token
+ *  2. Call the `delete-account` Edge Function with the Bearer token
+ *     — the function uses the service role key to call auth.admin.deleteUser()
+ *  3. Sign out locally to clear cached credentials
+ *
+ * The Edge Function handles ON DELETE CASCADE for all dependent rows.
+ * The client anon key cannot call auth.admin.deleteUser() directly.
+ *
+ * @throws Error if not authenticated or if the Edge Function returns an error
  */
 export async function deleteAccount(): Promise<void> {
-  throw new Error('계정 삭제 기능은 준비 중입니다.');
+  // Retrieve the active session — needed to pass the access token to the Edge Function
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || !session) {
+    throw new Error('로그인이 필요합니다.');
+  }
+
+  // Invoke the delete-account Edge Function with the user's Bearer token.
+  // The function validates the JWT and then uses the service role key to
+  // call auth.admin.deleteUser() on the verified user ID.
+  const { error } = await supabase.functions.invoke('delete-account', {
+    headers: {
+      // Pass the session token so the Edge Function can verify the caller's identity
+      Authorization: `Bearer ${session.access_token}`,
+    },
+  });
+
+  if (error) {
+    // error.message may contain a server-side message; fall back to generic Korean message
+    throw new Error(error.message ?? '계정 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+  }
+
+  // Clear local session after successful server-side deletion
+  // Ignore sign-out errors — the auth.users row is already gone
+  try {
+    await supabase.auth.signOut();
+  } catch {
+    // Silent — server-side deletion already succeeded
+  }
 }
 
 // ─── Private helpers ──────────────────────────────────────────────────────────

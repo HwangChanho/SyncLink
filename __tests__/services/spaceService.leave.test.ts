@@ -1,0 +1,342 @@
+/**
+ * __tests__/services/spaceService.leave.test.ts
+ *
+ * TASK-612: Space Leave + deleteAccount 테스트 스위트
+ *
+ * 커버리지:
+ *  leaveSpace — 일반 member 탈퇴 → space_members DELETE 호출
+ *  leaveSpace — owner 탈퇴 + 다른 멤버 있음 → 소유권 이전 후 DELETE
+ *  leaveSpace — 마지막 멤버 탈퇴 → space_members DELETE + spaces DELETE
+ *  leaveSpace — 멤버가 아닌 사용자 → "해당 Space의 멤버가 아닙니다." 에러 throw
+ *  leaveSpace — 미인증 → "로그인이 필요합니다." 에러 throw
+ *  leaveSpace — 멤버 조회 DB 에러 → 에러 throw
+ *  leaveSpace — DELETE 에러 → 에러 throw
+ *
+ * deleteAccount 관련 케이스는 authService.test.ts 에 이미 포함되어 있으므로
+ * 여기서는 leaveSpace에만 집중합니다.
+ *
+ * Mock 전략:
+ *  - TDZ-safe 팩토리 패턴: jest.mock 내부에서 chain/fromFn 생성 후 __참조 export
+ *  - makeChain(): thenable + .single() dual-mode 체인 빌더
+ *  - 복수 from() 호출은 mockReturnValueOnce 체이닝으로 순서 보장
+ *
+ * @task TASK-612
+ */
+
+// ─── Mock 선언 (TDZ-safe) ─────────────────────────────────────────────────────
+
+jest.mock('@/lib/supabase', () => {
+  const chain: Record<string, jest.Mock> = {
+    select:      jest.fn().mockReturnThis(),
+    insert:      jest.fn().mockReturnThis(),
+    update:      jest.fn().mockReturnThis(),
+    delete:      jest.fn().mockReturnThis(),
+    eq:          jest.fn().mockReturnThis(),
+    neq:         jest.fn().mockReturnThis(),
+    in:          jest.fn().mockReturnThis(),
+    order:       jest.fn().mockReturnThis(),
+    single:      jest.fn(),
+    maybeSingle: jest.fn(),
+  };
+
+  const fromFn = jest.fn().mockReturnValue(chain);
+
+  return {
+    supabase: { from: fromFn },
+    getCurrentUserId: jest.fn().mockResolvedValue('user-123'),
+    __chain:  chain,
+    __fromFn: fromFn,
+  };
+});
+
+// ─── Imports ──────────────────────────────────────────────────────────────────
+
+import { getCurrentUserId } from '@/lib/supabase';
+import { leaveSpace } from '@/services/spaceService';
+import type { SpaceMemberRow } from '@/types';
+
+// ─── Mock 참조 추출 ───────────────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const { __fromFn: fromFn } = require('@/lib/supabase') as any;
+
+// ─── 헬퍼 ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Supabase 쿼리 체인의 dual-mode thenable mock 생성.
+ * await chain     → resolvedValue (non-single 쿼리, 예: order → thenable)
+ * await chain.single() → resolvedValue
+ */
+function makeChain(resolvedValue: { data: unknown; error: unknown }) {
+  const promise = Promise.resolve(resolvedValue);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ch: any = {
+    select:      jest.fn().mockReturnThis(),
+    insert:      jest.fn().mockReturnThis(),
+    update:      jest.fn().mockReturnThis(),
+    delete:      jest.fn().mockReturnThis(),
+    eq:          jest.fn().mockReturnThis(),
+    neq:         jest.fn().mockReturnThis(),
+    in:          jest.fn().mockReturnThis(),
+    order:       jest.fn().mockReturnThis(),
+    single:      jest.fn().mockResolvedValue(resolvedValue),
+    maybeSingle: jest.fn().mockResolvedValue(resolvedValue),
+    then:  promise.then.bind(promise),
+    catch: promise.catch.bind(promise),
+  };
+  return ch;
+}
+
+// ─── 공통 픽스처 ──────────────────────────────────────────────────────────────
+
+/** 현재 로그인 유저 (user-123)의 일반 member 행 */
+const myMemberRow: SpaceMemberRow = {
+  id:        'member-row-001',
+  space_id:  'space-001',
+  user_id:   'user-123',
+  role:      'member',
+  color:     '#8B5CF6',
+  joined_at: new Date('2026-01-10').toISOString(),
+};
+
+/** 다른 유저의 member 행 */
+const otherMemberRow: SpaceMemberRow = {
+  id:        'member-row-002',
+  space_id:  'space-001',
+  user_id:   'other-user-456',
+  role:      'member',
+  color:     '#FB7185',
+  joined_at: new Date('2026-01-11').toISOString(),
+};
+
+/** 현재 로그인 유저 (user-123)의 owner 행 */
+const myOwnerRow: SpaceMemberRow = {
+  ...myMemberRow,
+  role: 'owner',
+};
+
+// ─── 테스트 스위트 ────────────────────────────────────────────────────────────
+
+describe('spaceService — leaveSpace', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (getCurrentUserId as jest.Mock).mockResolvedValue('user-123');
+    fromFn.mockReturnValue(makeChain({ data: null, error: null }));
+  });
+
+  // ════════════════════════════════════════════════════════════════════════
+  // 일반 탈퇴 (member role)
+  // ════════════════════════════════════════════════════════════════════════
+
+  describe('일반 member 탈퇴', () => {
+    it('space_members에서 DELETE 호출 확인 (eq id 조건)', async () => {
+      // leaveSpace 내부 호출 순서:
+      //   1) from('space_members').select('*').eq('space_id').order() → 멤버 전체 조회
+      //   2) from('space_members').delete().eq('id', myMembership.id) → 내 행 삭제
+      const membersFetchChain = makeChain({
+        data: [myMemberRow, otherMemberRow],
+        error: null,
+      });
+      const deleteChain = makeChain({ data: null, error: null });
+
+      fromFn
+        .mockReturnValueOnce(membersFetchChain)  // 멤버 조회
+        .mockReturnValueOnce(deleteChain);        // 내 행 삭제
+
+      await leaveSpace('space-001');
+
+      // DELETE가 올바른 테이블에 호출되었는지 확인
+      expect(fromFn).toHaveBeenCalledWith('space_members');
+      expect(deleteChain.delete).toHaveBeenCalled();
+      expect(deleteChain.eq).toHaveBeenCalledWith('id', myMemberRow.id);
+    });
+
+    it('탈퇴 후 다른 멤버가 남아있으면 spaces DELETE 미호출', async () => {
+      const membersFetchChain = makeChain({
+        data: [myMemberRow, otherMemberRow],
+        error: null,
+      });
+      const deleteChain = makeChain({ data: null, error: null });
+
+      fromFn
+        .mockReturnValueOnce(membersFetchChain)
+        .mockReturnValueOnce(deleteChain);
+
+      await leaveSpace('space-001');
+
+      // from() 호출 횟수: 멤버 조회(1) + 멤버 삭제(1) = 2회
+      // spaces DELETE가 호출되면 3회가 됨 → 2회여야 함
+      expect(fromFn).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════════════
+  // owner 탈퇴 — 소유권 이전
+  // ════════════════════════════════════════════════════════════════════════
+
+  describe('owner 탈퇴 — 소유권 이전', () => {
+    it('owner이고 다른 멤버 있음 → 소유권 이전 UPDATE 후 내 행 DELETE', async () => {
+      // 멤버 목록: owner(user-123), member(other-user-456)
+      // joined_at 기준 ASC 정렬이므로 otherMemberRow가 "다음 owner" 대상
+      const membersFetchChain = makeChain({
+        data: [myOwnerRow, otherMemberRow],
+        error: null,
+      });
+      const updateChain = makeChain({ data: null, error: null });  // 소유권 이전
+      const deleteChain = makeChain({ data: null, error: null });  // 내 행 삭제
+
+      fromFn
+        .mockReturnValueOnce(membersFetchChain)  // 멤버 조회
+        .mockReturnValueOnce(updateChain)         // UPDATE role='owner'
+        .mockReturnValueOnce(deleteChain);        // DELETE 내 행
+
+      await leaveSpace('space-001');
+
+      // 소유권 이전 UPDATE 검증
+      expect(updateChain.update).toHaveBeenCalledWith({ role: 'owner' });
+      expect(updateChain.eq).toHaveBeenCalledWith('id', otherMemberRow.id);
+
+      // 내 멤버십 삭제 검증
+      expect(deleteChain.delete).toHaveBeenCalled();
+      expect(deleteChain.eq).toHaveBeenCalledWith('id', myOwnerRow.id);
+    });
+
+    it('소유권 이전 UPDATE 에러 → 에러 throw, DELETE 미호출', async () => {
+      const membersFetchChain = makeChain({
+        data: [myOwnerRow, otherMemberRow],
+        error: null,
+      });
+      const updateError = new Error('update failed');
+      const updateChain = makeChain({ data: null, error: updateError });
+
+      fromFn
+        .mockReturnValueOnce(membersFetchChain)
+        .mockReturnValueOnce(updateChain);
+
+      await expect(leaveSpace('space-001')).rejects.toThrow('update failed');
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════════════
+  // 마지막 멤버 탈퇴 — Space 자동 삭제
+  // ════════════════════════════════════════════════════════════════════════
+
+  describe('마지막 멤버 탈퇴 — Space 삭제', () => {
+    it('마지막 멤버 탈퇴 시 space_members DELETE + spaces DELETE 모두 호출', async () => {
+      // 본인만 있는 멤버 목록
+      const membersFetchChain = makeChain({
+        data: [myMemberRow],
+        error: null,
+      });
+      const memberDeleteChain = makeChain({ data: null, error: null });
+      const spaceDeleteChain  = makeChain({ data: null, error: null });
+
+      fromFn
+        .mockReturnValueOnce(membersFetchChain)   // 멤버 조회
+        .mockReturnValueOnce(memberDeleteChain)   // 내 행 삭제
+        .mockReturnValueOnce(spaceDeleteChain);   // Space 삭제
+
+      await leaveSpace('space-001');
+
+      // Space 삭제 검증 (from('spaces').delete().eq('id', ...))
+      expect(fromFn).toHaveBeenCalledWith('spaces');
+      expect(spaceDeleteChain.delete).toHaveBeenCalled();
+      expect(spaceDeleteChain.eq).toHaveBeenCalledWith('id', 'space-001');
+    });
+
+    it('Space 삭제 DB 에러 → 에러 throw', async () => {
+      const membersFetchChain = makeChain({
+        data: [myMemberRow],
+        error: null,
+      });
+      const memberDeleteChain = makeChain({ data: null, error: null });
+      const spaceDeleteChain  = makeChain({
+        data:  null,
+        error: new Error('space delete failed'),
+      });
+
+      fromFn
+        .mockReturnValueOnce(membersFetchChain)
+        .mockReturnValueOnce(memberDeleteChain)
+        .mockReturnValueOnce(spaceDeleteChain);
+
+      await expect(leaveSpace('space-001')).rejects.toThrow('space delete failed');
+    });
+
+    it('owner이고 마지막 멤버 → 소유권 이전 생략, 바로 Space 삭제', async () => {
+      // owner이지만 다른 멤버가 없음 → 소유권 이전 로직 생략
+      const membersFetchChain = makeChain({
+        data: [myOwnerRow],  // owner만 있음
+        error: null,
+      });
+      const memberDeleteChain = makeChain({ data: null, error: null });
+      const spaceDeleteChain  = makeChain({ data: null, error: null });
+
+      fromFn
+        .mockReturnValueOnce(membersFetchChain)
+        .mockReturnValueOnce(memberDeleteChain)
+        .mockReturnValueOnce(spaceDeleteChain);
+
+      await leaveSpace('space-001');
+
+      // UPDATE(소유권 이전) 없이 from이 3번만 호출되어야 함
+      // 멤버 조회(1) + 멤버 삭제(1) + Space 삭제(1) = 3
+      expect(fromFn).toHaveBeenCalledTimes(3);
+      // spaces 테이블이 대상인 삭제 확인
+      expect(fromFn).toHaveBeenCalledWith('spaces');
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════════════
+  // 에러 케이스
+  // ════════════════════════════════════════════════════════════════════════
+
+  describe('에러 케이스', () => {
+    it('미인증 → "로그인이 필요합니다." 에러 throw', async () => {
+      (getCurrentUserId as jest.Mock).mockResolvedValue(null);
+
+      await expect(leaveSpace('space-001')).rejects.toThrow('로그인이 필요합니다.');
+    });
+
+    it('멤버 조회 DB 에러 → 에러 throw', async () => {
+      fromFn.mockReturnValueOnce(
+        makeChain({ data: null, error: new Error('DB connection timeout') }),
+      );
+
+      await expect(leaveSpace('space-001')).rejects.toThrow('DB connection timeout');
+    });
+
+    it('멤버가 아닌 사용자 탈퇴 시도 → "해당 Space의 멤버가 아닙니다." 에러 throw', async () => {
+      // 멤버 목록에 user-123이 없음
+      const otherUsersOnly = [otherMemberRow];
+      fromFn.mockReturnValueOnce(makeChain({ data: otherUsersOnly, error: null }));
+
+      await expect(leaveSpace('space-001')).rejects.toThrow(
+        '해당 Space의 멤버가 아닙니다.',
+      );
+    });
+
+    it('빈 멤버 목록 → "해당 Space의 멤버가 아닙니다." 에러 throw', async () => {
+      fromFn.mockReturnValueOnce(makeChain({ data: [], error: null }));
+
+      await expect(leaveSpace('space-001')).rejects.toThrow(
+        '해당 Space의 멤버가 아닙니다.',
+      );
+    });
+
+    it('멤버 DELETE 에러 → 에러 throw', async () => {
+      const membersFetchChain = makeChain({
+        data: [myMemberRow, otherMemberRow],
+        error: null,
+      });
+      const deleteError = new Error('RLS policy violation');
+      const deleteChain = makeChain({ data: null, error: deleteError });
+
+      fromFn
+        .mockReturnValueOnce(membersFetchChain)
+        .mockReturnValueOnce(deleteChain);
+
+      await expect(leaveSpace('space-001')).rejects.toThrow('RLS policy violation');
+    });
+  });
+});

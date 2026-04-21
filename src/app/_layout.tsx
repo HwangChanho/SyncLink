@@ -5,40 +5,74 @@
  *
  * TASK-403: Initializes push notifications after authentication.
  * Wires notification tap handler for in-app routing.
+ *
+ * TASK-602: Checks first-launch onboarding flag in AsyncStorage.
+ * If @syncday/onboarding_done is absent, shows /onboarding before /auth/login.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Linking from 'expo-linking';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '@/stores/authStore';
 import { onAuthStateChange, getUserProfile } from '@/services/authService';
 import {
   initializeNotifications,
   setupNotificationHandlers,
 } from '@/services/notificationService';
+import { ONBOARDING_STORAGE_KEY } from '@/app/onboarding/index';
 
 // ─── Auth guard ───────────────────────────────────────────────────────────────
 
+/**
+ * Handles all routing based on auth state and onboarding completion.
+ *
+ * Routing priority:
+ *  1. While auth is loading — do nothing (prevents redirect flash)
+ *  2. Unauthenticated + onboarding not done → /onboarding
+ *  3. Unauthenticated + onboarding done → /auth/login
+ *  4. Authenticated + in auth group → /(tabs)
+ */
 function useAuthGuard() {
   const { isAuthenticated, isLoading } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
 
+  /** null = still checking AsyncStorage; true/false = result */
+  const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
+
+  // Check onboarding completion once on mount
   useEffect(() => {
-    if (isLoading) return;
+    AsyncStorage.getItem(ONBOARDING_STORAGE_KEY)
+      .then((value) => setOnboardingDone(value !== null))
+      .catch(() => setOnboardingDone(true)); // If read fails, skip onboarding
+  }, []);
 
-    const inAuthGroup = segments[0] === 'auth';
+  useEffect(() => {
+    // Wait for both auth hydration and AsyncStorage read to complete
+    if (isLoading || onboardingDone === null) return;
 
-    if (!isAuthenticated && !inAuthGroup) {
-      router.replace('/auth/login');
-    } else if (isAuthenticated && inAuthGroup) {
-      router.replace('/(tabs)');
+    const inAuthGroup    = segments[0] === 'auth';
+    const inOnboarding   = segments[0] === 'onboarding';
+
+    if (isAuthenticated) {
+      // Authenticated users should never be on auth or onboarding screens
+      if (inAuthGroup || inOnboarding) {
+        router.replace('/(tabs)');
+      }
+    } else {
+      // Unauthenticated: show onboarding first if never seen, else login
+      if (!onboardingDone && !inOnboarding) {
+        router.replace('/onboarding');
+      } else if (onboardingDone && !inAuthGroup) {
+        router.replace('/auth/login');
+      }
     }
-  }, [isAuthenticated, isLoading, segments, router]);
+  }, [isAuthenticated, isLoading, onboardingDone, segments, router]);
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -102,16 +136,45 @@ export default function RootLayout() {
 
   useEffect(() => {
     // Handle deep links for Space invite codes.
-    // Pattern: syncday://join/{code} → navigate to /space/join?code={code}
+    //
+    // Supported patterns:
+    //  - syncday://space/join/<code>  (new canonical form)
+    //  - syncday://join/<code>        (legacy fallback)
+    //  - https://syncday.app/space/join/<code>  (universal link)
+    //
+    // All patterns navigate to /space/join/<code> for the preview screen.
     const handleDeepLink = (event: { url: string }) => {
       const { url } = event;
       try {
         const parsed = Linking.parse(url);
-        // Match syncday://join/{code} where host='join' and path='/{code}'
+
+        // Pattern 1: syncday://space/join/<code>
+        // parsed.hostname = 'space', parsed.path = '/join/<code>'
+        if (parsed.hostname === 'space' && parsed.path?.startsWith('/join/')) {
+          const code = parsed.path.replace(/^\/join\//, '');
+          if (code) {
+            router.push(`/space/join/${encodeURIComponent(code)}`);
+            return;
+          }
+        }
+
+        // Pattern 2 (legacy): syncday://join/<code>
+        // parsed.hostname = 'join', parsed.path = '/<code>'
         if (parsed.hostname === 'join' && parsed.path) {
           const code = parsed.path.replace(/^\//, '');
           if (code) {
-            router.push(`/space/join?code=${encodeURIComponent(code)}`);
+            router.push(`/space/join/${encodeURIComponent(code)}`);
+            return;
+          }
+        }
+
+        // Pattern 3: https://syncday.app/space/join/<code>
+        // parsed.path = '/space/join/<code>'
+        if (parsed.path?.includes('/space/join/')) {
+          const parts = parsed.path.split('/space/join/');
+          const code = parts[1]?.split('/')[0];
+          if (code) {
+            router.push(`/space/join/${encodeURIComponent(code)}`);
           }
         }
       } catch {
@@ -140,6 +203,7 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <StatusBar style="auto" />
         <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="onboarding/index" />
           <Stack.Screen name="auth/login" />
           <Stack.Screen name="auth/callback" />
           <Stack.Screen name="auth/onboarding" />
@@ -150,6 +214,7 @@ export default function RootLayout() {
           <Stack.Screen name="space/[id]" options={{ presentation: 'modal' }} />
           <Stack.Screen name="space/create" options={{ presentation: 'modal' }} />
           <Stack.Screen name="space/join" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="space/join/[code]" options={{ presentation: 'modal' }} />
           <Stack.Screen name="note/[id]" options={{ presentation: 'modal' }} />
           <Stack.Screen name="note/new" options={{ presentation: 'modal' }} />
           <Stack.Screen name="settings/categories" options={{ presentation: 'modal' }} />

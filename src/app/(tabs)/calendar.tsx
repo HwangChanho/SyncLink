@@ -32,7 +32,7 @@ import { DayView } from '@/components/calendar/DayView';
 import { useEventStore } from '@/stores/eventStore';
 import { subscribeToSharedEvents } from '@/services/eventRealtimeService';
 import type { EventSummary } from '@/types';
-import { light as colors } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
 
 // ─── Swipe detection thresholds ───────────────────────────────────────────────
 
@@ -115,6 +115,8 @@ function shiftDate(date: Date, mode: ViewMode, delta: 1 | -1): Date {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function CalendarScreen() {
+  const colors = useColors();
+  const styles = makeStyles(colors);
   const router = useRouter();
   const { eventsByDate, fetchEvents, upsertEvent, removeEvent } = useEventStore();
 
@@ -285,38 +287,46 @@ export default function CalendarScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    flex: 1,
-  },
-  /** Floating action button — bottom-right, above tab bar. */
-  fab: {
-    position: 'absolute',
-    right: 20,
-    bottom: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    // Shadow (iOS)
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    // Elevation (Android)
-    elevation: 6,
-  },
-  fabPressed: {
-    opacity: 0.85,
-  },
-});
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ * Called inside the component to react to theme changes.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    content: {
+      flex: 1,
+    },
+    /** Floating action button — bottom-right, above tab bar. */
+    fab: {
+      position: 'absolute',
+      right: 20,
+      bottom: 24,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      // Shadow (iOS)
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.25,
+      shadowRadius: 6,
+      // Elevation (Android)
+      elevation: 6,
+    },
+    fabPressed: {
+      opacity: 0.85,
+    },
+  });
+}

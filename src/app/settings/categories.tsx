@@ -8,6 +8,7 @@
  * Entry: My 탭 → 설정 → 카테고리 관리
  *
  * TASK-401 (Sprint 4)
+ * TASK-600 (Sprint 6): 다크모드 대응 — makeStyles(colors) 패턴으로 교체
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -25,7 +26,8 @@ import {
   deleteCategory,
 } from '@/services/categoryService';
 import type { Category, CreateCategoryInput } from '@/types';
-import { light as colors } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
+import type { ColorTokens } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 
@@ -42,15 +44,25 @@ const PRESET_COLORS = [
 /**
  * Individual category row in the list.
  * System categories show a lock icon; user categories have edit/delete buttons.
+ *
+ * @param category - Category to display
+ * @param onEdit   - Called when the edit button is pressed
+ * @param onDelete - Called when the delete button is pressed
+ * @param colors   - Active theme color tokens
+ * @param styles   - Pre-computed styles for current theme
  */
 function CategoryRow({
   category,
   onEdit,
   onDelete,
+  colors,
+  styles,
 }: {
   category: Category;
   onEdit:   (cat: Category) => void;
   onDelete: (cat: Category) => void;
+  colors: ColorTokens;
+  styles: ReturnType<typeof makeStyles>;
 }) {
   const isSystem = category.userId === null;
 
@@ -90,18 +102,29 @@ function CategoryRow({
 /**
  * Modal for creating or editing a user-defined category.
  * Includes a name text input and a preset color picker.
+ *
+ * @param visible  - Whether the modal is visible
+ * @param editing  - Non-null when editing an existing category
+ * @param onClose  - Called when the modal should close
+ * @param onSave   - Called with validated name and color
+ * @param colors   - Active theme color tokens
+ * @param styles   - Pre-computed styles for current theme
  */
 function CategoryFormModal({
   visible,
   editing,
   onClose,
   onSave,
+  colors,
+  styles,
 }: {
   visible: boolean;
   /** If non-null, editing an existing category. If null, creating new. */
   editing: Category | null;
   onClose: () => void;
   onSave:  (name: string, color: string) => Promise<void>;
+  colors: ColorTokens;
+  styles: ReturnType<typeof makeStyles>;
 }) {
   const [name,      setName]      = useState('');
   // Explicit string type prevents literal type narrowing of PRESET_COLORS[0]
@@ -212,6 +235,9 @@ function CategoryFormModal({
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function CategoriesScreen() {
+  // Dark mode: resolve current theme colors and build dynamic styles
+  const colors = useColors();
+  const styles = makeStyles(colors);
   const router = useRouter();
 
   const [categories, setCategories] = useState<Category[]>([]);
@@ -311,6 +337,8 @@ export default function CategoriesScreen() {
               category={item}
               onEdit={handleEdit}
               onDelete={handleDelete}
+              colors={colors}
+              styles={styles}
             />
           )}
           ListHeaderComponent={
@@ -332,6 +360,8 @@ export default function CategoriesScreen() {
         editing={editingCat}
         onClose={() => setModalVisible(false)}
         onSave={handleSave}
+        colors={colors}
+        styles={styles}
       />
     </SafeAreaView>
   );
@@ -339,195 +369,203 @@ export default function CategoriesScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  container: {
-    flex:            1,
-    backgroundColor: colors.background,
-  },
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ * @returns StyleSheet object for the categories screen and sub-components
+ */
+function makeStyles(colors: ColorTokens) {
+  return StyleSheet.create({
+    container: {
+      flex:            1,
+      backgroundColor: colors.background,
+    },
 
-  // Header
-  header: {
-    flexDirection:     'row',
-    alignItems:        'center',
-    height:            componentHeight.navHeader,
-    paddingHorizontal: spacing[3],
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  backBtn: {
-    padding:  spacing[1],
-    minWidth: 40,
-  },
-  headerTitle: {
-    ...textStyles.h4,
-    color: colors.textPrimary,
-    flex:  1,
-    textAlign: 'center',
-  },
-  addBtn: {
-    padding:  spacing[1],
-    minWidth: 40,
-    alignItems: 'flex-end',
-  },
+    // Header
+    header: {
+      flexDirection:     'row',
+      alignItems:        'center',
+      height:            componentHeight.navHeader,
+      paddingHorizontal: spacing[3],
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    backBtn: {
+      padding:  spacing[1],
+      minWidth: 40,
+    },
+    headerTitle: {
+      ...textStyles.h4,
+      color: colors.textPrimary,
+      flex:  1,
+      textAlign: 'center',
+    },
+    addBtn: {
+      padding:  spacing[1],
+      minWidth: 40,
+      alignItems: 'flex-end',
+    },
 
-  // List
-  listContent: {
-    paddingVertical: spacing[2],
-  },
-  sectionLabel: {
-    ...textStyles.caption,
-    color:             colors.textTertiary,
-    paddingHorizontal: spacing[4],
-    paddingVertical:   spacing[2],
-  },
+    // List
+    listContent: {
+      paddingVertical: spacing[2],
+    },
+    sectionLabel: {
+      ...textStyles.caption,
+      color:             colors.textTertiary,
+      paddingHorizontal: spacing[4],
+      paddingVertical:   spacing[2],
+    },
 
-  // Category row
-  categoryRow: {
-    flexDirection:     'row',
-    alignItems:        'center',
-    paddingHorizontal: spacing[4],
-    paddingVertical:   spacing[3],
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor:   colors.background,
-    gap:               spacing[3],
-  },
-  colorSwatch: {
-    width:        24,
-    height:       24,
-    borderRadius: radius.sm,
-    flexShrink:   0,
-  },
-  categoryName: {
-    ...textStyles.body,
-    color: colors.textPrimary,
-    flex:  1,
-  },
-  rowActions: {
-    flexDirection: 'row',
-    gap:           spacing[2],
-  },
-  actionBtn: {
-    padding: spacing[1],
-  },
+    // Category row
+    categoryRow: {
+      flexDirection:     'row',
+      alignItems:        'center',
+      paddingHorizontal: spacing[4],
+      paddingVertical:   spacing[3],
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      backgroundColor:   colors.background,
+      gap:               spacing[3],
+    },
+    colorSwatch: {
+      width:        24,
+      height:       24,
+      borderRadius: radius.sm,
+      flexShrink:   0,
+    },
+    categoryName: {
+      ...textStyles.body,
+      color: colors.textPrimary,
+      flex:  1,
+    },
+    rowActions: {
+      flexDirection: 'row',
+      gap:           spacing[2],
+    },
+    actionBtn: {
+      padding: spacing[1],
+    },
 
-  // Modal
-  modalOverlay: {
-    flex:            1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent:  'flex-end',
-  },
-  modalSheet: {
-    backgroundColor:     colors.background,
-    borderTopLeftRadius:  radius['2xl'],
-    borderTopRightRadius: radius['2xl'],
-    padding:              spacing[6],
-    gap:                  spacing[3],
-  },
-  modalTitle: {
-    ...textStyles.h4,
-    color:        colors.textPrimary,
-    textAlign:    'center',
-    marginBottom: spacing[2],
-  },
-  fieldLabel: {
-    ...textStyles.label,
-    color:        colors.textSecondary,
-    marginBottom: spacing[1],
-  },
-  input: {
-    height:            componentHeight.inputField,
-    backgroundColor:   colors.inputBackground,
-    borderWidth:       1,
-    borderColor:       colors.inputBorder,
-    borderRadius:      radius.md,
-    paddingHorizontal: spacing[4],
-    ...textStyles.body,
-    color:             colors.textPrimary,
-  },
+    // Modal
+    modalOverlay: {
+      flex:            1,
+      backgroundColor: 'rgba(0,0,0,0.4)',
+      justifyContent:  'flex-end',
+    },
+    modalSheet: {
+      backgroundColor:     colors.background,
+      borderTopLeftRadius:  radius['2xl'],
+      borderTopRightRadius: radius['2xl'],
+      padding:              spacing[6],
+      gap:                  spacing[3],
+    },
+    modalTitle: {
+      ...textStyles.h4,
+      color:        colors.textPrimary,
+      textAlign:    'center',
+      marginBottom: spacing[2],
+    },
+    fieldLabel: {
+      ...textStyles.label,
+      color:        colors.textSecondary,
+      marginBottom: spacing[1],
+    },
+    input: {
+      height:            componentHeight.inputField,
+      backgroundColor:   colors.inputBackground,
+      borderWidth:       1,
+      borderColor:       colors.inputBorder,
+      borderRadius:      radius.md,
+      paddingHorizontal: spacing[4],
+      ...textStyles.body,
+      color:             colors.textPrimary,
+    },
 
-  // Color grid
-  colorGrid: {
-    flexDirection:  'row',
-    flexWrap:       'wrap',
-    gap:            spacing[2],
-  },
-  colorOption: {
-    width:          36,
-    height:         36,
-    borderRadius:   18,
-    alignItems:     'center',
-    justifyContent: 'center',
-  },
-  colorOptionSelected: {
-    borderWidth: 3,
-    borderColor: colors.textPrimary,
-  },
+    // Color grid
+    colorGrid: {
+      flexDirection:  'row',
+      flexWrap:       'wrap',
+      gap:            spacing[2],
+    },
+    colorOption: {
+      width:          36,
+      height:         36,
+      borderRadius:   18,
+      alignItems:     'center',
+      justifyContent: 'center',
+    },
+    colorOptionSelected: {
+      borderWidth: 3,
+      borderColor: colors.textPrimary,
+    },
 
-  // Preview
-  previewRow: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           spacing[2],
-    paddingVertical:   spacing[2],
-    paddingHorizontal: spacing[3],
-    backgroundColor:   colors.surfaceAlt,
-    borderRadius:      radius.md,
-  },
-  previewDot: {
-    width:        12,
-    height:       12,
-    borderRadius: 6,
-  },
-  previewName: {
-    ...textStyles.body,
-    color: colors.textPrimary,
-  },
+    // Preview
+    previewRow: {
+      flexDirection: 'row',
+      alignItems:    'center',
+      gap:           spacing[2],
+      paddingVertical:   spacing[2],
+      paddingHorizontal: spacing[3],
+      backgroundColor:   colors.surfaceAlt,
+      borderRadius:      radius.md,
+    },
+    previewDot: {
+      width:        12,
+      height:       12,
+      borderRadius: 6,
+    },
+    previewName: {
+      ...textStyles.body,
+      color: colors.textPrimary,
+    },
 
-  // Modal actions
-  modalActions: {
-    flexDirection: 'row',
-    gap:           spacing[3],
-    marginTop:     spacing[2],
-  },
-  cancelBtn: {
-    flex:              1,
-    height:            componentHeight.buttonSm,
-    borderRadius:      radius.md,
-    borderWidth:       1,
-    borderColor:       colors.border,
-    alignItems:        'center',
-    justifyContent:    'center',
-  },
-  cancelBtnText: {
-    ...textStyles.labelLg,
-    color: colors.textSecondary,
-  },
-  saveBtn: {
-    flex:              1,
-    height:            componentHeight.buttonSm,
-    borderRadius:      radius.md,
-    backgroundColor:   colors.primary,
-    alignItems:        'center',
-    justifyContent:    'center',
-  },
-  saveBtnText: {
-    ...textStyles.labelLg,
-    color: colors.textInverse,
-  },
-  disabled: {
-    opacity: 0.5,
-  },
+    // Modal actions
+    modalActions: {
+      flexDirection: 'row',
+      gap:           spacing[3],
+      marginTop:     spacing[2],
+    },
+    cancelBtn: {
+      flex:              1,
+      height:            componentHeight.buttonSm,
+      borderRadius:      radius.md,
+      borderWidth:       1,
+      borderColor:       colors.border,
+      alignItems:        'center',
+      justifyContent:    'center',
+    },
+    cancelBtnText: {
+      ...textStyles.labelLg,
+      color: colors.textSecondary,
+    },
+    saveBtn: {
+      flex:              1,
+      height:            componentHeight.buttonSm,
+      borderRadius:      radius.md,
+      backgroundColor:   colors.primary,
+      alignItems:        'center',
+      justifyContent:    'center',
+    },
+    saveBtnText: {
+      ...textStyles.labelLg,
+      color: colors.textInverse,
+    },
+    disabled: {
+      opacity: 0.5,
+    },
 
-  // Empty / loading states
-  centered: {
-    flex:           1,
-    justifyContent: 'center',
-    alignItems:     'center',
-    paddingVertical: spacing[10],
-  },
-  emptyText: {
-    ...textStyles.body,
-    color: colors.textTertiary,
-  },
-});
+    // Empty / loading states
+    centered: {
+      flex:           1,
+      justifyContent: 'center',
+      alignItems:     'center',
+      paddingVertical: spacing[10],
+    },
+    emptyText: {
+      ...textStyles.body,
+      color: colors.textTertiary,
+    },
+  });
+}
