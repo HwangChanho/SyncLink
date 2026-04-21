@@ -1,15 +1,12 @@
 /**
- * My tab — Profile management, Space list, Logout.
+ * My tab — Profile management, Space list, Settings, Subscription banner.
  *
- * TASK-102 (Sprint 1) implementation:
- *  - Profile display: avatar + nickname
- *  - Nickname inline edit
- *  - Avatar change via expo-image-picker → Supabase Storage upload
- *  - My Space list (from spaceStore)
- *  - Logout button
+ * TASK-102 (Sprint 1): Profile display, nickname edit, avatar upload, logout
+ * TASK-501 (Sprint 5): Settings section (notifications, categories), account deletion
+ * TASK-502 (Sprint 5): Dark mode theme toggle (Segmented Control)
+ * TASK-505 (Sprint 5): Subscription banner (Free plan usage + upgrade CTA)
  *
  * Note: My tab is 100% ad-free per PRD section 7.
- * Future: TASK-403 notification settings, TASK-503 dark mode toggle
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -27,7 +24,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { light as colors } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
+import { useAppearanceStore, type ColorSchemePreference } from '@/stores/appearanceStore';
+import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import * as authService from '@/services/authService';
@@ -35,9 +34,24 @@ import { useAuthStore } from '@/stores/authStore';
 import { useSpaceStore } from '@/stores/spaceStore';
 import type { SpaceSummary } from '@/types';
 
+// ─── Theme option labels ───────────────────────────────────────────────────────
+
+const THEME_OPTIONS: Array<{ value: ColorSchemePreference; label: string }> = [
+  { value: 'light',  label: '라이트' },
+  { value: 'dark',   label: '다크'   },
+  { value: 'system', label: '시스템'  },
+];
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function MyScreen() {
+  const colors = useColors();
+  // Build dynamic styles using the current theme's color tokens
+  const styles = makeStyles(colors);
+
+  const { colorScheme, setColorScheme } = useAppearanceStore();
+  const { plan, aiUsageToday } = useSubscriptionStore();
+
   const { user, setUser } = useAuthStore();
   const { spaces, fetchMySpaces, isLoading: spacesLoading } = useSpaceStore();
 
@@ -182,6 +196,48 @@ export default function MyScreen() {
     );
   }, [setUser]);
 
+  // ─── Account deletion ─────────────────────────────────────────────────────
+
+  /** Prompt the user with a double-confirmation alert before deleting their account. */
+  const handleDeleteAccount = useCallback(() => {
+    Alert.alert(
+      '회원 탈퇴',
+      '탈퇴 시 모든 데이터(일정, 할일, Space)가 영구적으로 삭제됩니다.\n정말 탈퇴하시겠습니까?',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '탈퇴하기',
+          style: 'destructive',
+          onPress: () => {
+            // Second confirmation to prevent accidental tap
+            Alert.alert(
+              '최종 확인',
+              '이 작업은 되돌릴 수 없습니다. 계속하시겠습니까?',
+              [
+                { text: '취소', style: 'cancel' },
+                {
+                  text: '탈퇴',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      await authService.deleteAccount();
+                      setUser(null);
+                    } catch (err) {
+                      Alert.alert(
+                        '오류',
+                        err instanceof Error ? err.message : '계정 삭제에 실패했습니다.',
+                      );
+                    }
+                  },
+                },
+              ],
+            );
+          },
+        },
+      ],
+    );
+  }, [setUser]);
+
   // ─── Render ──────────────────────────────────────────────────────────────
 
   if (!user) {
@@ -316,6 +372,82 @@ export default function MyScreen() {
           )}
         </View>
 
+        {/* ── Subscription banner (Free plan only) ────────────────────── */}
+        {plan === 'free' && (
+          <View style={styles.section}>
+            <TouchableOpacity
+              style={styles.subscriptionBanner}
+              onPress={() => router.push('/subscription/paywall')}
+              activeOpacity={0.85}
+            >
+              <View style={styles.subscriptionInfo}>
+                <Text style={styles.subscriptionTitle}>SyncDay Free</Text>
+                <Text style={styles.subscriptionUsage}>
+                  오늘 AI {aiUsageToday}/5회 사용
+                </Text>
+              </View>
+              <View style={styles.subscriptionCta}>
+                <Text style={styles.subscriptionCtaText}>Pro로 업그레이드 →</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ── Settings section ─────────────────────────────────────────── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>설정</Text>
+          <View style={styles.menuCard}>
+            {/* Notification settings */}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => router.push('/settings/notifications')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.menuItemText}>알림 설정</Text>
+              <Text style={styles.menuItemChevron}>›</Text>
+            </TouchableOpacity>
+
+            <View style={styles.menuDivider} />
+
+            {/* Category management */}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => router.push('/settings/categories')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.menuItemText}>카테고리 관리</Text>
+              <Text style={styles.menuItemChevron}>›</Text>
+            </TouchableOpacity>
+
+            <View style={styles.menuDivider} />
+
+            {/* Theme selector (inline Segmented Control) */}
+            <View style={styles.menuItemTheme}>
+              <Text style={styles.menuItemText}>테마</Text>
+              <View style={styles.themeSegmented}>
+                {THEME_OPTIONS.map(opt => (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[
+                      styles.themeSegmentItem,
+                      colorScheme === opt.value && styles.themeSegmentItemActive,
+                    ]}
+                    onPress={() => setColorScheme(opt.value)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      styles.themeSegmentLabel,
+                      colorScheme === opt.value && styles.themeSegmentLabelActive,
+                    ]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+        </View>
+
         {/* ── Account section ─────────────────────────────────────────── */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>계정</Text>
@@ -332,6 +464,17 @@ export default function MyScreen() {
                 <Text style={styles.logoutText}>로그아웃</Text>
               )}
             </TouchableOpacity>
+
+            <View style={styles.menuDivider} />
+
+            {/* Account deletion */}
+            <TouchableOpacity
+              style={[styles.menuItem, styles.logoutItem]}
+              onPress={handleDeleteAccount}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.deleteAccountText}>회원 탈퇴</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
@@ -341,7 +484,10 @@ export default function MyScreen() {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-/** Card row for a single space in the My Spaces list. */
+/**
+ * Card row for a single space in the My Spaces list.
+ * Uses useColors() directly to respond to theme changes.
+ */
 function SpaceCard({
   space,
   onPress,
@@ -349,6 +495,8 @@ function SpaceCard({
   space: SpaceSummary;
   onPress: () => void;
 }) {
+  const colors = useColors();
+  const styles = makeStyles(colors);
   const typeLabel = space.type === 'couple' ? '커플' : '그룹';
 
   return (
@@ -380,7 +528,14 @@ function SpaceCard({
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+/**
+ * makeStyles: returns a StyleSheet object using the provided color tokens.
+ * Called inside the component after useColors() resolves the active theme.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.backgroundAlt,
@@ -611,7 +766,55 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[4],
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
+  menuItemText: {
+    ...textStyles.labelLg,
+    color: colors.textPrimary,
+  },
+  menuItemChevron: {
+    fontSize: 22,
+    color: colors.textTertiary,
+    fontWeight: '300',
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginHorizontal: spacing[4],
+  },
+
+  // Theme segmented control row
+  menuItemTheme: {
+    paddingHorizontal: spacing[4],
+    paddingVertical:   spacing[3],
+    flexDirection:     'row',
+    alignItems:        'center',
+    justifyContent:    'space-between',
+  },
+  themeSegmented: {
+    flexDirection:   'row',
+    borderWidth:     1,
+    borderColor:     colors.border,
+    borderRadius:    radius.lg,
+    overflow:        'hidden',
+  },
+  themeSegmentItem: {
+    paddingHorizontal: spacing[3],
+    paddingVertical:   spacing[1.5],
+    backgroundColor:   colors.surface,
+  },
+  themeSegmentItemActive: {
+    backgroundColor: colors.primary,
+  },
+  themeSegmentLabel: {
+    ...textStyles.caption,
+    color: colors.textSecondary,
+  },
+  themeSegmentLabelActive: {
+    color: colors.textInverse,
+    fontWeight: '600',
+  },
+
   logoutItem: {
     justifyContent: 'center',
   },
@@ -619,4 +822,42 @@ const styles = StyleSheet.create({
     ...textStyles.labelLg,
     color: colors.error,
   },
-});
+  deleteAccountText: {
+    ...textStyles.labelLg,
+    color: colors.textTertiary,
+  },
+
+  // ── Subscription banner ───────────────────────────────────────────────────
+  subscriptionBanner: {
+    backgroundColor: colors.primaryLight,
+    borderRadius:    radius.xl,
+    borderWidth:     1,
+    borderColor:     colors.primary,
+    padding:         spacing[4],
+    flexDirection:   'row',
+    alignItems:      'center',
+    justifyContent:  'space-between',
+  },
+  subscriptionInfo: {
+    gap: spacing[0.5],
+  },
+  subscriptionTitle: {
+    ...textStyles.labelLg,
+    color: colors.primary,
+  },
+  subscriptionUsage: {
+    ...textStyles.caption,
+    color: colors.textSecondary,
+  },
+  subscriptionCta: {
+    paddingHorizontal: spacing[3],
+    paddingVertical:   spacing[1.5],
+    backgroundColor:   colors.primary,
+    borderRadius:      radius.full,
+  },
+  subscriptionCtaText: {
+    ...textStyles.label,
+    color: colors.textInverse,
+  },
+  });
+}

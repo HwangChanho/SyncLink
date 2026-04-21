@@ -223,6 +223,87 @@ export async function resetDailyUsage(): Promise<void> {
   await writeUsageRecord({ date: today, callCount: 0, tokensUsed: 0 });
 }
 
+// ─── Weekly review cache key ──────────────────────────────────────────────────
+
+/**
+ * Builds the AsyncStorage key for a weekly review cache entry.
+ * Keyed by week-start ISO date string (YYYY-MM-DD) so each week gets its own entry.
+ *
+ * @param weekStart - Monday of the review week
+ */
+function weeklyReviewCacheKey(weekStart: Date): string {
+  const y = weekStart.getFullYear();
+  const m = String(weekStart.getMonth() + 1).padStart(2, '0');
+  const d = String(weekStart.getDate()).padStart(2, '0');
+  return `syncday:weekly_review:${y}-${m}-${d}`;
+}
+
+/** Shape stored in AsyncStorage for a cached weekly review. */
+interface CachedWeeklyReview {
+  review: string;
+  generatedAt: string; // ISO-8601
+}
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+/**
+ * Get the AI-generated weekly review for the week starting on weekStart.
+ *
+ * Strategy:
+ *  1. Check AsyncStorage cache — if the current week's review exists, return it
+ *     immediately without calling the Edge Function (saves API cost).
+ *  2. Call the weekly-review Edge Function (Claude Haiku, max 200 tokens).
+ *  3. Persist result to AsyncStorage for same-week re-visits.
+ *
+ * The cache key includes the week-start date so each week gets a fresh review.
+ * Reviews from previous weeks remain in cache (harmless, small size).
+ *
+ * @param weekStart - Monday of the week to review (local midnight)
+ * @returns Object with review text and generation timestamp
+ * @throws If Edge Function returns an error
+ */
+export async function getWeeklyReview(weekStart: Date): Promise<{
+  review: string;
+  generatedAt: Date;
+}> {
+  const cacheKey = weeklyReviewCacheKey(weekStart);
+
+  // Step 1: check cache
+  try {
+    const raw = await AsyncStorage.getItem(cacheKey);
+    if (raw) {
+      const cached: CachedWeeklyReview = JSON.parse(raw);
+      return { review: cached.review, generatedAt: new Date(cached.generatedAt) };
+    }
+  } catch {
+    // Cache miss or parse error — fall through to Edge Function call
+  }
+
+  // Step 2: call Edge Function
+  const { data, error } = await supabase.functions.invoke<{
+    review: string;
+    generatedAt: string;
+  }>(EDGE_FUNCTIONS.WEEKLY_REVIEW, {
+    body: { weekStart: weekStart.toISOString() },
+  });
+
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Weekly review 생성에 실패했습니다.');
+  }
+
+  const result = { review: data.review, generatedAt: new Date(data.generatedAt) };
+
+  // Step 3: persist to cache (fire-and-forget)
+  AsyncStorage.setItem(cacheKey, JSON.stringify({
+    review: result.review,
+    generatedAt: result.generatedAt.toISOString(),
+  } satisfies CachedWeeklyReview)).catch(() => {
+    // Cache write failure is non-critical
+  });
+
+  return result;
+}
+
 /**
  * Generate a weekly review summary for the current user.
  * Only available for Pro users. Returns null for free users.
@@ -231,6 +312,7 @@ export async function resetDailyUsage(): Promise<void> {
  *
  * @param weekStartDate - Monday of the target week
  * @returns Markdown-formatted weekly review string, or null
+ * @deprecated Use getWeeklyReview() instead (TASK-504)
  */
 export async function generateWeeklyReview(_weekStartDate: Date): Promise<string | null> {
   // Pro-tier feature — not yet implemented

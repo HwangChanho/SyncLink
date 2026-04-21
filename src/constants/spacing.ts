@@ -47,6 +47,8 @@ export const componentHeight = {
   inputField:    48,
   button:        52,
   buttonSm:      40,
+  /** Large CTA button (e.g. Paywall subscribe button). */
+  buttonLg:      56,
   tabBar:        64,
   navHeader:     56,
   eventCard:     72,

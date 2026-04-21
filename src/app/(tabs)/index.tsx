@@ -24,11 +24,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useEventStore } from '@/stores/eventStore';
 import { useTodoStore } from '@/stores/todoStore';
 import { NLInputBar } from '@/components/nl/NLInputBar';
-import { HomeHeader }       from '@/components/home/HomeHeader';
-import { TodayEventList }   from '@/components/home/TodayEventList';
-import { TodayTodoList }    from '@/components/home/TodayTodoList';
-import { SpaceActivityFeed } from '@/components/home/SpaceActivityFeed';
-import { light as colors } from '@/constants/colors';
+import { HomeHeader }         from '@/components/home/HomeHeader';
+import { TodayEventList }     from '@/components/home/TodayEventList';
+import { TodayTodoList }      from '@/components/home/TodayTodoList';
+import { SpaceActivityFeed }  from '@/components/home/SpaceActivityFeed';
+import { WeeklyReviewCard }   from '@/components/home/WeeklyReviewCard';
+import { useColors } from '@/hooks/useColors';
 import { spacing } from '@/constants/spacing';
 import type { DateRange } from '@/types';
 
@@ -46,6 +47,7 @@ function todayRange(): DateRange {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
+  const colors = useColors();
   const fetchEvents = useEventStore(s => s.fetchEvents);
   const isFetchingEvents = useEventStore(s => s.isFetching);
   const { fetchTodos, isLoading: isFetchingTodos } = useTodoStore();
@@ -70,7 +72,10 @@ export default function HomeScreen() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: colors.background }]}
+      edges={['top', 'left', 'right']}
+    >
       {/* NLInputBar is pinned at the bottom, content scrolls above it */}
       <ScrollView
         style={styles.scroll}
@@ -87,6 +92,9 @@ export default function HomeScreen() {
       >
         {/* Greeting + date */}
         <HomeHeader />
+
+        {/* Weekly AI review card — TASK-504 */}
+        <WeeklyReviewCard />
 
         {/* Section spacer */}
         <NLInputBarSpacer />
@@ -119,8 +127,11 @@ function NLInputBarSpacer() {
 
 const styles = StyleSheet.create({
   safeArea: {
-    flex:            1,
-    backgroundColor: colors.background,
+    flex: 1,
+    // Note: background color is now dynamic (light/dark); using white here
+    // for the static stylesheet. The SafeAreaView background is updated
+    // via the colors.background from useColors() in the rendered style.
+    backgroundColor: '#FFFFFF',
   },
   scroll: {
     flex: 1,

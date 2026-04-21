@@ -81,6 +81,46 @@ export interface CreateEventInput {
 /** Payload when updating an event. */
 export type UpdateEventInput = Partial<CreateEventInput>;
 
+// ─── Event interaction types (TASK-503) ──────────────────────────────────────
+
+/**
+ * Supported emoji reactions on events.
+ * Limited to a curated set so the reaction bar stays compact.
+ */
+export type ReactionEmoji = '❤️' | '👍' | '😄' | '🎉' | '😮' | '😢';
+
+/** An emoji reaction left by a user on an event. */
+export interface EventReaction {
+  id: string;
+  eventId: string;
+  userId: string;
+  emoji: ReactionEmoji;
+  createdAt: Date;
+}
+
+/** Aggregated reaction counts per emoji, with current-user indicator. */
+export interface ReactionSummary {
+  emoji: ReactionEmoji;
+  /** Total count of this emoji across all users. */
+  count: number;
+  /** True if the current user has reacted with this emoji. */
+  isMyReaction: boolean;
+}
+
+/** A comment left by a user on an event. */
+export interface EventComment {
+  id: string;
+  eventId: string;
+  userId: string;
+  /** Author's display name (populated via join). */
+  authorNickname: string;
+  /** Author's avatar URL (may be null). */
+  authorAvatarUrl: string | null;
+  content: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 // ─── Date range ───────────────────────────────────────────────────────────────
 
 /**

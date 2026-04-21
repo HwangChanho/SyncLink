@@ -19,6 +19,8 @@ export type {
   AiChatLogRow, AiChatLogInsert,
   NotificationLogRow, NotificationLogInsert, NotificationTypeDb,
   RepeatTypeDb, NotificationSettings,
+  EventReactionRow, EventReactionInsert,
+  EventCommentRow, EventCommentInsert, EventCommentUpdate,
 } from './database';
 
 // Event domain types
@@ -26,6 +28,7 @@ export type {
   Event, EventSummary, CreateEventInput, UpdateEventInput,
   RepeatType, BuiltinCategory, FreeTimeSlot,
   DateRange,
+  EventReaction, EventComment, ReactionEmoji, ReactionSummary,
 } from './event';
 
 // Space domain types

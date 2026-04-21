@@ -23,6 +23,29 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import type { UserRow } from '@/types';
 
+// ─── Notification preferences types ──────────────────────────────────────────
+
+/**
+ * User-facing notification toggles stored in users.notification_preferences.
+ * Separate from NotificationSettings (which controls server-side delivery).
+ * Added in migration 006_notification_prefs.sql (TASK-501).
+ */
+export interface NotificationPreferences {
+  /** Receive reminders before own events start. */
+  event_reminder:  boolean;
+  /** Receive push when a Space member adds/modifies an event. */
+  space_activity:  boolean;
+  /** Receive push when an event is shared to one of your Spaces. */
+  event_share:     boolean;
+}
+
+/** Default preferences applied when no saved value exists. */
+export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
+  event_reminder: true,
+  space_activity: true,
+  event_share:    true,
+};
+
 // ─── Session types ────────────────────────────────────────────────────────────
 
 /** Currently authenticated user session. */
@@ -398,6 +421,41 @@ export async function uploadAvatar(localUri: string): Promise<string> {
     .getPublicUrl(filePath);
 
   return publicUrl;
+}
+
+/**
+ * Update the user's per-type notification preferences.
+ * Stored in users.notification_preferences JSONB column (migration 006).
+ *
+ * @param prefs - Partial notification preferences to update (merged with existing)
+ * @returns Updated UserRow
+ */
+export async function updateNotificationPreferences(
+  prefs: Partial<NotificationPreferences>,
+): Promise<UserRow> {
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) throw new Error('로그인이 필요합니다.');
+
+  // Merge with existing preferences before saving (partial update)
+  const { data: existing } = await (supabase.from('users') as any)
+    .select('notification_preferences')
+    .eq('id', user.id)
+    .single();
+
+  const merged: NotificationPreferences = {
+    ...(DEFAULT_NOTIFICATION_PREFERENCES),
+    ...(existing?.notification_preferences ?? {}),
+    ...prefs,
+  };
+
+  const { data, error } = await (supabase.from('users') as any)
+    .update({ notification_preferences: merged })
+    .eq('id', user.id)
+    .select()
+    .single();
+
+  if (error || !data) throw error ?? new Error('알림 설정 저장에 실패했습니다.');
+  return data;
 }
 
 /**

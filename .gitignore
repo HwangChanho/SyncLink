@@ -55,5 +55,8 @@ supabase/.temp
 # Claude Code project files (agent context, not source code)
 .claude/
 
+# Project documentation (agent handoffs, tasks, issues — not shipped)
+docs/
+
 # Backup files
 *.bak

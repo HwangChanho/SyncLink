@@ -25,6 +25,7 @@ import { ConfirmModal } from './ConfirmModal';
 import { parseNaturalLanguage } from '@/services/aiService';
 import { createEvent } from '@/services/eventService';
 import { useEventStore } from '@/stores/eventStore';
+import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import type { NLParseResult } from '@/types';
 import { light as colors } from '@/constants/colors';
 import { spacing, radius } from '@/constants/spacing';
@@ -69,6 +70,7 @@ function buildPrefillParams(result: NLParseResult): Record<string, string> {
 export function NLInputBar({ onEventCreated }: Props) {
   const router = useRouter();
   const upsertEvent = useEventStore(s => s.upsertEvent);
+  const { canUseAI, consumeAI } = useSubscriptionStore();
 
   const [text, setText] = useState('');
   const [inputState, setInputState] = useState<InputState>('idle');
@@ -83,10 +85,27 @@ export function NLInputBar({ onEventCreated }: Props) {
     if (!trimmed || inputState === 'loading') return;
 
     Keyboard.dismiss();
+
+    // TASK-505: Check subscription AI limit before calling the Edge Function.
+    // The local parser is always free; only the AI fallback is gated.
+    // We check the limit here (pre-parse) to avoid a wasted local parse call
+    // when we know AI will be needed. After parsing, if source === 'ai',
+    // we consume one unit from the daily quota.
+    if (!canUseAI()) {
+      // Navigate to paywall instead of running the parse
+      router.push('/subscription/paywall');
+      return;
+    }
+
     setInputState('loading');
     setErrorMsg('');
 
     const result = await parseNaturalLanguage(trimmed);
+
+    // If the AI fallback was used, record the usage
+    if (result.source === 'ai' && !result.error) {
+      consumeAI();
+    }
 
     // AI daily limit exceeded — show snackbar
     if (result.error && result.confidence === 'low') {

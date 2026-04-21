@@ -352,7 +352,17 @@ export const useTodoStore = create<TodoState>((set, get) => ({
   },
 
   // ── setFilter ──────────────────────────────────────────────────────────────
-  setFilter: (filter: TodoFilter) => set({ filter }),
+  /**
+   * Update the active filter and immediately re-fetch todos with the new filter.
+   * ISSUE-006 fix: previously only updated state without triggering a re-fetch,
+   * causing the Planner tab list to remain stale after filter changes.
+   */
+  setFilter: (filter: TodoFilter) => {
+    set({ filter });
+    // Trigger a re-fetch so the UI reflects the new filter immediately.
+    // fetchTodos merges { contentType: 'todo' } internally.
+    get().fetchTodos(filter);
+  },
 
   // ── clearError ─────────────────────────────────────────────────────────────
   clearError: () => set({ error: null }),

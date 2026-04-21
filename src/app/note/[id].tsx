@@ -17,6 +17,7 @@ import {
   StyleSheet, ActivityIndicator, Alert,
   KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
+import Markdown from 'react-native-markdown-display';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -221,10 +222,12 @@ export default function NoteDetailScreen() {
               수정: {formatDate(note.updatedAt)}
             </Text>
             <View style={styles.divider} />
-            {/* Plain text rendering — markdown display kept simple for web/test compat */}
-            <Text style={styles.viewBody}>
-              {note.content ?? '(내용 없음)'}
-            </Text>
+            {/* Render markdown content via react-native-markdown-display (TASK-402) */}
+            {note.content ? (
+              <Markdown style={markdownBodyStyles}>{note.content}</Markdown>
+            ) : (
+              <Text style={styles.viewBody}>(내용 없음)</Text>
+            )}
           </ScrollView>
         )}
       </KeyboardAvoidingView>
@@ -360,3 +363,38 @@ const styles = StyleSheet.create({
     lineHeight: 26,
   },
 });
+
+/**
+ * Markdown styles for the note view body.
+ * Maps common markdown elements to the app's design tokens.
+ */
+const markdownBodyStyles = {
+  body: {
+    color:      colors.textPrimary,
+    fontSize:   18,
+    lineHeight: 26,
+  },
+  heading1: { color: colors.textPrimary, fontWeight: '700' as const, marginTop: 16, marginBottom: 8 },
+  heading2: { color: colors.textPrimary, fontWeight: '700' as const, marginTop: 12, marginBottom: 6 },
+  heading3: { color: colors.textPrimary, fontWeight: '600' as const, marginTop: 8,  marginBottom: 4 },
+  paragraph: { marginTop: 0, marginBottom: 12 },
+  strong: { fontWeight: '700' as const },
+  em:     { fontStyle: 'italic' as const },
+  code_inline: {
+    backgroundColor: colors.surfaceAlt,
+    color:           colors.textPrimary,
+    borderRadius:    4,
+    paddingHorizontal: 4,
+  },
+  fence: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius:    8,
+    padding:         12,
+  },
+  blockquote: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.border,
+    paddingLeft:     12,
+    opacity:         0.7,
+  },
+};

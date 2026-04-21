@@ -348,6 +348,46 @@ describe('useTodoStore', () => {
 
       expect(useTodoStore.getState().filter.isCompleted).toBe(true);
     });
+
+    // ── ISSUE-006 회귀 테스트 ────────────────────────────────────────────────
+    // Before(Sprint 4): setFilter가 filter 상태만 변경하고 fetchTodos를 재호출하지 않아
+    //                   Planner 탭 목록이 필터 변경 후에도 갱신되지 않는 버그.
+    // After(Sprint 5):  setFilter 내부에서 get().fetchTodos(filter) 를 즉시 호출함.
+
+    it('[ISSUE-006] setFilter 호출 시 fetchTodos가 자동 재호출됨', async () => {
+      (getTodos as jest.Mock).mockResolvedValue([mockSummary]);
+
+      // categoryId 필터 설정
+      await useTodoStore.getState().setFilter({ categoryId: 'cat-2' });
+
+      // fetchTodos(getTodos)가 새 필터로 호출되었는지 검증
+      expect(getTodos).toHaveBeenCalledTimes(1);
+      expect(getTodos).toHaveBeenCalledWith(
+        expect.objectContaining({ categoryId: 'cat-2', contentType: 'todo' }),
+      );
+    });
+
+    it('[ISSUE-006] setFilter 후 todos 목록이 새 필터 결과로 갱신됨', async () => {
+      // 필터 변경 후 다른 todo 반환
+      const filteredSummary = { ...mockSummary, id: 'todo-filtered', title: '필터된 할일' };
+      (getTodos as jest.Mock).mockResolvedValue([filteredSummary]);
+
+      await useTodoStore.getState().setFilter({ categoryId: 'cat-filtered' });
+
+      const { todos } = useTodoStore.getState();
+      expect(todos).toHaveLength(1);
+      expect(todos[0].id).toBe('todo-filtered');
+    });
+
+    it('[ISSUE-006] setFilter: isCompleted=true 필터 변경 시 fetchTodos 재호출', async () => {
+      (getTodos as jest.Mock).mockResolvedValue([]);
+
+      await useTodoStore.getState().setFilter({ isCompleted: true });
+
+      expect(getTodos).toHaveBeenCalledWith(
+        expect.objectContaining({ isCompleted: true, contentType: 'todo' }),
+      );
+    });
   });
 
   // ══════════════════════════════════════════════════════════════════════════

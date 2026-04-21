@@ -155,6 +155,38 @@ export interface CategoryRow {
 export type CategoryInsert = Omit<CategoryRow, 'id' | 'created_at'>;
 export type CategoryUpdate = Partial<Omit<CategoryRow, 'id' | 'user_id' | 'created_at'>>;
 
+// ─── EVENT_REACTIONS ──────────────────────────────────────────────────────────
+
+/**
+ * Emoji reaction on an event. One row per user per emoji per event.
+ * UNIQUE(event_id, user_id, emoji) is enforced at the DB level.
+ */
+export interface EventReactionRow {
+  id: string;
+  event_id: string;
+  user_id: string;
+  /** Unicode emoji string: '❤️', '👍', '😄', '🎉', '😮', '😢' */
+  emoji: string;
+  created_at: string;
+}
+
+export type EventReactionInsert = Omit<EventReactionRow, 'id' | 'created_at'>;
+
+// ─── EVENT_COMMENTS ───────────────────────────────────────────────────────────
+
+/** Comment on an event. Content must be 1–500 characters (enforced by DB CHECK). */
+export interface EventCommentRow {
+  id: string;
+  event_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type EventCommentInsert = Omit<EventCommentRow, 'id' | 'created_at' | 'updated_at'>;
+export type EventCommentUpdate = Pick<EventCommentRow, 'content'>;
+
 // ─── ANNIVERSARIES ────────────────────────────────────────────────────────────
 
 /** Anniversary / D-day entry. Linked to a space. */
@@ -258,6 +290,16 @@ export interface Database {
         Row: NotificationLogRow;
         Insert: NotificationLogInsert;
         Update: never;
+      };
+      event_reactions: {
+        Row: EventReactionRow;
+        Insert: EventReactionInsert;
+        Update: never;
+      };
+      event_comments: {
+        Row: EventCommentRow;
+        Insert: EventCommentInsert;
+        Update: EventCommentUpdate;
       };
     };
   };

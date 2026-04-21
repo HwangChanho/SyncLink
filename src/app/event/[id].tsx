@@ -11,19 +11,31 @@
  * Route: /event/[id]
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, Pressable, ActivityIndicator,
-  Alert, StyleSheet,
+  Alert, StyleSheet, TextInput, KeyboardAvoidingView, Platform,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import type { Event } from '@/types';
+import type { Event, EventComment, ReactionSummary } from '@/types';
 import { getEventById, deleteEvent } from '@/services/eventService';
 import { shareEventToSpace, unshareEventFromSpace } from '@/services/eventShareService';
+import {
+  getReactionSummaries,
+  toggleReaction,
+  getComments,
+  addComment,
+  deleteComment,
+  subscribeToEventInteractions,
+  REACTION_EMOJIS,
+} from '@/services/eventInteractionService';
+import type { ReactionEmoji } from '@/types';
 import { useEventStore } from '@/stores/eventStore';
 import { useSpaceStore } from '@/stores/spaceStore';
+import { useAuthStore } from '@/stores/authStore';
 import { light as colors } from '@/constants/colors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
@@ -66,6 +78,7 @@ export default function EventDetailScreen() {
   const router = useRouter();
   const { removeEvent } = useEventStore();
   const { spaces } = useSpaceStore();
+  const { user } = useAuthStore();
 
   const [event, setEvent] = useState<Event | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -73,6 +86,18 @@ export default function EventDetailScreen() {
   const [isDeleting, setIsDeleting] = useState(false);
   /** Tracks which space share toggles are currently saving. */
   const [sharingInFlight, setSharingInFlight] = useState<Set<string>>(new Set());
+
+  // ── Reactions state ────────────────────────────────────────────────────────
+  const [reactions, setReactions] = useState<ReactionSummary[]>([]);
+  const [isTogglingReaction, setIsTogglingReaction] = useState<string | null>(null);
+
+  // ── Comments state ─────────────────────────────────────────────────────────
+  const [comments, setComments] = useState<EventComment[]>([]);
+  const [commentInput, setCommentInput] = useState('');
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
+
+  const commentInputRef = useRef<TextInput>(null);
 
   // ── Load event ─────────────────────────────────────────────────────────────
 
@@ -91,6 +116,105 @@ export default function EventDetailScreen() {
   }, [id]);
 
   useEffect(() => { void loadEvent(); }, [loadEvent]);
+
+  // ── Load reactions and comments (only for shared events) ─────────────────
+
+  const loadReactions = useCallback(async () => {
+    if (!id) return;
+    try {
+      const data = await getReactionSummaries(id);
+      setReactions(data);
+    } catch {
+      // Non-critical: fail silently
+    }
+  }, [id]);
+
+  const loadComments = useCallback(async () => {
+    if (!id) return;
+    try {
+      const data = await getComments(id);
+      setComments(data);
+    } catch {
+      // Non-critical: fail silently
+    }
+  }, [id]);
+
+  // Subscribe to realtime reactions/comments updates
+  useEffect(() => {
+    if (!id || !event) return;
+    // Only subscribe if the event has been shared to at least one space,
+    // or if the current user is the owner (reactions work on own events too).
+    const unsub = subscribeToEventInteractions(id, loadReactions, loadComments);
+    return unsub;
+  }, [id, event, loadReactions, loadComments]);
+
+  // Load reactions & comments after event is loaded
+  useEffect(() => {
+    if (!event) return;
+    void loadReactions();
+    void loadComments();
+  }, [event, loadReactions, loadComments]);
+
+  // ── Reaction toggle ────────────────────────────────────────────────────────
+
+  const handleToggleReaction = useCallback(async (emoji: ReactionEmoji) => {
+    if (!id || isTogglingReaction) return;
+    setIsTogglingReaction(emoji);
+    try {
+      await toggleReaction(id, emoji);
+      await loadReactions();
+    } catch (err) {
+      Alert.alert('오류', err instanceof Error ? err.message : '반응 변경에 실패했습니다.');
+    } finally {
+      setIsTogglingReaction(null);
+    }
+  }, [id, isTogglingReaction, loadReactions]);
+
+  // ── Comment submit ─────────────────────────────────────────────────────────
+
+  const handleSubmitComment = useCallback(async () => {
+    const trimmed = commentInput.trim();
+    if (!trimmed || !id || isSubmittingComment) return;
+
+    setIsSubmittingComment(true);
+    try {
+      const newComment = await addComment(id, trimmed);
+      setComments(prev => [...prev, newComment]);
+      setCommentInput('');
+      commentInputRef.current?.blur();
+    } catch (err) {
+      Alert.alert('오류', err instanceof Error ? err.message : '코멘트 작성에 실패했습니다.');
+    } finally {
+      setIsSubmittingComment(false);
+    }
+  }, [commentInput, id, isSubmittingComment]);
+
+  // ── Comment delete ─────────────────────────────────────────────────────────
+
+  const handleDeleteComment = useCallback((commentId: string) => {
+    Alert.alert(
+      '코멘트 삭제',
+      '이 코멘트를 삭제하시겠습니까?',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '삭제',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingCommentId(commentId);
+            try {
+              await deleteComment(commentId);
+              setComments(prev => prev.filter(c => c.id !== commentId));
+            } catch (err) {
+              Alert.alert('오류', err instanceof Error ? err.message : '코멘트 삭제에 실패했습니다.');
+            } finally {
+              setDeletingCommentId(null);
+            }
+          },
+        },
+      ],
+    );
+  }, []);
 
   // ── Delete ─────────────────────────────────────────────────────────────────
 
@@ -312,6 +436,130 @@ export default function EventDetailScreen() {
           </View>
         )}
 
+        {/* ── Reactions bar (TASK-503) ──────────────────────────────── */}
+        <View style={styles.reactionsSection}>
+          <Text style={styles.reactionsSectionTitle}>반응</Text>
+          <View style={styles.reactionsBar}>
+            {/* Show existing reactions with counts */}
+            {reactions.map(r => (
+              <TouchableOpacity
+                key={r.emoji}
+                style={[
+                  styles.reactionChip,
+                  r.isMyReaction && styles.reactionChipActive,
+                ]}
+                onPress={() => { void handleToggleReaction(r.emoji); }}
+                disabled={isTogglingReaction === r.emoji}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.reactionEmoji}>{r.emoji}</Text>
+                <Text style={[
+                  styles.reactionCount,
+                  r.isMyReaction && styles.reactionCountActive,
+                ]}>
+                  {r.count}
+                </Text>
+              </TouchableOpacity>
+            ))}
+
+            {/* Add reaction buttons for emojis not yet used */}
+            {REACTION_EMOJIS
+              .filter(e => !reactions.some(r => r.emoji === e))
+              .map(emoji => (
+                <TouchableOpacity
+                  key={emoji}
+                  style={styles.reactionAddChip}
+                  onPress={() => { void handleToggleReaction(emoji); }}
+                  disabled={isTogglingReaction === emoji}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.reactionEmoji}>{emoji}</Text>
+                </TouchableOpacity>
+              ))
+            }
+          </View>
+        </View>
+
+        {/* ── Comments section (TASK-503) ───────────────────────────── */}
+        <View style={styles.commentsSection}>
+          <Text style={styles.commentsSectionTitle}>
+            코멘트 {comments.length > 0 ? `${comments.length}개` : ''}
+          </Text>
+
+          {/* Comment list */}
+          {comments.map(comment => (
+            <View key={comment.id} style={styles.commentRow}>
+              {/* Author initial avatar */}
+              <View style={styles.commentAvatar}>
+                <Text style={styles.commentAvatarText}>
+                  {comment.authorNickname.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+
+              <View style={styles.commentContent}>
+                <View style={styles.commentHeader}>
+                  <Text style={styles.commentAuthor}>{comment.authorNickname}</Text>
+                  <Text style={styles.commentTime}>
+                    {comment.createdAt.toLocaleDateString('ko-KR', {
+                      month: 'short', day: 'numeric',
+                    })}
+                  </Text>
+                </View>
+                <Text style={styles.commentText}>{comment.content}</Text>
+              </View>
+
+              {/* Delete button (own comments only) */}
+              {comment.userId === user?.id && (
+                <TouchableOpacity
+                  style={styles.commentDeleteButton}
+                  onPress={() => handleDeleteComment(comment.id)}
+                  disabled={deletingCommentId === comment.id}
+                >
+                  {deletingCommentId === comment.id ? (
+                    <ActivityIndicator size="small" color={colors.textTertiary} />
+                  ) : (
+                    <Ionicons name="trash-outline" size={16} color={colors.textTertiary} />
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
+          ))}
+
+          {/* Comment input */}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
+            <View style={styles.commentInputRow}>
+              <TextInput
+                ref={commentInputRef}
+                style={styles.commentInput}
+                placeholder="코멘트 남기기..."
+                placeholderTextColor={colors.textPlaceholder}
+                value={commentInput}
+                onChangeText={setCommentInput}
+                maxLength={500}
+                multiline
+                returnKeyType="default"
+              />
+              <TouchableOpacity
+                style={[
+                  styles.commentSendButton,
+                  (!commentInput.trim() || isSubmittingComment) && styles.commentSendDisabled,
+                ]}
+                onPress={handleSubmitComment}
+                disabled={!commentInput.trim() || isSubmittingComment}
+                activeOpacity={0.7}
+              >
+                {isSubmittingComment ? (
+                  <ActivityIndicator size="small" color={colors.textInverse} />
+                ) : (
+                  <Ionicons name="send" size={16} color={colors.textInverse} />
+                )}
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+
         {/* Delete button — owner only */}
         {event.isOwn && (
           <Pressable
@@ -474,5 +722,141 @@ const styles = StyleSheet.create({
   deleteText: {
     ...textStyles.label,
     color: colors.error,
+  },
+
+  // ── Reactions (TASK-503) ────────────────────────────────────────────────────
+  reactionsSection: {
+    marginTop: spacing[6],
+    gap: spacing[2],
+  },
+  reactionsSectionTitle: {
+    ...textStyles.label,
+    color: colors.textSecondary,
+  },
+  reactionsBar: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing[2],
+  },
+  reactionChip: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             spacing[1],
+    paddingHorizontal: spacing[3],
+    paddingVertical:   spacing[1.5],
+    borderRadius:    radius.full,
+    borderWidth:     1,
+    borderColor:     colors.border,
+    backgroundColor: colors.surface,
+  },
+  reactionChipActive: {
+    borderColor:     colors.primary,
+    backgroundColor: colors.primaryLight,
+  },
+  reactionAddChip: {
+    paddingHorizontal: spacing[2.5],
+    paddingVertical:   spacing[1.5],
+    borderRadius:    radius.full,
+    borderWidth:     1,
+    borderColor:     colors.border,
+    borderStyle:     'dashed',
+    backgroundColor: colors.surface,
+  },
+  reactionEmoji: {
+    fontSize: 16,
+  },
+  reactionCount: {
+    ...textStyles.caption,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  reactionCountActive: {
+    color: colors.primary,
+  },
+
+  // ── Comments (TASK-503) ─────────────────────────────────────────────────────
+  commentsSection: {
+    marginTop: spacing[6],
+    gap: spacing[3],
+  },
+  commentsSectionTitle: {
+    ...textStyles.label,
+    color: colors.textSecondary,
+  },
+  commentRow: {
+    flexDirection: 'row',
+    alignItems:    'flex-start',
+    gap:           spacing[3],
+  },
+  commentAvatar: {
+    width:           32,
+    height:          32,
+    borderRadius:    radius.full,
+    backgroundColor: colors.primaryLight,
+    alignItems:      'center',
+    justifyContent:  'center',
+    flexShrink:      0,
+  },
+  commentAvatarText: {
+    fontSize:   13,
+    fontWeight: '700',
+    color:      colors.primary,
+  },
+  commentContent: {
+    flex: 1,
+    gap:  spacing[0.5],
+  },
+  commentHeader: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           spacing[2],
+  },
+  commentAuthor: {
+    ...textStyles.label,
+    color: colors.textPrimary,
+  },
+  commentTime: {
+    ...textStyles.caption,
+    color: colors.textTertiary,
+  },
+  commentText: {
+    ...textStyles.bodySm,
+    color: colors.textPrimary,
+  },
+  commentDeleteButton: {
+    padding: spacing[1],
+    flexShrink: 0,
+  },
+  commentInputRow: {
+    flexDirection:  'row',
+    alignItems:     'flex-end',
+    gap:            spacing[2],
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop:     spacing[3],
+  },
+  commentInput: {
+    flex:          1,
+    minHeight:     40,
+    maxHeight:     100,
+    borderWidth:   1,
+    borderColor:   colors.border,
+    borderRadius:  radius.lg,
+    paddingHorizontal: spacing[3],
+    paddingVertical:   spacing[2],
+    backgroundColor: colors.inputBackground,
+    ...textStyles.body,
+    color: colors.textPrimary,
+  },
+  commentSendButton: {
+    width:           40,
+    height:          40,
+    borderRadius:    radius.full,
+    backgroundColor: colors.primary,
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
+  commentSendDisabled: {
+    opacity: 0.5,
   },
 });

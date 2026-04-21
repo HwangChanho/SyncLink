@@ -7,6 +7,7 @@
  */
 
 import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
+import Markdown from 'react-native-markdown-display';
 import { useRouter } from 'expo-router';
 import type { Todo } from '@/types';
 import { light as colors } from '@/constants/colors';
@@ -27,21 +28,16 @@ interface NoteCardProps {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Strips markdown syntax for a plain-text preview (max 120 chars).
- * Full markdown is rendered in the detail screen.
+ * Truncates markdown text to a max length for card preview.
+ * Keeps markdown syntax so the Markdown component can render it.
+ * Breaks at the last whitespace within the limit to avoid mid-word cuts.
  */
-function markdownPreview(text: string | null, maxLength = 120): string {
+function truncateForPreview(text: string | null, maxLength = 200): string {
   if (!text) return '';
-  const plain = text
-    .replace(/#{1,6}\s/g, '')          // remove headings
-    .replace(/\*\*(.+?)\*\*/g, '$1')   // remove bold
-    .replace(/\*(.+?)\*/g, '$1')       // remove italic
-    .replace(/`(.+?)`/g, '$1')         // remove inline code
-    .replace(/- \[[ x]\] /g, '')       // remove checklist markers
-    .replace(/^\s*[-*+]\s+/gm, '')     // remove list bullets
-    .replace(/\n+/g, ' ')              // collapse newlines
-    .trim();
-  return plain.length > maxLength ? `${plain.slice(0, maxLength)}…` : plain;
+  if (text.length <= maxLength) return text;
+  const cut = text.slice(0, maxLength);
+  const lastSpace = cut.lastIndexOf(' ');
+  return `${lastSpace > 0 ? cut.slice(0, lastSpace) : cut}…`;
 }
 
 /** Formats a date as a relative string (오늘, 어제, or date). */
@@ -58,7 +54,7 @@ function formatNoteDate(date: Date): string {
 export function NoteCard({ note, width, onDelete: _onDelete }: NoteCardProps) {
   const router = useRouter();
 
-  const preview  = markdownPreview(note.content);
+  const preview  = truncateForPreview(note.content);
   const dateText = formatNoteDate(note.updatedAt);
 
   const handlePress = () => {
@@ -76,11 +72,11 @@ export function NoteCard({ note, width, onDelete: _onDelete }: NoteCardProps) {
         {note.title}
       </Text>
 
-      {/* Content preview (plain text, not full markdown for performance) */}
+      {/* Content preview — rendered as markdown for accurate visual representation */}
       {preview ? (
-        <Text style={styles.preview} numberOfLines={4}>
-          {preview}
-        </Text>
+        <View style={styles.previewContainer}>
+          <Markdown style={markdownPreviewStyles}>{preview}</Markdown>
+        </View>
       ) : (
         <Text style={styles.emptyPreview}>내용 없음</Text>
       )}
@@ -116,11 +112,11 @@ const styles = StyleSheet.create({
     color:        colors.textPrimary,
     marginBottom: spacing[1],
   },
-  preview: {
-    fontSize:     fontSize.sm,
-    color:        colors.textSecondary,
-    lineHeight:   fontSize.sm * 1.5,
-    flex:         1,
+  /** Wraps the Markdown preview — clipped to ~4 lines height. */
+  previewContainer: {
+    flex:       1,
+    maxHeight:  fontSize.sm * 1.5 * 4,  // approx 4 lines
+    overflow:   'hidden',
   },
   emptyPreview: {
     fontSize:  fontSize.sm,
@@ -137,3 +133,25 @@ const styles = StyleSheet.create({
     color: colors.textTertiary,
   },
 });
+
+/**
+ * Markdown styles for the card preview.
+ * Keeps all text small and muted to fit within the compact card layout.
+ */
+const markdownPreviewStyles = {
+  body: {
+    fontSize:   fontSize.sm,
+    color:      colors.textSecondary,
+    lineHeight: fontSize.sm * 1.5,
+  },
+  paragraph: {
+    marginTop:    0,
+    marginBottom: 0,
+  },
+  heading1: { fontSize: fontSize.sm, fontWeight: '700' as const, marginBottom: 0 },
+  heading2: { fontSize: fontSize.sm, fontWeight: '700' as const, marginBottom: 0 },
+  heading3: { fontSize: fontSize.sm, fontWeight: '600' as const, marginBottom: 0 },
+  code_inline: { fontSize: fontSize.sm, backgroundColor: 'transparent' },
+  fence:       { fontSize: fontSize.sm, backgroundColor: 'transparent', padding: 0 },
+  list_item:   { marginBottom: 0 },
+};
