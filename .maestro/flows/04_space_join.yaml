@@ -1,0 +1,47 @@
+# Maestro E2E — Flow 04: Invite Code Input → Join Space
+#
+# User story: A signed-in user navigates to the My tab,
+#             taps "Space 만들기" (or an existing join CTA),
+#             enters an invite code, and successfully joins
+#             the Space — which then appears in the Space list.
+#
+# Precondition:
+#   - User is signed in.
+#   - A valid invite code exists in the test environment.
+#     Set via the TEST_INVITE_CODE environment variable or
+#     hardcode a CI-provisioned code.
+#
+# Run:
+#   maestro test .maestro/flows/04_space_join.yaml
+#
+# With env override:
+#   maestro test .maestro/flows/04_space_join.yaml \
+#     -e TEST_INVITE_CODE=ABCD1234
+
+appId: com.syncday.app
+---
+
+# ── Step 1: Launch the app and navigate to the My tab ─────────────────────
+- launchApp
+- tapOn: "My"   # Bottom tab: My
+
+# ── Step 2: Open the Space creation / join screen ─────────────────────────
+# When the user has no Spaces, the empty state shows "Space 만들기".
+# If the user already has Spaces, tap the "+ Space 만들기" button.
+- tapOn: "Space 만들기"
+
+# ── Step 3: On the Space creation screen, switch to the Join tab ──────────
+# The screen has a segmented control or tab: "만들기" | "참여하기"
+- tapOn: "참여하기"
+
+# ── Step 4: Enter the invite code ─────────────────────────────────────────
+- tapOn: "초대 코드 입력"
+- inputText: "${TEST_INVITE_CODE:-TESTCODE}"
+
+# ── Step 5: Confirm the join action ───────────────────────────────────────
+- tapOn: "참여하기"   # The submit button on the join form
+
+# ── Step 6: Verify success — the new Space appears in the My tab list ─────
+# After joining, the app navigates back to the My tab and the Space card
+# should be visible.
+- assertVisible: "내 Space"

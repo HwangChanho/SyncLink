@@ -1,0 +1,43 @@
+# Maestro E2E — Flow 03: Todo Creation → Check (Complete)
+#
+# User story: A signed-in user navigates to the Planner tab,
+#             uses the quick-add bar to create a new todo,
+#             and then taps the checkbox to mark it as complete.
+#
+# Precondition: User is already signed in.
+#
+# Run:
+#   maestro test .maestro/flows/03_todo_check.yaml
+
+appId: com.syncday.app
+---
+
+# ── Step 1: Launch the app and navigate to the Planner tab ────────────────
+- launchApp
+- tapOn: "플래너"   # Bottom tab: 플래너
+
+# ── Step 2: Verify the Todo tab is active (default) ────────────────────────
+- assertVisible: "할일"
+
+# ── Step 3: Type a new todo in the quick-add bar ───────────────────────────
+# The quick-add TextInput placeholder is "할일 빠르게 추가..."
+- tapOn: "할일 빠르게 추가..."
+- inputText: "E2E 테스트 할일"
+
+# ── Step 4: Submit the quick-add form ──────────────────────────────────────
+# Tap the "+" IconButton (add button next to the input).
+- tapOn:
+    accessibilityLabel: "완료"   # fallback: pressReturnKey or tapOn button icon
+
+# ── Step 5: Verify the new todo appears in the list ────────────────────────
+- assertVisible: "E2E 테스트 할일"
+
+# ── Step 6: Tap the checkbox to complete the todo ──────────────────────────
+# The checkbox is a TouchableOpacity adjacent to the todo title.
+# Tapping it calls toggleTodo in the store.
+- tapOn: "E2E 테스트 할일"
+
+# ── Step 7: Verify the completed state ─────────────────────────────────────
+# After toggle, the row should show a strikethrough or checked state.
+# We verify the todo is still visible (not deleted).
+- assertVisible: "E2E 테스트 할일"

@@ -1,0 +1,21 @@
+# Maestro E2E configuration for SyncDay
+#
+# Prerequisites:
+#   1. Install Maestro CLI on your machine:
+#      curl -Ls "https://get.maestro.mobile.dev" | bash
+#   2. Launch a simulator or connect a real device.
+#   3. Install the development build (not Expo Go):
+#      npx expo run:ios   OR   npx expo run:android
+#
+# Run a single flow:
+#   maestro test .maestro/flows/01_onboarding.yaml
+#
+# Run all flows:
+#   maestro test .maestro/flows/
+
+appId: com.syncday.app
+
+# Global timeout (ms) for each action (default: 20000)
+# Increase on slower CI runners if needed.
+env:
+  TIMEOUT: "20000"

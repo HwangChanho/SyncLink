@@ -1,0 +1,52 @@
+# Maestro E2E — Flow 01: Onboarding → Login
+#
+# User story: A new user opens the app for the first time,
+#             is shown the login screen, signs up via email
+#             (or sees the OAuth options), and completes
+#             nickname setup in the onboarding screen.
+#
+# NOTE: This flow covers the UI path only.
+#       Actual OAuth sign-in requires a real account;
+#       use Supabase's magic-link email for CI automation.
+#
+# Run:
+#   maestro test .maestro/flows/01_onboarding.yaml
+
+appId: com.syncday.app
+---
+
+# ── Step 1: Launch the app ──────────────────────────────────────────────────
+- launchApp
+
+# ── Step 2: Verify the login screen is shown ───────────────────────────────
+# The login screen renders a "SyncDay" heading and social sign-in buttons.
+- assertVisible: "SyncDay"
+
+# ── Step 3: Verify sign-in option buttons are present ──────────────────────
+# At least one of the social login buttons must be visible.
+- assertVisible:
+    text: "Google로 시작하기"
+
+# ── Step 4: Simulate pressing "Continue with Email" (if available) ─────────
+# This is a fallback path used in QA environments where OAuth is not wired up.
+# In a real CI pipeline, inject credentials via environment variables.
+# - tapOn: "이메일로 시작하기"
+# - inputText:
+#     text: "${TEST_EMAIL}"
+#     id: "emailInput"
+# - tapOn: "계속"
+
+# ── Step 5: After sign-in → Onboarding screen appears ──────────────────────
+# The onboarding screen asks the user for a nickname.
+# We skip the step here since it requires a real auth session.
+# The assertion below would run after a real sign-in.
+# - assertVisible: "어떻게 불러드릴까요?"
+
+# ── Step 6: Enter a nickname and confirm ───────────────────────────────────
+# - tapOn: "닉네임 입력"
+# - inputText: "TestUser"
+# - tapOn: "시작하기"
+
+# ── Step 7: Land on the Home tab ───────────────────────────────────────────
+# After onboarding, the user should see the Home tab with the event list.
+# - assertVisible: "오늘 일정"

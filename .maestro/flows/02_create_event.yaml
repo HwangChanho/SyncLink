@@ -1,0 +1,41 @@
+# Maestro E2E — Flow 02: NL Input → Event Creation
+#
+# User story: A signed-in user types a natural-language event
+#             description into the NLInputBar on the Home or
+#             Calendar screen, confirms the parse result in the
+#             preview modal, and sees the event appear in the
+#             calendar.
+#
+# Precondition: User is already signed in (run 01_onboarding first,
+#               or use a persistent session via device storage).
+#
+# Run:
+#   maestro test .maestro/flows/02_create_event.yaml
+
+appId: com.syncday.app
+---
+
+# ── Step 1: Launch the app and navigate to Calendar tab ────────────────────
+- launchApp
+- tapOn: "캘린더"   # Bottom tab: 캘린더
+
+# ── Step 2: Tap the NL input bar placeholder ───────────────────────────────
+# The NLInputBar shows a placeholder text at the bottom of the screen.
+- tapOn: "일정을 입력해보세요"
+
+# ── Step 3: Type a natural-language event description ─────────────────────
+- inputText: "내일 오후 3시 팀 미팅"
+
+# ── Step 4: Submit (tap the send button or press Enter) ────────────────────
+- tapOn: "일정 파싱"  # accessibilityLabel on the send Pressable
+
+# ── Step 5: Verify the ConfirmModal appears with the parsed preview ─────────
+# The modal header says "일정 미리보기".
+- assertVisible: "일정 미리보기"
+
+# ── Step 6: Confirm the event ──────────────────────────────────────────────
+- tapOn: "확인"    # accessibilityLabel on the confirm button
+
+# ── Step 7: Verify the event title appears in the calendar ────────────────
+# After creation the new event should be visible on the calendar surface.
+- assertVisible: "팀 미팅"
