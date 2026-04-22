@@ -147,10 +147,43 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const aiParsed: ParsedEventFromAI = JSON.parse(jsonMatch[0]);
 
-    // 5. Map AI result to NLParseResult shape (dates stay as ISO strings here;
+    // 5. Log usage metrics (non-blocking)
+    const inputTokens = message.usage?.input_tokens ?? 0;
+    const outputTokens = message.usage?.output_tokens ?? 0;
+    const tokensUsed = inputTokens + outputTokens;
+
+    try {
+      const authHeader = req.headers.get('Authorization') ?? '';
+      const jwt = authHeader.slice(7);
+      const supabaseUser = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        { global: { headers: { Authorization: `Bearer ${jwt}` } } },
+      );
+      const { data: { user } } = await supabaseUser.auth.getUser();
+
+      if (user) {
+        const supabaseAdmin = createClient(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+        );
+        const INPUT_COST = 0.80 / 1_000_000;
+        const OUTPUT_COST = 4.00 / 1_000_000;
+        await supabaseAdmin.from('usage_metrics').insert({
+          user_id: user.id,
+          function_name: 'parse-event',
+          model: 'claude-haiku-4-5',
+          input_tokens: inputTokens,
+          output_tokens: outputTokens,
+          cost_usd: inputTokens * INPUT_COST + outputTokens * OUTPUT_COST,
+        });
+      }
+    } catch (metricsErr) {
+      console.error('[parse-event] usage_metrics insert failed:', metricsErr);
+    }
+
+    // Map AI result to NLParseResult shape (dates stay as ISO strings here;
     //    the client converts them to Date objects when needed)
-    const tokensUsed =
-      (message.usage?.input_tokens ?? 0) + (message.usage?.output_tokens ?? 0);
 
     const response: AiParseResponse = {
       result: {

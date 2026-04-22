@@ -96,6 +96,34 @@ async function generateReminderMessages(
   });
 
   const rawText = message.content[0].type === 'text' ? message.content[0].text : '';
+
+  // Log aggregate usage metrics (non-blocking) — smart-reminder is a batch job
+  // so we log once per invocation, not per user
+  try {
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+    );
+    const INPUT_COST = 0.80 / 1_000_000;
+    const OUTPUT_COST = 4.00 / 1_000_000;
+    const inputTokens = message.usage?.input_tokens ?? 0;
+    const outputTokens = message.usage?.output_tokens ?? 0;
+    // Use first group's userId as representative (batch job covers multiple users)
+    const firstUserId = groups[0]?.userId;
+    if (firstUserId) {
+      await supabaseAdmin.from('usage_metrics').insert({
+        user_id: firstUserId,
+        function_name: 'smart-reminder',
+        model: 'claude-haiku-4-5',
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        cost_usd: inputTokens * INPUT_COST + outputTokens * OUTPUT_COST,
+      });
+    }
+  } catch (metricsErr) {
+    console.error('[smart-reminder] usage_metrics insert failed:', metricsErr);
+  }
+
   const messageMap = new Map<string, string>();
 
   for (const line of rawText.split('\n')) {

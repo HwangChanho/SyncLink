@@ -11,6 +11,8 @@
  */
 
 import '@/lib/i18n'; // initialize i18n before any component renders
+import { initSentry } from '@/lib/sentry';
+initSentry();
 import { useEffect, useRef, useState } from 'react';
 import { AppState, AppStateStatus, Platform, View, StyleSheet, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';

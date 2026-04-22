@@ -160,7 +160,7 @@ Deno.serve(async (req: Request) => {
     const anthropic = new Anthropic({ apiKey });
 
     const message = await anthropic.messages.create({
-      model:      'claude-haiku-4-5',
+      model:      'claude-haiku-4-5-20251001',
       max_tokens: 200,
       messages: [
         {
@@ -179,6 +179,28 @@ Deno.serve(async (req: Request) => {
 
     if (!reviewText) {
       throw new Error('AI 응답에서 텍스트를 추출할 수 없습니다.');
+    }
+
+    // ── Log usage metrics (non-blocking) ─────────────────────────────────────
+    try {
+      const supabaseAdmin = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      );
+      const INPUT_COST = 0.80 / 1_000_000;
+      const OUTPUT_COST = 4.00 / 1_000_000;
+      const inputTokens = message.usage?.input_tokens ?? 0;
+      const outputTokens = message.usage?.output_tokens ?? 0;
+      await supabaseAdmin.from('usage_metrics').insert({
+        user_id: user.id,
+        function_name: 'weekly-review',
+        model: 'claude-haiku-4-5',
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        cost_usd: inputTokens * INPUT_COST + outputTokens * OUTPUT_COST,
+      });
+    } catch (metricsErr) {
+      console.error('[weekly-review] usage_metrics insert failed:', metricsErr);
     }
 
     // ── Return response ───────────────────────────────────────────────────────
