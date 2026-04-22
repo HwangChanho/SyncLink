@@ -24,7 +24,7 @@ import type { NLParseResult, AiUsageRecord, AiParseResponse } from '@/types';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 /** AsyncStorage key for daily AI usage tracking. */
-const AI_USAGE_STORAGE_KEY = 'syncday:ai_usage';
+const AI_USAGE_STORAGE_KEY = 'synclink:ai_usage';
 
 /** YYYY-MM-DD string for today in local time. */
 const todayDateString = (): string => {
@@ -235,7 +235,7 @@ function weeklyReviewCacheKey(weekStart: Date): string {
   const y = weekStart.getFullYear();
   const m = String(weekStart.getMonth() + 1).padStart(2, '0');
   const d = String(weekStart.getDate()).padStart(2, '0');
-  return `syncday:weekly_review:${y}-${m}-${d}`;
+  return `synclink:weekly_review:${y}-${m}-${d}`;
 }
 
 /** Shape stored in AsyncStorage for a cached weekly review. */
@@ -288,7 +288,15 @@ export async function getWeeklyReview(weekStart: Date): Promise<{
   });
 
   if (error || !data) {
-    throw new Error(error?.message ?? 'Weekly review 생성에 실패했습니다.');
+    // supabase-js wraps Edge Function errors as FunctionsHttpError.
+    // The generic message is always "Edge Function returned a non-2xx status code".
+    // The actual error body lives in error.context — read it for a meaningful message.
+    let message = error?.message ?? 'Weekly review 생성에 실패했습니다.';
+    try {
+      const body = await (error as unknown as { context?: { json?: () => Promise<{ error?: string }> } })?.context?.json?.();
+      if (body?.error) message = body.error;
+    } catch { /* ignore — use generic message */ }
+    throw new Error(message);
   }
 
   const result = { review: data.review, generatedAt: new Date(data.generatedAt) };
@@ -335,4 +343,55 @@ export async function getActivityRecommendations(
 ): Promise<string[]> {
   // Pro-tier feature — not yet implemented
   return [];
+}
+
+// ─── Date suggestion ──────────────────────────────────────────────────────────
+
+/** Time slot shape returned by the suggest-date Edge Function. */
+export interface DateSuggestionSlot {
+  /** ISO-8601 start of the free window. */
+  start: string;
+  /** ISO-8601 end of the free window. */
+  end: string;
+}
+
+/** Result of getDateSuggestion(). */
+export interface DateSuggestionResult {
+  /** Natural-language suggestion from Claude Haiku. */
+  suggestion: string;
+  /** Top shared free-time slots (max 3). */
+  slots: DateSuggestionSlot[];
+}
+
+/**
+ * Get an AI-generated date / meetup suggestion for a Space.
+ *
+ * Calls the `suggest-date` Edge Function which:
+ *  1. Finds free time slots shared across all Space members for the week.
+ *  2. Passes them to Claude Haiku for a friendly suggestion string.
+ *
+ * @param spaceId   - UUID of the Space to suggest a date for
+ * @param weekStart - ISO-8601 string for the Monday of the target week
+ * @returns DateSuggestionResult — suggestion text + matching slots
+ * @throws If the Edge Function returns an error
+ */
+export async function getDateSuggestion(
+  spaceId: string,
+  weekStart: string,
+): Promise<DateSuggestionResult> {
+  const { data, error } = await supabase.functions.invoke<DateSuggestionResult>(
+    EDGE_FUNCTIONS.SUGGEST_DATE,
+    { body: { spaceId, weekStart } },
+  );
+
+  if (error || !data) {
+    let message = error?.message ?? 'Date suggestion failed.';
+    try {
+      const body = await (error as unknown as { context?: { json?: () => Promise<{ error?: string }> } })?.context?.json?.();
+      if (body?.error) message = body.error;
+    } catch { /* ignore */ }
+    throw new Error(message);
+  }
+
+  return data;
 }

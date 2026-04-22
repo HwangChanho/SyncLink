@@ -12,15 +12,15 @@
 # Run:
 #   maestro test .maestro/flows/01_onboarding.yaml
 
-appId: com.syncday.app
+appId: com.synclink.app
 ---
 
 # ── Step 1: Launch the app ──────────────────────────────────────────────────
 - launchApp
 
 # ── Step 2: Verify the login screen is shown ───────────────────────────────
-# The login screen renders a "SyncDay" heading and social sign-in buttons.
-- assertVisible: "SyncDay"
+# The login screen renders a "SyncLink" heading and social sign-in buttons.
+- assertVisible: "SyncLink"
 
 # ── Step 3: Verify sign-in option buttons are present ──────────────────────
 # At least one of the social login buttons must be visible.

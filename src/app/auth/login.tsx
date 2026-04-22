@@ -6,10 +6,11 @@
 import { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ActivityIndicator, Platform,
+  ActivityIndicator, Platform, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
@@ -17,15 +18,23 @@ import {
   signInWithGoogle,
   signInWithKakao,
   signInWithApple,
+  signInWithEmail,
 } from '@/services/authService';
 
-type Provider = 'google' | 'kakao' | 'apple';
+type Provider = 'google' | 'kakao' | 'apple' | 'dev';
+
+const IS_DEV_BUILD = process.env.EXPO_PUBLIC_APP_ENV === 'development';
 
 export default function LoginScreen() {
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
   const [loading, setLoading] = useState<Provider | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Dev-only login state
+  const [devEmail, setDevEmail]       = useState('');
+  const [devPassword, setDevPassword] = useState('');
 
   const isLoading = loading !== null;
 
@@ -35,17 +44,21 @@ export default function LoginScreen() {
     setError(null);
 
     try {
-      const fn = provider === 'google'
-        ? signInWithGoogle
-        : provider === 'kakao'
-          ? signInWithKakao
-          : signInWithApple;
-
-      const result = await fn();
+      let result;
+      if (provider === 'dev') {
+        result = await signInWithEmail(devEmail.trim(), devPassword);
+      } else {
+        const fn = provider === 'google'
+          ? signInWithGoogle
+          : provider === 'kakao'
+            ? signInWithKakao
+            : signInWithApple;
+        result = await fn();
+      }
       router.replace(result.isNewUser ? '/auth/onboarding' : '/(tabs)');
     } catch (err: unknown) {
       if (isCancelError(err)) return;
-      setError(err instanceof Error ? err.message : '로그인 중 오류가 발생했습니다.');
+      setError(err instanceof Error ? err.message : t('auth.login.error'));
     } finally {
       setLoading(null);
     }
@@ -56,8 +69,8 @@ export default function LoginScreen() {
       <View style={styles.content}>
 
         <View style={styles.hero}>
-          <Text style={styles.logo}>SyncDay</Text>
-          <Text style={styles.tagline}>함께하는 일정, AI가 챙겨드려요</Text>
+          <Text style={styles.logo}>SyncLink</Text>
+          <Text style={styles.tagline}>{t('auth.login.tagline')}</Text>
         </View>
 
         <View style={styles.buttons}>
@@ -71,7 +84,7 @@ export default function LoginScreen() {
           >
             {loading === 'google'
               ? <ActivityIndicator color="#000000" />
-              : <Text style={[styles.buttonText, styles.googleText]}>Google로 시작하기</Text>
+              : <Text style={[styles.buttonText, styles.googleText]}>{t('auth.login.google')}</Text>
             }
           </TouchableOpacity>
 
@@ -84,7 +97,7 @@ export default function LoginScreen() {
           >
             {loading === 'kakao'
               ? <ActivityIndicator color="#3A1D1D" />
-              : <Text style={[styles.buttonText, styles.kakaoText]}>카카오로 시작하기</Text>
+              : <Text style={[styles.buttonText, styles.kakaoText]}>{t('auth.login.kakao')}</Text>
             }
           </TouchableOpacity>
 
@@ -98,12 +111,48 @@ export default function LoginScreen() {
             >
               {loading === 'apple'
                 ? <ActivityIndicator color="#FFFFFF" />
-                : <Text style={[styles.buttonText, styles.appleText]}>Apple로 시작하기</Text>
+                : <Text style={[styles.buttonText, styles.appleText]}>{t('auth.login.apple')}</Text>
               }
             </TouchableOpacity>
           )}
 
         </View>
+
+        {/* Dev-only email/password login — hidden in preview/production builds */}
+        {IS_DEV_BUILD && (
+          <View style={styles.devSection}>
+            <Text style={styles.devLabel}>{t('auth.login.dev_section')}</Text>
+            <TextInput
+              style={styles.devInput}
+              placeholder={t('auth.login.email_placeholder')}
+              placeholderTextColor={colors.textTertiary}
+              value={devEmail}
+              onChangeText={setDevEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              editable={!isLoading}
+            />
+            <TextInput
+              style={styles.devInput}
+              placeholder={t('auth.login.password_placeholder')}
+              placeholderTextColor={colors.textTertiary}
+              value={devPassword}
+              onChangeText={setDevPassword}
+              secureTextEntry
+              editable={!isLoading}
+            />
+            <TouchableOpacity
+              style={[styles.button, styles.devButton, isLoading && styles.disabled]}
+              onPress={() => handleSignIn('dev')}
+              disabled={isLoading || !devEmail || !devPassword}
+            >
+              {loading === 'dev'
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.devButtonText}>{t('auth.login.dev_button')}</Text>
+              }
+            </TouchableOpacity>
+          </View>
+        )}
 
         {error !== null && (
           <View style={styles.errorBox}>
@@ -112,7 +161,7 @@ export default function LoginScreen() {
         )}
 
         <Text style={styles.legal}>
-          로그인하면 서비스 이용약관 및 개인정보처리방침에 동의하게 됩니다.
+          {t('auth.login.legal')}
         </Text>
 
       </View>
@@ -160,6 +209,22 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     backgroundColor: colors.primaryLight,
   },
   errorText: { ...textStyles.bodySm, color: colors.error, textAlign: 'center' },
+  devSection: {
+    width: '100%', marginTop: spacing[6],
+    padding: spacing[4], borderRadius: radius.lg,
+    borderWidth: 1, borderStyle: 'dashed', borderColor: colors.border,
+    gap: spacing[3],
+  },
+  devLabel: { ...textStyles.label, color: colors.textSecondary, textAlign: 'center' },
+  devInput: {
+    width: '100%', height: 44,
+    borderWidth: 1, borderColor: colors.border,
+    borderRadius: radius.md, paddingHorizontal: spacing[3],
+    ...textStyles.body, color: colors.textPrimary,
+    backgroundColor: colors.surface,
+  },
+  devButton: { backgroundColor: '#555' },
+  devButtonText: { ...textStyles.labelLg, color: '#fff' },
   legal: {
     ...textStyles.caption, color: colors.textTertiary,
     textAlign: 'center', marginTop: spacing[8], paddingHorizontal: spacing[4],

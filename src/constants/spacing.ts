@@ -1,5 +1,5 @@
 /**
- * SyncDay design system — spacing tokens.
+ * SyncLink design system — spacing tokens.
  *
  * 4px base unit grid. All spacing values are multiples of 4.
  *

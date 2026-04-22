@@ -21,7 +21,7 @@
 # Run:
 #   maestro test .maestro/flows/05_nl_input.yaml
 
-appId: com.syncday.app
+appId: com.synclink.app
 ---
 
 # ── Step 1: Launch the app ──────────────────────────────────────────────────
@@ -29,8 +29,8 @@ appId: com.syncday.app
 
 # ── Step 2: Verify the initial screen is shown ─────────────────────────────
 # The login screen (unauthenticated) or Home screen (authenticated)
-# both contain the "SyncDay" branding.
-- assertVisible: "SyncDay"
+# both contain the "SyncLink" branding.
+- assertVisible: "SyncLink"
 
 # ── Step 3: Verify NLInputBar is present on Home ───────────────────────────
 # After sign-in, the Home tab renders the NLInputBar at the bottom.

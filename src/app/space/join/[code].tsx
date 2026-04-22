@@ -23,6 +23,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import type { ColorTokens } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
@@ -31,18 +32,20 @@ import * as spaceService from '@/services/spaceService';
 import { useSpaceStore } from '@/stores/spaceStore';
 import type { SpaceSummary } from '@/types';
 
-// ─── Space type labels ────────────────────────────────────────────────────────
-
-const SPACE_TYPE_LABELS: Record<string, string> = {
-  couple: '커플',
-  group:  '그룹',
-};
+// Space type labels are now built inside the component using i18n.
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SpaceJoinPreviewScreen() {
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
+
+  /** Space type labels loaded from i18n. */
+  const SPACE_TYPE_LABELS: Record<string, string> = {
+    couple: t('space.types.couple'),
+    group:  t('space.types.group'),
+  };
 
   const { code } = useLocalSearchParams<{ code: string }>();
   const { fetchMySpaces, setActiveSpaceId } = useSpaceStore();
@@ -56,7 +59,7 @@ export default function SpaceJoinPreviewScreen() {
 
   const loadSpace = useCallback(async () => {
     if (!code) {
-      setError('초대 코드가 없습니다.');
+      setError(t('space.no_code'));
       setIsLoading(false);
       return;
     }
@@ -66,7 +69,7 @@ export default function SpaceJoinPreviewScreen() {
       const info = await spaceService.getSpaceByInviteCode(code);
       setSpace(info);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '유효하지 않은 초대 코드입니다.');
+      setError(err instanceof Error ? err.message : t('space.invalid_code'));
     } finally {
       setIsLoading(false);
     }
@@ -90,7 +93,7 @@ export default function SpaceJoinPreviewScreen() {
       setActiveSpaceId(space.id);
       router.replace(`/space/${space.id}`);
     } catch (err) {
-      Alert.alert('참여 실패', err instanceof Error ? err.message : 'Space 참여에 실패했습니다.');
+      Alert.alert(t('space.join_fail_title'), err instanceof Error ? err.message : t('space.join_error'));
       setIsJoining(false);
     }
   }, [space, fetchMySpaces, setActiveSpaceId]);
@@ -101,7 +104,7 @@ export default function SpaceJoinPreviewScreen() {
     return (
       <SafeAreaView style={styles.centered}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>초대 코드 확인 중...</Text>
+        <Text style={styles.loadingText}>{t('common.loading')}</Text>
       </SafeAreaView>
     );
   }
@@ -110,10 +113,10 @@ export default function SpaceJoinPreviewScreen() {
     return (
       <SafeAreaView style={styles.centered}>
         <Ionicons name="alert-circle-outline" size={56} color={colors.error} />
-        <Text style={styles.errorTitle}>초대 코드 오류</Text>
-        <Text style={styles.errorText}>{error ?? '유효하지 않은 초대 코드입니다.'}</Text>
+        <Text style={styles.errorTitle}>{t('space.code_error')}</Text>
+        <Text style={styles.errorText}>{error ?? t('space.invalid_code')}</Text>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Text style={styles.backBtnText}>돌아가기</Text>
+          <Text style={styles.backBtnText}>{t('common.back')}</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -162,7 +165,7 @@ export default function SpaceJoinPreviewScreen() {
 
       {/* Description */}
       <Text style={styles.description}>
-        이 Space에 참여하시겠습니까?
+        {t('space.join_fail_desc')}
       </Text>
 
       {/* Action buttons */}

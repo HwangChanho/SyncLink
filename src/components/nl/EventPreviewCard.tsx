@@ -10,6 +10,7 @@
 
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import type { NLParseResult, Confidence } from '@/types';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
@@ -82,6 +83,7 @@ interface BadgeProps {
 
 function SourceBadge({ source, confidence }: BadgeProps) {
   // Each sub-component calls useColors() directly so it reacts to theme changes
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
 
@@ -89,7 +91,7 @@ function SourceBadge({ source, confidence }: BadgeProps) {
     return (
       <View style={styles.aiBadge}>
         <Ionicons name="sparkles" size={11} color={colors.primary} />
-        <Text style={styles.aiBadgeText}>AI가 해석했어요</Text>
+        <Text style={styles.aiBadgeText}>{t('common.preview')} AI</Text>
       </View>
     );
   }
@@ -97,7 +99,7 @@ function SourceBadge({ source, confidence }: BadgeProps) {
     return (
       <View style={styles.warningBadge}>
         <Ionicons name="warning-outline" size={11} color={colors.warning} />
-        <Text style={styles.warningBadgeText}>확인이 필요해요</Text>
+        <Text style={styles.warningBadgeText}>{t('common.warning')}</Text>
       </View>
     );
   }
@@ -108,14 +110,18 @@ function SourceBadge({ source, confidence }: BadgeProps) {
 
 export function EventPreviewCard({ result }: Props) {
   // Resolve active theme colors for dark mode support (TASK-700)
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
 
   const { parsed, confidence, source } = result;
 
-  // Repeat type label mapping
+  // Repeat type label mapping using i18n
   const repeatLabels: Record<string, string> = {
-    daily: '매일', weekly: '매주', monthly: '매월', yearly: '매년',
+    daily:   t('time.daily'),
+    weekly:  t('time.weekly'),
+    monthly: t('time.monthly'),
+    yearly:  t('time.annual'),
   };
 
   return (
@@ -123,7 +129,7 @@ export function EventPreviewCard({ result }: Props) {
       {/* Header: title + source badge */}
       <View style={styles.header}>
         <Text style={styles.titleText} numberOfLines={1}>
-          {parsed.title?.value ?? '제목 없음'}
+          {parsed.title?.value ?? t('event.untitled')}
         </Text>
         <SourceBadge source={source} confidence={confidence} />
       </View>
@@ -135,7 +141,7 @@ export function EventPreviewCard({ result }: Props) {
             label="시작"
             value={
               parsed.allDay?.value
-                ? `${parsed.startAt.value.toLocaleDateString('ko-KR')} (종일)`
+                ? `${parsed.startAt.value.toLocaleDateString('ko-KR')} (${t('time.all_day')})`
                 : formatDateTime(parsed.startAt.value)
             }
             uncertain={isUncertain(parsed.startAt.confidence)}

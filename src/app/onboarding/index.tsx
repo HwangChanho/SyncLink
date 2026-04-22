@@ -1,7 +1,7 @@
 /**
  * First-launch onboarding screen — shown once before the user logs in.
  *
- * Displays 3 swipeable pages that introduce SyncDay's core value propositions:
+ * Displays 3 swipeable pages that introduce SyncLink's core value propositions:
  *  1. "함께 일정을 공유하세요" — Space-based sharing with anyone
  *  2. "자연어로 일정 등록"    — Natural language event creation
  *  3. "AI 리마인더"           — Smart reminders powered by AI
@@ -35,6 +35,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import type { ColorTokens } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
@@ -47,7 +48,7 @@ import { textStyles } from '@/constants/typography';
  * If this key exists, the onboarding is skipped on startup.
  * Exported so _layout.tsx can read it without re-declaring the key.
  */
-export const ONBOARDING_STORAGE_KEY = '@syncday/onboarding_done';
+export const ONBOARDING_STORAGE_KEY = '@synclink/onboarding_done';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -66,29 +67,22 @@ interface PageData {
   subtitle: string;
 }
 
-const PAGES: PageData[] = [
-  {
-    icon: 'people',
-    title: '함께 일정을 공유하세요',
-    subtitle: '커플, 팀, 가족 — 누구와도 Space를 만들어 일정을 손쉽게 공유하세요.',
-  },
-  {
-    icon: 'chatbubble-ellipses',
-    title: '자연어로 일정 등록',
-    subtitle: '"다음 주 월요일 오후 3시 팀 미팅"을 입력하면 즉시 일정이 만들어집니다.',
-  },
-  {
-    icon: 'notifications',
-    title: 'AI 리마인더',
-    subtitle: '중요한 일정 전에 스마트 알림을 받으세요. AI가 최적의 타이밍을 찾아드립니다.',
-  },
+/** Ionicons icon names for each onboarding page (index-matched to onboarding.pages). */
+const PAGE_ICONS: Array<keyof typeof import('@expo/vector-icons').Ionicons.glyphMap> = [
+  'people',
+  'chatbubble-ellipses',
+  'notifications',
 ];
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function OnboardingScreen() {
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
+
+  /** Translated page data (title + subtitle) from i18n. */
+  const pages = t('onboarding.pages', { returnObjects: true }) as Array<{ title: string; subtitle: string }>;
 
   /** Zero-based index of the currently visible page */
   const [currentPage, setCurrentPage] = useState(0);
@@ -114,7 +108,7 @@ export default function OnboardingScreen() {
    * On the last page, calls handleFinish instead.
    */
   const handleNext = useCallback(() => {
-    const isLastPage = currentPage === PAGES.length - 1;
+    const isLastPage = currentPage === pages.length - 1;
     if (isLastPage) {
       void handleFinish();
       return;
@@ -137,7 +131,7 @@ export default function OnboardingScreen() {
     [],
   );
 
-  const isLastPage = currentPage === PAGES.length - 1;
+  const isLastPage = currentPage === pages.length - 1;
 
   // ── Render ──────────────────────────────────────────────────────────────
 
@@ -153,7 +147,7 @@ export default function OnboardingScreen() {
           accessibilityLabel="온보딩 건너뛰기"
           accessibilityRole="button"
         >
-          <Text style={styles.skipText}>건너뛰기</Text>
+          <Text style={styles.skipText}>{t('onboarding.skip')}</Text>
         </TouchableOpacity>
       )}
 
@@ -169,10 +163,10 @@ export default function OnboardingScreen() {
         contentContainerStyle={styles.scrollContent}
         accessibilityLabel="온보딩 페이지"
       >
-        {PAGES.map((page, index) => (
+        {pages.map((page, index) => (
           <OnboardingPage
             key={index}
-            page={page}
+            page={{ ...page, icon: PAGE_ICONS[index] ?? 'help-circle' }}
             colors={colors}
             styles={styles}
           />
@@ -180,8 +174,8 @@ export default function OnboardingScreen() {
       </ScrollView>
 
       {/* Page indicator dots */}
-      <View style={styles.dotsContainer} accessibilityLabel={`${currentPage + 1}/${PAGES.length} 페이지`}>
-        {PAGES.map((_, index) => (
+      <View style={styles.dotsContainer} accessibilityLabel={`${currentPage + 1}/${pages.length} 페이지`}>
+        {pages.map((_, index) => (
           <View
             key={index}
             style={[
@@ -202,7 +196,7 @@ export default function OnboardingScreen() {
           accessibilityRole="button"
         >
           <Text style={styles.ctaBtnText}>
-            {isLastPage ? '시작하기' : '다음'}
+            {isLastPage ? t('onboarding.start') : t('common.next')}
           </Text>
         </TouchableOpacity>
       </View>

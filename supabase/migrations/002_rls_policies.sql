@@ -26,16 +26,27 @@ create policy "users_select_own"
   on public.users for select
   using (auth.uid() = id);
 
+-- Helper: returns user_ids of all members who share a space with p_user_id.
+-- SECURITY DEFINER bypasses RLS on space_members, preventing infinite recursion
+-- that would occur if the policy queried space_members directly (space_members
+-- has its own RLS which references auth.uid(), causing a cycle through users).
+create or replace function get_space_member_ids(p_user_id uuid)
+returns table(user_id uuid)
+language sql
+security definer
+stable
+as $$
+  select sm2.user_id
+  from public.space_members sm1
+  join public.space_members sm2 on sm1.space_id = sm2.space_id
+  where sm1.user_id = p_user_id;
+$$;
+
 -- Users can view profiles of space members in their spaces
 create policy "users_select_space_members"
   on public.users for select
   using (
-    exists (
-      select 1 from public.space_members sm1
-      join public.space_members sm2 on sm1.space_id = sm2.space_id
-      where sm1.user_id = auth.uid()
-        and sm2.user_id = public.users.id
-    )
+    id in (select user_id from get_space_member_ids(auth.uid()))
   );
 
 -- Users can update their own profile

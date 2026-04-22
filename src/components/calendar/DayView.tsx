@@ -15,6 +15,7 @@
 
 import { useRef } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import type { EventSummary } from '@/types';
 import { EventBlock } from './EventBlock';
 import { useColors } from '@/hooks/useColors';
@@ -112,6 +113,7 @@ interface DayViewProps {
  */
 export function DayView({ selectedDate: _selectedDate, events, onEventPress }: DayViewProps) {
   // Resolve active theme colors for dark mode support (TASK-700)
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
 
@@ -132,7 +134,7 @@ export function DayView({ selectedDate: _selectedDate, events, onEventPress }: D
       {/* All-day events banner (shown only when there are all-day events) */}
       {allDayEvents.length > 0 && (
         <View style={styles.allDayBanner}>
-          <Text style={styles.allDayLabel}>종일</Text>
+          <Text style={styles.allDayLabel}>{t('time.all_day')}</Text>
           <View style={styles.allDayEvents}>
             {allDayEvents.map((evt) => (
               <View
@@ -203,7 +205,7 @@ export function DayView({ selectedDate: _selectedDate, events, onEventPress }: D
         {/* Empty state for days with no events */}
         {events.length === 0 && (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>일정이 없습니다</Text>
+            <Text style={styles.emptyText}>{t('event.today_list_title')} {t('common.none')}</Text>
           </View>
         )}
       </ScrollView>

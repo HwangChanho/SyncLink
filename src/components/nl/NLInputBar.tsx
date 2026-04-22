@@ -14,13 +14,15 @@
  * On limit error: shows a toast-style snackbar.
  */
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, TextInput, Pressable, Text, ActivityIndicator,
-  StyleSheet, Keyboard,
+  StyleSheet, Keyboard, Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
+import Voice, { type SpeechResultsEvent, type SpeechErrorEvent } from '@react-native-voice/voice';
 import { ConfirmModal } from './ConfirmModal';
 import { parseNaturalLanguage } from '@/services/aiService';
 import { createEvent } from '@/services/eventService';
@@ -69,6 +71,7 @@ function buildPrefillParams(result: NLParseResult): Record<string, string> {
 
 export function NLInputBar({ onEventCreated }: Props) {
   // Resolve active theme colors for dark mode support (TASK-700)
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
 
@@ -80,7 +83,44 @@ export function NLInputBar({ onEventCreated }: Props) {
   const [inputState, setInputState] = useState<InputState>('idle');
   const [parseResult, setParseResult] = useState<NLParseResult | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [isListening, setIsListening] = useState(false);
   const inputRef = useRef<TextInput>(null);
+
+  // ── Voice recognition setup ─────────────────────────────────────────────────
+
+  useEffect(() => {
+    Voice.onSpeechResults = (e: SpeechResultsEvent) => {
+      const recognized = e.value?.[0] ?? '';
+      if (recognized) setText(recognized);
+    };
+
+    Voice.onSpeechError = (_e: SpeechErrorEvent) => {
+      setIsListening(false);
+    };
+
+    Voice.onSpeechEnd = () => {
+      setIsListening(false);
+    };
+
+    return () => {
+      Voice.destroy().then(Voice.removeAllListeners).catch(() => {});
+    };
+  }, []);
+
+  const handleVoiceToggle = useCallback(async () => {
+    if (isListening) {
+      await Voice.stop();
+      setIsListening(false);
+      return;
+    }
+    try {
+      setText('');
+      await Voice.start('ko-KR');
+      setIsListening(true);
+    } catch {
+      Alert.alert(t('common.error'), t('nl.voice_error'));
+    }
+  }, [isListening, t]);
 
   // ── Parse submission ────────────────────────────────────────────────────────
 
@@ -159,7 +199,7 @@ export function NLInputBar({ onEventCreated }: Props) {
       setInputState('idle');
       onEventCreated?.();
     } catch {
-      setErrorMsg('일정 저장에 실패했어요. 다시 시도해주세요.');
+      setErrorMsg(t('nl.save_failed'));
       setInputState('error');
       setTimeout(() => setInputState('idle'), 4000);
     }
@@ -203,19 +243,35 @@ export function NLInputBar({ onEventCreated }: Props) {
 
       {/* Input row */}
       <View style={styles.inputRow}>
+        {/* Microphone button */}
+        <Pressable
+          style={[styles.micButton, isListening && styles.micButtonActive]}
+          onPress={handleVoiceToggle}
+          disabled={inputState === 'loading'}
+          accessibilityRole="button"
+          accessibilityLabel={isListening ? t('nl.voice_stop') : t('nl.voice_start')}
+        >
+          <Ionicons
+            name={isListening ? 'mic' : 'mic-outline'}
+            size={18}
+            color={isListening ? colors.error : colors.textSecondary}
+          />
+        </Pressable>
+
         <TextInput
           ref={inputRef}
           style={styles.input}
           value={text}
           onChangeText={setText}
-          placeholder="일정을 입력해보세요 (예: 내일 오후 3시 카페 미팅)"
-          placeholderTextColor={colors.textTertiary}
+          placeholder={isListening ? '듣는 중…' : t('nl.placeholder')}
+          placeholderTextColor={isListening ? colors.error : colors.textTertiary}
           returnKeyType="send"
           onSubmitEditing={handleSubmit}
           editable={inputState !== 'loading'}
           multiline={false}
           maxLength={200}
         />
+
         <Pressable
           style={[
             styles.sendButton,
@@ -285,6 +341,16 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     color: colors.textPrimary,
     paddingVertical: spacing[2],
     minHeight: 36,
+  },
+  micButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  micButtonActive: {
+    backgroundColor: colors.primaryLight,
   },
   sendButton: {
     width: 36,

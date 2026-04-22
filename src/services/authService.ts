@@ -170,11 +170,11 @@ export async function signInWithGoogle(): Promise<SignInResult> {
  *  1. supabase.auth.signInWithOAuth({ provider: 'kakao', skipBrowserRedirect: true })
  *     → returns the Kakao authorization URL
  *  2. WebBrowser.openAuthSessionAsync(url, redirectTo)
- *     → opens in-app browser, waits for redirect to syncday://auth/callback
+ *     → opens in-app browser, waits for redirect to synclink://auth/callback
  *  3. supabase.auth.exchangeCodeForSession(redirectUrl)
  *     → completes PKCE code exchange, establishes session
  *
- * Deep link scheme: syncday:// (configured in app.json)
+ * Deep link scheme: synclink:// (configured in app.json)
  * Redirect URI must be registered in Kakao developer console.
  *
  * @throws Error with message 'cancelled' if user closes the browser
@@ -182,7 +182,7 @@ export async function signInWithGoogle(): Promise<SignInResult> {
 export async function signInWithKakao(): Promise<SignInResult> {
   // The redirect URL must match what's registered in Kakao developer console
   // and in Supabase Dashboard > Authentication > Providers > Kakao
-  // In production: 'syncday://auth/callback'
+  // In production: 'synclink://auth/callback'
   // In Expo Go dev: Linking.createURL() returns exp:// which won't match — use a dev build
   // On web, use the browser's origin for the redirect URL;
   // on native, use the deep link scheme registered in app.json
@@ -503,6 +503,21 @@ export async function deleteAccount(): Promise<void> {
   }
 }
 
+/**
+ * Sign in with email and password (development only).
+ * Uses Supabase email/password auth — account must be pre-created in the dashboard.
+ * Only call this from __DEV__ code paths; never ship in production.
+ *
+ * @param email    - Test account email
+ * @param password - Test account password
+ */
+export async function signInWithEmail(email: string, password: string): Promise<SignInResult> {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+  if (!data.session) throw new Error('세션을 생성하지 못했습니다.');
+  return buildSignInResult(data.session);
+}
+
 // ─── Private helpers ──────────────────────────────────────────────────────────
 
 /**
@@ -539,11 +554,12 @@ async function buildSignInResult(session: Session): Promise<SignInResult> {
     throw new Error('사용자 프로필을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
   }
 
-  // Detect new users: auth.users.created_at within the last 30 seconds.
-  // This window is generous enough to cover network latency between trigger
-  // execution and this fetch.
-  const createdMs = new Date(session.user.created_at).getTime();
-  const isNewUser = Date.now() - createdMs < 30_000;
+  // Treat a user as "new" when their nickname hasn't been set yet.
+  // The handle_new_user trigger defaults nickname to the email username part
+  // (split_part(email, '@', 1)), so we detect that state here and route them
+  // to the nickname onboarding screen instead of straight to tabs.
+  const emailUsername = (session.user.email ?? '').split('@')[0];
+  const isNewUser = !userRow.nickname || userRow.nickname === emailUsername;
 
   return {
     session: authSession,

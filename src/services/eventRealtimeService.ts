@@ -8,6 +8,8 @@
  * Depends on:
  *  - eventService.getEventById — to hydrate INSERT/UPDATE payloads into EventSummary
  *  - AppState (react-native) — for foreground reconnect
+ *
+ * TASK-902: Added subscribeToEvents(spaceId) for direct space-level subscription.
  */
 
 import { AppState } from 'react-native';
@@ -19,6 +21,52 @@ import type { EventSummary } from '@/types';
 // Workaround: Database type lacks `Relationships` required by supabase-js v2.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const supa = supabase as any;
+
+/**
+ * Subscribe to Realtime changes for the events table for a specific space.
+ *
+ * Listens to INSERT, UPDATE, and DELETE on the `events` table filtered by
+ * `space_id`. This is the direct events-table subscription added in TASK-902.
+ * The broader subscription (via event_shares join) is handled by
+ * `subscribeToSharedEvents` below.
+ *
+ * @param spaceId  - UUID of the space to watch
+ * @param onUpsert - Called on INSERT or UPDATE with the raw event row
+ * @param onDelete - Called with the event ID on DELETE
+ * @returns Unsubscribe function — call on unmount
+ */
+export function subscribeToEvents(
+  spaceId: string,
+  onUpsert: (eventId: string) => void,
+  onDelete: (eventId: string) => void,
+): () => void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ch = (supabase as any)
+    .channel(`events:space:${spaceId}`)
+    .on(
+      'postgres_changes',
+      {
+        event:  '*',
+        schema: 'public',
+        table:  'events',
+        filter: `space_id=eq.${spaceId}`,
+      },
+      (payload: { eventType: string; new: { id: string }; old: { id?: string } }) => {
+        if (payload.eventType === 'DELETE') {
+          const id = payload.old.id;
+          if (id) onDelete(id);
+        } else {
+          // INSERT or UPDATE
+          if (payload.new.id) onUpsert(payload.new.id);
+        }
+      },
+    )
+    .subscribe() as ReturnType<typeof supabase.channel>;
+
+  return () => {
+    void supabase.removeChannel(ch);
+  };
+}
 
 /**
  * Subscribe to realtime changes for events shared to the user's spaces.

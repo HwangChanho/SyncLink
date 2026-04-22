@@ -20,7 +20,7 @@
 # Run:
 #   maestro test .maestro/flows/07_screenshots.yaml
 
-appId: com.syncday.app
+appId: com.synclink.app
 ---
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -31,7 +31,7 @@ appId: com.syncday.app
 - launchApp
 
 # ── Step 2: Verify the app is loaded ───────────────────────────────────────
-- assertVisible: "SyncDay"
+- assertVisible: "SyncLink"
 
 # ── Step 3: Navigate to the Home tab (if not already there) ────────────────
 # The Home tab is the default tab after sign-in.

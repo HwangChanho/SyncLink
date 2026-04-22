@@ -27,12 +27,14 @@
 import { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { textStyles } from '@/constants/typography';
 import { supabase } from '@/lib/supabase';
 
 export default function AuthCallbackScreen() {
   // Resolve active theme colors for dark mode support (TASK-700)
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
 
@@ -46,7 +48,7 @@ export default function AuthCallbackScreen() {
     // a token in the URL hash on web — authStore listener will handle navigation.
     // DEV should handle the ?code= (PKCE) case explicitly here.
     handleCallback().catch((err) => {
-      setError(err instanceof Error ? err.message : '인증 처리 중 오류가 발생했습니다.');
+      setError(err instanceof Error ? err.message : t('auth.callback.processing'));
     });
   }, []);
 
@@ -85,7 +87,7 @@ export default function AuthCallbackScreen() {
       }
     } catch {
       // URL parsing failed
-      throw new Error('콜백 URL을 파싱하지 못했습니다.');
+      throw new Error(t('auth.callback.parse_error'));
     }
 
     if (code) {
@@ -103,7 +105,7 @@ export default function AuthCallbackScreen() {
       // No code or tokens found — session may already exist or flow failed
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        throw new Error('인증 정보를 찾지 못했습니다. 다시 로그인해 주세요.');
+        throw new Error(t('auth.callback.not_found'));
       }
     }
 
@@ -127,7 +129,7 @@ export default function AuthCallbackScreen() {
           style={styles.retryLink}
           onPress={() => router.replace('/auth/login')}
         >
-          다시 로그인하기
+          {t('common.retry')}
         </Text>
       </View>
     );
@@ -136,7 +138,7 @@ export default function AuthCallbackScreen() {
   return (
     <View style={styles.container}>
       <ActivityIndicator size="large" color={colors.primary} />
-      <Text style={styles.label}>로그인 처리 중...</Text>
+      <Text style={styles.label}>{t('common.loading')}</Text>
     </View>
   );
 }

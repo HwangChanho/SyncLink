@@ -20,6 +20,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import type { Event, EventComment, ReactionSummary } from '@/types';
 import { getEventById, deleteEvent } from '@/services/eventService';
 import { shareEventToSpace, unshareEventFromSpace } from '@/services/eventShareService';
@@ -42,7 +43,7 @@ import { textStyles } from '@/constants/typography';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Korean weekday abbreviations. */
+/** Korean weekday abbreviations (static fallback; i18n used in component). */
 const KO_WEEKDAY = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
 /**
@@ -62,21 +63,24 @@ function formatDateTime(date: Date, allDay: boolean): string {
   return `${y}년 ${m}월 ${d}일 (${wd}) ${ampm} ${h12}:${min}`;
 }
 
-/** Maps RepeatType to Korean label. */
-const REPEAT_LABELS: Record<string, string> = {
-  none: '반복 없음',
-  daily: '매일',
-  weekly: '매주',
-  monthly: '매월',
-  yearly: '매년',
-};
+// Repeat labels are now built inside the component using i18n.
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function EventDetailScreen() {
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
   const { id } = useLocalSearchParams<{ id: string }>();
+
+  /** Maps RepeatType to translated label. */
+  const REPEAT_LABELS: Record<string, string> = {
+    none:    t('time.no_repeat'),
+    daily:   t('time.daily'),
+    weekly:  t('time.weekly'),
+    monthly: t('time.monthly'),
+    yearly:  t('time.annual'),
+  };
   const router = useRouter();
   const { removeEvent } = useEventStore();
   const { spaces } = useSpaceStore();
@@ -111,7 +115,7 @@ export default function EventDetailScreen() {
       const data = await getEventById(id);
       setEvent(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '일정을 불러오지 못했습니다.');
+      setError(err instanceof Error ? err.message : t('event.load_failed'));
     } finally {
       setIsLoading(false);
     }
@@ -166,7 +170,7 @@ export default function EventDetailScreen() {
       await toggleReaction(id, emoji);
       await loadReactions();
     } catch (err) {
-      Alert.alert('오류', err instanceof Error ? err.message : '반응 변경에 실패했습니다.');
+      Alert.alert(t('common.error'), err instanceof Error ? err.message : t('reaction.change_failed'));
     } finally {
       setIsTogglingReaction(null);
     }
@@ -185,7 +189,7 @@ export default function EventDetailScreen() {
       setCommentInput('');
       commentInputRef.current?.blur();
     } catch (err) {
-      Alert.alert('오류', err instanceof Error ? err.message : '코멘트 작성에 실패했습니다.');
+      Alert.alert(t('common.error'), err instanceof Error ? err.message : t('comment.write_failed'));
     } finally {
       setIsSubmittingComment(false);
     }
@@ -195,12 +199,12 @@ export default function EventDetailScreen() {
 
   const handleDeleteComment = useCallback((commentId: string) => {
     Alert.alert(
-      '코멘트 삭제',
-      '이 코멘트를 삭제하시겠습니까?',
+      t('comment.delete'),
+      t('comment.delete_confirm'),
       [
-        { text: '취소', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: '삭제',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: async () => {
             setDeletingCommentId(commentId);
@@ -208,7 +212,7 @@ export default function EventDetailScreen() {
               await deleteComment(commentId);
               setComments(prev => prev.filter(c => c.id !== commentId));
             } catch (err) {
-              Alert.alert('오류', err instanceof Error ? err.message : '코멘트 삭제에 실패했습니다.');
+              Alert.alert(t('common.error'), err instanceof Error ? err.message : t('comment.delete_failed'));
             } finally {
               setDeletingCommentId(null);
             }
@@ -216,19 +220,19 @@ export default function EventDetailScreen() {
         },
       ],
     );
-  }, []);
+  }, [t]);
 
   // ── Delete ─────────────────────────────────────────────────────────────────
 
   const handleDelete = useCallback(() => {
     if (!event) return;
     Alert.alert(
-      '일정 삭제',
-      `"${event.title}" 일정을 삭제하시겠습니까?`,
+      t('event.delete'),
+      t('event.delete_confirm'),
       [
-        { text: '취소', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: '삭제',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: async () => {
             setIsDeleting(true);
@@ -239,8 +243,8 @@ export default function EventDetailScreen() {
               router.back();
             } catch (err) {
               Alert.alert(
-                '삭제 실패',
-                err instanceof Error ? err.message : '삭제 중 오류가 발생했습니다.',
+                t('common.error'),
+                err instanceof Error ? err.message : t('common.delete_failed'),
               );
               setIsDeleting(false);
             }
@@ -248,7 +252,7 @@ export default function EventDetailScreen() {
         },
       ],
     );
-  }, [event, removeEvent, router]);
+  }, [event, removeEvent, router, t]);
 
   // ── Share toggle ────────────────────────────────────────────────────────────
 
@@ -288,7 +292,7 @@ export default function EventDetailScreen() {
           : prev.sharedSpaceIds.filter((sid) => sid !== spaceId);
         return { ...prev, sharedSpaceIds };
       });
-      Alert.alert('오류', err instanceof Error ? err.message : '공유 설정 변경에 실패했습니다.');
+      Alert.alert(t('common.error'), err instanceof Error ? err.message : t('share.update_failed'));
     } finally {
       setSharingInFlight((prev) => {
         const next = new Set(prev);
@@ -311,9 +315,9 @@ export default function EventDetailScreen() {
   if (error || !event) {
     return (
       <SafeAreaView style={styles.centered}>
-        <Text style={styles.errorText}>{error ?? '일정을 찾을 수 없습니다.'}</Text>
+        <Text style={styles.errorText}>{error ?? t('event.not_found')}</Text>
         <Pressable style={styles.retryButton} onPress={() => void loadEvent()}>
-          <Text style={styles.retryText}>다시 시도</Text>
+          <Text style={styles.retryText}>{t('common.retry')}</Text>
         </Pressable>
       </SafeAreaView>
     );
@@ -411,7 +415,7 @@ export default function EventDetailScreen() {
         {/* Space sharing — only owner can toggle */}
         {event.isOwn && spaces.length > 0 && (
           <View style={styles.sharingSection}>
-            <Text style={styles.sharingTitle}>공유 중인 Space</Text>
+            <Text style={styles.sharingTitle}>{t('space.activity_notification')}</Text>
             {spaces.map((space) => {
               const shared = event.sharedSpaceIds.includes(space.id);
               const inFlight = sharingInFlight.has(space.id);
@@ -440,7 +444,7 @@ export default function EventDetailScreen() {
 
         {/* ── Reactions bar (TASK-503) ──────────────────────────────── */}
         <View style={styles.reactionsSection}>
-          <Text style={styles.reactionsSectionTitle}>반응</Text>
+          <Text style={styles.reactionsSectionTitle}>{t('common.unknown')}</Text>
           <View style={styles.reactionsBar}>
             {/* Show existing reactions with counts */}
             {reactions.map(r => (
@@ -485,7 +489,7 @@ export default function EventDetailScreen() {
         {/* ── Comments section (TASK-503) ───────────────────────────── */}
         <View style={styles.commentsSection}>
           <Text style={styles.commentsSectionTitle}>
-            코멘트 {comments.length > 0 ? `${comments.length}개` : ''}
+            {t('note.label')} {comments.length > 0 ? `${comments.length}개` : ''}
           </Text>
 
           {/* Comment list */}
@@ -535,7 +539,8 @@ export default function EventDetailScreen() {
               <TextInput
                 ref={commentInputRef}
                 style={styles.commentInput}
-                placeholder="코멘트 남기기..."
+                placeholder={t('note.label') + '...'}
+
                 placeholderTextColor={colors.textPlaceholder}
                 value={commentInput}
                 onChangeText={setCommentInput}
@@ -572,7 +577,7 @@ export default function EventDetailScreen() {
             {isDeleting ? (
               <ActivityIndicator size="small" color={colors.error} />
             ) : (
-              <Text style={styles.deleteText}>일정 삭제</Text>
+              <Text style={styles.deleteText}>{t('event.delete')}</Text>
             )}
           </Pressable>
         )}

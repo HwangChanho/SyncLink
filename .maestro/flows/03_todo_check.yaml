@@ -9,7 +9,7 @@
 # Run:
 #   maestro test .maestro/flows/03_todo_check.yaml
 
-appId: com.syncday.app
+appId: com.synclink.app
 ---
 
 # ── Step 1: Launch the app and navigate to the Planner tab ────────────────

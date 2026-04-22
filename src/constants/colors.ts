@@ -1,5 +1,5 @@
 /**
- * SyncDay design system — color tokens.
+ * SyncLink design system — color tokens.
  *
  * Structure:
  *  - palette:   raw hex values (never use directly in components)

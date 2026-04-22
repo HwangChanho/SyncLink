@@ -10,6 +10,7 @@
  */
 
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles, fontWeight } from '@/constants/typography';
@@ -19,11 +20,7 @@ export type ViewMode = 'month' | 'week' | 'day';
 
 const VIEW_MODES: ViewMode[] = ['month', 'week', 'day'];
 
-const VIEW_MODE_LABELS: Record<ViewMode, string> = {
-  month: '월',
-  week: '주',
-  day: '일',
-};
+// VIEW_MODE_LABELS is now built inside the component using i18n.
 
 interface CalendarHeaderProps {
   viewMode: ViewMode;
@@ -77,8 +74,16 @@ export function CalendarHeader({
   onViewModeChange,
 }: CalendarHeaderProps) {
   // Resolve active theme colors for dark mode support (TASK-700)
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
+
+  /** View mode labels for month/week/day tabs. */
+  const VIEW_MODE_LABELS: Record<ViewMode, string> = {
+    month: t('time.monthly').slice(-1),  // '월' from '매월'
+    week:  t('time.weekly').slice(-1),   // '주' from '매주'
+    day:   t('time.daily').slice(-1),    // '일' from '매일'
+  };
 
   return (
     <View style={styles.container}>

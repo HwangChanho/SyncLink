@@ -22,6 +22,7 @@ import Markdown from 'react-native-markdown-display';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import type { ColorTokens } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
@@ -33,6 +34,7 @@ import type { Todo } from '@/types';
 
 export default function NoteDetailScreen() {
   // Dark mode: resolve current theme colors and build dynamic styles
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
   const markdownBodyStyles = makeMarkdownStyles(colors);
@@ -75,7 +77,7 @@ export default function NoteDetailScreen() {
     if (!note) return;
     const trimmedTitle = draftTitle.trim();
     if (trimmedTitle.length === 0) {
-      Alert.alert('오류', '노트 제목을 입력해 주세요.');
+      Alert.alert(t('common.error'), t('note.title_placeholder'));
       return;
     }
 
@@ -89,7 +91,7 @@ export default function NoteDetailScreen() {
       });
       setIsEditing(false);
     } catch (err) {
-      Alert.alert('오류', err instanceof Error ? err.message : '저장에 실패했습니다.');
+      Alert.alert(t('common.error'), err instanceof Error ? err.message : t('note.save_failed'));
     } finally {
       setIsSaving(false);
     }
@@ -107,12 +109,12 @@ export default function NoteDetailScreen() {
   const handleDelete = useCallback(() => {
     if (!note) return;
     Alert.alert(
-      '노트 삭제',
-      `"${note.title}"을(를) 삭제하시겠습니까?`,
+      t('note.delete'),
+      t('note.delete_confirm'),
       [
-        { text: '취소', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: '삭제',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: async () => {
             await removeNote(note.id);
@@ -121,16 +123,16 @@ export default function NoteDetailScreen() {
         },
       ],
     );
-  }, [note, removeNote, router]);
+  }, [note, removeNote, router, t]);
 
   // ── Not found ────────────────────────────────────────────────────────────
 
   if (!note) {
     return (
       <SafeAreaView style={styles.centered}>
-        <Text style={styles.notFoundText}>노트를 찾을 수 없습니다.</Text>
+        <Text style={styles.notFoundText}>{t('common.unknown')}</Text>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Text style={styles.backBtnText}>돌아가기</Text>
+          <Text style={styles.backBtnText}>{t('common.back')}</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -154,7 +156,7 @@ export default function NoteDetailScreen() {
         </TouchableOpacity>
 
         <Text style={styles.headerTitle} numberOfLines={1}>
-          {isEditing ? '노트 편집' : note.title}
+          {isEditing ? t('note.edit') : note.title}
         </Text>
 
         {/* Right actions */}
@@ -168,7 +170,7 @@ export default function NoteDetailScreen() {
             >
               {isSaving
                 ? <ActivityIndicator size="small" color={colors.textInverse} />
-                : <Text style={styles.savePillText}>저장</Text>
+                : <Text style={styles.savePillText}>{t('common.save')}</Text>
               }
             </TouchableOpacity>
           ) : (
@@ -201,7 +203,7 @@ export default function NoteDetailScreen() {
               style={styles.titleInput}
               value={draftTitle}
               onChangeText={setDraftTitle}
-              placeholder="노트 제목"
+              placeholder={t('note.title_placeholder')}
               placeholderTextColor={colors.textPlaceholder}
               returnKeyType="next"
               autoFocus
@@ -211,7 +213,7 @@ export default function NoteDetailScreen() {
               style={styles.bodyInput}
               value={draftContent}
               onChangeText={setDraftContent}
-              placeholder="내용을 입력하세요..."
+              placeholder={t('nl.placeholder')}
               placeholderTextColor={colors.textPlaceholder}
               multiline
               textAlignVertical="top"

@@ -20,6 +20,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import type { Event, RepeatType } from '@/types';
 import { getEventById, updateEvent, deleteEvent } from '@/services/eventService';
 import { shareEventToSpace, unshareEventFromSpace } from '@/services/eventShareService';
@@ -28,16 +29,11 @@ import { useSpaceStore } from '@/stores/spaceStore';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { PlaceSearchInput } from '@/components/places/PlaceSearchInput';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const REPEAT_OPTIONS: { value: RepeatType; label: string }[] = [
-  { value: 'none',    label: '반복 없음' },
-  { value: 'daily',   label: '매일' },
-  { value: 'weekly',  label: '매주' },
-  { value: 'monthly', label: '매월' },
-  { value: 'yearly',  label: '매년' },
-];
+// REPEAT_OPTIONS is now built inside the component using i18n.
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -109,9 +105,19 @@ function makeRowStyles(colors: ReturnType<typeof useColors>) {
 
 export default function EventEditScreen() {
   // Resolve active theme colors for dark mode support (TASK-700)
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
   const rowStyle = makeRowStyles(colors);
+
+  /** Repeat options built from i18n translations. */
+  const REPEAT_OPTIONS: { value: RepeatType; label: string }[] = [
+    { value: 'none',    label: t('time.no_repeat') },
+    { value: 'daily',   label: t('time.daily') },
+    { value: 'weekly',  label: t('time.weekly') },
+    { value: 'monthly', label: t('time.monthly') },
+    { value: 'yearly',  label: t('time.annual') },
+  ];
 
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -164,7 +170,7 @@ export default function EventEditScreen() {
         setShareSpaceIds(ev.sharedSpaceIds);
       } catch (err) {
         if (!cancelled) {
-          setLoadError(err instanceof Error ? err.message : '일정을 불러오지 못했습니다.');
+          setLoadError(err instanceof Error ? err.message : t('event.load_failed'));
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -198,11 +204,11 @@ export default function EventEditScreen() {
     if (!id || !originalEvent) return;
 
     if (!title.trim()) {
-      Alert.alert('입력 오류', '제목을 입력해 주세요.');
+      Alert.alert(t('common.error'), t('event.title_placeholder'));
       return;
     }
     if (!allDay && endAt <= startAt) {
-      Alert.alert('입력 오류', '종료 시간이 시작 시간보다 늦어야 합니다.');
+      Alert.alert(t('common.error'), t('event.end_after_start'));
       return;
     }
 
@@ -248,7 +254,7 @@ export default function EventEditScreen() {
       router.back();
       router.back();
     } catch (err) {
-      Alert.alert('저장 실패', err instanceof Error ? err.message : '일정을 저장하지 못했습니다.');
+      Alert.alert(t('common.error'), err instanceof Error ? err.message : t('event.save_error'));
       setIsSaving(false);
     }
   }, [
@@ -260,12 +266,12 @@ export default function EventEditScreen() {
   const handleDelete = useCallback(() => {
     if (!id || !originalEvent) return;
     Alert.alert(
-      '일정 삭제',
-      `"${originalEvent.title}" 일정을 삭제하시겠습니까?`,
+      t('event.delete'),
+      t('event.delete_confirm'),
       [
-        { text: '취소', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: '삭제',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: async () => {
             setIsDeleting(true);
@@ -276,14 +282,14 @@ export default function EventEditScreen() {
               router.back();
               router.back();
             } catch (err) {
-              Alert.alert('삭제 실패', err instanceof Error ? err.message : '삭제 중 오류가 발생했습니다.');
+              Alert.alert(t('common.error'), err instanceof Error ? err.message : t('common.delete_failed'));
               setIsDeleting(false);
             }
           },
         },
       ],
     );
-  }, [id, originalEvent, removeEvent, router]);
+  }, [id, originalEvent, removeEvent, router, t]);
 
   // ── Render states ───────────────────────────────────────────────────────────
 
@@ -313,9 +319,9 @@ export default function EventEditScreen() {
       {/* Header */}
       <View style={styles.headerBar}>
         <Pressable style={styles.headerButton} onPress={() => router.back()}>
-          <Text style={styles.headerCancel}>취소</Text>
+          <Text style={styles.headerCancel}>{t('common.cancel')}</Text>
         </Pressable>
-        <Text style={styles.headerTitle}>일정 수정</Text>
+        <Text style={styles.headerTitle}>{t('common.edit')} {t('event.untitled')}</Text>
         <Pressable
           style={[styles.headerButton, isSaving && styles.headerButtonDisabled]}
           onPress={() => void handleSave()}
@@ -324,7 +330,7 @@ export default function EventEditScreen() {
           {isSaving ? (
             <ActivityIndicator size="small" color={colors.primary} />
           ) : (
-            <Text style={styles.headerSave}>저장</Text>
+            <Text style={styles.headerSave}>{t('common.save')}</Text>
           )}
         </Pressable>
       </View>
@@ -337,7 +343,7 @@ export default function EventEditScreen() {
         {/* Title */}
         <TextInput
           style={styles.titleInput}
-          placeholder="제목"
+          placeholder={t('event.title_placeholder')}
           placeholderTextColor={colors.textSecondary}
           value={title}
           onChangeText={setTitle}
@@ -408,15 +414,12 @@ export default function EventEditScreen() {
             </ScrollView>
           </FormRow>
 
-          {/* Location */}
+          {/* Location — Google Places Autocomplete (TASK-901) */}
           <FormRow label="위치" rowStyle={rowStyle}>
-            <TextInput
-              style={styles.inlineInput}
-              placeholder="위치 추가 (선택)"
-              placeholderTextColor={colors.textSecondary}
+            <PlaceSearchInput
               value={location}
-              onChangeText={setLocation}
-              returnKeyType="done"
+              onPlaceSelect={setLocation}
+              placeholder={t('places.search_placeholder')}
             />
           </FormRow>
 
@@ -424,7 +427,7 @@ export default function EventEditScreen() {
           <FormRow label="메모" rowStyle={rowStyle}>
             <TextInput
               style={[styles.inlineInput, styles.multilineInput]}
-              placeholder="메모 추가 (선택)"
+              placeholder={t('nl.placeholder')}
               placeholderTextColor={colors.textSecondary}
               value={description}
               onChangeText={setDescription}
@@ -465,7 +468,7 @@ export default function EventEditScreen() {
             {isDeleting ? (
               <ActivityIndicator size="small" color={colors.error} />
             ) : (
-              <Text style={styles.deleteText}>일정 삭제</Text>
+              <Text style={styles.deleteText}>{t('event.delete')}</Text>
             )}
           </Pressable>
         </View>

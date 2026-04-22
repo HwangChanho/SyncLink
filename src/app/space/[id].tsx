@@ -31,6 +31,7 @@ import {
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
@@ -43,6 +44,7 @@ import type { Space, SpaceMember, Anniversary, FreeTimeSlot } from '@/types';
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SpaceDetailScreen() {
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
   const { id: spaceId } = useLocalSearchParams<{ id: string }>();
@@ -108,7 +110,7 @@ export default function SpaceDetailScreen() {
       const loaded = await fetchSpaceById(spaceId);
       setSpace(loaded);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Space를 불러오지 못했습니다.');
+      setError(err instanceof Error ? err.message : t('space.load_failed'));
     } finally {
       setIsLoading(false);
     }
@@ -136,7 +138,7 @@ export default function SpaceDetailScreen() {
     if (!space) return;
     try {
       await Share.share({
-        message: `SyncDay Space "${space.name}"에 초대합니다!\n초대 코드: ${space.inviteCode}\n참여 링크: syncday://space/join/${space.inviteCode}`,
+        message: `SyncLink Space "${space.name}"에 초대합니다!\n초대 코드: ${space.inviteCode}\n참여 링크: synclink://space/join/${space.inviteCode}`,
         title: `${space.name} 초대`,
       });
     } catch {
@@ -147,12 +149,12 @@ export default function SpaceDetailScreen() {
   /** Regenerate invite code (owner only). */
   const handleRegenerateCode = () => {
     Alert.alert(
-      '초대 코드 재생성',
-      '기존 코드가 무효화됩니다. 새로 생성할까요?',
+      t('space.invite_regen'),
+      t('space.regen_confirm'),
       [
-        { text: '취소', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: '재생성',
+          text: t('space.regen'),
           style: 'destructive',
           onPress: async () => {
             if (!space) return;
@@ -163,7 +165,7 @@ export default function SpaceDetailScreen() {
               setSpace(updated);
               setSpaceDetail(updated);
             } catch (err) {
-              Alert.alert('오류', err instanceof Error ? err.message : '재생성에 실패했습니다.');
+              Alert.alert(t('common.error'), err instanceof Error ? err.message : t('space.regen_failed'));
             } finally {
               setIsActionLoading(false);
             }
@@ -176,12 +178,12 @@ export default function SpaceDetailScreen() {
   /** Remove a member (owner only). */
   const handleRemoveMember = (member: SpaceMember) => {
     Alert.alert(
-      '멤버 추방',
+      t('space.kick'),
       `${member.nickname}님을 Space에서 내보낼까요?`,
       [
-        { text: '취소', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: '내보내기',
+          text: t('space.leave_button'),
           style: 'destructive',
           onPress: async () => {
             if (!space) return;
@@ -190,7 +192,7 @@ export default function SpaceDetailScreen() {
               await spaceService.removeMember(space.id, member.userId);
               await loadSpace();
             } catch (err) {
-              Alert.alert('오류', err instanceof Error ? err.message : '멤버 추방에 실패했습니다.');
+              Alert.alert(t('common.error'), err instanceof Error ? err.message : t('space.kick_failed'));
             } finally {
               setIsActionLoading(false);
             }
@@ -203,14 +205,14 @@ export default function SpaceDetailScreen() {
   /** Leave the space. */
   const handleLeaveSpace = () => {
     Alert.alert(
-      'Space 탈퇴',
+      t('space.leave'),
       isOwner
-        ? '탈퇴 시 소유권이 다음 멤버에게 이전됩니다. 탈퇴할까요?'
-        : '이 Space에서 탈퇴할까요?',
+        ? t('space.leave_owner')
+        : t('space.leave_confirm'),
       [
-        { text: '취소', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: '탈퇴',
+          text: t('space.leave_button'),
           style: 'destructive',
           onPress: async () => {
             if (!space) return;
@@ -220,7 +222,7 @@ export default function SpaceDetailScreen() {
               removeSpace(space.id);
               router.back();
             } catch (err) {
-              Alert.alert('오류', err instanceof Error ? err.message : '탈퇴에 실패했습니다.');
+              Alert.alert(t('common.error'), err instanceof Error ? err.message : t('space.leave_failed'));
               setIsActionLoading(false);
             }
           },
@@ -245,7 +247,7 @@ export default function SpaceDetailScreen() {
       startParts.length !== 3 || startParts.some((n) => isNaN(n ?? NaN)) ||
       endParts.length !== 3   || endParts.some((n) => isNaN(n ?? NaN))
     ) {
-      setFtError('날짜 형식이 올바르지 않습니다. YYYY-MM-DD 형식으로 입력해 주세요.');
+      setFtError(t('anniversary.date_invalid'));
       return;
     }
 
@@ -255,7 +257,7 @@ export default function SpaceDetailScreen() {
     const end   = new Date(ey, em - 1, ed, 23, 59, 59);
 
     if (end <= start) {
-      setFtError('종료일이 시작일보다 늦어야 합니다.');
+      setFtError(t('event.end_date_after_start'));
       return;
     }
 
@@ -266,7 +268,7 @@ export default function SpaceDetailScreen() {
       const slots = await findFreeTimeSlots(spaceId, { start, end }, ftMinDuration);
       setFtResults(slots);
     } catch (err) {
-      setFtError(err instanceof Error ? err.message : '검색 중 오류가 발생했습니다.');
+      setFtError(err instanceof Error ? err.message : t('nl.error'));
     } finally {
       setFtIsSearching(false);
     }
@@ -300,7 +302,7 @@ export default function SpaceDetailScreen() {
 
     const title = anniversaryTitle.trim();
     if (title.length === 0) {
-      Alert.alert('오류', '기념일 제목을 입력해 주세요.');
+      Alert.alert(t('common.error'), t('anniversary.title_placeholder'));
       return;
     }
 
@@ -315,7 +317,7 @@ export default function SpaceDetailScreen() {
       month < 1 || month > 12 ||
       day < 1 || day > 31
     ) {
-      Alert.alert('오류', '올바른 날짜를 입력해 주세요. (예: 연도 2024, 월 03, 일 15)');
+      Alert.alert(t('anniversary.input_error'), t('anniversary.date_example'));
       return;
     }
 
@@ -328,7 +330,7 @@ export default function SpaceDetailScreen() {
       date.getMonth() + 1 !== month ||
       date.getDate() !== day
     ) {
-      Alert.alert('오류', '존재하지 않는 날짜입니다. 다시 확인해 주세요.');
+      Alert.alert(t('anniversary.input_error'), t('anniversary.date_not_exist'));
       return;
     }
 
@@ -343,7 +345,7 @@ export default function SpaceDetailScreen() {
       setIsAnniversaryModalVisible(false);
       await loadAnniversaries();
     } catch (err) {
-      Alert.alert('오류', err instanceof Error ? err.message : '기념일 추가에 실패했습니다.');
+      Alert.alert(t('common.error'), err instanceof Error ? err.message : t('anniversary.add_failed'));
     } finally {
       setIsSavingAnniversary(false);
     }
@@ -360,19 +362,19 @@ export default function SpaceDetailScreen() {
   /** Delete an anniversary. */
   const handleDeleteAnniversary = (anniversary: Anniversary) => {
     Alert.alert(
-      '기념일 삭제',
-      `"${anniversary.title}" 기념일을 삭제할까요?`,
+      t('anniversary.delete'),
+      `"${anniversary.title}"을(를) 삭제할까요?`,
       [
-        { text: '취소', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: '삭제',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: async () => {
             try {
               await spaceService.deleteAnniversary(anniversary.id);
               setAnniversaries(prev => prev.filter(a => a.id !== anniversary.id));
             } catch (err) {
-              Alert.alert('오류', err instanceof Error ? err.message : '삭제에 실패했습니다.');
+              Alert.alert(t('common.error'), err instanceof Error ? err.message : t('common.delete_failed'));
             }
           },
         },
@@ -396,9 +398,9 @@ export default function SpaceDetailScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
-          <Text style={styles.errorText}>{error ?? 'Space를 찾을 수 없습니다.'}</Text>
+          <Text style={styles.errorText}>{error ?? t('space.not_found')}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={loadSpace}>
-            <Text style={styles.retryText}>다시 시도</Text>
+            <Text style={styles.retryText}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -407,7 +409,7 @@ export default function SpaceDetailScreen() {
 
   // ─── Full render ─────────────────────────────────────────────────────────
 
-  const typeLabel = space.type === 'couple' ? '커플' : '그룹';
+  const typeLabel = space.type === 'couple' ? t('space.types.couple') : t('space.types.group');
 
   return (
     <SafeAreaView style={styles.container}>
@@ -418,7 +420,7 @@ export default function SpaceDetailScreen() {
           style={styles.closeButton}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={styles.closeText}>닫기</Text>
+          <Text style={styles.closeText}>{t('common.close')}</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>{space.name}</Text>
         <View style={styles.closeButton} />
@@ -539,7 +541,7 @@ export default function SpaceDetailScreen() {
           }
         >
           {anniversaries.length === 0 ? (
-            <Text style={styles.emptyText}>등록된 기념일이 없습니다.</Text>
+            <Text style={styles.emptyText}>{t('common.none')}</Text>
           ) : (
             anniversaries.map(anniversary => (
               <AnniversaryRow
@@ -640,7 +642,7 @@ export default function SpaceDetailScreen() {
             onPress={handleLeaveSpace}
             activeOpacity={0.7}
           >
-            <Text style={styles.leaveButtonText}>Space 탈퇴하기</Text>
+            <Text style={styles.leaveButtonText}>{t('space.leave')}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -771,6 +773,7 @@ function AnniversaryAddModal({
   colors: ReturnType<typeof useColors>;
   styles: ReturnType<typeof makeStyles>;
 }) {
+  const { t } = useTranslation();
   return (
     <Modal
       visible={visible}
@@ -794,20 +797,20 @@ function AnniversaryAddModal({
         <View style={styles.modalSheet}>
           {/* Header */}
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>기념일 추가</Text>
+            <Text style={styles.modalTitle}>{t('anniversary.title_placeholder')}</Text>
             <TouchableOpacity onPress={onClose} disabled={isSaving}>
-              <Text style={styles.modalCloseText}>닫기</Text>
+              <Text style={styles.modalCloseText}>{t('common.close')}</Text>
             </TouchableOpacity>
           </View>
 
           {/* Title input */}
           <View style={styles.modalField}>
-            <Text style={styles.modalFieldLabel}>기념일 이름</Text>
+            <Text style={styles.modalFieldLabel}>{t('anniversary.title_placeholder')}</Text>
             <TextInput
               style={styles.modalInput}
               value={title}
               onChangeText={onChangeTitle}
-              placeholder="예: 처음 만난 날"
+              placeholder={t('anniversary.title_placeholder')}
               placeholderTextColor={colors.textPlaceholder}
               maxLength={30}
               autoFocus
@@ -852,7 +855,7 @@ function AnniversaryAddModal({
 
           {/* Repeat yearly toggle */}
           <View style={styles.modalToggleRow}>
-            <Text style={styles.modalFieldLabel}>매년 반복</Text>
+            <Text style={styles.modalFieldLabel}>{t('time.annual')}</Text>
             <Switch
               value={repeatYearly}
               onValueChange={onToggleRepeatYearly}
@@ -871,7 +874,7 @@ function AnniversaryAddModal({
             {isSaving ? (
               <ActivityIndicator color={colors.textInverse} />
             ) : (
-              <Text style={styles.modalSaveButtonText}>추가하기</Text>
+              <Text style={styles.modalSaveButtonText}>{t('common.save')}</Text>
             )}
           </TouchableOpacity>
         </View>

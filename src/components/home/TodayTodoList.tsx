@@ -9,6 +9,7 @@
 
 import { useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useTodoStore } from '@/stores/todoStore';
 import type { Todo } from '@/types';
 import { useColors } from '@/hooks/useColors';
@@ -81,6 +82,7 @@ function TodoRow({ todo, onToggle, colors: _colors, styles }: TodoRowProps) {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function TodayTodoList() {
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
   const { todos, fetchTodos, toggleTodo } = useTodoStore();
@@ -106,7 +108,7 @@ export function TodayTodoList() {
     <View style={styles.container}>
       {/* Section header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>✅ 오늘 할일</Text>
+        <Text style={styles.headerTitle}>{t('todo.today_list_title')}</Text>
         {todayTodos.length > 0 && (
           <Text style={styles.headerCount}>
             {completed.length}/{todayTodos.length}
@@ -116,7 +118,7 @@ export function TodayTodoList() {
 
       {todayTodos.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>오늘 마감 할일이 없습니다</Text>
+          <Text style={styles.emptyText}>{t('todo.today_list_title')} {t('common.none')}</Text>
         </View>
       ) : (
         <View style={styles.list}>

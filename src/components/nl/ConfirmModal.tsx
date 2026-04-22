@@ -9,6 +9,7 @@
  */
 
 import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { EventPreviewCard } from './EventPreviewCard';
 import type { NLParseResult } from '@/types';
 import { useColors } from '@/hooks/useColors';
@@ -34,6 +35,7 @@ interface Props {
 
 export function ConfirmModal({ visible, result, onConfirm, onEdit, onDismiss }: Props) {
   // Resolve active theme colors for dark mode support (TASK-700)
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
 
@@ -50,7 +52,7 @@ export function ConfirmModal({ visible, result, onConfirm, onEdit, onDismiss }: 
         {/* Stop propagation so tapping the card doesn't dismiss */}
         <Pressable style={styles.sheet} onPress={() => { /* noop */ }}>
 
-          <Text style={styles.heading}>일정 미리보기</Text>
+          <Text style={styles.heading}>{t('common.preview')}</Text>
 
           <EventPreviewCard result={result} />
 
@@ -62,7 +64,7 @@ export function ConfirmModal({ visible, result, onConfirm, onEdit, onDismiss }: 
               accessibilityRole="button"
               accessibilityLabel="직접 입력"
             >
-              <Text style={styles.editButtonText}>직접 입력</Text>
+              <Text style={styles.editButtonText}>{t('common.edit')}</Text>
             </Pressable>
             <Pressable
               style={[styles.button, styles.confirmButton]}
@@ -70,7 +72,7 @@ export function ConfirmModal({ visible, result, onConfirm, onEdit, onDismiss }: 
               accessibilityRole="button"
               accessibilityLabel="확인"
             >
-              <Text style={styles.confirmButtonText}>확인</Text>
+              <Text style={styles.confirmButtonText}>{t('common.ok')}</Text>
             </Pressable>
           </View>
 

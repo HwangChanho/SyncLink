@@ -1,5 +1,5 @@
 /**
- * Public type surface for the SyncDay app.
+ * Public type surface for the SyncLink app.
  *
  * Import types from here: import type { Event, Space } from '@/types'
  * Do NOT import directly from sub-files in components/screens.

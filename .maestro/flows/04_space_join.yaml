@@ -18,7 +18,7 @@
 #   maestro test .maestro/flows/04_space_join.yaml \
 #     -e TEST_INVITE_CODE=ABCD1234
 
-appId: com.syncday.app
+appId: com.synclink.app
 ---
 
 # ── Step 1: Launch the app and navigate to the My tab ─────────────────────

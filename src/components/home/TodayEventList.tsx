@@ -9,6 +9,7 @@
 
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useEventStore } from '@/stores/eventStore';
 import type { EventSummary } from '@/types';
 import { useColors } from '@/hooks/useColors';
@@ -40,8 +41,9 @@ interface EventRowProps {
 }
 
 function EventRow({ event, onPress, colors, styles }: EventRowProps) {
+  const { t } = useTranslation();
   const timeLabel = event.allDay
-    ? '종일'
+    ? t('time.all_day')
     : `${formatTime(event.startAt)} – ${formatTime(event.endAt)}`;
 
   return (
@@ -67,6 +69,7 @@ function EventRow({ event, onPress, colors, styles }: EventRowProps) {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function TodayEventList() {
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
   const router       = useRouter();
@@ -81,7 +84,7 @@ export function TodayEventList() {
     <View style={styles.container}>
       {/* Section header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>📅 오늘 일정</Text>
+        <Text style={styles.headerTitle}>{t('event.today_list_title')}</Text>
         <Text style={styles.headerCount}>
           {sortedEvents.length > 0 ? `${sortedEvents.length}개` : ''}
         </Text>
@@ -89,7 +92,7 @@ export function TodayEventList() {
 
       {sortedEvents.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>오늘 일정이 없습니다</Text>
+          <Text style={styles.emptyText}>{t('event.today_list_title')} {t('common.none')}</Text>
         </View>
       ) : (
         <ScrollView

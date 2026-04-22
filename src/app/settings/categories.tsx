@@ -19,6 +19,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import {
   getCategories,
   createCategory,
@@ -142,10 +143,12 @@ function CategoryFormModal({
     }
   }, [editing, visible]);
 
+  const { t: tForm } = useTranslation();
+
   const handleSave = async () => {
     const trimmed = name.trim();
     if (trimmed.length === 0) {
-      Alert.alert('오류', '카테고리 이름을 입력해 주세요.');
+      Alert.alert(tForm('common.error'), tForm('category.name_placeholder'));
       return;
     }
     setIsSaving(true);
@@ -153,7 +156,7 @@ function CategoryFormModal({
       await onSave(trimmed, color);
       onClose();
     } catch (err) {
-      Alert.alert('오류', err instanceof Error ? err.message : '저장에 실패했습니다.');
+      Alert.alert(tForm('common.error'), err instanceof Error ? err.message : tForm('common.save_failed'));
     } finally {
       setIsSaving(false);
     }
@@ -169,16 +172,16 @@ function CategoryFormModal({
       <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
         <TouchableOpacity style={styles.modalSheet} activeOpacity={1}>
           <Text style={styles.modalTitle}>
-            {editing ? '카테고리 수정' : '새 카테고리'}
+            {editing ? tForm('category.edit') : tForm('category.new')}
           </Text>
 
           {/* Name input */}
-          <Text style={styles.fieldLabel}>이름</Text>
+          <Text style={styles.fieldLabel}>{tForm('common.unknown')}</Text>
           <TextInput
             style={styles.input}
             value={name}
             onChangeText={setName}
-            placeholder="카테고리 이름"
+            placeholder={tForm('category.name_placeholder')}
             placeholderTextColor={colors.textPlaceholder}
             maxLength={30}
             autoFocus={!editing}
@@ -213,7 +216,7 @@ function CategoryFormModal({
           {/* Action buttons */}
           <View style={styles.modalActions}>
             <TouchableOpacity style={styles.cancelBtn} onPress={onClose} disabled={isSaving}>
-              <Text style={styles.cancelBtnText}>취소</Text>
+              <Text style={styles.cancelBtnText}>{tForm('common.cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.saveBtn, isSaving && styles.disabled]}
@@ -222,7 +225,7 @@ function CategoryFormModal({
             >
               {isSaving
                 ? <ActivityIndicator size="small" color={colors.textInverse} />
-                : <Text style={styles.saveBtnText}>저장</Text>
+                : <Text style={styles.saveBtnText}>{tForm('common.save')}</Text>
               }
             </TouchableOpacity>
           </View>
@@ -236,6 +239,7 @@ function CategoryFormModal({
 
 export default function CategoriesScreen() {
   // Dark mode: resolve current theme colors and build dynamic styles
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
   const router = useRouter();
@@ -252,7 +256,7 @@ export default function CategoriesScreen() {
       const cats = await getCategories();
       setCategories(cats);
     } catch (err) {
-      Alert.alert('오류', err instanceof Error ? err.message : '카테고리를 불러오지 못했습니다.');
+      Alert.alert(t('common.error'), err instanceof Error ? err.message : t('category.load_failed'));
     } finally {
       setIsLoading(false);
     }
@@ -276,19 +280,19 @@ export default function CategoriesScreen() {
 
   const handleDelete = (cat: Category) => {
     Alert.alert(
-      '카테고리 삭제',
-      `"${cat.name}"을(를) 삭제하시겠습니까?\n연결된 할일의 카테고리가 초기화됩니다.`,
+      t('category.delete'),
+      `"${cat.name}"을(를) 삭제하시겠습니까?`,
       [
-        { text: '취소', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: '삭제',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: async () => {
             try {
               await deleteCategory(cat.id);
               setCategories(prev => prev.filter(c => c.id !== cat.id));
             } catch (err) {
-              Alert.alert('오류', err instanceof Error ? err.message : '삭제에 실패했습니다.');
+              Alert.alert(t('common.error'), err instanceof Error ? err.message : t('common.delete_failed'));
             }
           },
         },
@@ -317,7 +321,7 @@ export default function CategoriesScreen() {
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>카테고리 관리</Text>
+        <Text style={styles.headerTitle}>{t('category.edit')}</Text>
         <TouchableOpacity style={styles.addBtn} onPress={handleCreate}>
           <Ionicons name="add" size={24} color={colors.primary} />
         </TouchableOpacity>

@@ -27,6 +27,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import type { ColorTokens } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
@@ -40,12 +41,7 @@ import { getCategories } from '@/services/categoryService';
 /** Tab type for the planner top tabs. */
 type PlannerTab = 'todo' | 'notes';
 
-/** Priority labels in Korean. */
-const PRIORITY_LABELS: Record<string, string> = {
-  high:   '높음',
-  medium: '보통',
-  low:    '낮음',
-};
+// Priority labels are now loaded via useTranslation inside components.
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -75,6 +71,7 @@ const TodoRow = memo(function TodoRow({
   colors: ColorTokens;
   styles: ReturnType<typeof makeStyles>;
 }) {
+  const { t } = useTranslation();
   // Priority color mapping — uses live color tokens
   const priorityColorMap: Record<string, string> = {
     high:   colors.error,
@@ -83,17 +80,24 @@ const TodoRow = memo(function TodoRow({
   };
   const priorityColor = priorityColorMap[todo.priority] ?? colors.textTertiary;
 
+  /** Priority labels loaded from i18n. */
+  const priorityLabels: Record<string, string> = {
+    high:   t('todo.priority.high'),
+    medium: t('todo.priority.medium'),
+    low:    t('todo.priority.low'),
+  };
+
   return (
     <Pressable
       style={({ pressed }) => [styles.todoRow, pressed && styles.todoRowPressed]}
       onPress={() => onEdit(todo)}
       onLongPress={() => {
         Alert.alert(
-          '할일 삭제',
+          t('todo.delete'),
           `"${todo.title}"을(를) 삭제하시겠습니까?`,
           [
-            { text: '취소', style: 'cancel' },
-            { text: '삭제', style: 'destructive', onPress: () => onDelete(todo.id) },
+            { text: t('common.cancel'), style: 'cancel' },
+            { text: t('common.delete'), style: 'destructive', onPress: () => onDelete(todo.id) },
           ],
         );
       }}
@@ -122,7 +126,7 @@ const TodoRow = memo(function TodoRow({
       {/* Priority badge */}
       <View style={[styles.priorityBadge, { backgroundColor: priorityColor + '22' }]}>
         <Text style={[styles.priorityText, { color: priorityColor }]}>
-          {PRIORITY_LABELS[todo.priority] ?? todo.priority}
+          {priorityLabels[todo.priority] ?? todo.priority}
         </Text>
       </View>
     </Pressable>
@@ -157,7 +161,8 @@ function CategorySectionHeader({
   colors: ColorTokens;
   styles: ReturnType<typeof makeStyles>;
 }) {
-  const name = category?.name ?? '미분류';
+  const { t: tCat } = useTranslation();
+  const name = category?.name ?? tCat('todo.uncategorized');
   const color = category?.color ?? colors.textTertiary;
 
   return (
@@ -203,6 +208,7 @@ const NoteCard = memo(function NoteCard({
   onDelete: (id: string) => void;
   styles: ReturnType<typeof makeStyles>;
 }) {
+  const { t: tNote } = useTranslation();
   // Show first ~100 chars of content as preview
   const preview = note.content?.slice(0, 100) ?? '';
   const updatedLabel = formatRelativeDate(note.updatedAt);
@@ -213,11 +219,11 @@ const NoteCard = memo(function NoteCard({
       onPress={() => onPress(note)}
       onLongPress={() => {
         Alert.alert(
-          '노트 삭제',
+          tNote('note.delete'),
           `"${note.title}"을(를) 삭제하시겠습니까?`,
           [
-            { text: '취소', style: 'cancel' },
-            { text: '삭제', style: 'destructive', onPress: () => onDelete(note.id) },
+            { text: tNote('common.cancel'), style: 'cancel' },
+            { text: tNote('common.delete'), style: 'destructive', onPress: () => onDelete(note.id) },
           ],
         );
       }}
@@ -285,6 +291,8 @@ function EditTodoModal({
     setTitle(todo?.title ?? '');
   }, [todo]);
 
+  const { t: tModal } = useTranslation();
+
   const handleSave = useCallback(async () => {
     if (!todo || title.trim().length === 0) return;
     setIsSaving(true);
@@ -292,11 +300,11 @@ function EditTodoModal({
       await onSave(todo.id, { title: title.trim() });
       onClose();
     } catch {
-      Alert.alert('오류', '수정에 실패했습니다.');
+      Alert.alert(tModal('common.error'), tModal('common.edit_failed'));
     } finally {
       setIsSaving(false);
     }
-  }, [todo, title, onSave, onClose]);
+  }, [todo, title, onSave, onClose, tModal]);
 
   return (
     <Modal
@@ -307,12 +315,12 @@ function EditTodoModal({
     >
       <Pressable style={styles.modalOverlay} onPress={onClose}>
         <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
-          <Text style={styles.modalTitle}>할일 수정</Text>
+          <Text style={styles.modalTitle}>{tModal('common.edit')} {tModal('todo.label')}</Text>
           <TextInput
             style={styles.modalInput}
             value={title}
             onChangeText={setTitle}
-            placeholder="할일 제목"
+            placeholder={tModal('todo.label')}
             placeholderTextColor={colors.textPlaceholder}
             autoFocus
             returnKeyType="done"
@@ -320,7 +328,7 @@ function EditTodoModal({
           />
           <View style={styles.modalActions}>
             <TouchableOpacity style={styles.modalCancelBtn} onPress={onClose} disabled={isSaving}>
-              <Text style={styles.modalCancelText}>취소</Text>
+              <Text style={styles.modalCancelText}>{tModal('common.cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.modalSaveBtn, isSaving && styles.buttonDisabled]}
@@ -329,7 +337,7 @@ function EditTodoModal({
             >
               {isSaving
                 ? <ActivityIndicator size="small" color={colors.textInverse} />
-                : <Text style={styles.modalSaveText}>저장</Text>
+                : <Text style={styles.modalSaveText}>{tModal('common.save')}</Text>
               }
             </TouchableOpacity>
           </View>
@@ -343,6 +351,7 @@ function EditTodoModal({
 
 export default function PlannerScreen() {
   // Dark mode: resolve current theme colors and build dynamic styles
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
 
@@ -382,11 +391,22 @@ export default function PlannerScreen() {
 
   // ── Error display ────────────────────────────────────────────────────────
 
+  // Prevent duplicate Alerts when multiple store operations fail simultaneously
+  // (e.g. fetchTodos + fetchNotes both error on mount).
+  const alertActiveRef = useRef(false);
+
   useEffect(() => {
-    if (error) {
-      Alert.alert('오류', error, [{ text: '확인', onPress: clearError }]);
+    if (error && !alertActiveRef.current) {
+      alertActiveRef.current = true;
+      Alert.alert(t('common.error'), error, [{
+        text: t('common.ok'),
+        onPress: () => {
+          clearError();
+          alertActiveRef.current = false;
+        },
+      }]);
     }
-  }, [error, clearError]);
+  }, [error, clearError, t]);
 
   // ── Quick add ────────────────────────────────────────────────────────────
 
@@ -473,8 +493,8 @@ export default function PlannerScreen() {
       return (
         <View style={styles.centered}>
           <Ionicons name="checkmark-circle-outline" size={48} color={colors.textTertiary} />
-          <Text style={styles.emptyText}>할일이 없습니다</Text>
-          <Text style={styles.emptySubText}>아래 입력창으로 할일을 추가해 보세요</Text>
+          <Text style={styles.emptyText}>{t('todo.label')} {t('common.none')}</Text>
+          <Text style={styles.emptySubText}>{t('common.unknown')}</Text>
         </View>
       );
     }
@@ -552,8 +572,8 @@ export default function PlannerScreen() {
       return (
         <View style={styles.centered}>
           <Ionicons name="document-text-outline" size={48} color={colors.textTertiary} />
-          <Text style={styles.emptyText}>노트가 없습니다</Text>
-          <Text style={styles.emptySubText}>아래 버튼으로 첫 노트를 작성해 보세요</Text>
+          <Text style={styles.emptyText}>{t('note.label')} {t('common.none')}</Text>
+          <Text style={styles.emptySubText}>{t('common.unknown')}</Text>
         </View>
       );
     }
@@ -591,7 +611,7 @@ export default function PlannerScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>플래너</Text>
+        <Text style={styles.headerTitle}>{t('tabs.planner')}</Text>
         {/* Category management shortcut */}
         <TouchableOpacity
           style={styles.headerAction}
@@ -610,7 +630,7 @@ export default function PlannerScreen() {
             onPress={() => setActiveTab(tab)}
           >
             <Text style={[styles.tabLabel, activeTab === tab && styles.tabLabelActive]}>
-              {tab === 'todo' ? '할일' : '노트'}
+              {tab === 'todo' ? t('todo.label') : t('note.label')}
             </Text>
           </TouchableOpacity>
         ))}
@@ -634,7 +654,7 @@ export default function PlannerScreen() {
               style={styles.quickAddInput}
               value={quickInput}
               onChangeText={setQuickInput}
-              placeholder="할일 빠르게 추가..."
+              placeholder={t('todo.today_list_title') + '...'}
               placeholderTextColor={colors.textPlaceholder}
               returnKeyType="done"
               onSubmitEditing={handleQuickAdd}

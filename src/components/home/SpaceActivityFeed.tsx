@@ -13,6 +13,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { subscribeToSharedEvents } from '@/services/eventRealtimeService';
 import type { EventSummary } from '@/types';
 import { useColors } from '@/hooks/useColors';
@@ -60,6 +61,7 @@ function formatRelative(date: Date): string {
 const MAX_ITEMS = 10;
 
 export function SpaceActivityFeed() {
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
   const router = useRouter();
@@ -90,7 +92,7 @@ export function SpaceActivityFeed() {
       (eventId) => {
         const stub: EventSummary = {
           id:      eventId,
-          title:   '알 수 없는 일정',
+          title:   t('event.unknown'),
           startAt: new Date(),
           endAt:   new Date(),
           allDay:  false,
@@ -107,7 +109,7 @@ export function SpaceActivityFeed() {
     <View style={styles.container}>
       {/* Section header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>👥 Space 활동</Text>
+        <Text style={styles.headerTitle}>{t('space.activity_notification')}</Text>
         <View style={styles.liveIndicator}>
           <View style={styles.liveDot} />
           <Text style={styles.liveText}>실시간</Text>
@@ -116,7 +118,7 @@ export function SpaceActivityFeed() {
 
       {activities.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>최근 Space 활동이 없습니다</Text>
+          <Text style={styles.emptyText}>{t('space.activity_notification')} {t('common.none')}</Text>
         </View>
       ) : (
         <View style={styles.list}>

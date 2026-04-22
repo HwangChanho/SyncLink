@@ -9,6 +9,7 @@
  */
 
 import { View, Text, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
 import { useColors } from '@/hooks/useColors';
 import type { ColorTokens } from '@/hooks/useColors';
@@ -27,21 +28,25 @@ function formatTodayKo(date: Date): string {
   return `${month}월 ${day}일 (${weekday})`;
 }
 
-/** Returns a time-of-day greeting in Korean. */
-function getGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return '좋은 아침이에요';
-  if (hour < 18) return '안녕하세요';
-  return '좋은 저녁이에요';
-}
+// getGreeting is now inside the component using i18n.
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function HomeHeader() {
+  const { t } = useTranslation();
   const colors    = useColors();
   const styles    = makeStyles(colors);
   const user      = useAuthStore(s => s.user);
-  const nickname  = user?.nickname ?? '사용자';
+  const nickname  = user?.nickname ?? t('common.user');
+
+  /** Returns a time-of-day greeting using i18n. */
+  function getGreeting(): string {
+    const hour = new Date().getHours();
+    if (hour < 12) return t('greeting.morning');
+    if (hour < 18) return t('greeting.hello');
+    return t('greeting.evening');
+  }
+
   const greeting  = getGreeting();
   const dateLabel = formatTodayKo(new Date());
 

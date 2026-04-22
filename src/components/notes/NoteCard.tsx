@@ -9,6 +9,7 @@
 import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import type { Todo } from '@/types';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
@@ -40,23 +41,26 @@ function truncateForPreview(text: string | null, maxLength = 200): string {
   return `${lastSpace > 0 ? cut.slice(0, lastSpace) : cut}…`;
 }
 
-/** Formats a date as a relative string (오늘, 어제, or date). */
-function formatNoteDate(date: Date): string {
-  const today = new Date();
-  const diff  = Math.floor((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-  if (diff === 0) return '오늘';
-  if (diff === 1) return '어제';
-  return `${date.getMonth() + 1}월 ${date.getDate()}일`;
-}
+// formatNoteDate is now inside the component using i18n.
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function NoteCard({ note, width, onDelete: _onDelete }: NoteCardProps) {
   // Resolve active theme colors for dark mode support (TASK-700)
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
 
   const router = useRouter();
+
+  /** Formats a date as a relative string using i18n. */
+  function formatNoteDate(date: Date): string {
+    const today = new Date();
+    const diff  = Math.floor((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+    if (diff === 0) return t('time.today');
+    if (diff === 1) return t('time.yesterday');
+    return `${date.getMonth() + 1}월 ${date.getDate()}일`;
+  }
 
   const preview  = truncateForPreview(note.content);
   const dateText = formatNoteDate(note.updatedAt);
@@ -82,7 +86,7 @@ export function NoteCard({ note, width, onDelete: _onDelete }: NoteCardProps) {
           <Markdown style={styles.markdownStyles}>{preview}</Markdown>
         </View>
       ) : (
-        <Text style={styles.emptyPreview}>내용 없음</Text>
+        <Text style={styles.emptyPreview}>{t('common.none')}</Text>
       )}
 
       {/* Footer: updated date */}

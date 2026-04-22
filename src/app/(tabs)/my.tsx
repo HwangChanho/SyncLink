@@ -25,6 +25,7 @@ import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { useAppearanceStore, type ColorSchemePreference } from '@/stores/appearanceStore';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
@@ -35,20 +36,22 @@ import { useAuthStore } from '@/stores/authStore';
 import { useSpaceStore } from '@/stores/spaceStore';
 import type { SpaceSummary } from '@/types';
 
-// ─── Theme option labels ───────────────────────────────────────────────────────
-
-const THEME_OPTIONS: Array<{ value: ColorSchemePreference; label: string }> = [
-  { value: 'light',  label: '라이트' },
-  { value: 'dark',   label: '다크'   },
-  { value: 'system', label: '시스템'  },
-];
+// ─── Theme options are now built inside the component using i18n ───────────────
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function MyScreen() {
+  const { t } = useTranslation();
   const colors = useColors();
   // Build dynamic styles using the current theme's color tokens
   const styles = makeStyles(colors);
+
+  /** Theme options built from i18n to respond to locale changes. */
+  const THEME_OPTIONS: Array<{ value: ColorSchemePreference; label: string }> = [
+    { value: 'light',  label: t('profile.theme.light') },
+    { value: 'dark',   label: t('profile.theme.dark')  },
+    { value: 'system', label: t('profile.theme.system') },
+  ];
 
   const { colorScheme, setColorScheme } = useAppearanceStore();
   const { plan, aiUsageToday } = useSubscriptionStore();
@@ -100,11 +103,11 @@ export default function MyScreen() {
 
     // Validation: at least 1 char, max 20 chars
     if (trimmed.length === 0) {
-      Alert.alert('오류', '닉네임을 입력해 주세요.');
+      Alert.alert(t('common.error'), t('profile.nickname_required'));
       return;
     }
     if (trimmed.length > 20) {
-      Alert.alert('오류', '닉네임은 20자 이하로 입력해 주세요.');
+      Alert.alert(t('common.error'), t('profile.nickname_too_long'));
       return;
     }
     // Skip network call if unchanged
@@ -119,7 +122,7 @@ export default function MyScreen() {
       setUser(updated);
       setIsEditingNickname(false);
     } catch (err) {
-      Alert.alert('오류', err instanceof Error ? err.message : '닉네임 저장에 실패했습니다.');
+      Alert.alert(t('common.error'), err instanceof Error ? err.message : t('profile.nickname_failed'));
     } finally {
       setIsSavingNickname(false);
     }
@@ -136,8 +139,8 @@ export default function MyScreen() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert(
-        '권한 필요',
-        '아바타를 변경하려면 사진 접근 권한이 필요합니다. 설정에서 허용해 주세요.',
+        t('notification.permission_required'),
+        t('profile.avatar_permission'),
       );
       return;
     }
@@ -164,7 +167,7 @@ export default function MyScreen() {
       const updated = await authService.updateProfile({ avatar_url: publicUrl });
       setUser(updated);
     } catch (err) {
-      Alert.alert('오류', err instanceof Error ? err.message : '아바타 업로드에 실패했습니다.');
+      Alert.alert(t('common.error'), err instanceof Error ? err.message : t('profile.avatar_failed'));
     } finally {
       setIsUploadingAvatar(false);
     }
@@ -174,12 +177,12 @@ export default function MyScreen() {
 
   const handleLogout = useCallback(() => {
     Alert.alert(
-      '로그아웃',
-      '로그아웃 하시겠습니까?',
+      t('auth.logout.button'),
+      t('auth.logout.confirm'),
       [
-        { text: '취소', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: '로그아웃',
+          text: t('auth.logout.button'),
           style: 'destructive',
           onPress: async () => {
             setIsLoggingOut(true);
@@ -188,36 +191,36 @@ export default function MyScreen() {
               // Clear user from store — _layout.tsx's auth guard will redirect to /auth/login
               setUser(null);
             } catch (err) {
-              Alert.alert('오류', err instanceof Error ? err.message : '로그아웃에 실패했습니다.');
+              Alert.alert(t('common.error'), err instanceof Error ? err.message : t('auth.logout.failed'));
               setIsLoggingOut(false);
             }
           },
         },
       ],
     );
-  }, [setUser]);
+  }, [setUser, t]);
 
   // ─── Account deletion ─────────────────────────────────────────────────────
 
   /** Prompt the user with a double-confirmation alert before deleting their account. */
   const handleDeleteAccount = useCallback(() => {
     Alert.alert(
-      '회원 탈퇴',
-      '탈퇴 시 모든 데이터(일정, 할일, Space)가 영구적으로 삭제됩니다.\n정말 탈퇴하시겠습니까?',
+      t('auth.delete_account.button'),
+      t('auth.delete_account.confirm'),
       [
-        { text: '취소', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: '탈퇴하기',
+          text: t('space.leave_button'),
           style: 'destructive',
           onPress: () => {
             // Second confirmation to prevent accidental tap
             Alert.alert(
-              '최종 확인',
-              '이 작업은 되돌릴 수 없습니다. 계속하시겠습니까?',
+              t('common.confirm'),
+              t('common.irreversible'),
               [
-                { text: '취소', style: 'cancel' },
+                { text: t('common.cancel'), style: 'cancel' },
                 {
-                  text: '탈퇴',
+                  text: t('common.delete'),
                   style: 'destructive',
                   onPress: async () => {
                     try {
@@ -225,8 +228,8 @@ export default function MyScreen() {
                       setUser(null);
                     } catch (err) {
                       Alert.alert(
-                        '오류',
-                        err instanceof Error ? err.message : '계정 삭제에 실패했습니다.',
+                        t('common.error'),
+                        err instanceof Error ? err.message : t('auth.delete_account.failed'),
                       );
                     }
                   },
@@ -237,7 +240,7 @@ export default function MyScreen() {
         },
       ],
     );
-  }, [setUser]);
+  }, [setUser, t]);
 
   // ─── Render ──────────────────────────────────────────────────────────────
 
@@ -293,7 +296,7 @@ export default function MyScreen() {
                 maxLength={20}
                 returnKeyType="done"
                 onSubmitEditing={handleSaveNickname}
-                placeholder="닉네임 입력"
+                placeholder={t('profile.nickname_placeholder')}
                 placeholderTextColor={colors.textPlaceholder}
               />
               <TouchableOpacity
@@ -304,7 +307,7 @@ export default function MyScreen() {
                 {isSavingNickname ? (
                   <ActivityIndicator size="small" color={colors.textInverse} />
                 ) : (
-                  <Text style={styles.nicknameSaveText}>저장</Text>
+                  <Text style={styles.nicknameSaveText}>{t('common.save')}</Text>
                 )}
               </TouchableOpacity>
               <TouchableOpacity
@@ -312,7 +315,7 @@ export default function MyScreen() {
                 onPress={handleCancelEditNickname}
                 disabled={isSavingNickname}
               >
-                <Text style={styles.nicknameCancelText}>취소</Text>
+                <Text style={styles.nicknameCancelText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -322,7 +325,7 @@ export default function MyScreen() {
                 onPress={handleStartEditNickname}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Text style={styles.editNicknameText}>수정</Text>
+                <Text style={styles.editNicknameText}>{t('common.edit')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -335,7 +338,7 @@ export default function MyScreen() {
 
         {/* ── My Spaces section ───────────────────────────────────────── */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>내 Space</Text>
+          <Text style={styles.sectionTitle}>{t('tabs.my')} Space</Text>
 
           {spacesLoading && spaces.length === 0 ? (
             <View style={styles.loadingRow}>
@@ -343,13 +346,13 @@ export default function MyScreen() {
             </View>
           ) : spaces.length === 0 ? (
             <View style={styles.emptySpacesCard}>
-              <Text style={styles.emptySpacesText}>아직 참여한 Space가 없습니다.</Text>
+              <Text style={styles.emptySpacesText}>{t('common.none')}</Text>
               <TouchableOpacity
                 style={styles.createSpaceButton}
                 onPress={() => router.push('/space/create')}
                 activeOpacity={0.7}
               >
-                <Text style={styles.createSpaceButtonText}>Space 만들기</Text>
+                <Text style={styles.createSpaceButtonText}>Space {t('category.new')}</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -367,7 +370,7 @@ export default function MyScreen() {
                 onPress={() => router.push('/space/create')}
                 activeOpacity={0.7}
               >
-                <Text style={styles.addSpaceText}>+ Space 만들기</Text>
+                <Text style={styles.addSpaceText}>+ Space {t('category.new')}</Text>
               </TouchableOpacity>
             </>
           )}
@@ -382,13 +385,13 @@ export default function MyScreen() {
               activeOpacity={0.85}
             >
               <View style={styles.subscriptionInfo}>
-                <Text style={styles.subscriptionTitle}>SyncDay Free</Text>
+                <Text style={styles.subscriptionTitle}>SyncLink Free</Text>
                 <Text style={styles.subscriptionUsage}>
-                  오늘 AI {aiUsageToday}/5회 사용
+                  AI {aiUsageToday}/5
                 </Text>
               </View>
               <View style={styles.subscriptionCta}>
-                <Text style={styles.subscriptionCtaText}>Pro로 업그레이드 →</Text>
+                <Text style={styles.subscriptionCtaText}>Pro →</Text>
               </View>
             </TouchableOpacity>
           </View>
@@ -396,7 +399,7 @@ export default function MyScreen() {
 
         {/* ── Settings section ─────────────────────────────────────────── */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>설정</Text>
+          <Text style={styles.sectionTitle}>{t('common.system')}</Text>
           <View style={styles.menuCard}>
             {/* Notification settings */}
             <TouchableOpacity
@@ -404,7 +407,7 @@ export default function MyScreen() {
               onPress={() => router.push('/settings/notifications')}
               activeOpacity={0.7}
             >
-              <Text style={styles.menuItemText}>알림 설정</Text>
+              <Text style={styles.menuItemText}>{t('notification.event_reminder')}</Text>
               <Text style={styles.menuItemChevron}>›</Text>
             </TouchableOpacity>
 
@@ -416,7 +419,19 @@ export default function MyScreen() {
               onPress={() => router.push('/settings/categories')}
               activeOpacity={0.7}
             >
-              <Text style={styles.menuItemText}>카테고리 관리</Text>
+              <Text style={styles.menuItemText}>{t('category.edit')}</Text>
+              <Text style={styles.menuItemChevron}>›</Text>
+            </TouchableOpacity>
+
+            <View style={styles.menuDivider} />
+
+            {/* App Lock (Face ID / Touch ID) */}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => router.push('/settings/app-lock')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.menuItemText}>{t('settings.app_lock')}</Text>
               <Text style={styles.menuItemChevron}>›</Text>
             </TouchableOpacity>
 
@@ -424,7 +439,7 @@ export default function MyScreen() {
 
             {/* Theme selector (inline Segmented Control) */}
             <View style={styles.menuItemTheme}>
-              <Text style={styles.menuItemText}>테마</Text>
+              <Text style={styles.menuItemText}>{t('profile.theme.label')}</Text>
               <View style={styles.themeSegmented}>
                 {THEME_OPTIONS.map(opt => (
                   <TouchableOpacity
@@ -451,7 +466,7 @@ export default function MyScreen() {
 
         {/* ── Account section ─────────────────────────────────────────── */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>계정</Text>
+          <Text style={styles.sectionTitle}>{t('common.user')}</Text>
           <View style={styles.menuCard}>
             <TouchableOpacity
               style={[styles.menuItem, styles.logoutItem]}
@@ -462,7 +477,7 @@ export default function MyScreen() {
               {isLoggingOut ? (
                 <ActivityIndicator size="small" color={colors.error} />
               ) : (
-                <Text style={styles.logoutText}>로그아웃</Text>
+                <Text style={styles.logoutText}>{t('auth.logout.button')}</Text>
               )}
             </TouchableOpacity>
 
@@ -474,7 +489,7 @@ export default function MyScreen() {
               onPress={handleDeleteAccount}
               activeOpacity={0.7}
             >
-              <Text style={styles.deleteAccountText}>회원 탈퇴</Text>
+              <Text style={styles.deleteAccountText}>{t('auth.delete_account.button')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -496,9 +511,10 @@ function SpaceCard({
   space: SpaceSummary;
   onPress: () => void;
 }) {
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
-  const typeLabel = space.type === 'couple' ? '커플' : '그룹';
+  const typeLabel = space.type === 'couple' ? t('space.types.couple') : t('space.types.group');
 
   return (
     <TouchableOpacity style={styles.spaceCard} onPress={onPress} activeOpacity={0.7}>

@@ -22,7 +22,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 /** AsyncStorage key for persisting the user's color scheme preference. */
-const APPEARANCE_STORAGE_KEY = 'syncday:appearance:colorScheme';
+const APPEARANCE_STORAGE_KEY = 'synclink:appearance:colorScheme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

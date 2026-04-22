@@ -82,14 +82,21 @@ docs/
 - `docs/PRD.md` — 제품 요구사항 정의서
 - `docs/SPRINT_PLAN.md` — 스프린트 계획 및 태스크 브레이크다운
 - `docs/AGENTS.md` — 팀 구조 및 워크플로우
+- `docs/architecture/ROADMAP.md` — v1.0~v1.2 전체 로드맵
+- `docs/architecture/BUDGET_GUARDRAILS.md` — AI/인프라 비용 가드레일
+- `docs/launch/V1_LAUNCH_CHECKLIST.md` — v1.0 출시 체크리스트
 
 ## 각 에이전트 역할 요약
 
-| 에이전트 | 역할 | 파일 권한 |
+| 에이전트 | 담당 | 파일 권한 |
 |---------|------|---------|
-| LEAD | 아키텍처 설계, 태스크 분배, scaffold 생성 | docs/tasks/, docs/architecture/, src/types/, src/services/ (stub) |
-| DEV | 기능 구현, 서비스 로직 작성 | src/ 전체 (LEAD가 만든 타입 준수) |
-| QA | 테스트 작성, 코드 리뷰, 이슈 리포트 | __tests__/, docs/issues/, docs/review/ |
+| **LEAD (사용자)** | 스프린트 테마 결정, 아키텍처/BM 승인, 출시 수동 작업, 예산 가드레일 집행 | `docs/handoffs/sprint-N/LEAD.md` 1차 소유자 |
+| **Claude (오케스트레이터)** | DEV·QA 에이전트 spawn, 진행 취합, 리스크/비용 리포트 | LEAD.md draft 보조, 스프린트 리포트 |
+| DEV | 기능 구현, 서비스 로직 작성 | `src/` 전체 (LEAD가 만든 타입 준수) |
+| QA | 테스트 작성, 코드 리뷰, 이슈 리포트 | `__tests__/`, `docs/issues/`, `docs/review/` |
+
+**Claude 단독 결정 상한: Level 2 (동료 승인)**  
+Level 3 이상은 반드시 NOTIFY 파일 → 사용자 확인 대기.
 
 세부 프롬프트는 `.claude/agents/` 하위 파일 참조.
 
@@ -126,7 +133,79 @@ LEAD 세션은 언제든 `/clear`될 수 있다. 따라서:
 
 ## 세션 시작 루틴
 
-### 역할 감지
+### 창 역할 감지 및 자동 Monitor 시작
+
+세션이 시작되면 먼저 어느 창인지 판단하고 즉시 Monitor를 켠다.
+
+#### 기획 창 (사용자가 "기획" 언급 또는 PLANNING 컨텍스트)
+
+**영구 플랜모드 규칙 (강도 3)**
+
+기획창은 항상 플랜모드로 동작한다. 다음을 엄수한다:
+
+1. **세션 시작 시 EnterPlanMode 도구 즉시 호출** — 예외 없음.
+2. **ExitPlanMode는 사용자 승인용 신호로만 사용** — Claude가 임의로 호출 금지.
+   사용자가 플랜 파일을 검토 후 승인하면 하니스가 자동으로 플랜모드를 종료한다.
+3. **외부 파일 수정은 단위 작업 단위로만** — 메모리, 핸드오프(`docs/handoffs/`),
+   COMMAND.md, RESULT.md, 설정 파일 등 외부 파일 수정은 반드시:
+   (a) 플랜 파일에 변경 내용 기록 → (b) ExitPlanMode 호출해 사용자 승인 요청 →
+   (c) 승인 후 단위 작업 1회 수행 → (d) **즉시 EnterPlanMode 재호출**.
+4. **플랜모드 내 허용 행위**: 읽기(Read/Grep/Glob), 플랜 파일 편집, Monitor 실행,
+   AskUserQuestion, 작업창 결과 수신/해석.
+5. **플랜모드 내 금지 행위**: `src/`·테스트 수정, COMMAND.md 작성, 커밋, 셸 실행 등
+   모든 side-effect. (수신한 결과를 플랜 파일에 기록하는 것은 허용.)
+
+**작업 위임 원칙**: 실 코드 실행·대규모 변경은 기획창이 직접 수행하지 않고
+COMMAND.md 설계 → 작업창 위임으로만 처리. 기획창은 "설계·검토·메모리 관리"에 집중.
+
+세션 시작 즉시 다음 두 가지를 이 순서대로 실행한다:
+
+1. EnterPlanMode 도구 호출 (위 규칙에 따라 영구 플랜모드 진입)
+2. Monitor 툴을 persistent 모드로 실행 (아래 python3 스크립트)
+
+Monitor 스크립트:
+```
+python3 -c "
+import time, hashlib
+import os
+paths = [
+    '/Users/danielhwang/Desktop/Projects/syncday/syncday/docs/handoffs',
+    '/Users/danielhwang/Desktop/Projects/syncday/syncday/docs/issues',
+    '/Users/danielhwang/Desktop/Projects/syncday/syncday/docs/review',
+    '/Users/danielhwang/Desktop/Projects/syncday/syncday/docs/inbox/RESULT.md',
+]
+state = {}
+while True:
+    for p in paths:
+        try:
+            if os.path.isdir(p):
+                for f in os.listdir(p):
+                    fp = os.path.join(p, f)
+                    m = os.path.getmtime(fp)
+                    if state.get(fp) and state[fp] != m:
+                        print(f'[WORK_RESULT] 변경: {fp}', flush=True)
+                    state[fp] = m
+            else:
+                m = os.path.getmtime(p)
+                if state.get(p) and state[p] != m:
+                    print(f'[WORK_RESULT] 변경: {p}', flush=True)
+                state[p] = m
+        except: pass
+    time.sleep(1)
+"
+```
+
+#### 작업 창 (사용자가 "작업" 언급 또는 LEAD/DEV/QA 핸드오프 파일 제시)
+
+세션 시작 즉시:
+1. 최신 스프린트 핸드오프 파일 읽고 컨텍스트 복원
+2. Monitor 툴을 persistent 모드로 실행:
+```
+python3 /Users/danielhwang/Desktop/Projects/syncday/syncday/docs/inbox/monitor.py
+```
+3. 파일 변경 감지 시 COMMAND.md 읽고 즉시 실행 (계획 수립 없이 바로 실행 — 기획 창에서 이미 설계 완료된 명령만 전달됨)
+
+#### 핸드오프 파일로 역할 감지 (기존)
 
 사용자가 핸드오프 파일 경로를 제시하거나 역할을 언급하면 즉시 해당 파일을 읽고 컨텍스트를 복원한다.
 
@@ -136,7 +215,7 @@ LEAD 세션은 언제든 `/clear`될 수 있다. 따라서:
 
 ### LEAD 자율 진행 모드
 
-사용자가 **"진행해"** 또는 **"자율로 진행해"** 라고 하면, LEAD는 다음을 실행한다:
+사용자가 **"진행해"** 또는 **"자율로 진행해"** 라고 하면, Claude(오케스트레이터)는 다음을 실행한다:
 
 1. 현재 스프린트 핸드오프 파일에서 미완료 태스크 파악
 2. Agent 툴로 DEV 에이전트를 spawn (필요 시 background=true)
@@ -144,7 +223,8 @@ LEAD 세션은 언제든 `/clear`될 수 있다. 따라서:
 3. Agent 툴로 QA 에이전트를 spawn (DEV 완료 후 또는 병렬)
    - prompt에 `docs/handoffs/sprint-N/QA.md` 전체 내용 전달
 4. 각 에이전트 결과를 파일에서 확인하고 핸드오프 업데이트
-5. 사람 승인 필요 사항만 사용자에게 보고
+5. **Level 3 이상 사안**은 NOTIFY 파일 작성 후 사용자 확인 대기
+6. 사람 승인 필요 사항만(Level 4) 사용자에게 보고
 
 ### 일반 시작 루틴
 

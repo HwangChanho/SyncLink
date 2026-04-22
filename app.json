@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "SyncDay",
-    "slug": "syncday",
+    "name": "SyncLink",
+    "slug": "synclink",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "syncday",
+    "scheme": "synclink",
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/splash.png",
@@ -17,12 +17,16 @@
     ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.syncday.app",
+      "bundleIdentifier": "com.synclink.app",
       "buildNumber": "1",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "프로필 사진 변경에 사용됩니다.",
         "NSCameraUsageDescription": "프로필 사진 촬영에 사용됩니다.",
-        "NSUserNotificationsUsageDescription": "일정 리마인더 알림을 전송합니다."
+        "NSUserNotificationsUsageDescription": "일정 리마인더 알림을 전송합니다.",
+        "NSMicrophoneUsageDescription": "음성으로 일정을 입력하는 데 사용됩니다.",
+        "NSSpeechRecognitionUsageDescription": "음성을 텍스트로 변환하여 일정을 입력합니다.",
+        "NSLocationWhenInUseUsageDescription": "날씨 위젯에서 현재 위치의 날씨를 표시하는 데 사용됩니다.",
+        "NSFaceIDUsageDescription": "앱 잠금 기능을 위해 Face ID를 사용합니다."
       }
     },
     "android": {
@@ -30,13 +34,18 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#4A6CF7"
       },
-      "package": "com.syncday.app",
+      "package": "com.synclink.app",
       "versionCode": 1,
       "permissions": [
-        "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
       ]
     },
     "web": {
@@ -76,8 +85,9 @@
         "origin": false
       },
       "eas": {
-        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
+        "projectId": "c9ef6634-3221-4503-9ca0-3dee0e53ac45"
       }
-    }
+    },
+    "owner": "danielhwang"
   }
 }

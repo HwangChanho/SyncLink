@@ -12,7 +12,7 @@
 # Run:
 #   maestro test .maestro/flows/02_create_event.yaml
 
-appId: com.syncday.app
+appId: com.synclink.app
 ---
 
 # ── Step 1: Launch the app and navigate to Calendar tab ────────────────────

@@ -16,12 +16,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { useTodoStore } from '@/stores/todoStore';
 
 export default function NoteNewScreen() {
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
   const router = useRouter();
@@ -38,7 +40,7 @@ export default function NoteNewScreen() {
   const handleSave = useCallback(async () => {
     const trimmedTitle = title.trim();
     if (trimmedTitle.length === 0) {
-      Alert.alert('오류', '노트 제목을 입력해 주세요.');
+      Alert.alert(t('common.error'), t('note.title_placeholder'));
       return;
     }
 
@@ -53,7 +55,7 @@ export default function NoteNewScreen() {
       });
       router.back();
     } catch (err) {
-      Alert.alert('오류', err instanceof Error ? err.message : '노트 저장에 실패했습니다.');
+      Alert.alert(t('common.error'), err instanceof Error ? err.message : t('note.save_failed'));
     } finally {
       setIsSaving(false);
     }
@@ -66,7 +68,7 @@ export default function NoteNewScreen() {
         <TouchableOpacity style={styles.headerBtn} onPress={() => router.back()}>
           <Ionicons name="close" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>새 노트</Text>
+        <Text style={styles.headerTitle}>{t('note.label')}</Text>
         <TouchableOpacity
           style={[styles.headerBtn, styles.saveBtn, isSaving && styles.buttonDisabled]}
           onPress={handleSave}
@@ -74,7 +76,7 @@ export default function NoteNewScreen() {
         >
           {isSaving
             ? <ActivityIndicator size="small" color={colors.textInverse} />
-            : <Text style={styles.saveBtnText}>저장</Text>
+            : <Text style={styles.saveBtnText}>{t('common.save')}</Text>
           }
         </TouchableOpacity>
       </View>
@@ -94,7 +96,7 @@ export default function NoteNewScreen() {
             style={styles.titleInput}
             value={title}
             onChangeText={setTitle}
-            placeholder="노트 제목"
+            placeholder={t('note.title_placeholder')}
             placeholderTextColor={colors.textPlaceholder}
             multiline={false}
             returnKeyType="next"
@@ -109,7 +111,7 @@ export default function NoteNewScreen() {
             style={styles.bodyInput}
             value={content}
             onChangeText={setContent}
-            placeholder={`내용을 입력하세요...\n\n마크다운을 지원합니다:\n**굵게**, *이탤릭*\n- 목록\n- [ ] 체크리스트`}
+            placeholder={t('nl.placeholder')}
             placeholderTextColor={colors.textPlaceholder}
             multiline
             textAlignVertical="top"

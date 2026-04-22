@@ -2,7 +2,7 @@
  * Space join screen — invite code entry.
  *
  * Accepts a 6-character invite code to join an existing Space.
- * Supports deep link prefill: syncday://join/XXXXXX is handled in _layout.tsx,
+ * Supports deep link prefill: synclink://join/XXXXXX is handled in _layout.tsx,
  * which navigates here with `?code=XXXXXX` query param.
  *
  * Accessed via:
@@ -24,6 +24,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
@@ -36,6 +37,7 @@ const CODE_LENGTH = 6;
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function JoinSpaceScreen() {
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
   const params = useLocalSearchParams<{ code?: string }>();
@@ -60,7 +62,7 @@ export default function JoinSpaceScreen() {
 
   const handleJoin = async () => {
     if (code.length !== CODE_LENGTH) {
-      Alert.alert('코드 오류', `초대 코드는 ${CODE_LENGTH}자리입니다.`);
+      Alert.alert(t('space.code_error'), `초대 코드는 ${CODE_LENGTH}자리입니다.`);
       return;
     }
 
@@ -77,8 +79,8 @@ export default function JoinSpaceScreen() {
       router.replace(`/space/${space.id}`);
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Space 가입에 실패했습니다.';
-      Alert.alert('가입 실패', message);
+        err instanceof Error ? err.message : t('space.join_failed');
+      Alert.alert(t('space.join_fail_title'), message);
     } finally {
       setIsLoading(false);
     }
@@ -99,7 +101,7 @@ export default function JoinSpaceScreen() {
             style={styles.backButton}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Text style={styles.backText}>취소</Text>
+            <Text style={styles.backText}>{t('common.cancel')}</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Space 참여하기</Text>
           <View style={styles.backButton} />
@@ -149,7 +151,7 @@ export default function JoinSpaceScreen() {
             {isLoading ? (
               <ActivityIndicator color={colors.textInverse} />
             ) : (
-              <Text style={styles.joinButtonText}>참여하기</Text>
+              <Text style={styles.joinButtonText}>{t('space.join_button') || '참여하기'}</Text>
             )}
           </TouchableOpacity>
         </View>

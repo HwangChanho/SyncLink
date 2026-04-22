@@ -22,7 +22,7 @@
 # Run:
 #   maestro test .maestro/flows/06_pro_subscribe.yaml
 
-appId: com.syncday.app
+appId: com.synclink.app
 ---
 
 # ── Step 1: Launch the app ──────────────────────────────────────────────────
@@ -30,7 +30,7 @@ appId: com.syncday.app
 
 # ── Step 2: Verify the initial screen is shown ─────────────────────────────
 # Confirms the app launched successfully (login or home screen).
-- assertVisible: "SyncDay"
+- assertVisible: "SyncLink"
 
 # ── Step 3: Navigate to the My tab ─────────────────────────────────────────
 # The bottom tab bar includes "내 정보" or "My" label.

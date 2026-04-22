@@ -1,17 +1,22 @@
 /**
- * Paywall screen — SyncDay Pro subscription UI.
+ * Paywall screen — SyncLink Pro subscription UI.
  *
- * Displays the Pro plan features, pricing (월간/연간), and CTA button.
- * Actual payment integration (RevenueCat / react-native-purchases) is deferred
- * to v1.1. Current implementation shows "준비 중" alert on purchase attempt.
+ * Displays the Pro plan features and available RevenueCat offerings.
+ * Loads packages dynamically from RevenueCat; falls back to static
+ * display data while loading or if the SDK is not yet initialized.
+ *
+ * Flows handled:
+ *  - Purchase:  purchaseService.purchasePackage() → setPlan('pro') → back
+ *  - Restore:   purchaseService.restorePurchases() → setPlan('pro') if active
+ *  - Dismiss:   router.back() or /(tabs) if no back stack
  *
  * Accessible via: router.push('/subscription/paywall')
  * Opened automatically when AI limit is exceeded (NLInputBar gate).
  *
- * TASK-505 (Sprint 5)
+ * TASK-505 (Sprint 5) — updated TASK-800 (Sprint 8)
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -20,23 +25,28 @@ import {
   ScrollView,
   Alert,
   SafeAreaView,
+  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
+import type { PurchasesPackage } from 'react-native-purchases';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import {
+  getOfferings,
+  purchasePackage,
+  restorePurchases,
+} from '@/services/purchaseService';
+import { useSubscriptionStore } from '@/stores/subscriptionStore';
 
-// ─── Plan data ─────────────────────────────────────────────────────────────────
+// ─── Static plan display data — replaced by i18n inside the component ─────────
 
-const PRO_FEATURES = [
-  'AI 자연어 일정 무제한',
-  '주간 리뷰 매주',
-  'Space 무제한',
-  '날짜 추천 AI',
-  '광고 없음',
-] as const;
-
-interface PricingOption {
+/**
+ * Fallback pricing shown while RevenueCat offerings are loading.
+ * Replaced by actual package data once getOfferings() resolves.
+ */
+interface FallbackPricing {
   id: 'monthly' | 'annual';
   label: string;
   price: string;
@@ -45,50 +55,254 @@ interface PricingOption {
   savingsLabel?: string;
 }
 
-const PRICING_OPTIONS: PricingOption[] = [
-  {
-    id:         'monthly',
-    label:      '월간',
-    price:      '3,900원',
-    period:     '/월',
-    isPopular:  false,
-  },
-  {
-    id:           'annual',
-    label:        '연간',
-    price:        '29,900원',
-    period:       '/년',
-    isPopular:    true,
-    savingsLabel: '월 2,492원 — 36% 절약',
-  },
-];
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * Determine if a PurchasesPackage is an annual subscription.
+ * RevenueCat PackageType enum: 'ANNUAL', 'MONTHLY', 'WEEKLY', etc.
+ * Package identifier also often contains 'annual'/'yearly' by convention.
+ */
+function isAnnualPackage(pkg: PurchasesPackage): boolean {
+  const type = pkg.packageType?.toLowerCase() ?? '';
+  const id   = pkg.identifier?.toLowerCase() ?? '';
+  return type.includes('annual') || type.includes('yearly') || id.includes('annual') || id.includes('yearly');
+}
+
+/**
+ * Format a RevenueCat product price string for display.
+ * product.priceString is already locale-formatted (e.g. '₩3,900').
+ */
+function formatPackagePrice(pkg: PurchasesPackage): string {
+  return pkg.product.priceString;
+}
+
+/**
+ * Map a PurchasesPackage to its display period label.
+ */
+function formatPackagePeriod(pkg: PurchasesPackage): string {
+  if (isAnnualPackage(pkg)) return '/년';
+  return '/월';
+}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function PaywallScreen() {
-  const colors = useColors();
-  const styles = makeStyles(colors);
+  const { t } = useTranslation();
+  const colors  = useColors();
+  const styles  = makeStyles(colors);
+  const setPlan = useSubscriptionStore((s) => s.setPlan);
 
-  /** Currently selected pricing plan. Annual is the default (highlighted). */
-  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual'>('annual');
+  /** Pro features loaded from i18n. */
+  const PRO_FEATURES = t('paywall.features', { returnObjects: true }) as string[];
 
-  const handleSubscribe = () => {
-    // v1.1: RevenueCat integration will replace this Alert
-    Alert.alert(
-      '준비 중',
-      '결제 기능은 곧 출시됩니다! 조금만 기다려 주세요.',
-      [{ text: '확인', style: 'default' }],
-    );
-  };
+  /** Fallback pricing loaded from i18n. */
+  const FALLBACK_PRICING: FallbackPricing[] = [
+    {
+      id:        'monthly',
+      label:     t('paywall.monthly_label'),
+      price:     t('paywall.monthly_price'),
+      period:    t('paywall.monthly_period'),
+      isPopular: false,
+    },
+    {
+      id:           'annual',
+      label:        t('paywall.annual_label'),
+      price:        t('paywall.annual_price'),
+      period:       t('paywall.annual_period'),
+      isPopular:    true,
+      savingsLabel: t('paywall.annual_savings'),
+    },
+  ];
 
-  const handleDismiss = () => {
-    // Navigate back; if no back stack, go to home
+  /** RevenueCat packages loaded from the current offering. */
+  const [packages, setPackages] = useState<PurchasesPackage[] | null>(null);
+
+  /** Index of the currently selected package. Defaults to the annual option (index 1). */
+  const [selectedIndex, setSelectedIndex] = useState<number>(1);
+
+  /** Whether a purchase or restore network call is in progress. */
+  const [purchasing, setPurchasing] = useState(false);
+
+  /** Whether offerings are still being fetched from RevenueCat. */
+  const [offeringsLoading, setOfferingsLoading] = useState(true);
+
+  // ── Load offerings on mount ─────────────────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+
+    getOfferings()
+      .then((pkgs) => {
+        if (cancelled) return;
+        setPackages(pkgs);
+        // Default selection: prefer annual (index 1), but clamp to valid range
+        setSelectedIndex(pkgs.length > 1 ? 1 : 0);
+      })
+      .catch(() => {
+        // Offerings unavailable (no network, SDK not initialized, etc.)
+        // Fall back to static pricing display; purchase buttons still disabled.
+        if (!cancelled) setPackages([]);
+      })
+      .finally(() => {
+        if (!cancelled) setOfferingsLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, []);
+
+  // ── Purchase handler ────────────────────────────────────────────────────────
+  const handleSubscribe = useCallback(async () => {
+    if (purchasing) return;
+
+    // If RevenueCat packages are loaded, use them; otherwise show unavailable alert
+    if (!packages || packages.length === 0) {
+      Alert.alert(
+        t('paywall.purchase_unavailable_title'),
+        t('paywall.purchase_unavailable_desc'),
+        [{ text: t('common.ok'), style: 'default' }],
+      );
+      return;
+    }
+
+    const selectedPackage = packages[selectedIndex] ?? packages[0];
+    if (!selectedPackage) return;
+
+    setPurchasing(true);
+    try {
+      const isPro = await purchasePackage(selectedPackage);
+      if (isPro) {
+        // Sync local subscription store with the confirmed entitlement
+        setPlan('pro');
+        Alert.alert(
+          t('paywall.purchase_complete_title'),
+          t('paywall.purchase_complete_desc'),
+          [{
+            text: t('common.ok'),
+            onPress: () => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/(tabs)');
+              }
+            },
+          }],
+        );
+      }
+    } catch (err: unknown) {
+      // User cancellation is normal — do not show an error alert
+      const msg = err instanceof Error ? err.message.toLowerCase() : '';
+      const isCancelled =
+        msg.includes('cancel') || msg.includes('usercancel') || msg.includes('0');
+      if (!isCancelled) {
+        Alert.alert(
+          t('paywall.purchase_failed_title'),
+          err instanceof Error ? err.message : t('paywall.purchase_failed_desc'),
+          [{ text: t('common.ok'), style: 'default' }],
+        );
+      }
+    } finally {
+      setPurchasing(false);
+    }
+  }, [packages, selectedIndex, purchasing, setPlan]);
+
+  // ── Restore handler ─────────────────────────────────────────────────────────
+  const handleRestore = useCallback(async () => {
+    if (purchasing) return;
+    setPurchasing(true);
+    try {
+      const isPro = await restorePurchases();
+      if (isPro) {
+        setPlan('pro');
+        Alert.alert(t('paywall.restore_complete_title'), t('paywall.restore_complete_desc'), [{
+          text: t('common.ok'),
+          onPress: () => {
+            if (router.canGoBack()) router.back();
+            else router.replace('/(tabs)');
+          },
+        }]);
+      } else {
+        Alert.alert(t('paywall.restore_none_title'), t('paywall.restore_none_desc'), [{ text: t('common.ok') }]);
+      }
+    } catch (err: unknown) {
+      Alert.alert(
+        t('paywall.restore_failed_title'),
+        err instanceof Error ? err.message : t('paywall.restore_failed_desc'),
+        [{ text: t('common.ok') }],
+      );
+    } finally {
+      setPurchasing(false);
+    }
+  }, [purchasing, setPlan]);
+
+  // ── Dismiss handler ─────────────────────────────────────────────────────────
+  const handleDismiss = useCallback(() => {
     if (router.canGoBack()) {
       router.back();
     } else {
       router.replace('/(tabs)');
     }
-  };
+  }, []);
+
+  // ─── Render helpers ─────────────────────────────────────────────────────────
+
+  /**
+   * Render a pricing card — either from a live RevenueCat package or
+   * from the static fallback data shown during loading.
+   */
+  function renderPricingCard(
+    key: string,
+    index: number,
+    label: string,
+    price: string,
+    period: string,
+    isPopular: boolean,
+    savingsLabel?: string,
+  ) {
+    const isSelected = selectedIndex === index;
+    return (
+      <TouchableOpacity
+        key={key}
+        style={[
+          styles.pricingCard,
+          isSelected     && styles.pricingCardSelected,
+          isPopular      && styles.pricingCardPopular,
+        ]}
+        onPress={() => setSelectedIndex(index)}
+        activeOpacity={0.8}
+        disabled={purchasing}
+      >
+        {/* Popular badge */}
+        {isPopular && (
+          <View style={styles.popularBadge}>
+            <Text style={styles.popularBadgeText}>{t('paywall.popular')}</Text>
+          </View>
+        )}
+
+        <View style={styles.pricingInfo}>
+          <Text style={[styles.pricingLabel, isSelected && styles.pricingLabelSelected]}>
+            {label}
+          </Text>
+          <View style={styles.priceRow}>
+            <Text style={[styles.priceAmount, isSelected && styles.priceAmountSelected]}>
+              {price}
+            </Text>
+            <Text style={[styles.pricePeriod, isSelected && styles.pricePeriodSelected]}>
+              {period}
+            </Text>
+          </View>
+          {savingsLabel && (
+            <Text style={[styles.savingsText, isSelected && styles.savingsTextSelected]}>
+              {savingsLabel}
+            </Text>
+          )}
+        </View>
+
+        {/* Selection indicator */}
+        <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
+          {isSelected && <View style={styles.radioInner} />}
+        </View>
+      </TouchableOpacity>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -98,8 +312,8 @@ export default function PaywallScreen() {
       >
         {/* ── Header ────────────────────────────────────────────────── */}
         <View style={styles.header}>
-          <Text style={styles.appName}>SyncDay Pro</Text>
-          <Text style={styles.headline}>모든 기능을 제한 없이 사용하세요</Text>
+          <Text style={styles.appName}>SyncLink Pro</Text>
+          <Text style={styles.headline}>{t('paywall.headline')}</Text>
         </View>
 
         {/* ── Feature list ──────────────────────────────────────────── */}
@@ -114,77 +328,63 @@ export default function PaywallScreen() {
           ))}
         </View>
 
-        {/* ── Pricing options ────────────────────────────────────────── */}
+        {/* ── Pricing options ─────────────────────────────────────────── */}
         <View style={styles.pricingSection}>
-          {PRICING_OPTIONS.map(option => (
-            <TouchableOpacity
-              key={option.id}
-              style={[
-                styles.pricingCard,
-                selectedPlan === option.id && styles.pricingCardSelected,
-                option.isPopular && styles.pricingCardPopular,
-              ]}
-              onPress={() => setSelectedPlan(option.id)}
-              activeOpacity={0.8}
-            >
-              {/* Popular badge */}
-              {option.isPopular && (
-                <View style={styles.popularBadge}>
-                  <Text style={styles.popularBadgeText}>인기</Text>
-                </View>
-              )}
-
-              <View style={styles.pricingInfo}>
-                <Text style={[
-                  styles.pricingLabel,
-                  selectedPlan === option.id && styles.pricingLabelSelected,
-                ]}>
-                  {option.label}
-                </Text>
-                <View style={styles.priceRow}>
-                  <Text style={[
-                    styles.priceAmount,
-                    selectedPlan === option.id && styles.priceAmountSelected,
-                  ]}>
-                    {option.price}
-                  </Text>
-                  <Text style={[
-                    styles.pricePeriod,
-                    selectedPlan === option.id && styles.pricePeriodSelected,
-                  ]}>
-                    {option.period}
-                  </Text>
-                </View>
-                {option.savingsLabel && (
-                  <Text style={[
-                    styles.savingsText,
-                    selectedPlan === option.id && styles.savingsTextSelected,
-                  ]}>
-                    {option.savingsLabel}
-                  </Text>
-                )}
-              </View>
-
-              {/* Selection indicator */}
-              <View style={[
-                styles.radioOuter,
-                selectedPlan === option.id && styles.radioOuterSelected,
-              ]}>
-                {selectedPlan === option.id && (
-                  <View style={styles.radioInner} />
-                )}
-              </View>
-            </TouchableOpacity>
-          ))}
+          {offeringsLoading ? (
+            // Loading skeleton — show spinner while fetching offerings
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator color={colors.primary} />
+              <Text style={styles.loadingText}>{t('paywall.loading')}</Text>
+            </View>
+          ) : packages && packages.length > 0 ? (
+            // Live RevenueCat packages
+            packages.map((pkg, index) => {
+              const annual       = isAnnualPackage(pkg);
+              const label        = annual ? t('paywall.annual_label') : t('paywall.monthly_label');
+              const price        = formatPackagePrice(pkg);
+              const period       = formatPackagePeriod(pkg);
+              const isPopular    = annual;
+              // savingsLabel only available from server-side config; omitted for live pkgs
+              return renderPricingCard(pkg.identifier, index, label, price, period, isPopular);
+            })
+          ) : (
+            // Fallback static pricing (SDK not initialized or no offerings configured)
+            FALLBACK_PRICING.map((option, index) =>
+              renderPricingCard(
+                option.id,
+                index,
+                option.label,
+                option.price,
+                option.period,
+                option.isPopular,
+                option.savingsLabel,
+              ),
+            )
+          )}
         </View>
 
         {/* ── CTA button ─────────────────────────────────────────────── */}
         <TouchableOpacity
-          style={styles.ctaButton}
+          style={[styles.ctaButton, purchasing && styles.ctaButtonDisabled]}
           onPress={handleSubscribe}
           activeOpacity={0.85}
+          disabled={purchasing || offeringsLoading}
         >
-          <Text style={styles.ctaText}>지금 시작하기</Text>
+          {purchasing ? (
+            <ActivityIndicator color={colors.textInverse} />
+          ) : (
+            <Text style={styles.ctaText}>{t('paywall.cta')}</Text>
+          )}
+        </TouchableOpacity>
+
+        {/* ── Restore button ──────────────────────────────────────────── */}
+        <TouchableOpacity
+          style={styles.restoreButton}
+          onPress={handleRestore}
+          activeOpacity={0.7}
+          disabled={purchasing}
+        >
+          <Text style={styles.restoreText}>{t('paywall.restore')}</Text>
         </TouchableOpacity>
 
         {/* ── Dismiss link ───────────────────────────────────────────── */}
@@ -192,14 +392,14 @@ export default function PaywallScreen() {
           style={styles.dismissButton}
           onPress={handleDismiss}
           activeOpacity={0.7}
+          disabled={purchasing}
         >
-          <Text style={styles.dismissText}>무료로 계속 사용</Text>
+          <Text style={styles.dismissText}>{t('paywall.dismiss')}</Text>
         </TouchableOpacity>
 
         {/* ── Legal footnote ─────────────────────────────────────────── */}
         <Text style={styles.legalText}>
-          결제는 App Store / Google Play를 통해 처리됩니다.
-          구독은 언제든지 해지할 수 있습니다.
+          {t('paywall.legal')}
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -266,10 +466,22 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       color: colors.textPrimary,
     },
 
-    // ── Pricing cards ────────────────────────────────────────────────────────
+    // ── Pricing section ─────────────────────────────────────────────────────
     pricingSection: {
       gap: spacing[3],
     },
+    loadingContainer: {
+      alignItems:      'center',
+      justifyContent:  'center',
+      paddingVertical: spacing[6],
+      gap:             spacing[3],
+    },
+    loadingText: {
+      ...textStyles.body,
+      color: colors.textSecondary,
+    },
+
+    // ── Pricing cards ────────────────────────────────────────────────────────
     pricingCard: {
       flexDirection:   'row',
       alignItems:      'center',
@@ -281,20 +493,20 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       position:        'relative',
     },
     pricingCardSelected: {
-      borderColor: colors.primary,
+      borderColor:     colors.primary,
       backgroundColor: colors.primaryLight,
     },
     pricingCardPopular: {
       // Slightly taller implicit via padding — badge handles the visual
     },
     popularBadge: {
-      position:        'absolute',
-      top:             -12,
-      right:           spacing[4],
-      backgroundColor: colors.primary,
+      position:          'absolute',
+      top:               -12,
+      right:             spacing[4],
+      backgroundColor:   colors.primary,
       paddingHorizontal: spacing[3],
       paddingVertical:   spacing[1],
-      borderRadius:    radius.full,
+      borderRadius:      radius.full,
     },
     popularBadgeText: {
       ...textStyles.caption,
@@ -339,12 +551,12 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       color: colors.primary,
     },
     radioOuter: {
-      width:        22,
-      height:       22,
-      borderRadius: radius.full,
-      borderWidth:  2,
-      borderColor:  colors.border,
-      alignItems:   'center',
+      width:          22,
+      height:         22,
+      borderRadius:   radius.full,
+      borderWidth:    2,
+      borderColor:    colors.border,
+      alignItems:     'center',
       justifyContent: 'center',
     },
     radioOuterSelected: {
@@ -365,14 +577,27 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       alignItems:      'center',
       justifyContent:  'center',
     },
+    ctaButtonDisabled: {
+      opacity: 0.7,
+    },
     ctaText: {
       ...textStyles.labelLg,
       color: colors.textInverse,
     },
 
+    // ── Restore ───────────────────────────────────────────────────────────────
+    restoreButton: {
+      alignItems:      'center',
+      paddingVertical: spacing[2],
+    },
+    restoreText: {
+      ...textStyles.label,
+      color: colors.primary,
+    },
+
     // ── Dismiss & legal ──────────────────────────────────────────────────────
     dismissButton: {
-      alignItems: 'center',
+      alignItems:      'center',
       paddingVertical: spacing[2],
     },
     dismissText: {
@@ -381,8 +606,8 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     },
     legalText: {
       ...textStyles.caption,
-      color:     colors.textTertiary,
-      textAlign: 'center',
+      color:         colors.textTertiary,
+      textAlign:     'center',
       paddingBottom: spacing[4],
     },
   });

@@ -13,6 +13,7 @@ import {
   View, Text, TextInput, TouchableOpacity,
   ScrollView, StyleSheet, KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles, fontSize } from '@/constants/typography';
@@ -61,6 +62,7 @@ export function NoteEditor({
   isSaving = false,
 }: NoteEditorProps) {
   // Resolve active theme colors for dark mode support (TASK-700)
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
 
@@ -120,16 +122,16 @@ export function NoteEditor({
       {/* ── Header ── */}
       <View style={styles.header}>
         <TouchableOpacity onPress={onCancel} style={styles.headerButton}>
-          <Text style={styles.headerButtonText}>취소</Text>
+          <Text style={styles.headerButtonText}>{t('common.cancel')}</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>노트</Text>
+        <Text style={styles.headerTitle}>{t('note.label')}</Text>
         <TouchableOpacity
           onPress={handleSave}
           style={[styles.headerButton, !canSave && styles.headerButtonDisabled]}
           disabled={!canSave}
         >
           <Text style={[styles.headerButtonText, styles.saveText, !canSave && styles.saveTextDisabled]}>
-            {isSaving ? '저장 중…' : '저장'}
+            {isSaving ? t('common.saving') : t('common.save')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -140,7 +142,7 @@ export function NoteEditor({
           style={styles.titleInput}
           value={title}
           onChangeText={setTitle}
-          placeholder="제목"
+          placeholder={t('note.title_placeholder')}
           placeholderTextColor={colors.textPlaceholder}
           returnKeyType="next"
           onSubmitEditing={() => contentRef.current?.focus()}
@@ -174,7 +176,7 @@ export function NoteEditor({
           style={styles.contentInput}
           value={content}
           onChangeText={setContent}
-          placeholder="내용을 입력하세요. 마크다운을 지원합니다."
+          placeholder={t('nl.placeholder')}
           placeholderTextColor={colors.textPlaceholder}
           multiline
           textAlignVertical="top"

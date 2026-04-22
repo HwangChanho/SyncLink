@@ -16,7 +16,8 @@
 
 import { create } from 'zustand';
 import type { EventSummary, DateRange } from '@/types';
-import { getEventsInRange } from '@/services/eventService';
+import { getEventsInRange, getEventById } from '@/services/eventService';
+import { subscribeToEvents as realtimeSubscribeToEvents } from '@/services/eventRealtimeService';
 
 interface EventState {
   /**
@@ -46,6 +47,19 @@ interface EventState {
   setEventsForDate: (date: string, events: EventSummary[]) => void;
   upsertEvent: (event: EventSummary) => void;
   removeEvent: (eventId: string) => void;
+
+  // ── Realtime subscription (TASK-902) ─────────────────────────────────────────
+  /**
+   * Subscribe to Supabase Realtime changes for events in a specific space.
+   * Automatically upserts or removes events from the store as changes arrive.
+   *
+   * Returns an unsubscribe function — the caller (e.g. CalendarScreen) must
+   * call it on unmount to prevent memory leaks.
+   *
+   * @param spaceId - UUID of the space to watch
+   * @returns Unsubscribe function
+   */
+  subscribeToEvents: (spaceId: string) => () => void;
 
   // ── UI actions ────────────────────────────────────────────────────────────
   setSelectedDate: (date: Date) => void;
@@ -123,6 +137,54 @@ export const useEventStore = create<EventState>((set, _get) => ({
       );
       return { eventsByDate: updated };
     }),
+
+  subscribeToEvents: (spaceId: string) => {
+    /**
+     * When an event is upserted via Realtime, we only receive the event ID.
+     * Fetch the full event detail and merge it into the store.
+     */
+    const handleUpsert = async (eventId: string) => {
+      try {
+        const event = await getEventById(eventId);
+        // Convert full Event to EventSummary for the store
+        set((state) => {
+          const dateKey = event.startAt.toISOString().split('T')[0] ?? '';
+          const existing = state.eventsByDate[dateKey] ?? [];
+          const index = existing.findIndex((e) => e.id === event.id);
+          const summary: EventSummary = {
+            id:      event.id,
+            title:   event.title,
+            startAt: event.startAt,
+            endAt:   event.endAt,
+            allDay:  event.allDay,
+            color:   event.color ?? '#6C63FF',
+            isOwn:   event.isOwn,
+          };
+          const updated =
+            index >= 0
+              ? [...existing.slice(0, index), summary, ...existing.slice(index + 1)]
+              : [...existing, summary];
+          return { eventsByDate: { ...state.eventsByDate, [dateKey]: updated } };
+        });
+      } catch {
+        // Ignore — event may not be accessible or was already removed
+      }
+    };
+
+    const handleDelete = (eventId: string) => {
+      set((state) => ({
+        eventsByDate: Object.fromEntries(
+          Object.entries(state.eventsByDate).map(([date, events]) => [
+            date,
+            events.filter((e) => e.id !== eventId),
+          ]),
+        ),
+      }));
+    };
+
+    // Wire up the service-level subscription and return its cleanup
+    return realtimeSubscribeToEvents(spaceId, (id) => { void handleUpsert(id); }, handleDelete);
+  },
 
   setSelectedDate: (selectedDate) => set({ selectedDate }),
   setFetching: (isFetching) => set({ isFetching }),

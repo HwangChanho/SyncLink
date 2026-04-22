@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
@@ -34,7 +35,7 @@ const NICKNAME_MAX_LENGTH = 20;
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function OnboardingScreen() {
-  // Resolve active theme colors for dark mode support (TASK-700)
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
 
@@ -53,7 +54,7 @@ export default function OnboardingScreen() {
   async function handleConfirm() {
     const trimmed = nickname.trim();
     if (trimmed.length === 0) {
-      setErrorMessage('닉네임을 입력해 주세요.');
+      setErrorMessage(t('profile.nickname_required'));
       return;
     }
     if (isSaving) return;
@@ -91,11 +92,8 @@ export default function OnboardingScreen() {
 
           {/* ── Header ───────────────────────────────────────────────── */}
           <View style={styles.header}>
-            <Text style={styles.title}>어떻게 불러드릴까요?</Text>
-            <Text style={styles.subtitle}>
-              함께 일정을 공유할 때 사용할 닉네임을 설정해 주세요.
-              {'\n'}나중에 My 탭에서 언제든 변경할 수 있습니다.
-            </Text>
+            <Text style={styles.title}>{t('profile.onboarding_title')}</Text>
+            <Text style={styles.subtitle}>{t('profile.onboarding_subtitle')}</Text>
           </View>
 
           {/* ── Nickname input ───────────────────────────────────────── */}
@@ -105,7 +103,7 @@ export default function OnboardingScreen() {
                 styles.input,
                 errorMessage !== null && styles.inputError,
               ]}
-              placeholder="닉네임 입력"
+              placeholder={t('profile.nickname_placeholder')}
               placeholderTextColor={colors.textPlaceholder}
               value={nickname}
               onChangeText={(text) => {
@@ -146,7 +144,7 @@ export default function OnboardingScreen() {
                 <ActivityIndicator color={colors.textInverse} />
               ) : (
                 <Text style={[styles.buttonText, styles.confirmButtonText]}>
-                  시작하기
+                  {t('onboarding.start')}
                 </Text>
               )}
             </TouchableOpacity>
@@ -155,10 +153,10 @@ export default function OnboardingScreen() {
               style={styles.skipButton}
               onPress={handleSkip}
               disabled={isSaving}
-              accessibilityLabel="닉네임 설정 건너뛰기"
+              accessibilityLabel={t('profile.onboarding_skip')}
               accessibilityRole="button"
             >
-              <Text style={styles.skipText}>나중에 설정하기</Text>
+              <Text style={styles.skipText}>{t('profile.onboarding_skip')}</Text>
             </TouchableOpacity>
           </View>
 

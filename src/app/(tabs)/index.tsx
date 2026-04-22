@@ -29,6 +29,8 @@ import { TodayEventList }     from '@/components/home/TodayEventList';
 import { TodayTodoList }      from '@/components/home/TodayTodoList';
 import { SpaceActivityFeed }  from '@/components/home/SpaceActivityFeed';
 import { WeeklyReviewCard }   from '@/components/home/WeeklyReviewCard';
+import { WeatherWidget }      from '@/components/home/WeatherWidget';
+import { DateSuggestionCard } from '@/components/home/DateSuggestionCard';
 import { useColors } from '@/hooks/useColors';
 import { spacing } from '@/constants/spacing';
 import type { DateRange } from '@/types';
@@ -92,6 +94,12 @@ export default function HomeScreen() {
       >
         {/* Greeting + date */}
         <HomeHeader />
+
+        {/* Current weather widget — TASK-903 */}
+        <WeatherWidget />
+
+        {/* AI date suggestion card — TASK-904 */}
+        <DateSuggestionCard />
 
         {/* Weekly AI review card — TASK-504 */}
         <WeeklyReviewCard />

@@ -22,6 +22,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
@@ -65,6 +66,7 @@ function formatWeekRange(weekStart: Date): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function WeeklyReviewCard() {
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
 
@@ -106,8 +108,10 @@ export function WeeklyReviewCard() {
       if (forceRefresh) {
         consumeWeeklyReview();
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '리뷰를 불러오지 못했습니다.');
+    } catch {
+      // Edge Function unavailable or no data — show empty state instead of error
+      setReview(null);
+      setError(null);
     } finally {
       setIsLoading(false);
     }
@@ -138,7 +142,7 @@ export function WeeklyReviewCard() {
             activeOpacity={0.7}
             accessibilityLabel="주간 리뷰 새로고침"
           >
-            <Text style={styles.refreshText}>새로 고침</Text>
+            <Text style={styles.refreshText}>{t('common.refresh')}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -161,7 +165,7 @@ export function WeeklyReviewCard() {
             onPress={() => loadReview(false)}
             activeOpacity={0.7}
           >
-            <Text style={styles.retryText}>다시 시도</Text>
+            <Text style={styles.retryText}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
       ) : review ? (
@@ -179,9 +183,7 @@ export function WeeklyReviewCard() {
       ) : (
         // Empty state (no data loaded yet and not loading)
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>
-            {plan === 'pro' ? '리뷰를 불러오는 중...' : '새로 고침을 눌러 리뷰를 생성하세요.'}
-          </Text>
+          <Text style={styles.emptyText}>{t('review.empty')}</Text>
         </View>
       )}
 

@@ -24,6 +24,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import type { RepeatType } from '@/types';
 import { createEvent } from '@/services/eventService';
 import { useEventStore } from '@/stores/eventStore';
@@ -31,16 +32,11 @@ import { useSpaceStore } from '@/stores/spaceStore';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { PlaceSearchInput } from '@/components/places/PlaceSearchInput';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const REPEAT_OPTIONS: { value: RepeatType; label: string }[] = [
-  { value: 'none',    label: '반복 없음' },
-  { value: 'daily',   label: '매일' },
-  { value: 'weekly',  label: '매주' },
-  { value: 'monthly', label: '매월' },
-  { value: 'yearly',  label: '매년' },
-];
+// REPEAT_OPTIONS is now built inside the component using i18n.
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -134,9 +130,19 @@ function makeRowStyles(colors: ReturnType<typeof useColors>) {
 
 export default function EventCreateScreen() {
   // Resolve active theme colors for dark mode support (TASK-700)
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
   const rowStyle = makeRowStyles(colors);
+
+  /** Repeat options built from i18n translations. */
+  const REPEAT_OPTIONS: { value: RepeatType; label: string }[] = [
+    { value: 'none',    label: t('time.no_repeat') },
+    { value: 'daily',   label: t('time.daily') },
+    { value: 'weekly',  label: t('time.weekly') },
+    { value: 'monthly', label: t('time.monthly') },
+    { value: 'yearly',  label: t('time.annual') },
+  ];
 
   const { date: dateParam } = useLocalSearchParams<{ date?: string }>();
   const router = useRouter();
@@ -201,11 +207,11 @@ export default function EventCreateScreen() {
   /** Validate and submit the form. */
   const handleSave = useCallback(async () => {
     if (!title.trim()) {
-      Alert.alert('입력 오류', '제목을 입력해 주세요.');
+      Alert.alert(t('common.error'), t('event.title_placeholder'));
       return;
     }
     if (!allDay && endAt <= startAt) {
-      Alert.alert('입력 오류', '종료 시간이 시작 시간보다 늦어야 합니다.');
+      Alert.alert(t('common.error'), t('event.end_after_start'));
       return;
     }
 
@@ -236,7 +242,7 @@ export default function EventCreateScreen() {
 
       router.back();
     } catch (err) {
-      Alert.alert('저장 실패', err instanceof Error ? err.message : '일정을 저장하지 못했습니다.');
+      Alert.alert(t('common.error'), err instanceof Error ? err.message : t('event.save_error'));
       setIsSaving(false);
     }
   }, [
@@ -252,9 +258,9 @@ export default function EventCreateScreen() {
       {/* Header */}
       <View style={styles.headerBar}>
         <Pressable style={styles.headerButton} onPress={() => router.back()}>
-          <Text style={styles.headerCancel}>취소</Text>
+          <Text style={styles.headerCancel}>{t('common.cancel')}</Text>
         </Pressable>
-        <Text style={styles.headerTitle}>새 일정</Text>
+        <Text style={styles.headerTitle}>{t('event.untitled')}</Text>
         <Pressable
           style={[styles.headerButton, isSaving && styles.headerButtonDisabled]}
           onPress={() => void handleSave()}
@@ -263,7 +269,7 @@ export default function EventCreateScreen() {
           {isSaving ? (
             <ActivityIndicator size="small" color={colors.primary} />
           ) : (
-            <Text style={styles.headerSave}>저장</Text>
+            <Text style={styles.headerSave}>{t('common.save')}</Text>
           )}
         </Pressable>
       </View>
@@ -276,7 +282,7 @@ export default function EventCreateScreen() {
         {/* Title */}
         <TextInput
           style={styles.titleInput}
-          placeholder="제목"
+          placeholder={t('event.title_placeholder')}
           placeholderTextColor={colors.textSecondary}
           value={title}
           onChangeText={setTitle}
@@ -286,7 +292,8 @@ export default function EventCreateScreen() {
 
         <View style={styles.form}>
           {/* All-day toggle */}
-          <FormRow label="종일" rowStyle={rowStyle}>
+          <FormRow label={t('time.all_day')} rowStyle={rowStyle}>
+
             <Switch
               value={allDay}
               onValueChange={setAllDay}
@@ -362,15 +369,12 @@ export default function EventCreateScreen() {
             </ScrollView>
           </FormRow>
 
-          {/* Location */}
+          {/* Location — Google Places Autocomplete (TASK-901) */}
           <FormRow label="위치" rowStyle={rowStyle}>
-            <TextInput
-              style={styles.inlineInput}
-              placeholder="위치 추가 (선택)"
-              placeholderTextColor={colors.textSecondary}
+            <PlaceSearchInput
               value={location}
-              onChangeText={setLocation}
-              returnKeyType="done"
+              onPlaceSelect={setLocation}
+              placeholder={t('places.search_placeholder')}
             />
           </FormRow>
 
@@ -378,7 +382,7 @@ export default function EventCreateScreen() {
           <FormRow label="메모" rowStyle={rowStyle}>
             <TextInput
               style={[styles.inlineInput, styles.multilineInput]}
-              placeholder="메모 추가 (선택)"
+              placeholder={t('nl.placeholder')}
               placeholderTextColor={colors.textSecondary}
               value={description}
               onChangeText={setDescription}

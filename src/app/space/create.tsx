@@ -22,6 +22,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
@@ -38,36 +39,38 @@ interface SpaceTypeOption {
   emoji: string;
 }
 
-const SPACE_TYPE_OPTIONS: SpaceTypeOption[] = [
-  {
-    type: 'couple',
-    label: '커플',
-    description: '연인과 단둘이 (최대 2명)',
-    emoji: '💑',
-  },
-  {
-    type: 'group',
-    label: '그룹',
-    description: '가족, 친구, 팀과 함께',
-    emoji: '👥',
-  },
-];
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function CreateSpaceScreen() {
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
   const [name, setName] = useState('');
   const [selectedType, setSelectedType] = useState<SpaceType>('couple');
   const [isLoading, setIsLoading] = useState(false);
 
+  /** Space type options built from i18n translations. */
+  const SPACE_TYPE_OPTIONS: SpaceTypeOption[] = [
+    {
+      type: 'couple',
+      label: t('space.types.couple'),
+      description: t('space.types.couple_desc'),
+      emoji: '💑',
+    },
+    {
+      type: 'group',
+      label: t('space.types.group'),
+      description: t('space.types.group_desc'),
+      emoji: '👥',
+    },
+  ];
+
   const { fetchMySpaces, setActiveSpaceId, setSpaceDetail } = useSpaceStore();
 
   const handleCreate = async () => {
     const trimmedName = name.trim();
     if (!trimmedName) {
-      Alert.alert('이름 필요', 'Space 이름을 입력해 주세요.');
+      Alert.alert(t('space.need_name'), t('space.name_placeholder'));
       return;
     }
 
@@ -88,8 +91,8 @@ export default function CreateSpaceScreen() {
       router.replace(`/space/${space.id}`);
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Space 생성에 실패했습니다.';
-      Alert.alert('오류', message);
+        err instanceof Error ? err.message : t('space.create_failed');
+      Alert.alert(t('common.error'), message);
     } finally {
       setIsLoading(false);
     }
@@ -108,7 +111,7 @@ export default function CreateSpaceScreen() {
             style={styles.cancelButton}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Text style={styles.cancelText}>취소</Text>
+            <Text style={styles.cancelText}>{t('common.cancel')}</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>새 Space 만들기</Text>
           {/* Spacer to center title */}
@@ -124,7 +127,7 @@ export default function CreateSpaceScreen() {
           <Text style={styles.label}>Space 이름</Text>
           <TextInput
             style={styles.input}
-            placeholder="우리만의 공간 이름을 지어주세요"
+            placeholder={t('space.name_placeholder')}
             placeholderTextColor={colors.textPlaceholder}
             value={name}
             onChangeText={setName}
@@ -184,7 +187,7 @@ export default function CreateSpaceScreen() {
             {isLoading ? (
               <ActivityIndicator color={colors.textInverse} />
             ) : (
-              <Text style={styles.createButtonText}>Space 만들기</Text>
+              <Text style={styles.createButtonText}>Space {t('category.new')}</Text>
             )}
           </TouchableOpacity>
         </ScrollView>

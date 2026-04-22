@@ -27,7 +27,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 /** AsyncStorage key for persisting subscription state. */
-const SUBSCRIPTION_STORAGE_KEY = 'syncday:subscription';
+const SUBSCRIPTION_STORAGE_KEY = 'synclink:subscription';
 
 /** Free plan: max AI fallback calls per day. */
 export const FREE_AI_DAILY_LIMIT = 5;

@@ -1,4 +1,4 @@
-# Maestro E2E configuration for SyncDay
+# Maestro E2E configuration for SyncLink
 #
 # Prerequisites:
 #   1. Install Maestro CLI on your machine:
@@ -13,7 +13,7 @@
 # Run all flows:
 #   maestro test .maestro/flows/
 
-appId: com.syncday.app
+appId: com.synclink.app
 
 # Global timeout (ms) for each action (default: 20000)
 # Increase on slower CI runners if needed.

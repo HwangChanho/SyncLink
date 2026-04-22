@@ -27,7 +27,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   // that mock the client. Real connection attempts will still fail gracefully.
   // See: docs/escalations/ESCALATION-001.md for setup instructions.
   console.warn(
-    '[SyncDay] Missing Supabase credentials.\n' +
+    '[SyncLink] Missing Supabase credentials.\n' +
     'Copy .env.example to .env and fill in EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY.\n' +
     'See docs/escalations/ESCALATION-001.md for setup instructions.'
   );

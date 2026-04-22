@@ -26,6 +26,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
@@ -44,30 +45,32 @@ interface ToggleConfig {
   description: string;
 }
 
-const TOGGLES: ToggleConfig[] = [
-  {
-    key:         'event_reminder',
-    label:       '일정 리마인더',
-    description: '일정 30분 전에 알림을 받습니다.',
-  },
-  {
-    key:         'space_activity',
-    label:       'Space 활동 알림',
-    description: 'Space 멤버가 공유 일정을 추가하거나 수정할 때 알림을 받습니다.',
-  },
-  {
-    key:         'event_share',
-    label:       '공유 일정 알림',
-    description: '내 Space에 새 일정이 공유될 때 알림을 받습니다.',
-  },
-];
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function NotificationsSettingsScreen() {
   // Resolve active theme colors for dark mode support (TASK-700)
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
+
+  /** Toggles built from i18n to respond to locale changes. */
+  const TOGGLES: ToggleConfig[] = [
+    {
+      key:         'event_reminder',
+      label:       t('notification.event_reminder'),
+      description: t('notification.event_reminder_desc'),
+    },
+    {
+      key:         'space_activity',
+      label:       t('notification.space_activity'),
+      description: t('notification.space_activity_desc'),
+    },
+    {
+      key:         'event_share',
+      label:       t('notification.event_share'),
+      description: t('notification.event_share_desc'),
+    },
+  ];
 
   const { user, setUser } = useAuthStore();
 
@@ -119,7 +122,7 @@ export default function NotificationsSettingsScreen() {
     } catch (err) {
       // Revert optimistic change
       setPrefs(p => ({ ...p, [key]: prev }));
-      Alert.alert('오류', err instanceof Error ? err.message : '설정 저장에 실패했습니다.');
+      Alert.alert(t('common.error'), err instanceof Error ? err.message : t('notification.save_failed'));
     } finally {
       setSavingKey(null);
     }
@@ -176,7 +179,7 @@ export default function NotificationsSettingsScreen() {
         {/* Info note */}
         <Text style={styles.note}>
           알림을 받으려면 기기의 알림 권한이 허용되어 있어야 합니다.
-          설정 앱에서 SyncDay의 알림을 허용해 주세요.
+          설정 앱에서 SyncLink의 알림을 허용해 주세요.
         </Text>
       </ScrollView>
     </SafeAreaView>

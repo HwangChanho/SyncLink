@@ -1,5 +1,5 @@
 /**
- * SyncDay design system — typography tokens.
+ * SyncLink design system — typography tokens.
  *
  * Scale based on 4px base unit (same as spacing).
  * Font: System default (SF Pro on iOS, Roboto on Android).

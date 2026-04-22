@@ -1,5 +1,5 @@
 /**
- * SyncDay business constants and runtime configuration.
+ * SyncLink business constants and runtime configuration.
  *
  * These values drive business rules and must be consistent across
  * the app and Edge Functions. Changes here may require corresponding
@@ -74,4 +74,5 @@ export const EDGE_FUNCTIONS = {
   SMART_REMINDER:  'smart-reminder',
   WEEKLY_REVIEW:   'weekly-review',
   DATE_RECOMMEND:  'date-recommend',
+  SUGGEST_DATE:    'suggest-date',
 } as const;
