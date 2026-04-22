@@ -1,0 +1,64 @@
+# Maestro E2E — Flow 05: NL Input → Local Parse → Event Creation
+#
+# User story: A signed-in user types a natural-language phrase into
+#             the NLInputBar on the Home screen. The local parser
+#             (nlParser.ts) extracts the date, time, and title without
+#             calling the Anthropic AI API, and the user confirms the
+#             parsed preview to create an event.
+#
+# Precondition: User is already signed in (run 01_onboarding first,
+#               or use a persistent session via device storage).
+#
+# NOTE: OAuth sign-in is not automatable in CI/simulator.
+#       Steps that require an active session are commented out.
+#       Live assertions cover only the launch and initial screen.
+#
+# Local parser condition:
+#   EXPO_PUBLIC_APP_ENV=development → AI fallback is disabled.
+#   The local parser handles the full phrase; no Anthropic API call occurs.
+#   Confidence 'low' → AI fallback is triggered only in production builds.
+#
+# Run:
+#   maestro test .maestro/flows/05_nl_input.yaml
+
+appId: com.syncday.app
+---
+
+# ── Step 1: Launch the app ──────────────────────────────────────────────────
+- launchApp
+
+# ── Step 2: Verify the initial screen is shown ─────────────────────────────
+# The login screen (unauthenticated) or Home screen (authenticated)
+# both contain the "SyncDay" branding.
+- assertVisible: "SyncDay"
+
+# ── Step 3: Verify NLInputBar is present on Home ───────────────────────────
+# After sign-in, the Home tab renders the NLInputBar at the bottom.
+# Requires an active session — commented out for CI.
+# - assertVisible: "일정을 입력해보세요"
+
+# ── Step 4: Tap the NLInputBar placeholder to open the keyboard ────────────
+# - tapOn: "일정을 입력해보세요"
+
+# ── Step 5: Type a natural-language phrase ─────────────────────────────────
+# The local nlParser.ts resolves:
+#   "다음 주 금요일" → next Friday's date
+#   "오후 6시"       → 18:00
+#   "저녁 식사"      → event title
+# No AI call is made when EXPO_PUBLIC_APP_ENV=development.
+# - inputText: "다음 주 금요일 오후 6시 저녁 식사"
+
+# ── Step 6: Submit the input ────────────────────────────────────────────────
+# Tap the send button (accessibilityLabel: "일정 파싱").
+# - tapOn: "일정 파싱"
+
+# ── Step 7: Verify the ConfirmModal parse preview ──────────────────────────
+# The modal shows the extracted title, date, and time.
+# - assertVisible: "일정 미리보기"
+# - assertVisible: "저녁 식사"
+# - assertVisible: "금요일"
+
+# ── Step 8: Confirm and verify event creation ──────────────────────────────
+# Tap "확인" to create the event, then verify it appears on the home screen.
+# - tapOn: "확인"
+# - assertVisible: "저녁 식사"

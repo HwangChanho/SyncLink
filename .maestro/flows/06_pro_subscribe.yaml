@@ -1,0 +1,68 @@
+# Maestro E2E — Flow 06: Pro Subscription → Paywall → Cancel
+#
+# User story: A signed-in user navigates to the My tab, taps the
+#             "Pro 업그레이드" button, is shown the Paywall screen
+#             with monthly and annual plan options, cancels without
+#             purchasing, and returns to confirm the free-tier AI
+#             usage limit is still in effect.
+#
+# Precondition: User is already signed in (run 01_onboarding first,
+#               or use a persistent session via device storage).
+#
+# NOTE: OAuth sign-in is not automatable in CI/simulator.
+#       Steps that require an active session are commented out.
+#       Live assertions cover only the launch and initial screen.
+#
+# RevenueCat note:
+#   Sandbox (test) purchases require a real device with a Sandbox
+#   Apple ID or Google Play test account. Simulator can reach the
+#   Paywall screen but cannot complete a purchase.
+#   This flow validates the navigation path up to Paywall entry.
+#
+# Run:
+#   maestro test .maestro/flows/06_pro_subscribe.yaml
+
+appId: com.syncday.app
+---
+
+# ── Step 1: Launch the app ──────────────────────────────────────────────────
+- launchApp
+
+# ── Step 2: Verify the initial screen is shown ─────────────────────────────
+# Confirms the app launched successfully (login or home screen).
+- assertVisible: "SyncDay"
+
+# ── Step 3: Navigate to the My tab ─────────────────────────────────────────
+# The bottom tab bar includes "내 정보" or "My" label.
+# Requires an active session — commented out for CI.
+# - tapOn: "내 정보"
+
+# ── Step 4: Verify the My tab is loaded ────────────────────────────────────
+# The My screen shows the user's profile and subscription status.
+# - assertVisible: "프로필"
+
+# ── Step 5: Tap the Pro upgrade button ─────────────────────────────────────
+# The button label may render as "Pro로 업그레이드" or "플랜 업그레이드"
+# depending on the current subscription state.
+# - tapOn: "Pro로 업그레이드"
+
+# ── Step 6: Verify the Paywall screen is shown ─────────────────────────────
+# The Paywall screen (src/app/subscription/paywall.tsx) displays
+# monthly and annual plan cards.
+# - assertVisible: "월간"
+# - assertVisible: "연간"
+
+# ── Step 7: Cancel (go back without purchasing) ─────────────────────────────
+# The Paywall has a close/back button. RevenueCat Sandbox purchase
+# is not triggered; navigation only.
+# - tapOn: "닫기"   # or back gesture
+
+# ── Step 8: Verify return to My tab ────────────────────────────────────────
+# After cancelling, the user should land back on the My screen.
+# - assertVisible: "프로필"
+
+# ── Step 9: Verify free-tier AI limit is unchanged ─────────────────────────
+# The AI usage indicator should still show the free daily limit
+# (FREE_AI_DAILY_LIMIT = 5, defined in src/constants/config.ts).
+# This confirms no subscription state change occurred.
+# - assertVisible: "AI"

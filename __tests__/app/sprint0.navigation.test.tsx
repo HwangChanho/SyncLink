@@ -81,7 +81,8 @@ describe('TASK-004: Tab screens render without crashing', () => {
   it('HomeScreen shows today todo section header', () => {
     const { getByText } = render(<HomeScreen />);
     // TodayTodoList 컴포넌트가 항상 렌더링하는 섹션 헤더
-    expect(getByText('✅ 오늘 할일')).toBeTruthy();
+    // i18n 적용 후: 이모지 제거, t('todo.today_list_title') = '오늘 할일'
+    expect(getByText('오늘 할일')).toBeTruthy();
   });
 
   it('CalendarScreen renders', () => {

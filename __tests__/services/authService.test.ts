@@ -238,10 +238,13 @@ describe('authService', () => {
       expect(result.session.userId).toBe('user-123');
     });
 
-    it('신규 유저: created_at이 30초 이내 → isNewUser = true', async () => {
+    it('신규 유저: nickname 미설정(null) → isNewUser = true', async () => {
+      // authService now determines isNewUser by nickname absence, not created_at.
+      // Provide a userRow without a nickname to trigger the new-user path.
+      setupFromMock({ data: { ...mockUserRow, nickname: null }, error: null });
       (GoogleSignin.signIn as jest.Mock).mockResolvedValue({ idToken: 'google-id-token' });
       (supabase.auth.signInWithIdToken as jest.Mock).mockResolvedValue({
-        data: { session: mockNewUserSession },
+        data: { session: mockSession },
         error: null,
       });
 

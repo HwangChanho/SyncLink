@@ -53,6 +53,11 @@ jest.mock('@/services/aiService', () => ({
   hasRemainingDailyLimit: jest.fn().mockResolvedValue(true),
 }));
 
+// Sprint 9 컴포넌트 mock — HomeScreen 테스트 범위 밖, 자체 의존성(네이티브 API, 스토어)을 차단
+jest.mock('@/components/home/WeatherWidget',     () => ({ WeatherWidget:     () => null }));
+jest.mock('@/components/home/WeeklyReviewCard',  () => ({ WeeklyReviewCard:  () => null }));
+jest.mock('@/components/home/DateSuggestionCard',() => ({ DateSuggestionCard:() => null }));
+
 // SafeAreaView mock
 jest.mock('react-native-safe-area-context', () => {
   const mockReact = require('react');
@@ -207,12 +212,14 @@ describe('HomeScreen', () => {
 
     it('오늘 일정 섹션 헤더 표시', () => {
       const { getByText } = render(<HomeScreen />);
-      expect(getByText('📅 오늘 일정')).toBeTruthy();
+      // i18n 적용 후: 이모지 제거, t('event.today_list_title') = '오늘 일정'
+      expect(getByText('오늘 일정')).toBeTruthy();
     });
 
     it('오늘 할일 섹션 헤더 표시', () => {
       const { getByText } = render(<HomeScreen />);
-      expect(getByText('✅ 오늘 할일')).toBeTruthy();
+      // i18n 적용 후: 이모지 제거, t('todo.today_list_title') = '오늘 할일'
+      expect(getByText('오늘 할일')).toBeTruthy();
     });
 
     it('닉네임이 있으면 인사말에 닉네임 표시', () => {
@@ -221,9 +228,10 @@ describe('HomeScreen', () => {
       expect(getByText('홍길동')).toBeTruthy();
     });
 
-    it('닉네임이 없으면 "사용자" 기본값 표시', () => {
+    it('닉네임이 없으면 기본값 표시', () => {
       mockAuthStore(null);
       const { getByText } = render(<HomeScreen />);
+      // i18n 적용 후: t('common.user') = '사용자'
       expect(getByText('사용자')).toBeTruthy();
     });
   });
@@ -233,16 +241,18 @@ describe('HomeScreen', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('빈 상태', () => {
-    it('오늘 일정 없음 → "오늘 일정이 없습니다" 표시', () => {
+    it('오늘 일정 없음 → 빈 상태 표시', () => {
       mockEventStore({ eventsByDate: {} });
       const { getByText } = render(<HomeScreen />);
-      expect(getByText('오늘 일정이 없습니다')).toBeTruthy();
+      // i18n 적용 후: t('event.today_list_title') + ' ' + t('common.none') = '오늘 일정 없음'
+      expect(getByText('오늘 일정 없음')).toBeTruthy();
     });
 
-    it('오늘 할일 없음 → "오늘 마감 할일이 없습니다" 표시', () => {
+    it('오늘 할일 없음 → 빈 상태 표시', () => {
       mockTodoStore({ todos: [] });
       const { getByText } = render(<HomeScreen />);
-      expect(getByText('오늘 마감 할일이 없습니다')).toBeTruthy();
+      // i18n 적용 후: t('todo.today_list_title') + ' ' + t('common.none') = '오늘 할일 없음'
+      expect(getByText('오늘 할일 없음')).toBeTruthy();
     });
   });
 

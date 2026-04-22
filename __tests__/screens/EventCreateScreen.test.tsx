@@ -149,28 +149,33 @@ describe('EventCreateScreen', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('렌더링', () => {
-    it('"새 일정" 헤더 텍스트가 렌더링됨', () => {
+    it('헤더 텍스트가 렌더링됨', () => {
       const { getByText } = render(<EventCreateScreen />);
-      expect(getByText('새 일정')).toBeTruthy();
+      // i18n 적용 후: t('event.untitled') = '제목 없음'
+      expect(getByText('제목 없음')).toBeTruthy();
     });
 
     it('"저장" 버튼이 렌더링됨', () => {
       const { getByText } = render(<EventCreateScreen />);
+      // i18n 적용 후: t('common.save') = '저장'
       expect(getByText('저장')).toBeTruthy();
     });
 
     it('"취소" 버튼이 렌더링됨', () => {
       const { getByText } = render(<EventCreateScreen />);
+      // i18n 적용 후: t('common.cancel') = '취소'
       expect(getByText('취소')).toBeTruthy();
     });
 
-    it('"제목" placeholder 입력 필드가 렌더링됨', () => {
+    it('제목 입력 필드가 렌더링됨', () => {
       const { getByPlaceholderText } = render(<EventCreateScreen />);
-      expect(getByPlaceholderText('제목')).toBeTruthy();
+      // i18n 적용 후: t('event.title_placeholder') = '제목을 입력해 주세요.'
+      expect(getByPlaceholderText('제목을 입력해 주세요.')).toBeTruthy();
     });
 
     it('"종일" 토글 레이블이 렌더링됨', () => {
       const { getByText } = render(<EventCreateScreen />);
+      // i18n 적용 후: t('time.all_day') = '종일'
       expect(getByText('종일')).toBeTruthy();
     });
 
@@ -186,6 +191,7 @@ describe('EventCreateScreen', () => {
 
     it('반복 옵션 칩 5개가 모두 렌더링됨', () => {
       const { getByText } = render(<EventCreateScreen />);
+      // i18n 적용 후: t('time.*') keys
       expect(getByText('반복 없음')).toBeTruthy();
       expect(getByText('매일')).toBeTruthy();
       expect(getByText('매주')).toBeTruthy();
@@ -211,14 +217,15 @@ describe('EventCreateScreen', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('유효성 검사', () => {
-    it('제목 미입력 상태로 저장 시 Alert("입력 오류") 표시됨', async () => {
+    it('제목 미입력 상태로 저장 시 Alert 표시됨', async () => {
       const { getByText } = render(<EventCreateScreen />);
 
       await act(async () => {
         fireEvent.press(getByText('저장'));
       });
 
-      expect(alertSpy).toHaveBeenCalledWith('입력 오류', '제목을 입력해 주세요.');
+      // i18n 적용 후: Alert(t('common.error'), t('event.title_placeholder'))
+      expect(alertSpy).toHaveBeenCalledWith('오류', '제목을 입력해 주세요.');
     });
 
     it('제목 미입력 시 createEvent가 호출되지 않음', async () => {
@@ -251,7 +258,7 @@ describe('EventCreateScreen', () => {
       (createEvent as jest.Mock).mockResolvedValue(mockCreatedEvent);
 
       const { getByPlaceholderText, getByText } = render(<EventCreateScreen />);
-      fireEvent.changeText(getByPlaceholderText('제목'), '팀 미팅');
+      fireEvent.changeText(getByPlaceholderText('제목을 입력해 주세요.'), '팀 미팅');
 
       await act(async () => {
         fireEvent.press(getByText('저장'));
@@ -266,7 +273,7 @@ describe('EventCreateScreen', () => {
       (createEvent as jest.Mock).mockResolvedValue(mockCreatedEvent);
 
       const { getByPlaceholderText, getByText } = render(<EventCreateScreen />);
-      fireEvent.changeText(getByPlaceholderText('제목'), '  스프린트 회의  ');
+      fireEvent.changeText(getByPlaceholderText('제목을 입력해 주세요.'), '  스프린트 회의  ');
 
       await act(async () => {
         fireEvent.press(getByText('저장'));
@@ -283,7 +290,7 @@ describe('EventCreateScreen', () => {
       (createEvent as jest.Mock).mockResolvedValue(mockCreatedEvent);
 
       const { getByPlaceholderText, getByText } = render(<EventCreateScreen />);
-      fireEvent.changeText(getByPlaceholderText('제목'), '팀 미팅');
+      fireEvent.changeText(getByPlaceholderText('제목을 입력해 주세요.'), '팀 미팅');
 
       await act(async () => {
         fireEvent.press(getByText('저장'));
@@ -298,7 +305,7 @@ describe('EventCreateScreen', () => {
       (createEvent as jest.Mock).mockResolvedValue(mockCreatedEvent);
 
       const { getByPlaceholderText, getByText } = render(<EventCreateScreen />);
-      fireEvent.changeText(getByPlaceholderText('제목'), '팀 미팅');
+      fireEvent.changeText(getByPlaceholderText('제목을 입력해 주세요.'), '팀 미팅');
 
       await act(async () => {
         fireEvent.press(getByText('저장'));
@@ -313,7 +320,7 @@ describe('EventCreateScreen', () => {
       (createEvent as jest.Mock).mockResolvedValue(mockCreatedEvent);
 
       const { getByPlaceholderText, getByText } = render(<EventCreateScreen />);
-      fireEvent.changeText(getByPlaceholderText('제목'), '팀 미팅');
+      fireEvent.changeText(getByPlaceholderText('제목을 입력해 주세요.'), '팀 미팅');
 
       await act(async () => {
         fireEvent.press(getByText('저장'));
@@ -331,18 +338,20 @@ describe('EventCreateScreen', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('저장 실패', () => {
-    it('createEvent 실패 → Alert("저장 실패", error.message) 표시됨', async () => {
+    it('createEvent 실패 → Alert(error.message) 표시됨', async () => {
       (createEvent as jest.Mock).mockRejectedValue(new Error('네트워크 오류'));
 
       const { getByPlaceholderText, getByText } = render(<EventCreateScreen />);
-      fireEvent.changeText(getByPlaceholderText('제목'), '팀 미팅');
+      // i18n 적용 후 placeholder: t('event.title_placeholder') = '제목을 입력해 주세요.'
+      fireEvent.changeText(getByPlaceholderText('제목을 입력해 주세요.'), '팀 미팅');
 
       await act(async () => {
         fireEvent.press(getByText('저장'));
       });
 
       await waitFor(() => {
-        expect(alertSpy).toHaveBeenCalledWith('저장 실패', '네트워크 오류');
+        // i18n 적용 후: Alert(t('common.error'), error.message) = Alert('오류', '네트워크 오류')
+        expect(alertSpy).toHaveBeenCalledWith('오류', '네트워크 오류');
       });
     });
 
@@ -350,7 +359,7 @@ describe('EventCreateScreen', () => {
       (createEvent as jest.Mock).mockRejectedValue(new Error('서버 오류'));
 
       const { getByPlaceholderText, getByText } = render(<EventCreateScreen />);
-      fireEvent.changeText(getByPlaceholderText('제목'), '팀 미팅');
+      fireEvent.changeText(getByPlaceholderText('제목을 입력해 주세요.'), '팀 미팅');
 
       await act(async () => {
         fireEvent.press(getByText('저장'));
@@ -362,19 +371,21 @@ describe('EventCreateScreen', () => {
       expect(mockBack).not.toHaveBeenCalled();
     });
 
-    it('Error 인스턴스 아닌 실패값: 기본 에러 메시지("일정을 저장하지 못했습니다.") 표시됨', async () => {
+    it('Error 인스턴스 아닌 실패값: 기본 에러 메시지 표시됨', async () => {
       // err instanceof Error가 false인 경우
       (createEvent as jest.Mock).mockRejectedValue('unknown error');
 
       const { getByPlaceholderText, getByText } = render(<EventCreateScreen />);
-      fireEvent.changeText(getByPlaceholderText('제목'), '팀 미팅');
+      // i18n 적용 후 placeholder: t('event.title_placeholder') = '제목을 입력해 주세요.'
+      fireEvent.changeText(getByPlaceholderText('제목을 입력해 주세요.'), '팀 미팅');
 
       await act(async () => {
         fireEvent.press(getByText('저장'));
       });
 
       await waitFor(() => {
-        expect(alertSpy).toHaveBeenCalledWith('저장 실패', '일정을 저장하지 못했습니다.');
+        // i18n 적용 후: Alert(t('common.error'), t('event.save_error'))
+        expect(alertSpy).toHaveBeenCalledWith('오류', '일정을 저장하지 못했습니다.');
       });
     });
   });
@@ -394,7 +405,7 @@ describe('EventCreateScreen', () => {
       const { getByPlaceholderText, getByText, queryByText, UNSAFE_getByType } =
         render(<EventCreateScreen />);
 
-      fireEvent.changeText(getByPlaceholderText('제목'), '팀 미팅');
+      fireEvent.changeText(getByPlaceholderText('제목을 입력해 주세요.'), '팀 미팅');
 
       // press 후 act flush → isSaving=true 상태로 진입
       await act(async () => {
@@ -463,7 +474,7 @@ describe('EventCreateScreen', () => {
       const { getByPlaceholderText, getByText, UNSAFE_getByType } = render(<EventCreateScreen />);
       const { Switch } = require('react-native');
 
-      fireEvent.changeText(getByPlaceholderText('제목'), '종일 미팅');
+      fireEvent.changeText(getByPlaceholderText('제목을 입력해 주세요.'), '종일 미팅');
       fireEvent(UNSAFE_getByType(Switch), 'valueChange', true);
 
       await act(async () => {

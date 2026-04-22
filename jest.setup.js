@@ -167,6 +167,117 @@ jest.mock('expo-linking', () => ({
   getInitialURL: jest.fn().mockResolvedValue(null),
 }));
 
+// ─── react-native-purchases mock ─────────────────────────────────────────────
+// RevenueCat SDK requires a native bridge — unavailable in Jest environment.
+// This mock mirrors the real SDK shape so purchaseService tests can run without
+// a real App Store / Google Play connection.
+jest.mock('react-native-purchases', () => ({
+  __esModule: true,
+  default: {
+    setLogLevel:       jest.fn(),
+    configure:         jest.fn().mockResolvedValue(undefined),
+    getOfferings:      jest.fn().mockResolvedValue({
+      current: {
+        availablePackages: [],
+      },
+    }),
+    purchasePackage:   jest.fn().mockResolvedValue({
+      customerInfo: { entitlements: { active: {} } },
+    }),
+    restorePurchases:  jest.fn().mockResolvedValue({
+      entitlements: { active: {} },
+    }),
+    getCustomerInfo:   jest.fn().mockResolvedValue({
+      entitlements: { active: {} },
+    }),
+  },
+  // LOG_LEVEL enum values used in purchaseService.ts
+  LOG_LEVEL: {
+    DEBUG:   'DEBUG',
+    INFO:    'INFO',
+    WARNING: 'WARNING',
+    ERROR:   'ERROR',
+  },
+  // PACKAGE_TYPE enum (used in type checks)
+  PACKAGE_TYPE: {
+    ANNUAL:  'ANNUAL',
+    MONTHLY: 'MONTHLY',
+  },
+}));
+
+// ─── react-i18next mock ───────────────────────────────────────────────────────
+// i18next requires async initialization and locale resources — unavailable in
+// Jest environment. This mock returns translation keys as-is so component
+// tests can find rendered text by translation key or by the Korean default value.
+jest.mock('react-i18next', () => {
+  /**
+   * Minimal t() implementation: looks up the key in the Korean locale bundle
+   * (loaded synchronously) so tests that query by Korean text still pass.
+   * Falls back to returning the key itself if not found.
+   */
+  const ko = require('./src/locales/ko').default;
+
+  function resolvePath(obj, path) {
+    return path.split('.').reduce((acc, part) => {
+      if (acc === null || acc === undefined) return undefined;
+      // Array index notation: e.g. pages[0].title → pages, 0, title
+      const match = part.match(/^(\w+)\[(\d+)\]$/);
+      if (match) return acc[match[1]]?.[Number(match[2])];
+      return acc[part];
+    }, obj);
+  }
+
+  function t(key, opts) {
+    if (opts && opts.returnObjects) {
+      const val = resolvePath(ko, key);
+      return val !== undefined ? val : key;
+    }
+    const val = resolvePath(ko, key);
+    if (val !== undefined && typeof val === 'string') return val;
+    return key;
+  }
+
+  return {
+    useTranslation: () => ({ t, i18n: { language: 'ko', changeLanguage: jest.fn() } }),
+    Trans: ({ children }) => children,
+    I18nextProvider: ({ children }) => children,
+    initReactI18next: { type: '3rdParty', init: jest.fn() },
+  };
+});
+
+// ─── @react-native-voice/voice mock ──────────────────────────────────────────
+// The native voice package calls `new NativeEventEmitter(NativeModules.Voice)`
+// at module load time. In Jest, NativeModules.Voice is null → throws.
+// This mock prevents the NativeEventEmitter crash and makes Voice methods
+// available as jest.fn() stubs for components that use voice input.
+jest.mock('@react-native-voice/voice', () => ({
+  __esModule: true,
+  default: {
+    isAvailable:            jest.fn().mockResolvedValue(true),
+    start:                  jest.fn().mockResolvedValue(undefined),
+    stop:                   jest.fn().mockResolvedValue(undefined),
+    cancel:                 jest.fn().mockResolvedValue(undefined),
+    destroy:                jest.fn().mockResolvedValue(undefined),
+    removeAllListeners:     jest.fn(),
+    onSpeechStart:          null,
+    onSpeechRecognized:     null,
+    onSpeechEnd:            null,
+    onSpeechError:          null,
+    onSpeechResults:        null,
+    onSpeechPartialResults: null,
+    onSpeechVolumeChanged:  null,
+  },
+}));
+
+// ─── EXPO_PUBLIC_* env vars ───────────────────────────────────────────────────
+// babel-preset-expo inlines EXPO_PUBLIC_* at Babel transform time (not at runtime).
+// These stubs must be set before any module is transformed so the inlined value
+// is a non-empty string rather than undefined.
+process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY =
+  process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? 'test-google-maps-key';
+process.env.EXPO_PUBLIC_WEATHER_API_KEY =
+  process.env.EXPO_PUBLIC_WEATHER_API_KEY ?? 'test-weather-key';
+
 // ─── Console noise reduction ──────────────────────────────────────────────────
 // Suppress expected React Native warnings that pollute test output.
 const SUPPRESSED_WARNINGS = [

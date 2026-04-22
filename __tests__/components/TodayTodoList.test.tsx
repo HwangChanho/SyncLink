@@ -135,12 +135,13 @@ describe('TodayTodoList', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('빈 상태', () => {
-    it('todos가 비어 있으면 "오늘 마감 할일이 없습니다" 표시', () => {
+    it('todos가 비어 있으면 빈 상태 표시', () => {
       mockStore({ todos: [] });
 
       const { getByText } = render(<TodayTodoList />);
 
-      expect(getByText('오늘 마감 할일이 없습니다')).toBeTruthy();
+      // i18n 적용 후: '오늘 할일 없음' (t('todo.today_list_title') + ' ' + t('common.none'))
+      expect(getByText('오늘 할일 없음')).toBeTruthy();
     });
 
     it('오늘 할일이 없으면 섹션 헤더 카운트 미표시', () => {
@@ -158,7 +159,8 @@ describe('TodayTodoList', () => {
       const { getByText } = render(<TodayTodoList />);
 
       // isDueToday 필터로 내일 할일은 제외됨
-      expect(getByText('오늘 마감 할일이 없습니다')).toBeTruthy();
+      // i18n 적용 후: t('todo.today_list_title') + ' ' + t('common.none') = '오늘 할일 없음'
+      expect(getByText('오늘 할일 없음')).toBeTruthy();
     });
   });
 
@@ -185,12 +187,13 @@ describe('TodayTodoList', () => {
       expect(getByText('두 번째 할일')).toBeTruthy();
     });
 
-    it('오늘 할일이 있으면 "✅ 오늘 할일" 섹션 헤더 표시', () => {
+    it('오늘 할일이 있으면 "오늘 할일" 섹션 헤더 표시', () => {
       mockStore({ todos: [baseTodo] });
 
       const { getByText } = render(<TodayTodoList />);
 
-      expect(getByText('✅ 오늘 할일')).toBeTruthy();
+      // i18n 적용 후: 이모지 제거, t('todo.today_list_title') = '오늘 할일'
+      expect(getByText('오늘 할일')).toBeTruthy();
     });
 
     it('완료/전체 카운트 표시 (완료 1개, 전체 2개 → "1/2")', () => {

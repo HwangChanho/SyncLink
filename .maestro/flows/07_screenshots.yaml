@@ -1,0 +1,119 @@
+# Maestro E2E — Flow 07: App Store Screenshot Navigation
+#
+# User story: Navigate to each of the 6 required App Store screenshot
+#             screens in order. LEAD manually captures each screen
+#             using the simctl command shown after each step.
+#
+# Preconditions:
+#   1. User is already signed in (active session via device storage).
+#   2. Sample data exists: events with Korean titles, at least one Space
+#      with a member, and a WeeklyReviewCard populated with review text.
+#   3. Simulator: iPhone 14 Pro Max (6.7") — 1290 × 2796 px.
+#   4. Status bar: Xcode Simulator automatically shows 9:41 / 100% battery.
+#   5. Appearance: Light mode (System Settings → Appearance → Light).
+#
+# Screenshot command (run in a separate terminal after each pause):
+#   xcrun simctl io booted screenshot ~/Desktop/screenshots/<filename>.png
+#
+# Full capture sequence is documented in docs/appstore/screenshot_guide.md.
+#
+# Run:
+#   maestro test .maestro/flows/07_screenshots.yaml
+
+appId: com.syncday.app
+---
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SCREEN 1: Home — Weather widget + AI date card + today's events
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Step 1: Launch the app ──────────────────────────────────────────────────
+- launchApp
+
+# ── Step 2: Verify the app is loaded ───────────────────────────────────────
+- assertVisible: "SyncDay"
+
+# ── Step 3: Navigate to the Home tab (if not already there) ────────────────
+# The Home tab is the default tab after sign-in.
+# If the app opens to a different screen, tap the Home tab icon.
+# - tapOn: "홈"
+
+# ── Step 4: Wait for the home screen content to load ───────────────────────
+# Weather widget and AI date card may take a moment to render.
+# - waitForAnimationToEnd
+# - assertVisible: "오늘 일정"
+
+# 📸 SCREENSHOT 1 — Home screen
+# Run in terminal: xcrun simctl io booted screenshot ~/Desktop/screenshots/01_home.png
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SCREEN 2: Calendar — Monthly view with coloured event dots
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Step 5: Navigate to the Calendar tab ───────────────────────────────────
+# - tapOn: "캘린더"
+# - waitForAnimationToEnd
+# - assertVisible: "캘린더"
+
+# 📸 SCREENSHOT 2 — Calendar monthly view
+# Run in terminal: xcrun simctl io booted screenshot ~/Desktop/screenshots/02_calendar.png
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SCREEN 3: NLInputBar — Natural-language text in progress (before send)
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Step 6: Return to Home and open the NLInputBar ─────────────────────────
+# - tapOn: "홈"
+# - tapOn: "일정을 입력해보세요"   # NLInputBar placeholder
+
+# ── Step 7: Type the example phrase and pause (do NOT tap send) ────────────
+# The parse preview may already appear as the user types.
+# Screenshot is taken here to show the input-in-progress state.
+# - inputText: "다음 주 금요일 오후 6시 저녁 식사"
+# - waitForAnimationToEnd
+
+# 📸 SCREENSHOT 3 — NLInputBar with text entered (before confirmation)
+# Run in terminal: xcrun simctl io booted screenshot ~/Desktop/screenshots/03_nl_input.png
+
+# ── Step 8: Dismiss the input (do not create the event) ────────────────────
+# Tap outside the input or use the back gesture to close without saving.
+# - tapOn: "취소"   # cancel button if available
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SCREEN 4: Space — Shared calendar with member avatars
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Step 9: Navigate to a Space ────────────────────────────────────────────
+# From the Home screen, tap on a Space card or navigate via the Planner tab.
+# The Space screen shows the shared event list and member avatars.
+# - tapOn: "플래너"      # or tap a Space card directly from the home feed
+# - waitForAnimationToEnd
+# - assertVisible: "멤버"   # or the Space name
+
+# 📸 SCREENSHOT 4 — Space shared calendar view
+# Run in terminal: xcrun simctl io booted screenshot ~/Desktop/screenshots/04_space.png
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SCREEN 5: Weekly AI Review Card — Home scroll-down
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Step 10: Return to Home and scroll down to the WeeklyReviewCard ─────────
+# The WeeklyReviewCard is rendered below the TodayEventList on the home screen.
+# - tapOn: "홈"
+# - scrollDown    # scroll until the review card is visible
+# - assertVisible: "이번 주 리뷰"    # WeeklyReviewCard header text
+
+# 📸 SCREENSHOT 5 — Weekly AI Review card
+# Run in terminal: xcrun simctl io booted screenshot ~/Desktop/screenshots/05_weekly_review.png
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SCREEN 6: My Tab — Profile + Space list + Pro badge
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Step 11: Navigate to the My tab ─────────────────────────────────────────
+# - tapOn: "내 정보"
+# - waitForAnimationToEnd
+# - assertVisible: "프로필"
+
+# 📸 SCREENSHOT 6 — My tab
+# Run in terminal: xcrun simctl io booted screenshot ~/Desktop/screenshots/06_my_tab.png
