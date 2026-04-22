@@ -20,10 +20,14 @@ CREATE TABLE IF NOT EXISTS public.notification_logs (
   event_id          UUID        REFERENCES public.events(id) ON DELETE SET NULL,
   notification_type TEXT        NOT NULL,   -- 'reminder' | 'invite' | 'share'
   sent_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
-  -- 하루에 같은 (user, event, type) 조합으로 중복 발송 방지
-  UNIQUE(user_id, event_id, notification_type, (sent_at::date))
+  -- sent_date: 중복 방지용 날짜 컬럼 (TIMESTAMPTZ::date 표현식 인덱스는 IMMUTABLE 불가)
+  -- 삽입 시 애플리케이션/Edge Function이 UTC 기준 날짜를 채워야 함
+  sent_date         DATE        NOT NULL DEFAULT CURRENT_DATE
 );
+
+-- 하루에 같은 (user, event, type) 조합으로 중복 발송 방지
+CREATE UNIQUE INDEX IF NOT EXISTS notification_logs_daily_unique
+  ON public.notification_logs (user_id, event_id, notification_type, sent_date);
 
 COMMENT ON TABLE public.notification_logs IS
   'Push notification delivery history. Used by smart-reminder to prevent duplicate sends.';
