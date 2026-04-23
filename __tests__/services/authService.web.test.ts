@@ -66,7 +66,7 @@ jest.mock('expo-web-browser', () => ({
 
 // expo-linking: origin 없을 때 signInWithKakao의 폴백 경로 검증
 jest.mock('expo-linking', () => ({
-  createURL: jest.fn().mockReturnValue('syncday://auth/callback'),
+  createURL: jest.fn().mockReturnValue('synclink://auth/callback'),
 }));
 
 // @/lib/supabase 전체 대체 — 실제 Supabase 호출 차단

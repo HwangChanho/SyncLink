@@ -15,7 +15,7 @@
  *  @/lib/nlParser       — parseLocally 반환값으로 confidence 레벨 제어
  *  @/lib/supabase       — supabase.functions.invoke 호출 여부 및 반환값 제어
  *  AsyncStorage         — jest.setup.js 전역 in-memory mock 사용
- *                         키: 'syncday:ai_usage' (aiService.ts 내부 상수와 동일)
+ *                         키: 'synclink:ai_usage' (aiService.ts 내부 상수와 동일)
  *
  * @task TASK-311
  * @depends TASK-301 (aiService.ts implementation)
@@ -52,7 +52,7 @@ import type { NLParseResult, AiUsageRecord } from '@/types';
 // ─── 상수 ─────────────────────────────────────────────────────────────────────
 
 /** aiService.ts 내부 AsyncStorage 키 (변경 시 함께 수정 필요) */
-const AI_USAGE_STORAGE_KEY = 'syncday:ai_usage';
+const AI_USAGE_STORAGE_KEY = 'synclink:ai_usage';
 
 // ─── 헬퍼 ────────────────────────────────────────────────────────────────────
 
@@ -76,7 +76,7 @@ function yesterday(): string {
 
 /**
  * AsyncStorage에 AI 사용량 기록 주입.
- * aiService.ts가 읽는 키와 동일한 키('syncday:ai_usage')에 저장.
+ * aiService.ts가 읽는 키와 동일한 키('synclink:ai_usage')에 저장.
  */
 async function setUsageRecord(record: AiUsageRecord): Promise<void> {
   await AsyncStorage.setItem(AI_USAGE_STORAGE_KEY, JSON.stringify(record));

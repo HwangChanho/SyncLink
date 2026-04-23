@@ -81,7 +81,7 @@ function getMondayOfWeek(date: Date = new Date()): Date {
  * aiService.ts의 weeklyReviewCacheKey()와 동일한 구조.
  */
 function cacheKey(weekStart: Date): string {
-  return `syncday:weekly_review:${localDateStr(weekStart)}`;
+  return `synclink:weekly_review:${localDateStr(weekStart)}`;
 }
 
 /**

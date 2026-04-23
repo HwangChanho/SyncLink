@@ -127,9 +127,9 @@ describe('LoginScreen', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('렌더링', () => {
-    it('SyncDay 로고 텍스트가 렌더링됨', () => {
+    it('SyncLink 로고 텍스트가 렌더링됨', () => {
       const { getByText } = render(<LoginScreen />);
-      expect(getByText('SyncDay')).toBeTruthy();
+      expect(getByText('SyncLink')).toBeTruthy();
     });
 
     it('Google 로그인 버튼이 렌더링됨', () => {

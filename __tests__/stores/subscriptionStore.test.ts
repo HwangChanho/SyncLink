@@ -339,7 +339,7 @@ describe('useSubscriptionStore', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('hydrate', () => {
-    const SUBSCRIPTION_KEY = 'syncday:subscription';
+    const SUBSCRIPTION_KEY = 'synclink:subscription';
 
     it('AsyncStorage에 저장된 plan 복원', async () => {
       await AsyncStorage.setItem(

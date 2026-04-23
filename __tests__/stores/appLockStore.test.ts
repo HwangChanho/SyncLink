@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppLockStore } from '@/stores/appLockStore';
 
 /** AsyncStorage key used by appLockStore (must match implementation). */
-const APP_LOCK_KEY = 'syncday:app_lock_enabled';
+const APP_LOCK_KEY = 'synclink:app_lock_enabled';
 
 describe('appLockStore', () => {
   beforeEach(() => {

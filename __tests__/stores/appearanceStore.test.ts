@@ -74,7 +74,7 @@ const mockGetColorScheme = rnMock.__getColorScheme as jest.Mock;
 // ─── 상수 ─────────────────────────────────────────────────────────────────────
 
 /** appearanceStore.ts 내부 AsyncStorage 키 (변경 시 함께 수정) */
-const APPEARANCE_STORAGE_KEY = 'syncday:appearance:colorScheme';
+const APPEARANCE_STORAGE_KEY = 'synclink:appearance:colorScheme';
 
 // ─── 테스트 스위트 ────────────────────────────────────────────────────────────
 

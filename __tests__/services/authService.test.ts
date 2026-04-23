@@ -53,7 +53,7 @@ jest.mock('expo-web-browser', () => ({
 }));
 
 jest.mock('expo-linking', () => ({
-  createURL: jest.fn().mockReturnValue('syncday://auth/callback'),
+  createURL: jest.fn().mockReturnValue('synclink://auth/callback'),
 }));
 
 // @/lib/supabase 전체를 대체 — 실제 createClient 호출 차단
@@ -363,7 +363,7 @@ describe('authService', () => {
       // 2. 브라우저에서 사용자가 로그인 완료 후 redirect URL 반환
       (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({
         type: 'success',
-        url: 'syncday://auth/callback?code=auth-code-123&state=xyz',
+        url: 'synclink://auth/callback?code=auth-code-123&state=xyz',
       });
       // 3. PKCE code exchange 성공
       (supabase.auth.exchangeCodeForSession as jest.Mock).mockResolvedValue({
@@ -381,19 +381,19 @@ describe('authService', () => {
       expect(supabase.auth.signInWithOAuth).toHaveBeenCalledWith({
         provider: 'kakao',
         options: {
-          redirectTo: 'syncday://auth/callback',
+          redirectTo: 'synclink://auth/callback',
           skipBrowserRedirect: true,
         },
       });
       // WebBrowser에 OAuth URL과 redirect URL 전달 검증
       expect(WebBrowser.openAuthSessionAsync).toHaveBeenCalledWith(
         'https://kakao.example.com/oauth/authorize',
-        'syncday://auth/callback',
+        'synclink://auth/callback',
         { showInRecents: false },
       );
       // redirect URL로 code exchange 요청 검증
       expect(supabase.auth.exchangeCodeForSession).toHaveBeenCalledWith(
-        'syncday://auth/callback?code=auth-code-123&state=xyz',
+        'synclink://auth/callback?code=auth-code-123&state=xyz',
       );
       expect(result.session.userId).toBe('user-123');
       expect(result.user).toEqual(mockUserRow);
@@ -449,7 +449,7 @@ describe('authService', () => {
       });
       (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({
         type: 'success',
-        url: 'syncday://auth/callback?code=bad-code',
+        url: 'synclink://auth/callback?code=bad-code',
       });
       const exchangeError = new Error('Invalid PKCE code');
       (supabase.auth.exchangeCodeForSession as jest.Mock).mockResolvedValue({
@@ -466,7 +466,7 @@ describe('authService', () => {
       });
       (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({
         type: 'success',
-        url: 'syncday://auth/callback?code=auth-code-123',
+        url: 'synclink://auth/callback?code=auth-code-123',
       });
       (supabase.auth.exchangeCodeForSession as jest.Mock).mockResolvedValue({ error: null });
       const sessionError = new Error('Session fetch failed after exchange');
@@ -485,7 +485,7 @@ describe('authService', () => {
       });
       (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({
         type: 'success',
-        url: 'syncday://auth/callback?code=auth-code-123',
+        url: 'synclink://auth/callback?code=auth-code-123',
       });
       (supabase.auth.exchangeCodeForSession as jest.Mock).mockResolvedValue({ error: null });
       (supabase.auth.getSession as jest.Mock).mockResolvedValue({
