@@ -210,7 +210,23 @@ export default function MyScreen() {
 
   // ─── Account deletion ─────────────────────────────────────────────────────
 
-  /** Prompt the user with a double-confirmation alert before deleting their account. */
+  /**
+   * Prompt the user with a double-confirmation alert before deleting their account.
+   *
+   * Flow:
+   *   1) First Alert — primary warning.
+   *   2) Second Alert — irreversible-action confirm.
+   *   3) authService.deleteAccount() → server-side auth.admin.deleteUser + signOut.
+   *   4) Reset local auth state AND explicitly navigate to /auth/login.
+   *      The auth-guard in _layout.tsx also watches for user=null, but an
+   *      explicit router.replace() is more robust against race conditions
+   *      (the guard runs on segment change; a stale (tabs)/my render without
+   *      a guard re-run can otherwise linger for a frame).
+   *
+   * Logs:
+   *   console.error is used on failure so iOS silent-fail bugs surface in
+   *   Metro. Previously the user only saw the localised error title.
+   */
   const handleDeleteAccount = useCallback(() => {
     Alert.alert(
       t('auth.delete_account.button'),
@@ -232,9 +248,20 @@ export default function MyScreen() {
                   style: 'destructive',
                   onPress: async () => {
                     try {
+                      console.log('[My] deleteAccount: invoking Edge Function');
                       await authService.deleteAccount();
+                      console.log('[My] deleteAccount: success; clearing local state');
+                      // Clear auth store — auth-guard will pick this up too.
                       setUser(null);
+                      // Belt-and-braces: force navigation to the login screen
+                      // immediately so the user cannot see tab content after
+                      // their account has been deleted server-side.
+                      router.replace('/auth/login');
                     } catch (err) {
+                      // Always log the raw error — helps triage Edge Function
+                      // failures that previously surfaced only as a generic
+                      // localised message on iOS.
+                      console.error('[My] deleteAccount failed:', err);
                       Alert.alert(
                         t('common.error'),
                         err instanceof Error ? err.message : t('auth.delete_account.failed'),

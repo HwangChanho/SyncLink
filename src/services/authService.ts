@@ -559,6 +559,10 @@ export async function deleteAccount(): Promise<void> {
   // Retrieve the active session — needed to pass the access token to the Edge Function
   const { data: { session }, error: sessionError } = await supabase.auth.getSession();
   if (sessionError || !session) {
+    // Log the underlying Supabase error so Metro shows the root cause when
+    // the session is expired or missing (previously produced only a localised
+    // Korean message on iOS with no hint as to why).
+    console.error('[authService.deleteAccount] no active session:', sessionError);
     throw new Error('로그인이 필요합니다.');
   }
 
@@ -573,16 +577,21 @@ export async function deleteAccount(): Promise<void> {
   });
 
   if (error) {
+    // Log the full Edge-Function error before re-throwing a user-facing message.
+    // `error` from functions.invoke can be a FunctionsHttpError with a status
+    // code and a context object; stringify both so Metro captures everything.
+    console.error('[authService.deleteAccount] Edge Function returned error:', error);
     // error.message may contain a server-side message; fall back to generic Korean message
     throw new Error(error.message ?? '계정 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.');
   }
 
-  // Clear local session after successful server-side deletion
-  // Ignore sign-out errors — the auth.users row is already gone
+  // Clear local session after successful server-side deletion.
+  // We downgrade the previous "silent catch" to a console.warn so Metro still
+  // records sign-out errors (e.g. network offline after delete) for triage.
   try {
     await supabase.auth.signOut();
-  } catch {
-    // Silent — server-side deletion already succeeded
+  } catch (signOutErr) {
+    console.warn('[authService.deleteAccount] signOut failed (non-fatal):', signOutErr);
   }
 }
 
