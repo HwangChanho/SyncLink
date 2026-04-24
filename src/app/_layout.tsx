@@ -55,14 +55,16 @@ function useAuthGuard() {
   /** null = still checking AsyncStorage; true/false = result */
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
 
-  // Re-check AsyncStorage whenever segments change (e.g. after onboarding completes
-  // and navigates away). Skip if already true to avoid redundant reads.
+  /** Prevent duplicate replaces to the same target during re-renders. */
+  const lastReplacedRef = useRef<string | null>(null);
+
+  // Read onboarding flag ONCE at mount. Re-running on segment change caused
+  // redundant AsyncStorage reads which fed back into the routing effect below.
   useEffect(() => {
-    if (onboardingDone) return;
     AsyncStorage.getItem(ONBOARDING_STORAGE_KEY)
       .then((value) => setOnboardingDone(value !== null))
-      .catch(() => setOnboardingDone(true)); // If read fails, skip onboarding
-  }, [segments, onboardingDone]);
+      .catch(() => setOnboardingDone(true));
+  }, []);
 
   useEffect(() => {
     // Wait for both auth hydration and AsyncStorage read to complete
@@ -71,18 +73,21 @@ function useAuthGuard() {
     const inAuthGroup    = segments[0] === 'auth';
     const inOnboarding   = segments[0] === 'onboarding';
 
+    // Compute the target path without immediately calling replace()
+    let target: string | null = null;
     if (isAuthenticated) {
-      // Authenticated users should never be on auth or onboarding screens
-      if (inAuthGroup || inOnboarding) {
-        router.replace('/(tabs)');
-      }
+      if (inAuthGroup || inOnboarding) target = '/(tabs)';
     } else {
-      // Unauthenticated: show onboarding first if never seen, else login
-      if (!onboardingDone && !inOnboarding) {
-        router.replace('/onboarding');
-      } else if (onboardingDone && !inAuthGroup) {
-        router.replace('/auth/login');
-      }
+      if (!onboardingDone && !inOnboarding) target = '/onboarding';
+      else if (onboardingDone && !inAuthGroup) target = '/auth/login';
+    }
+
+    // Guard: skip if we already replaced to the same target in the previous render.
+    // This prevents a replace() -> segments change -> re-run -> replace() loop
+    // that caused login/home screens to be pushed twice.
+    if (target && lastReplacedRef.current !== target) {
+      lastReplacedRef.current = target;
+      router.replace(target as '/(tabs)' | '/auth/login' | '/onboarding');
     }
   }, [isAuthenticated, isLoading, onboardingDone, segments, router]);
 }
@@ -190,24 +195,28 @@ export default function RootLayout() {
     void hydrate();
   }, [hydrate]);
 
-  // TASK-900: Lock the app when it moves to the background and comes back to foreground.
+  // TASK-900: Lock the app only on true background→foreground transitions.
+  //
+  // iOS triggers 'active → inactive → active' for transient events like opening
+  // ActionSheet, DatePicker, Control Center swipe, or split-view. Treating
+  // 'inactive' as "came from background" caused the lock to fire on every
+  // modal/action, breaking the app. Only 'background' is a real foreground return.
+  //
+  // Deps are intentionally empty: the listener reads isEnabled/lock via getState()
+  // so it doesn't re-register on store changes (which would drop events).
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
       const prev = appStateRef.current;
       appStateRef.current = nextState;
 
-      // background/inactive → active: lock if enabled
-      if (
-        (prev === 'background' || prev === 'inactive') &&
-        nextState === 'active' &&
-        isEnabled
-      ) {
-        lock();
+      if (prev === 'background' && nextState === 'active') {
+        const store = useAppLockStore.getState();
+        if (store.isEnabled) store.lock();
       }
     });
 
     return () => subscription.remove();
-  }, [isEnabled, lock]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps — reads latest state via getState()
 
   useEffect(() => {
     // Subscribe to auth state — fires immediately with current session.
