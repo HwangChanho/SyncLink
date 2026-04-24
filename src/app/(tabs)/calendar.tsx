@@ -341,11 +341,11 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     content: {
       flex: 1,
     },
-    /** Floating action button — bottom-right, above tab bar. */
+    /** Floating action button — bottom-right, positioned above NLInputBar to avoid blocking its send button. */
     fab: {
       position: 'absolute',
       right: 20,
-      bottom: 24,
+      bottom: 96, // NLInputBar 위로 올림 (기존 24 → 96, NL 입력바 높이 + 여백)
       width: 56,
       height: 56,
       borderRadius: 28,
