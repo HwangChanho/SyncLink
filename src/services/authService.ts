@@ -210,67 +210,52 @@ export async function signInWithKakao(): Promise<SignInResult> {
     );
   }
 
-  // Web uses the current origin + /auth/callback; native uses the deep link
-  // scheme registered in app.json. Both must be whitelisted in the Kakao
-  // Developer Console.
+  // Kakao requires HTTPS redirect_uri and does NOT accept custom schemes.
+  // Architecture: our Edge Function IS the redirect target. It processes the
+  // code server-side and then bounces the user-agent back to the app via an
+  // HTML redirect to this appReturn URL.
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error('Supabase 설정이 누락되었습니다.');
+  }
   const origin = (globalThis as typeof globalThis & { location?: { origin?: string } })
     .location?.origin;
-  const redirectUri = Platform.OS === 'web' && origin
+  const appReturn = Platform.OS === 'web' && origin
     ? `${origin}/auth/callback`
     : Linking.createURL('/auth/callback');
+  // Edge Function URL (registered in Kakao Developer Console as a Redirect URI)
+  const edgeFunctionUrl = `${SUPABASE_URL}/functions/v1/kakao-auth`;
 
   // ── 2. Build the Kakao authorize URL ────────────────────────────────────
-  // response_type=code selects the OAuth Authorization Code flow.
+  // redirect_uri = our Edge Function (HTTPS, Kakao-compatible)
+  // state = app-return URL so the Edge Function can bounce back to us
   const authUrl =
     'https://kauth.kakao.com/oauth/authorize' +
     `?client_id=${encodeURIComponent(kakaoRestApiKey)}` +
-    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&redirect_uri=${encodeURIComponent(edgeFunctionUrl)}` +
+    `&state=${encodeURIComponent(appReturn)}` +
     '&response_type=code';
 
-  // ── 3. Open Kakao consent UI in the in-app browser ──────────────────────
-  const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri, {
+  // ── 3. Open Kakao consent UI and watch for the app-return redirect ──────
+  // After Kakao redirects to our Edge Function, the function processes the
+  // code and redirects (via HTML) to `appReturn?email=...&password=...`.
+  // WebBrowser catches that URL (matches its watch pattern) and closes.
+  const result = await WebBrowser.openAuthSessionAsync(authUrl, appReturn, {
     showInRecents: false,
   });
 
   if (result.type !== 'success') {
-    // User dismissed the browser (cancel / dismiss)
     throw new Error('cancelled');
   }
 
-  // ── 4. Extract `code` from the redirect URL ─────────────────────────────
-  // result.url looks like:  synclink://auth/callback?code=...&state=...
-  // or (web):               https://app.example.com/auth/callback?code=...
-  const code = extractQueryParam(result.url, 'code');
-  if (!code) {
-    throw new Error('Kakao 인증 코드를 받지 못했습니다.');
+  // ── 4. Extract email/password from the final redirect URL ───────────────
+  // result.url looks like: synclink://auth/callback?email=...&password=...
+  // (or on web: https://app.example.com/auth/callback?email=...&password=...)
+  const errParam = extractQueryParam(result.url, 'error');
+  if (errParam) {
+    throw new Error(`Kakao 로그인 오류: ${decodeURIComponent(errParam)}`);
   }
-
-  // ── 5. Call our kakao-auth Edge Function to upsert the user ─────────────
-  // We use a plain fetch (not supabase.functions.invoke) because the call is
-  // unauthenticated — the user has no Supabase session yet. The URL and anon
-  // key come from `lib/supabase` (single source of truth), not from direct
-  // process.env reads, to avoid babel inline-env-vars headaches in tests.
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    throw new Error('Supabase 설정이 누락되었습니다.');
-  }
-
-  const fnRes = await fetch(`${SUPABASE_URL}/functions/v1/kakao-auth`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      // Anon key lets the request past Supabase's function gateway.
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      apikey: SUPABASE_ANON_KEY,
-    },
-    body: JSON.stringify({ code, redirect_uri: redirectUri }),
-  });
-
-  if (!fnRes.ok) {
-    const detail = await fnRes.text();
-    throw new Error(`Kakao 로그인에 실패했습니다: ${detail || fnRes.status}`);
-  }
-
-  const { email, password } = (await fnRes.json()) as { email?: string; password?: string };
+  const email = extractQueryParam(result.url, 'email');
+  const password = extractQueryParam(result.url, 'password');
   if (!email || !password) {
     throw new Error('Kakao 로그인 응답이 올바르지 않습니다.');
   }

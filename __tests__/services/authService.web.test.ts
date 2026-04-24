@@ -239,20 +239,25 @@ describe('authService (Platform.OS = "web")', () => {
     });
 
     /**
-     * 웹에서는 redirect URI가 window.location.origin + /auth/callback 이어야 한다.
-     * signInWithKakao는 이 URI를 Kakao authorize URL과 Edge Function 요청 body 양쪽에
-     * 포함시켜 보낸다.
+     * 새 아키텍처: redirect_uri는 Edge Function(HTTPS), state는 웹 app 복귀 URL.
+     * WebBrowser는 app 복귀 URL을 watch 한다.
      */
-    it('redirectUri = window.location.origin + "/auth/callback"', async () => {
-      // 브라우저는 cancel을 반환해 짧은 경로로 테스트 종료
+    it('redirect_uri = Edge Function URL, state = web app 복귀 URL', async () => {
       (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({ type: 'cancel' });
 
       await expect(signInWithKakao()).rejects.toThrow('cancelled');
 
-      // 브라우저 호출: authUrl에 client_id 포함, redirectUri가 origin 기반
       const call = (WebBrowser.openAuthSessionAsync as jest.Mock).mock.calls[0];
       expect(call[0]).toContain('https://kauth.kakao.com/oauth/authorize');
-      expect(call[0]).toContain(`redirect_uri=${encodeURIComponent(`${TEST_ORIGIN}/auth/callback`)}`);
+      // redirect_uri = Edge Function URL (HTTPS)
+      expect(call[0]).toContain(
+        `redirect_uri=${encodeURIComponent('https://test.supabase.co/functions/v1/kakao-auth')}`,
+      );
+      // state = web 복귀 URL
+      expect(call[0]).toContain(
+        `state=${encodeURIComponent(`${TEST_ORIGIN}/auth/callback`)}`,
+      );
+      // WebBrowser watches for the app-return URL
       expect(call[1]).toBe(`${TEST_ORIGIN}/auth/callback`);
 
       // Supabase 내장 Kakao 프로바이더는 더 이상 사용하지 않는다
