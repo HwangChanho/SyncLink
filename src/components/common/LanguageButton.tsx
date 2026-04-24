@@ -16,7 +16,7 @@
  *   <Tabs.Screen options={{ headerRight: () => <LanguageButton /> }} />
  */
 
-import { TouchableOpacity, ActionSheetIOS, Alert, Platform, StyleSheet } from 'react-native';
+import { TouchableOpacity, ActionSheetIOS, Alert, Platform, StyleSheet, View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
@@ -50,7 +50,10 @@ const LANG_OPTIONS: LangOption[] = [
 export function LanguageButton() {
   const { t } = useTranslation();
   const colors = useColors();
-  const { changeLanguage }: UseLanguageReturn = useLanguage();
+  const { currentLanguage, changeLanguage }: UseLanguageReturn = useLanguage();
+
+  /** Two-letter uppercase code shown next to the icon (KO / EN / ZH / JA). */
+  const languageLabel = currentLanguage.toUpperCase();
 
   /**
    * Present the language picker appropriate for the current platform.
@@ -98,10 +101,13 @@ export function LanguageButton() {
       onPress={handlePress}
       style={styles.button}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-      accessibilityLabel="Change language"
+      accessibilityLabel={`Change language (current: ${languageLabel})`}
       accessibilityRole="button"
     >
-      <Ionicons name="language" size={22} color={colors.textPrimary} />
+      <View style={styles.row}>
+        <Ionicons name="language" size={20} color={colors.textPrimary} />
+        <Text style={[styles.label, { color: colors.textPrimary }]}>{languageLabel}</Text>
+      </View>
     </TouchableOpacity>
   );
 }
@@ -112,5 +118,14 @@ const styles = StyleSheet.create({
   button: {
     paddingHorizontal: spacing[3],
     paddingVertical:   spacing[2],
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           4,
+  },
+  label: {
+    fontSize:   12,
+    fontWeight: '600',
   },
 });

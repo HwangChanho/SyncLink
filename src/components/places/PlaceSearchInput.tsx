@@ -39,6 +39,18 @@ import {
   type PlaceSuggestion,
 } from '@/services/placesService';
 
+/**
+ * Map our i18next locale → Google Places API `language` param.
+ * Google uses BCP-47 codes; the only transform needed is zh → zh-CN.
+ */
+function mapLangForGooglePlaces(locale: string): string {
+  const lower = locale.toLowerCase();
+  if (lower.startsWith('ko')) return 'ko';
+  if (lower.startsWith('ja')) return 'ja';
+  if (lower.startsWith('zh')) return 'zh-CN';
+  return 'en';
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface PlaceSearchInputProps {
@@ -137,7 +149,12 @@ export function PlaceSearchInput({
     const fetchSuggestions = async () => {
       setIsSearching(true);
       try {
-        const results = await searchPlaces(debouncedQuery, sessionTokenRef.current);
+        // Pass current i18n language so Google returns localized place names.
+        // Dynamic require avoids a circular dep with logging that also imports supabase.
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const i18n = require('@/lib/i18n').default as { language?: string };
+        const lang = mapLangForGooglePlaces(i18n?.language ?? 'ko');
+        const results = await searchPlaces(debouncedQuery, sessionTokenRef.current, lang);
         if (!cancelled) {
           setSuggestions(results);
           setIsDropdownOpen(results.length > 0);

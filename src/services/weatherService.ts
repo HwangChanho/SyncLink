@@ -40,6 +40,18 @@ export interface WeatherData {
 /** OpenWeatherMap Current Weather endpoint. */
 const WEATHER_URL = 'https://api.openweathermap.org/data/2.5/weather';
 
+/**
+ * Map an i18next BCP-47 locale to OpenWeatherMap's `lang` parameter.
+ * Only a handful of our supported locales differ from OWM codes.
+ */
+function mapLangForOWM(locale: string): string {
+  const lower = locale.toLowerCase();
+  if (lower.startsWith('ko')) return 'ko';
+  if (lower.startsWith('ja')) return 'ja';
+  if (lower.startsWith('zh')) return 'zh_cn';
+  return 'en';
+}
+
 /** Default location — Seoul, South Korea — used when GPS is unavailable. */
 export const DEFAULT_LAT = 37.5665;
 export const DEFAULT_LON = 126.9780;
@@ -106,12 +118,19 @@ function mapConditionToIcon(conditionId: number, isDay: boolean): string {
 export async function getCurrentWeather(lat: number, lon: number): Promise<WeatherData> {
   const key = getApiKey();
 
+  // OpenWeatherMap language codes: ko / en / ja / zh_cn
+  // Map our i18next locale → OWM language. Dynamic import avoids a circular
+  // dep with error logging that also touches supabase.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const i18n = require('@/lib/i18n').default as { language?: string };
+  const lang = mapLangForOWM(i18n?.language ?? 'en');
+
   const params = new URLSearchParams({
     lat:   lat.toString(),
     lon:   lon.toString(),
     appid: key,
-    units: 'metric',   // Celsius
-    lang:  'en',       // Short description in English (consistent across locales)
+    units: 'metric',
+    lang,
   });
 
   const response = await fetch(`${WEATHER_URL}?${params.toString()}`);
