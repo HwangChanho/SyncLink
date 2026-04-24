@@ -27,6 +27,13 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
 
+// Sprint 14 TASK-1403: mock out the credit service so the store's
+// quota/credit branches don't hit Supabase during unit tests.
+jest.mock('@/services/creditService', () => ({
+  fetchAdCreditBalance: jest.fn(async () => 0),
+  consumeAdCreditRemote: jest.fn(async () => null),
+}));
+
 // ─── Imports ──────────────────────────────────────────────────────────────────
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -99,25 +106,25 @@ describe('useSubscriptionStore', () => {
 
   describe('canUseAI — Free 플랜', () => {
     it('사용 0회 → true', () => {
-      expect(useSubscriptionStore.getState().canUseAI()).toBe(true);
+      expect(useSubscriptionStore.getState().canUseAI().allowed).toBe(true);
     });
 
     it(`사용 ${FREE_AI_DAILY_LIMIT - 1}회 → true (한도 미달)`, () => {
       useSubscriptionStore.setState({ aiUsageToday: FREE_AI_DAILY_LIMIT - 1 });
 
-      expect(useSubscriptionStore.getState().canUseAI()).toBe(true);
+      expect(useSubscriptionStore.getState().canUseAI().allowed).toBe(true);
     });
 
     it(`사용 ${FREE_AI_DAILY_LIMIT}회 → false (한도 도달)`, () => {
       useSubscriptionStore.setState({ aiUsageToday: FREE_AI_DAILY_LIMIT });
 
-      expect(useSubscriptionStore.getState().canUseAI()).toBe(false);
+      expect(useSubscriptionStore.getState().canUseAI().allowed).toBe(false);
     });
 
     it('한도 초과 상태(6회)에서도 false', () => {
       useSubscriptionStore.setState({ aiUsageToday: FREE_AI_DAILY_LIMIT + 1 });
 
-      expect(useSubscriptionStore.getState().canUseAI()).toBe(false);
+      expect(useSubscriptionStore.getState().canUseAI().allowed).toBe(false);
     });
   });
 
@@ -131,13 +138,13 @@ describe('useSubscriptionStore', () => {
     });
 
     it('Pro + 0회 → true', () => {
-      expect(useSubscriptionStore.getState().canUseAI()).toBe(true);
+      expect(useSubscriptionStore.getState().canUseAI().allowed).toBe(true);
     });
 
     it('Pro + 한도 초과 횟수에서도 → true (무제한)', () => {
       useSubscriptionStore.setState({ aiUsageToday: FREE_AI_DAILY_LIMIT + 100 });
 
-      expect(useSubscriptionStore.getState().canUseAI()).toBe(true);
+      expect(useSubscriptionStore.getState().canUseAI().allowed).toBe(true);
     });
   });
 
@@ -160,7 +167,7 @@ describe('useSubscriptionStore', () => {
 
       const result = useSubscriptionStore.getState().canUseAI();
 
-      expect(result).toBe(true);
+      expect(result.allowed).toBe(true);
     });
 
     it('자정 리셋 후 aiUsageToday = 0으로 갱신됨', () => {
@@ -244,12 +251,12 @@ describe('useSubscriptionStore', () => {
     it("setPlan('pro') 후 canUseAI() = true (무제한)", () => {
       // Free 상태에서 한도 소진
       useSubscriptionStore.setState({ aiUsageToday: FREE_AI_DAILY_LIMIT });
-      expect(useSubscriptionStore.getState().canUseAI()).toBe(false);
+      expect(useSubscriptionStore.getState().canUseAI().allowed).toBe(false);
 
       // Pro로 업그레이드
       useSubscriptionStore.getState().setPlan('pro');
 
-      expect(useSubscriptionStore.getState().canUseAI()).toBe(true);
+      expect(useSubscriptionStore.getState().canUseAI().allowed).toBe(true);
     });
 
     it("setPlan('free') 후 plan = 'free'", () => {
@@ -424,25 +431,25 @@ describe('useSubscriptionStore', () => {
       for (let i = 0; i < FREE_AI_DAILY_LIMIT; i++) {
         useSubscriptionStore.getState().consumeAI();
       }
-      expect(useSubscriptionStore.getState().canUseAI()).toBe(false);
+      expect(useSubscriptionStore.getState().canUseAI().allowed).toBe(false);
 
       // 2. Pro 업그레이드
       useSubscriptionStore.getState().setPlan('pro');
 
       // 3. 다시 사용 가능
-      expect(useSubscriptionStore.getState().canUseAI()).toBe(true);
+      expect(useSubscriptionStore.getState().canUseAI().allowed).toBe(true);
     });
 
     it('consumeAI 연속 호출 후 자정 리셋 → 리셋 후 canUseAI true', () => {
       // 오늘 5회 소진
       useSubscriptionStore.setState({ aiUsageToday: FREE_AI_DAILY_LIMIT });
-      expect(useSubscriptionStore.getState().canUseAI()).toBe(false);
+      expect(useSubscriptionStore.getState().canUseAI().allowed).toBe(false);
 
       // 자정이 지났다고 가정 (lastResetDate를 어제로 변경)
       useSubscriptionStore.setState({ lastResetDate: yesterday() });
 
       // 다음 날 canUseAI 호출 → 리셋 → true
-      expect(useSubscriptionStore.getState().canUseAI()).toBe(true);
+      expect(useSubscriptionStore.getState().canUseAI().allowed).toBe(true);
       expect(useSubscriptionStore.getState().aiUsageToday).toBe(0);
     });
   });
