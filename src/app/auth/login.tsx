@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { Ionicons, FontAwesome } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
@@ -87,7 +88,24 @@ export default function LoginScreen() {
           >
             {loading === 'google'
               ? <ActivityIndicator color="#000000" />
-              : <Text style={[styles.buttonText, styles.googleText]}>{t('auth.login.google')}</Text>
+              : (
+                /*
+                 * Row-layout button body: left-aligned brand icon + centred label.
+                 * The icon is absolutely positioned so the text remains centred
+                 * regardless of icon width — keeps all three buttons visually
+                 * aligned with each other.
+                 */
+                <View style={styles.buttonRow}>
+                  {/* Google "G" logo — FontAwesome bundles the official glyph */}
+                  <FontAwesome
+                    name="google"
+                    size={20}
+                    color="#4285F4"
+                    style={styles.buttonIcon}
+                  />
+                  <Text style={[styles.buttonText, styles.googleText]}>{t('auth.login.google')}</Text>
+                </View>
+              )
             }
           </TouchableOpacity>
 
@@ -103,7 +121,23 @@ export default function LoginScreen() {
             >
               {loading === 'kakao'
                 ? <ActivityIndicator color="#3A1D1D" />
-                : <Text style={[styles.buttonText, styles.kakaoText]}>{t('auth.login.kakao')}</Text>
+                : (
+                  <View style={styles.buttonRow}>
+                    {/*
+                     * Kakao chat bubble — Ionicons' `chatbubble` shape is close
+                     * to the official KakaoTalk speech-bubble mark. Rendered in
+                     * the brand's dark-brown ink colour so it reads against the
+                     * Kakao-yellow button background without bundling a PNG.
+                     */}
+                    <Ionicons
+                      name="chatbubble"
+                      size={20}
+                      color="#3A1D1D"
+                      style={styles.buttonIcon}
+                    />
+                    <Text style={[styles.buttonText, styles.kakaoText]}>{t('auth.login.kakao')}</Text>
+                  </View>
+                )
               }
             </TouchableOpacity>
           ) : (
@@ -125,7 +159,18 @@ export default function LoginScreen() {
             >
               {loading === 'apple'
                 ? <ActivityIndicator color="#FFFFFF" />
-                : <Text style={[styles.buttonText, styles.appleText]}>{t('auth.login.apple')}</Text>
+                : (
+                  <View style={styles.buttonRow}>
+                    {/* Apple logo — Ionicons ships the official glyph */}
+                    <Ionicons
+                      name="logo-apple"
+                      size={22}
+                      color="#FFFFFF"
+                      style={styles.buttonIcon}
+                    />
+                    <Text style={[styles.buttonText, styles.appleText]}>{t('auth.login.apple')}</Text>
+                  </View>
+                )
               }
             </TouchableOpacity>
           )}
@@ -210,6 +255,24 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center',
   },
   disabled: { opacity: 0.6 },
+  /**
+   * Row container for icon + label. Fills the parent button and centres the
+   * label text. The icon is absolutely positioned via `buttonIcon` so it does
+   * not shift the label's centre-of-mass — this keeps the three provider
+   * buttons visually aligned with one another.
+   */
+  buttonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    height: '100%',
+  },
+  /** Left-anchored brand icon inside a provider button. */
+  buttonIcon: {
+    position: 'absolute',
+    left: spacing[4],
+  },
   buttonText: { ...textStyles.labelLg },
   googleButton: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#DADCE0' },
   googleText: { color: '#3C4043' },
