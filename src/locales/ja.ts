@@ -147,11 +147,38 @@ const ja = {
     delete: 'タスクを削除',
     label: 'タスク',
     priority: {
+      label: '優先度',
       high: '高',
       medium: '中',
       low: '低',
     },
     uncategorized: '未分類',
+  },
+
+  // Sprint 14 TASK-1413/1414 — プランナーのカテゴリ UX
+  planner: {
+    change_category: 'カテゴリを変更',
+    new_category: '新しいカテゴリ',
+    category_none: 'カテゴリなし',
+    category_changed: 'カテゴリを更新しました',
+  },
+
+  // Sprint 14 TASK-1407 — 広告・報酬
+  ads: {
+    watch_to_unlock: '広告を見て AI をあと 2 回使う',
+    watch_failed: '広告の再生に失敗しました',
+    reward_earned: 'AI クレジットを {{count}} 回獲得しました！',
+    daily_limit_reached: '本日の広告視聴回数に達しました',
+    not_available: '現在、広告を再生できません',
+  },
+  rewards: {
+    credit_balance: 'AI クレジット: {{count}} 回',
+    credit_consumed: 'AI クレジットを 1 回使用しました',
+  },
+  ai: {
+    quota_exceeded_title: 'AI の利用上限に達しました',
+    quota_exceeded_subtitle: '本日の無料 AI 枠をすべて使い切りました。',
+    upgrade_cta: 'Pro にアップグレード',
   },
 
   note: {

@@ -147,11 +147,38 @@ const en = {
     delete: 'Delete Todo',
     label: 'Todo',
     priority: {
+      label: 'Priority',
       high: 'High',
       medium: 'Medium',
       low: 'Low',
     },
     uncategorized: 'Uncategorized',
+  },
+
+  // Sprint 14 TASK-1413/1414 — Planner category UX strings
+  planner: {
+    change_category: 'Change category',
+    new_category: 'New category',
+    category_none: 'No category',
+    category_changed: 'Category updated',
+  },
+
+  // Sprint 14 TASK-1407 — Ad / reward strings
+  ads: {
+    watch_to_unlock: 'Watch ad for 2 more AI uses',
+    watch_failed: 'Failed to play the ad',
+    reward_earned: 'Earned {{count}} AI credit(s)!',
+    daily_limit_reached: "You've hit today's ad limit",
+    not_available: 'Ads are unavailable right now',
+  },
+  rewards: {
+    credit_balance: 'AI credits: {{count}}',
+    credit_consumed: '1 AI credit used',
+  },
+  ai: {
+    quota_exceeded_title: 'AI quota reached',
+    quota_exceeded_subtitle: "You've used today's free AI allowance.",
+    upgrade_cta: 'Upgrade to Pro',
   },
 
   note: {

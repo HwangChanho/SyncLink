@@ -19,7 +19,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "io.synclink.app",
       "newArchEnabled": false,
-      "buildNumber": "11",
+      "buildNumber": "13",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "프로필 사진 변경에 사용됩니다.",
         "NSCameraUsageDescription": "프로필 사진 촬영에 사용됩니다.",
@@ -28,6 +28,7 @@
         "NSSpeechRecognitionUsageDescription": "음성을 텍스트로 변환하여 일정을 입력합니다.",
         "NSLocationWhenInUseUsageDescription": "날씨 위젯에서 현재 위치의 날씨를 표시하는 데 사용됩니다.",
         "NSFaceIDUsageDescription": "앱 잠금 기능을 위해 Face ID를 사용합니다.",
+        "NSUserTrackingUsageDescription": "이 앱은 개인화된 광고를 표시하기 위해 기기 간 활동을 연결할 수 있는 권한을 요청합니다. 거부해도 앱 기능에 제한은 없으며, 광고가 개인화되지 않은 형태로 표시됩니다.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -38,6 +39,7 @@
       },
       "package": "io.synclink.app",
       "versionCode": 1,
+      "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.VIBRATE",
@@ -80,7 +82,21 @@
       ],
       "@sentry/react-native",
       "@react-native-community/datetimepicker",
-      "expo-location"
+      "expo-location",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "iosAppId": "ca-app-pub-2936938026486482~2712096301",
+          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "userTrackingUsageDescription": "이 앱은 개인화된 광고를 표시하기 위해 기기 간 활동을 연결할 수 있는 권한을 요청합니다. 거부해도 앱 기능에 제한은 없으며, 광고가 개인화되지 않은 형태로 표시됩니다."
+        }
+      ],
+      [
+        "expo-tracking-transparency",
+        {
+          "userTrackingPermission": "이 앱은 개인화된 광고를 표시하기 위해 기기 간 활동을 연결할 수 있는 권한을 요청합니다."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

@@ -151,11 +151,38 @@ const ko = {
     delete: '할일 삭제',
     label: '할일',
     priority: {
+      label: '우선순위',
       high: '높음',
       medium: '보통',
       low: '낮음',
     },
     uncategorized: '미분류',
+  },
+
+  // Sprint 14 TASK-1413/1414 — 플래너 카테고리 UX 문자열
+  planner: {
+    change_category: '카테고리 변경',
+    new_category: '새 카테고리',
+    category_none: '카테고리 없음',
+    category_changed: '카테고리가 변경되었습니다',
+  },
+
+  // Sprint 14 TASK-1407 — 광고/보상 관련 문구
+  ads: {
+    watch_to_unlock: '광고 보고 AI 2회 더 사용',
+    watch_failed: '광고 재생에 실패했습니다',
+    reward_earned: 'AI 크레딧 {{count}}회 획득!',
+    daily_limit_reached: '오늘 광고 시청 한도에 도달했습니다',
+    not_available: '지금은 광고를 재생할 수 없습니다',
+  },
+  rewards: {
+    credit_balance: 'AI 크레딧: {{count}}회',
+    credit_consumed: 'AI 크레딧 1회 사용',
+  },
+  ai: {
+    quota_exceeded_title: 'AI 쿼터 초과',
+    quota_exceeded_subtitle: '오늘의 무료 AI 사용량을 모두 사용했어요.',
+    upgrade_cta: 'Pro로 업그레이드',
   },
 
   note: {

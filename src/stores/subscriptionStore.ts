@@ -23,6 +23,10 @@
 
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  consumeAdCreditRemote,
+  fetchAdCreditBalance,
+} from '@/services/creditService';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -38,6 +42,20 @@ export const FREE_WEEKLY_REVIEW_MONTHLY_LIMIT = 1;
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type SubscriptionPlan = 'free' | 'pro';
+
+/**
+ * Outcome of a `canUseAI()` check — richer than a boolean so the UI can
+ * render different CTAs for each reason.
+ *   - 'ok'        : plan allows AI right now (Pro, under quota, or has credits)
+ *   - 'quota'     : free daily quota is exhausted but ad credits can fill in
+ *   - 'no-credit' : no quota AND no credits → must upgrade or watch an ad
+ *
+ * Sprint 14 TASK-1403
+ */
+export interface CanUseAIResult {
+  allowed: boolean;
+  reason: 'ok' | 'quota' | 'no-credit';
+}
 
 interface SubscriptionState {
   /** Current user plan. */
@@ -67,23 +85,50 @@ interface SubscriptionState {
    */
   lastReviewResetMonth: string;
 
+  /**
+   * Ad-earned AI credits. Incremented by the `reward-credit` Edge Function
+   * after AdMob SSV verification, decremented locally by `consumeAdCredit()`.
+   * Loaded from Supabase via `refreshCredits()` — the store does NOT persist
+   * this to AsyncStorage because the source of truth is the server.
+   * Sprint 14 TASK-1403.
+   */
+  adCredits: number;
+
   // ── Actions ─────────────────────────────────────────────────────────────────
 
   /**
    * Check if the user can make an AI fallback call right now.
-   * Pro users have unlimited calls. Free users are limited to FREE_AI_DAILY_LIMIT/day.
-   * Also triggers midnight reset if the date has changed since last check.
    *
-   * @returns true if an AI call is allowed
+   * Returns a richer `CanUseAIResult` so the UI can distinguish between:
+   *   - 'ok'       : call is allowed (Pro, within quota, or ad credits available)
+   *   - 'quota'    : quota exhausted — offer ad CTA (credits can cover)
+   *   - 'no-credit': quota exhausted AND no credits — paywall or ad CTA
+   *
+   * Also triggers a midnight reset if the date has changed since last check.
+   * Sprint 14 TASK-1403 — upgraded return type from boolean.
    */
-  canUseAI: () => boolean;
+  canUseAI: () => CanUseAIResult;
 
   /**
-   * Record one AI fallback call, incrementing aiUsageToday.
-   * Should be called immediately before each AI service call.
-   * Also persists updated state to AsyncStorage.
+   * Record one AI fallback call. Increments aiUsageToday up to the free daily
+   * limit; once the quota is exhausted the call consumes one ad credit
+   * instead (local optimistic decrement + server update).
+   *
+   * Safe to call without checking `canUseAI()` first — no-ops if neither
+   * quota nor credits are available. Sprint 14 TASK-1403.
    */
-  consumeAI: () => void;
+  consumeAI: () => Promise<void>;
+
+  /** Refresh `adCredits` from Supabase. Sprint 14 TASK-1403. */
+  refreshCredits: () => Promise<void>;
+
+  /**
+   * Decrement the ad credit balance by 1 (optimistic local update + server
+   * write). Safe to call when the balance is 0 (no-op, no server call).
+   * Returns true if a credit was consumed, false otherwise.
+   * Sprint 14 TASK-1403.
+   */
+  consumeAdCredit: () => Promise<boolean>;
 
   /**
    * Check if the user can generate a weekly review this month.
@@ -142,35 +187,83 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
   lastResetDate: todayString(),
   weeklyReviewUsedThisMonth: 0,
   lastReviewResetMonth: currentMonthString(),
+  adCredits: 0,
 
-  canUseAI: () => {
+  canUseAI: (): CanUseAIResult => {
     const state = get();
 
-    // Pro plan: unlimited
-    if (state.plan === 'pro') return true;
+    // Pro plan: unlimited — no need to track quotas
+    if (state.plan === 'pro') return { allowed: true, reason: 'ok' };
 
     // Auto-reset at midnight: if lastResetDate is not today, reset counter
     const today = todayString();
     if (state.lastResetDate !== today) {
-      // Reset the counter for the new day
       set({ aiUsageToday: 0, lastResetDate: today });
       persist({ ...get(), aiUsageToday: 0, lastResetDate: today });
-      return true; // freshly reset, so usage is 0 < limit
+      return { allowed: true, reason: 'ok' };
     }
 
-    return state.aiUsageToday < FREE_AI_DAILY_LIMIT;
+    // Under the free daily quota → allowed directly.
+    if (state.aiUsageToday < FREE_AI_DAILY_LIMIT) {
+      return { allowed: true, reason: 'ok' };
+    }
+
+    // Quota exhausted — can we fall back to ad credits?
+    if (state.adCredits > 0) {
+      return { allowed: true, reason: 'quota' };
+    }
+
+    // No quota and no credits → must upgrade or watch an ad to earn credits.
+    return { allowed: false, reason: 'no-credit' };
   },
 
-  consumeAI: () => {
+  consumeAI: async () => {
     const state = get();
     const today = todayString();
 
     // Also handle midnight rollover here in case canUseAI wasn't called first
     const currentUsage = state.lastResetDate === today ? state.aiUsageToday : 0;
-    const next = { aiUsageToday: currentUsage + 1, lastResetDate: today };
 
-    set(next);
-    persist({ ...state, ...next });
+    // Pro or within free quota: bump the daily counter.
+    if (state.plan === 'pro' || currentUsage < FREE_AI_DAILY_LIMIT) {
+      const next = { aiUsageToday: currentUsage + 1, lastResetDate: today };
+      set(next);
+      persist({ ...state, ...next });
+      return;
+    }
+
+    // Free user past quota → attempt to consume an ad credit.
+    if (state.adCredits > 0) {
+      await get().consumeAdCredit();
+    }
+    // If neither branch fired, the UI should have already blocked the call
+    // via canUseAI() — we silently no-op to avoid corrupting any counters.
+  },
+
+  refreshCredits: async () => {
+    try {
+      const balance = await fetchAdCreditBalance();
+      set({ adCredits: balance });
+    } catch {
+      // Non-fatal — keep existing (possibly stale) balance.
+    }
+  },
+
+  consumeAdCredit: async () => {
+    const state = get();
+    if (state.adCredits <= 0) return false;
+
+    // Optimistic local decrement — revert on server failure.
+    set({ adCredits: state.adCredits - 1 });
+    const newRemote = await consumeAdCreditRemote();
+    if (newRemote === null) {
+      // Rollback on error so we don't lose a credit.
+      set({ adCredits: state.adCredits });
+      return false;
+    }
+    // Keep server value authoritative in case of drift.
+    set({ adCredits: newRemote });
+    return true;
   },
 
   canUseWeeklyReview: () => {

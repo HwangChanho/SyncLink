@@ -24,6 +24,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import Voice, { type SpeechResultsEvent, type SpeechErrorEvent } from '@react-native-voice/voice';
 import { ConfirmModal } from './ConfirmModal';
+import { QuotaExceededSheet } from '@/components/ai/QuotaExceededSheet';
 import { parseNaturalLanguage } from '@/services/aiService';
 import { createEvent } from '@/services/eventService';
 import { useEventStore } from '@/stores/eventStore';
@@ -84,6 +85,11 @@ export function NLInputBar({ onEventCreated }: Props) {
   const [parseResult, setParseResult] = useState<NLParseResult | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [isListening, setIsListening] = useState(false);
+  /**
+   * When true, the QuotaExceededSheet is displayed instead of routing to
+   * the paywall (Sprint 14 TASK-1404).
+   */
+  const [quotaSheetVisible, setQuotaSheetVisible] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
   // ── Voice recognition setup ─────────────────────────────────────────────────
@@ -135,9 +141,12 @@ export function NLInputBar({ onEventCreated }: Props) {
     // We check the limit here (pre-parse) to avoid a wasted local parse call
     // when we know AI will be needed. After parsing, if source === 'ai',
     // we consume one unit from the daily quota.
-    if (!canUseAI()) {
-      // Navigate to paywall instead of running the parse
-      router.push('/subscription/paywall');
+    // TASK-1403: canUseAI() now returns a richer object. When the check
+    // fails with 'no-credit' we open the QuotaExceededSheet (TASK-1404) so
+    // the user can watch an ad or upgrade instead of a hard paywall redirect.
+    const gate = canUseAI();
+    if (!gate.allowed) {
+      setQuotaSheetVisible(true);
       return;
     }
 
@@ -146,9 +155,9 @@ export function NLInputBar({ onEventCreated }: Props) {
 
     const result = await parseNaturalLanguage(trimmed);
 
-    // If the AI fallback was used, record the usage
+    // If the AI fallback was used, record the usage (quota first, then credit).
     if (result.source === 'ai' && !result.error) {
-      consumeAI();
+      void consumeAI();
     }
 
     // AI daily limit exceeded — show snackbar
@@ -317,6 +326,19 @@ export function NLInputBar({ onEventCreated }: Props) {
           onDismiss={handleDismiss}
         />
       )}
+
+      {/*
+       * Quota-exceeded bottom sheet (Sprint 14 TASK-1404). Replaces the
+       * previous hard paywall redirect so free users can choose to watch
+       * a rewarded ad to earn credits.
+       */}
+      <QuotaExceededSheet
+        visible={quotaSheetVisible}
+        onClose={() => setQuotaSheetVisible(false)}
+        onRewardEarned={() => {
+          // The earned credit is now on the server; user can retry submit.
+        }}
+      />
     </View>
   );
 }

@@ -147,11 +147,38 @@ const zh = {
     delete: '删除待办',
     label: '待办',
     priority: {
+      label: '优先级',
       high: '高',
       medium: '中',
       low: '低',
     },
     uncategorized: '未分类',
+  },
+
+  // Sprint 14 TASK-1413/1414 — 计划面板分类 UX
+  planner: {
+    change_category: '更换分类',
+    new_category: '新建分类',
+    category_none: '无分类',
+    category_changed: '分类已更新',
+  },
+
+  // Sprint 14 TASK-1407 — 广告与奖励
+  ads: {
+    watch_to_unlock: '观看广告再用 2 次 AI',
+    watch_failed: '广告播放失败',
+    reward_earned: '已获得 {{count}} 次 AI 积分！',
+    daily_limit_reached: '今天的广告次数已达上限',
+    not_available: '暂时无法播放广告',
+  },
+  rewards: {
+    credit_balance: 'AI 积分：{{count}} 次',
+    credit_consumed: '已使用 1 次 AI 积分',
+  },
+  ai: {
+    quota_exceeded_title: 'AI 额度已用尽',
+    quota_exceeded_subtitle: '你今天的免费 AI 额度已使用完毕。',
+    upgrade_cta: '升级到 Pro',
   },
 
   note: {

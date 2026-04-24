@@ -10,3 +10,11 @@ project_id = "uhubhqcymxajdonmkthm"
 # callback endpoint. All user-facing security is enforced inside the function
 # (SHA-256 password derivation keyed by KAKAO_REST_API_KEY).
 verify_jwt = false
+
+[functions.reward-credit]
+# AdMob Server-Side Verification (SSV) callbacks arrive without an
+# Authorization header — AdMob signs the query string with ECDSA instead.
+# We therefore disable JWT verification and rely on signature verification
+# inside the handler (against Google's public key set).
+# Sprint 14 TASK-1405.
+verify_jwt = false

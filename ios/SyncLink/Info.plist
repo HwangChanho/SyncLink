@@ -41,7 +41,13 @@
       </dict>
     </array>
     <key>CFBundleVersion</key>
-    <string>9</string>
+    <string>13</string>
+    <key>GADApplicationIdentifier</key>
+    <string>ca-app-pub-2936938026486482~2712096301</string>
+    <key>GADDelayAppMeasurementInit</key>
+    <false/>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
     <key>LSMinimumSystemVersion</key>
     <string>12.0</string>
     <key>LSRequiresIPhoneOS</key>
@@ -55,8 +61,6 @@
     </dict>
     <key>NSCameraUsageDescription</key>
     <string>프로필 사진 촬영에 사용됩니다.</string>
-    <key>ITSAppUsesNonExemptEncryption</key>
-    <false/>
     <key>NSFaceIDUsageDescription</key>
     <string>앱 잠금 기능을 위해 Face ID를 사용합니다.</string>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
@@ -77,6 +81,8 @@
     </array>
     <key>NSUserNotificationsUsageDescription</key>
     <string>일정 리마인더 알림을 전송합니다.</string>
+    <key>NSUserTrackingUsageDescription</key>
+    <string>이 앱은 개인화된 광고를 표시하기 위해 기기 간 활동을 연결할 수 있는 권한을 요청합니다. 거부해도 앱 기능에 제한은 없으며, 광고가 개인화되지 않은 형태로 표시됩니다.</string>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
     <key>UIRequiredDeviceCapabilities</key>

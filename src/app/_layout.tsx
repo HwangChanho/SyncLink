@@ -33,6 +33,9 @@ import { initializePurchases, checkProStatus } from '@/services/purchaseService'
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { useAppLockStore } from '@/stores/appLockStore';
 import { authenticate } from '@/services/appLockService';
+// Sprint 14 TASK-1402/1406 — AdMob SDK initialization after ATT consent.
+import { initAdMob } from '@/services/adService';
+import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
 import { useColors } from '@/hooks/useColors';
 import { ONBOARDING_STORAGE_KEY } from '@/app/onboarding/index';
 
@@ -195,6 +198,40 @@ export default function RootLayout() {
   // with the system locale at module load time, so there is no flash of untranslated text.
   useEffect(() => {
     void initI18n();
+  }, []);
+
+  /*
+   * Sprint 14 TASK-1406 — Ask for ATT on iOS (first launch only) and then
+   * initialize the AdMob SDK. The order is important: initializing AdMob
+   * before the user has granted tracking means iOS 14+ requires non-
+   * personalized ads for the rest of the session. We gate the prompt with
+   * an AsyncStorage flag so users are asked at most once by us (the OS may
+   * never re-prompt after an answer, but the flag prevents mounting logic
+   * from trying again in the current session if the modal was dismissed).
+   */
+  useEffect(() => {
+    const ATT_ASKED_KEY = 'synclink:att_asked_v1';
+    (async () => {
+      try {
+        if (Platform.OS === 'ios') {
+          const already = await AsyncStorage.getItem(ATT_ASKED_KEY);
+          if (already === null) {
+            await requestTrackingPermissionsAsync();
+            await AsyncStorage.setItem(ATT_ASKED_KEY, '1');
+          }
+        }
+      } catch (err) {
+        // Non-fatal — AdMob will still work (NPA if tracking denied).
+        console.warn('[root] ATT prompt failed:', err);
+      }
+
+      // Initialize AdMob now that tracking status is known.
+      try {
+        await initAdMob();
+      } catch (err) {
+        console.warn('[root] initAdMob failed:', err);
+      }
+    })();
   }, []);
 
   // TASK-900: Hydrate app lock setting from AsyncStorage on startup.
