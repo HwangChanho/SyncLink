@@ -3,23 +3,36 @@
  *
  * Tab order: Home → Calendar → Planner → My
  * (No AI tab — AI is embedded in Home and Calendar)
+ *
+ * TASK-1301: Each tab exposes a language-picker button in the top-right header.
+ * The header is now visible (headerShown: true) for all tab screens so that the
+ * LanguageButton is accessible from anywhere in the app.
  */
 
 import { Tabs } from 'expo-router';
 import { Platform } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { componentHeight } from '@/constants/spacing';
-
-// TODO (TASK-200+): Replace text placeholders with proper icons (expo/vector-icons)
+import { LanguageButton } from '@/components/common/LanguageButton';
 
 export default function TabLayout() {
   // Resolve active theme colors for dark mode support (TASK-700)
   const colors = useColors();
+  const { t } = useTranslation();
 
   return (
     <Tabs
       screenOptions={{
-        headerShown: false,
+        // Show the header so the LanguageButton is always accessible.
+        headerShown: true,
+        headerStyle: {
+          backgroundColor: colors.background,
+        },
+        headerTintColor: colors.textPrimary,
+        headerShadowVisible: false,
+        // Language picker button appears on every tab's top-right header.
+        headerRight: () => <LanguageButton />,
         tabBarActiveTintColor: colors.tabActive,
         tabBarInactiveTintColor: colors.tabInactive,
         tabBarStyle: {
@@ -32,28 +45,28 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: '홈',
+          title: t('tabs.home'),
           // tabBarIcon: ({ color }) => <HomeIcon color={color} />,
         }}
       />
       <Tabs.Screen
         name="calendar"
         options={{
-          title: '캘린더',
+          title: t('tabs.calendar'),
           // tabBarIcon: ({ color }) => <CalendarIcon color={color} />,
         }}
       />
       <Tabs.Screen
         name="planner"
         options={{
-          title: '플래너',
+          title: t('tabs.planner'),
           // tabBarIcon: ({ color }) => <CheckSquareIcon color={color} />,
         }}
       />
       <Tabs.Screen
         name="my"
         options={{
-          title: 'My',
+          title: t('tabs.my'),
           // tabBarIcon: ({ color }) => <UserIcon color={color} />,
         }}
       />

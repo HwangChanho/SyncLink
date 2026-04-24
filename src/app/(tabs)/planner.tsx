@@ -20,10 +20,11 @@
 import { useState, useEffect, useCallback, useRef, memo } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput,
-  TouchableOpacity, ActivityIndicator, Alert,
+  TouchableOpacity, ActivityIndicator,
   KeyboardAvoidingView, Platform, ScrollView,
   Pressable, Modal,
 } from 'react-native';
+import { showAlert } from '@/lib/webAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -92,7 +93,7 @@ const TodoRow = memo(function TodoRow({
       style={({ pressed }) => [styles.todoRow, pressed && styles.todoRowPressed]}
       onPress={() => onEdit(todo)}
       onLongPress={() => {
-        Alert.alert(
+        showAlert(
           t('todo.delete'),
           `"${todo.title}"을(를) 삭제하시겠습니까?`,
           [
@@ -218,7 +219,7 @@ const NoteCard = memo(function NoteCard({
       style={({ pressed }) => [styles.noteCard, pressed && styles.noteCardPressed]}
       onPress={() => onPress(note)}
       onLongPress={() => {
-        Alert.alert(
+        showAlert(
           tNote('note.delete'),
           `"${note.title}"을(를) 삭제하시겠습니까?`,
           [
@@ -300,7 +301,7 @@ function EditTodoModal({
       await onSave(todo.id, { title: title.trim() });
       onClose();
     } catch {
-      Alert.alert(tModal('common.error'), tModal('common.edit_failed'));
+      showAlert(tModal('common.error'), tModal('common.edit_failed'));
     } finally {
       setIsSaving(false);
     }
@@ -398,7 +399,7 @@ export default function PlannerScreen() {
   useEffect(() => {
     if (error && !alertActiveRef.current) {
       alertActiveRef.current = true;
-      Alert.alert(t('common.error'), error, [{
+      showAlert(t('common.error'), error, [{
         text: t('common.ok'),
         onPress: () => {
           clearError();
@@ -421,8 +422,10 @@ export default function PlannerScreen() {
         contentType: activeTab === 'notes' ? 'note' : 'todo',
       });
       setQuickInput('');
-    } catch {
-      // Error already set in store
+    } catch (err) {
+      // Error is stored in the todo store (triggers the error useEffect above),
+      // but we also log to console for web devtools debugging.
+      console.error('[Planner] addTodo failed:', err);
     } finally {
       setIsAdding(false);
     }

@@ -6,15 +6,32 @@
  *
  * The editor is self-contained and manages its own title/content state.
  * The parent provides initial values and onSave/onCancel callbacks.
+ *
+ * Features:
+ *  - Title input + markdown toolbar shortcuts
+ *  - Plain-text content input (multiline)
+ *  - Cross-platform placeholder fix (web vs. native Android)
+ *  - Voice-to-text mic button in the toolbar (Sprint 13)
+ *      Web:    window.SpeechRecognition (Chrome / Edge)
+ *      Native: @react-native-voice/voice (iOS / Android)
  */
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity,
-  ScrollView, StyleSheet, KeyboardAvoidingView, Platform,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  Animated,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
+import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles, fontSize } from '@/constants/typography';
 
@@ -69,10 +86,66 @@ export function NoteEditor({
   const [title,   setTitle]   = useState(initialTitle);
   const [content, setContent] = useState(initialContent);
 
+  /**
+   * Tracks whether the content TextInput is focused.
+   * Used for the Android placeholder workaround (see TextInput below).
+   */
+  const [isContentFocused, setIsContentFocused] = useState(false);
+
   // Ref for the content TextInput — needed for toolbar insertion
   const contentRef = useRef<TextInput>(null);
   // Track cursor position for toolbar insertions
   const cursorRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
+
+  // ── Voice input ──────────────────────────────────────────────────────────
+
+  /**
+   * Animated scale for the mic button — pulses while listening.
+   */
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  /**
+   * Append each recognised speech segment to the note body.
+   * A space separator is added automatically when the preceding text doesn't
+   * already end in whitespace.
+   */
+  const handleSpeechResult = useCallback((text: string) => {
+    setContent(prev => {
+      const separator = prev.length > 0 && !prev.endsWith(' ') && !prev.endsWith('\n') ? ' ' : '';
+      return prev + separator + text;
+    });
+  }, []);
+
+  const startPulse = useCallback(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.15, duration: 500, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1.0,  duration: 500, useNativeDriver: true }),
+      ]),
+    ).start();
+  }, [pulseAnim]);
+
+  const stopPulse = useCallback(() => {
+    pulseAnim.stopAnimation();
+    pulseAnim.setValue(1);
+  }, [pulseAnim]);
+
+  const { isListening, isSupported, startListening, stopListening } = useSpeechRecognition({
+    language:  'ko-KR',
+    onResult:  handleSpeechResult,
+    onEnd:     stopPulse,
+    onError:   stopPulse,
+  });
+
+  /** Toggle the microphone: start if idle, stop if active. */
+  const handleMicPress = useCallback(async () => {
+    if (isListening) {
+      await stopListening();
+    } else {
+      startPulse();
+      await startListening();
+    }
+  }, [isListening, startListening, stopListening, startPulse]);
 
   // ── Toolbar action: wrap selection or insert at cursor ────────────────────
 
@@ -152,7 +225,7 @@ export function NoteEditor({
         {/* Divider */}
         <View style={styles.divider} />
 
-        {/* ── Markdown toolbar ── */}
+        {/* ── Markdown toolbar (+ mic button at the end) ── */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -168,22 +241,73 @@ export function NoteEditor({
               <Text style={styles.toolbarBtnText}>{item.label}</Text>
             </TouchableOpacity>
           ))}
+
+          {/*
+           * Mic button in the markdown toolbar.
+           * Only rendered when speech recognition is available on this device/browser.
+           * A separator line visually groups it apart from the formatting shortcuts.
+           */}
+          {isSupported && (
+            <>
+              <View style={styles.toolbarSeparator} />
+              <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                <TouchableOpacity
+                  style={[styles.toolbarBtn, styles.micBtn, isListening && styles.micBtnActive]}
+                  onPress={() => void handleMicPress()}
+                  accessibilityLabel={isListening ? '음성 인식 중지' : '음성으로 입력'}
+                  accessibilityRole="button"
+                >
+                  <Ionicons
+                    name={isListening ? 'mic' : 'mic-outline'}
+                    size={16}
+                    color={isListening ? colors.textInverse : colors.primary}
+                  />
+                </TouchableOpacity>
+              </Animated.View>
+            </>
+          )}
         </ScrollView>
 
         {/* ── Content input ── */}
+        {/*
+         * On web: React Native's TextInput renders as a <textarea>, and the native
+         * `placeholder` attribute already disappears on focus automatically — no
+         * custom workaround needed. Passing an empty string when focused caused the
+         * placeholder to flicker on web (briefly visible on re-render after focus).
+         *
+         * On native (Android): some older builds don't clear the placeholder on focus;
+         * we pass '' when focused to handle that edge case.
+         *
+         * Solution: use the native placeholder prop unconditionally on web,
+         * and apply the '' trick only on native platforms.
+         */}
         <TextInput
           ref={contentRef}
           style={styles.contentInput}
           value={content}
           onChangeText={setContent}
-          placeholder={t('nl.placeholder')}
+          placeholder={
+            Platform.OS === 'web'
+              ? t('nl.placeholder')                            // web: let HTML handle it natively
+              : (isContentFocused ? '' : t('nl.placeholder'))  // native: empty string on focus (Android fix)
+          }
           placeholderTextColor={colors.textPlaceholder}
           multiline
           textAlignVertical="top"
+          onFocus={() => setIsContentFocused(true)}
+          onBlur={() => setIsContentFocused(false)}
           onSelectionChange={(e) => {
             cursorRef.current = e.nativeEvent.selection;
           }}
         />
+
+        {/* Voice status indicator — shown below the content when listening */}
+        {isListening && (
+          <View style={styles.listeningBadge}>
+            <View style={styles.listeningDot} />
+            <Text style={styles.listeningText}>음성 인식 중...</Text>
+          </View>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -262,6 +386,7 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     paddingHorizontal: spacing[4],
     paddingVertical:   spacing[2],
     gap:               spacing[2],
+    alignItems:        'center',
   },
   toolbarBtn: {
     backgroundColor:   colors.surfaceAlt,
@@ -270,11 +395,31 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     paddingHorizontal: spacing[2],
     minWidth:          36,
     alignItems:        'center',
+    justifyContent:    'center',
   },
   toolbarBtnText: {
     ...textStyles.label,
     color: colors.textSecondary,
   },
+
+  /** Vertical separator line between markdown shortcuts and mic button. */
+  toolbarSeparator: {
+    width:           1,
+    height:          24,
+    backgroundColor: colors.border,
+    marginHorizontal: spacing[1],
+  },
+
+  /** Mic button variant of the toolbar button. */
+  micBtn: {
+    backgroundColor: colors.primaryLight,
+    minWidth:        36,
+    height:          32,
+  },
+  micBtnActive: {
+    backgroundColor: colors.error,
+  },
+
   contentInput: {
     flex:              1,
     fontSize:          fontSize.base,
@@ -284,6 +429,30 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     paddingTop:        spacing[3],
     paddingBottom:     spacing[10],
     minHeight:         300,
+  },
+
+  /** Badge shown below the content area while voice recognition is active. */
+  listeningBadge: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               spacing[2],
+    marginHorizontal:  spacing[4],
+    marginBottom:      spacing[2],
+    paddingHorizontal: spacing[3],
+    paddingVertical:   spacing[1.5],
+    backgroundColor:   colors.primaryLight,
+    borderRadius:      radius.full,
+    alignSelf:         'flex-start',
+  },
+  listeningDot: {
+    width:           8,
+    height:          8,
+    borderRadius:    4,
+    backgroundColor: colors.primary,
+  },
+  listeningText: {
+    ...textStyles.caption,
+    color: colors.primary,
   },
   });
 }

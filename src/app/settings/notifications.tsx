@@ -24,8 +24,11 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
@@ -52,6 +55,7 @@ export default function NotificationsSettingsScreen() {
   const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
+  const router = useRouter();
 
   /** Toggles built from i18n to respond to locale changes. */
   const TOGGLES: ToggleConfig[] = [
@@ -132,6 +136,21 @@ export default function NotificationsSettingsScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      {/* ── Navigation header with back button ── */}
+      <View style={styles.navHeader}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityLabel={t('common.back')}
+        >
+          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <Text style={styles.navTitle}>알림 설정</Text>
+        {/* Spacer to keep title centered */}
+        <View style={styles.backButton} />
+      </View>
+
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -200,6 +219,31 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     flex:            1,
     backgroundColor: colors.backgroundAlt,
   },
+
+  // ── Navigation header ────────────────────────────────────────────────────
+  navHeader: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    justifyContent:    'space-between',
+    paddingHorizontal: spacing[2],
+    paddingVertical:   spacing[3],
+    backgroundColor:   colors.backgroundAlt,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  navTitle: {
+    ...textStyles.labelLg,
+    color: colors.textPrimary,
+    flex:  1,
+    textAlign: 'center',
+  },
+  backButton: {
+    width:  40,
+    height: 40,
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
+
   content: {
     padding: spacing[4],
     gap:     spacing[4],

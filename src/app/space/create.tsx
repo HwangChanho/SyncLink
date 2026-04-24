@@ -15,11 +15,11 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
 } from 'react-native';
+import { showAlert } from '@/lib/webAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -70,7 +70,7 @@ export default function CreateSpaceScreen() {
   const handleCreate = async () => {
     const trimmedName = name.trim();
     if (!trimmedName) {
-      Alert.alert(t('space.need_name'), t('space.name_placeholder'));
+      showAlert(t('space.need_name'), t('space.name_placeholder'));
       return;
     }
 
@@ -92,7 +92,9 @@ export default function CreateSpaceScreen() {
     } catch (err) {
       const message =
         err instanceof Error ? err.message : t('space.create_failed');
-      Alert.alert(t('common.error'), message);
+      // Log to console for web devtools debugging
+      console.error('[SpaceCreate] create failed:', err);
+      showAlert(t('common.error'), message);
     } finally {
       setIsLoading(false);
     }

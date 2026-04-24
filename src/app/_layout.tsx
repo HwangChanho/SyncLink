@@ -10,7 +10,7 @@
  * If @synclink/onboarding_done is absent, shows /onboarding before /auth/login.
  */
 
-import '@/lib/i18n'; // initialize i18n before any component renders
+import '@/lib/i18n'; // initialize i18n before any component renders (synchronous default locale)
 import { initSentry } from '@/lib/sentry';
 initSentry();
 import { useEffect, useRef, useState } from 'react';
@@ -24,6 +24,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
 import { onAuthStateChange, getUserProfile } from '@/services/authService';
+import { initI18n } from '@/lib/i18n';
 import {
   initializeNotifications,
   setupNotificationHandlers,
@@ -176,6 +177,13 @@ export default function RootLayout() {
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   useAuthGuard();
+
+  // TASK-1301: Restore the user-persisted language from AsyncStorage on every startup.
+  // initI18n() is async so we call it in a useEffect; i18next was already initialised
+  // with the system locale at module load time, so there is no flash of untranslated text.
+  useEffect(() => {
+    void initI18n();
+  }, []);
 
   // TASK-900: Hydrate app lock setting from AsyncStorage on startup.
   useEffect(() => {

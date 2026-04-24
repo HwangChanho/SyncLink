@@ -11,7 +11,7 @@ export function initSentry(): void {
   Sentry.init({
     dsn,
     environment: process.env.EXPO_PUBLIC_APP_ENV ?? 'development',
-    enableNative: true,
+    enableNative: false, // Native SDK requires sentry.properties org/project — disabled until configured
     tracesSampleRate: 0.2,
     // Ignore non-actionable errors
     ignoreErrors: ['Network request failed', 'AbortError'],

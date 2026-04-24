@@ -4,20 +4,31 @@
  * Presented as a modal from the Planner tab's Notes FAB.
  * Route: /note/new
  *
+ * Features:
+ *  - Title + body text input
+ *  - Voice-to-text: microphone button at the bottom of the editor
+ *      Web:    window.SpeechRecognition (Chrome / Edge)
+ *      Native: @react-native-voice/voice (iOS / Android)
+ *  - Cross-platform Alert via showAlert (works on web)
+ *
  * TASK-402 (Sprint 4)
+ * Voice input added (Sprint 13)
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, ActivityIndicator, Alert,
+  StyleSheet, ActivityIndicator,
   KeyboardAvoidingView, Platform, ScrollView,
+  Animated,
 } from 'react-native';
+import { showAlert } from '@/lib/webAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
+import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { useTodoStore } from '@/stores/todoStore';
@@ -29,18 +40,92 @@ export default function NoteNewScreen() {
   const router = useRouter();
   const { addTodo } = useTodoStore();
 
-  const [title, setTitle] = useState('');
+  const [title, setTitle]     = useState('');
   const [content, setContent] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  /**
+   * Animated scale for the mic button — pulses while listening to give
+   * clear visual feedback that the microphone is active.
+   */
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  // ── Speech recognition ─────────────────────────────────────────────────────
+
+  /**
+   * Append recognised speech to the note body.
+   * On web we receive final segments only (interimResults filtered in hook).
+   * On native we receive partial results which are replaced on next call —
+   * we therefore always append rather than replace to avoid data loss.
+   */
+  const handleSpeechResult = useCallback((text: string) => {
+    setContent(prev => {
+      // Add a space separator if the existing content doesn't end with whitespace
+      const separator = prev.length > 0 && !prev.endsWith(' ') && !prev.endsWith('\n') ? ' ' : '';
+      return prev + separator + text;
+    });
+  }, []);
+
+  const handleSpeechEnd = useCallback(() => {
+    // Stop pulsing animation
+    pulseAnim.stopAnimation();
+    pulseAnim.setValue(1);
+  }, [pulseAnim]);
+
+  const handleSpeechError = useCallback((err: string) => {
+    pulseAnim.stopAnimation();
+    pulseAnim.setValue(1);
+    // Only show errors that are not "no-speech" (common when user pauses)
+    if (err !== 'no-speech') {
+      showAlert('음성 인식 오류', err);
+    }
+  }, [pulseAnim]);
+
+  const { isListening, isSupported, startListening, stopListening } = useSpeechRecognition({
+    language:  'ko-KR',
+    onResult:  handleSpeechResult,
+    onEnd:     handleSpeechEnd,
+    onError:   handleSpeechError,
+  });
+
+  /**
+   * Start the pulse animation loop while the microphone is active.
+   * The button scales between 1.0 and 1.15 repeatedly.
+   */
+  const startPulse = useCallback(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.15, duration: 500, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1.0,  duration: 500, useNativeDriver: true }),
+      ]),
+    ).start();
+  }, [pulseAnim]);
+
+  /** Toggle the microphone: start if idle, stop if listening. */
+  const handleMicPress = useCallback(async () => {
+    if (isListening) {
+      await stopListening();
+    } else {
+      startPulse();
+      await startListening();
+    }
+  }, [isListening, startListening, stopListening, startPulse]);
+
+  // ── Save ───────────────────────────────────────────────────────────────────
 
   /**
    * Save the new note and navigate back.
    * Validates that title is non-empty.
    */
   const handleSave = useCallback(async () => {
+    // Stop voice recognition if still active before saving
+    if (isListening) {
+      await stopListening();
+    }
+
     const trimmedTitle = title.trim();
     if (trimmedTitle.length === 0) {
-      Alert.alert(t('common.error'), t('note.title_placeholder'));
+      showAlert(t('common.error'), t('note.title_placeholder'));
       return;
     }
 
@@ -55,11 +140,15 @@ export default function NoteNewScreen() {
       });
       router.back();
     } catch (err) {
-      Alert.alert(t('common.error'), err instanceof Error ? err.message : t('note.save_failed'));
+      // Log to console for web devtools debugging
+      console.error('[NoteNew] save failed:', err);
+      showAlert(t('common.error'), err instanceof Error ? err.message : t('note.save_failed'));
     } finally {
       setIsSaving(false);
     }
-  }, [title, content, addTodo, router]);
+  }, [title, content, addTodo, router, isListening, stopListening, t]);
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -117,6 +206,42 @@ export default function NoteNewScreen() {
             textAlignVertical="top"
           />
         </ScrollView>
+
+        {/*
+         * Microphone toolbar — fixed above the keyboard.
+         * Only rendered when speech recognition is available on this platform/browser.
+         *
+         * Visual feedback:
+         *  - Idle:     mic icon, primary colour, normal size
+         *  - Listening: mic icon filled, error/red colour, pulsing scale animation
+         */}
+        {isSupported && (
+          <View style={styles.voiceBar}>
+            {/* Status label */}
+            <Text style={[styles.voiceStatus, isListening && styles.voiceStatusActive]}>
+              {isListening ? '음성 인식 중...' : '음성으로 입력'}
+            </Text>
+
+            {/* Mic button */}
+            <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+              <TouchableOpacity
+                style={[
+                  styles.micButton,
+                  isListening && styles.micButtonActive,
+                ]}
+                onPress={() => void handleMicPress()}
+                accessibilityLabel={isListening ? '음성 인식 중지' : '음성 인식 시작'}
+                accessibilityRole="button"
+              >
+                <Ionicons
+                  name={isListening ? 'mic' : 'mic-outline'}
+                  size={24}
+                  color={isListening ? colors.textInverse : colors.primary}
+                />
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -188,6 +313,56 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     color: colors.textPrimary,
     minHeight: 300,
     lineHeight: 24,
+  },
+
+  // ── Voice toolbar ──────────────────────────────────────────────────────────
+
+  /**
+   * Thin toolbar at the bottom of the editor area.
+   * Sits above the system keyboard (KeyboardAvoidingView handles the offset).
+   */
+  voiceBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[2],
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.background,
+    gap: spacing[3],
+  },
+
+  /**
+   * Status text to the left of the mic button.
+   * Shows "음성으로 입력" when idle, "음성 인식 중..." when active.
+   */
+  voiceStatus: {
+    ...textStyles.caption,
+    color: colors.textTertiary,
+    flex: 1,
+  },
+  voiceStatusActive: {
+    color: colors.primary,
+  },
+
+  /** Circular mic button — white fill when idle, primary fill when recording. */
+  micButton: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.full,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Shadow (iOS + web)
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  micButtonActive: {
+    backgroundColor: colors.error,
   },
   });
 }

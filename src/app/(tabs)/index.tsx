@@ -19,8 +19,9 @@
  */
 
 import { useEffect } from 'react';
-import { ScrollView, StyleSheet, RefreshControl } from 'react-native';
+import { ScrollView, StyleSheet, RefreshControl, Platform, Pressable, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useEventStore } from '@/stores/eventStore';
 import { useTodoStore } from '@/stores/todoStore';
 import { NLInputBar } from '@/components/nl/NLInputBar';
@@ -32,7 +33,9 @@ import { WeeklyReviewCard }   from '@/components/home/WeeklyReviewCard';
 import { WeatherWidget }      from '@/components/home/WeatherWidget';
 import { DateSuggestionCard } from '@/components/home/DateSuggestionCard';
 import { useColors } from '@/hooks/useColors';
+import { useTranslation } from 'react-i18next';
 import { spacing } from '@/constants/spacing';
+import { textStyles } from '@/constants/typography';
 import type { DateRange } from '@/types';
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -50,6 +53,7 @@ function todayRange(): DateRange {
 
 export default function HomeScreen() {
   const colors = useColors();
+  const { t } = useTranslation();
   const fetchEvents = useEventStore(s => s.fetchEvents);
   const isFetchingEvents = useEventStore(s => s.isFetching);
   const { fetchTodos, isLoading: isFetchingTodos } = useTodoStore();
@@ -78,20 +82,44 @@ export default function HomeScreen() {
       style={[styles.safeArea, { backgroundColor: colors.background }]}
       edges={['top', 'left', 'right']}
     >
-      {/* NLInputBar is pinned at the bottom, content scrolls above it */}
+      {/*
+       * Web: RefreshControl is no-op on web browsers so we render a manual
+       * refresh button at the top of the scroll area instead.
+       * Native: use the standard pull-to-refresh RefreshControl.
+       */}
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={loadTodayData}
-            tintColor={colors.primary}
-          />
+          Platform.OS !== 'web' ? (
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={loadTodayData}
+              tintColor={colors.primary}
+            />
+          ) : undefined
         }
       >
+        {/* Web-only refresh button — replaces pull-to-refresh */}
+        {Platform.OS === 'web' && (
+          <Pressable
+            style={[styles.webRefreshButton, { borderColor: colors.border }]}
+            onPress={loadTodayData}
+            disabled={isRefreshing}
+          >
+            <Ionicons
+              name="refresh"
+              size={16}
+              color={isRefreshing ? colors.textTertiary : colors.primary}
+            />
+            <Text style={[styles.webRefreshText, { color: isRefreshing ? colors.textTertiary : colors.primary }]}>
+              {t('common.refresh')}
+            </Text>
+          </Pressable>
+        )}
+
         {/* Greeting + date */}
         <HomeHeader />
 
@@ -147,5 +175,22 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingTop:    spacing[2],
     paddingBottom: spacing[20],  // space for NLInputBar
+  },
+
+  // ── Web-only refresh button ───────────────────────────────────────────────
+  webRefreshButton: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    alignSelf:       'flex-end',
+    gap:             spacing[1],
+    marginRight:     spacing[4],
+    marginBottom:    spacing[1],
+    paddingVertical: spacing[1],
+    paddingHorizontal: spacing[3],
+    borderWidth:     1,
+    borderRadius:    999,
+  },
+  webRefreshText: {
+    ...textStyles.caption,
   },
 });

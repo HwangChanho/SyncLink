@@ -19,6 +19,7 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
 // expo-image provides better caching and performance than React Native's Image (TASK-701)
 import { Image } from 'expo-image';
@@ -34,6 +35,7 @@ import { textStyles } from '@/constants/typography';
 import * as authService from '@/services/authService';
 import { useAuthStore } from '@/stores/authStore';
 import { useSpaceStore } from '@/stores/spaceStore';
+import { showAlert } from '@/lib/webAlert';
 import type { SpaceSummary } from '@/types';
 
 // ─── Theme options are now built inside the component using i18n ───────────────
@@ -167,11 +169,17 @@ export default function MyScreen() {
       const updated = await authService.updateProfile({ avatar_url: publicUrl });
       setUser(updated);
     } catch (err) {
-      Alert.alert(t('common.error'), err instanceof Error ? err.message : t('profile.avatar_failed'));
+      // Log raw error so engineers can triage via Metro logs.
+      // showAlert works on both web (window.alert) and native (Alert.alert).
+      console.error('[MyTab] handleChangeAvatar failed:', err);
+      showAlert(
+        t('common.error'),
+        err instanceof Error ? err.message : t('profile.avatar_failed'),
+      );
     } finally {
       setIsUploadingAvatar(false);
     }
-  }, [setUser]);
+  }, [setUser, t]);
 
   // ─── Logout ──────────────────────────────────────────────────────────────
 
@@ -425,17 +433,23 @@ export default function MyScreen() {
 
             <View style={styles.menuDivider} />
 
-            {/* App Lock (Face ID / Touch ID) */}
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => router.push('/settings/app-lock')}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.menuItemText}>{t('settings.app_lock')}</Text>
-              <Text style={styles.menuItemChevron}>›</Text>
-            </TouchableOpacity>
-
-            <View style={styles.menuDivider} />
+            {/*
+             * App Lock (Face ID / Touch ID) — native-only feature.
+             * Hidden on web because biometric APIs are not available in browsers.
+             */}
+            {Platform.OS !== 'web' && (
+              <>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => router.push('/settings/app-lock')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.menuItemText}>{t('settings.app_lock')}</Text>
+                  <Text style={styles.menuItemChevron}>›</Text>
+                </TouchableOpacity>
+                <View style={styles.menuDivider} />
+              </>
+            )}
 
             {/* Theme selector (inline Segmented Control) */}
             <View style={styles.menuItemTheme}>
