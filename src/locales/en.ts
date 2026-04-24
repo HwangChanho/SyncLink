@@ -29,6 +29,7 @@ const en = {
     refresh: 'Refresh',
     system: 'System',
     group: 'Group',
+    add: 'Add',
   },
 
   time: {
@@ -47,6 +48,15 @@ const en = {
     no_repeat: 'No repeat',
     repeat_annual: ' · Repeats yearly',
     capacity_full: ' · Full',
+    /** Calendar view-mode tab labels (short form for the tab strip). */
+    view_month: 'Month',
+    view_week: 'Week',
+    view_day: 'Day',
+    /** Language names for the language-picker sheet. */
+    lang_ko: '한국어',
+    lang_en: 'English',
+    lang_zh: '中文',
+    lang_ja: '日本語',
   },
 
   greeting: {
@@ -288,6 +298,19 @@ const en = {
     loading: 'Generating suggestion…',
     empty: 'No suggestions available.',
     create_event: 'Create Event',
+  },
+
+  reminder: {
+    title: 'Reminder',
+    add: 'Add reminder',
+    none: 'None',
+    minutes_before: '{{count}} min before',
+    hours_before: '{{count}} hr before',
+    days_before: '{{count}} day before',
+    custom: 'Custom',
+    unit_minutes: 'min',
+    unit_hours: 'hr',
+    kakao_web_notice: 'Kakao login is available in the app',
   },
 
   paywall: {

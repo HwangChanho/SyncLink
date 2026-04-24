@@ -29,6 +29,7 @@ const zh = {
     refresh: '刷新',
     system: '系统',
     group: '群组',
+    add: '添加',
   },
 
   time: {
@@ -47,6 +48,15 @@ const zh = {
     no_repeat: '不重复',
     repeat_annual: ' · 每年重复',
     capacity_full: ' · 已满',
+    /** Calendar view-mode tab labels (short form for the tab strip). */
+    view_month: '月',
+    view_week: '周',
+    view_day: '日',
+    /** Language names for the language-picker sheet. */
+    lang_ko: '한국어',
+    lang_en: 'English',
+    lang_zh: '中文',
+    lang_ja: '日本語',
   },
 
   greeting: {
@@ -284,6 +294,19 @@ const zh = {
     loading: '正在生成推荐…',
     empty: '暂无推荐。',
     create_event: '创建日程',
+  },
+
+  reminder: {
+    title: '提醒',
+    add: '添加提醒',
+    none: '无',
+    minutes_before: '提前 {{count}} 分钟',
+    hours_before: '提前 {{count}} 小时',
+    days_before: '提前 {{count}} 天',
+    custom: '自定义',
+    unit_minutes: '分钟',
+    unit_hours: '小时',
+    kakao_web_notice: 'Kakao 登录仅在应用中可用',
   },
 
   paywall: {

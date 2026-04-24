@@ -29,6 +29,7 @@ const ja = {
     refresh: '更新',
     system: 'システム',
     group: 'グループ',
+    add: '追加',
   },
 
   time: {
@@ -47,6 +48,15 @@ const ja = {
     no_repeat: '繰り返しなし',
     repeat_annual: ' · 毎年繰り返し',
     capacity_full: ' · 満員',
+    /** Calendar view-mode tab labels (short form for the tab strip). */
+    view_month: '月',
+    view_week: '週',
+    view_day: '日',
+    /** Language names for the language-picker sheet. */
+    lang_ko: '한국어',
+    lang_en: 'English',
+    lang_zh: '中文',
+    lang_ja: '日本語',
   },
 
   greeting: {
@@ -284,6 +294,19 @@ const ja = {
     loading: '提案を生成中…',
     empty: '提案がありません。',
     create_event: '予定を作成',
+  },
+
+  reminder: {
+    title: 'リマインダー',
+    add: 'リマインダーを追加',
+    none: 'なし',
+    minutes_before: '{{count}} 分前',
+    hours_before: '{{count}} 時間前',
+    days_before: '{{count}} 日前',
+    custom: 'カスタム',
+    unit_minutes: '分',
+    unit_hours: '時間',
+    kakao_web_notice: 'Kakao ログインはアプリでご利用いただけます',
   },
 
   paywall: {

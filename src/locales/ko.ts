@@ -33,6 +33,7 @@ const ko = {
     refresh: '새로 고침',
     system: '시스템',
     group: '그룹',
+    add: '추가',
   },
 
   time: {
@@ -51,6 +52,15 @@ const ko = {
     no_repeat: '반복 없음',
     repeat_annual: ' · 매년 반복',
     capacity_full: ' · 정원 마감',
+    /** Calendar view-mode tab labels (short form for the tab strip). */
+    view_month: '월',
+    view_week: '주',
+    view_day: '일',
+    /** Language names for the language-picker sheet. */
+    lang_ko: '한국어',
+    lang_en: 'English',
+    lang_zh: '中文',
+    lang_ja: '日本語',
   },
 
   greeting: {
@@ -292,6 +302,19 @@ const ko = {
     loading: '추천을 생성하는 중…',
     empty: '추천할 일정이 없습니다.',
     create_event: '일정 만들기',
+  },
+
+  reminder: {
+    title: '리마인더',
+    add: '리마인더 추가',
+    none: '없음',
+    minutes_before: '{{count}}분 전',
+    hours_before: '{{count}}시간 전',
+    days_before: '{{count}}일 전',
+    custom: '직접 입력',
+    unit_minutes: '분',
+    unit_hours: '시간',
+    kakao_web_notice: '카카오 로그인은 앱에서 이용 가능합니다',
   },
 
   paywall: {
