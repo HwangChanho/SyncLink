@@ -724,12 +724,18 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     gap: spacing[2],
   },
   repeatChip: {
+    // Ensure the chip's content is centred both horizontally and vertically.
+    // Without this the RN default (stretch) can leave the label left-aligned
+    // when the chip grows wider than its intrinsic text width.
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[1],
     borderRadius: radius.full,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 32,
   },
   repeatChipSelected: {
     borderColor: colors.primary,
@@ -738,6 +744,9 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   repeatChipText: {
     ...textStyles.labelSm,
     color: colors.textSecondary,
+    // Centre the label inside the chip so longer labels (e.g. "매년")
+    // remain visually balanced against shorter ones (e.g. "일").
+    textAlign: 'center',
   },
   repeatChipTextSelected: {
     color: colors.primary,
