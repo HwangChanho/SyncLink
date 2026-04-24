@@ -26,6 +26,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { NLInputBar } from '@/components/nl/NLInputBar';
 import { CalendarHeader, type ViewMode } from '@/components/calendar/CalendarHeader';
+import { YearMonthPicker } from '@/components/calendar/YearMonthPicker';
 import { MonthView } from '@/components/calendar/MonthView';
 import { WeekView } from '@/components/calendar/WeekView';
 import { DayView } from '@/components/calendar/DayView';
@@ -127,6 +128,12 @@ export default function CalendarScreen() {
     return d;
   });
 
+  /**
+   * Controls the visibility of the YearMonthPicker modal.
+   * Opened when the user taps the period title in CalendarHeader.
+   */
+  const [pickerVisible, setPickerVisible] = useState(false);
+
   // ─── Navigation ─────────────────────────────────────────────────────────────
 
   const goNext = useCallback(() => {
@@ -141,6 +148,25 @@ export default function CalendarScreen() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     setSelectedDate(today);
+  }, []);
+
+  /** Opens the YearMonthPicker modal (triggered by tapping the title). */
+  const handleYearMonthPress = useCallback(() => {
+    setPickerVisible(true);
+  }, []);
+
+  /**
+   * Receives the date selected in YearMonthPicker and updates the calendar.
+   * The picker provides the 1st of the selected month; we normalise to midnight.
+   *
+   * @param date - 1st day of the selected year/month at 00:00:00
+   */
+  const handleYearMonthSelect = useCallback((date: Date) => {
+    date.setHours(0, 0, 0, 0);
+    setSelectedDate(date);
+    // Always switch to month view after a year/month jump for context
+    setViewMode('month');
+    setPickerVisible(false);
   }, []);
 
   /** Tapping a date in MonthView switches to DayView for that date. */
@@ -222,7 +248,16 @@ export default function CalendarScreen() {
           onPrev={goPrev}
           onNext={goNext}
           onToday={goToday}
+          onYearMonthPress={handleYearMonthPress}
           onViewModeChange={setViewMode}
+        />
+
+        {/* Year/month picker modal — opens when the header title is tapped */}
+        <YearMonthPicker
+          visible={pickerVisible}
+          currentDate={selectedDate}
+          onSelect={handleYearMonthSelect}
+          onClose={() => setPickerVisible(false)}
         />
 
         {/* Swipe-enabled content area */}

@@ -2,11 +2,17 @@
  * CalendarHeader — navigation bar for the calendar screen.
  *
  * Renders:
- *  - ‹ PERIOD TITLE ›  (tap title = jump to today)
+ *  - ‹ PERIOD TITLE ›  (tap title = open YearMonthPicker; long-press = jump to today)
  *  - Month / Week / Day tab strip
  *
  * The parent is responsible for computing and updating `currentDate`
  * when the user navigates forward/back.
+ *
+ * TASK-YMP: Tapping the title now opens a YearMonthPicker modal so the user
+ * can jump to any year/month quickly.  The old "tap = today" behaviour has been
+ * moved to `onToday` which the parent still controls (e.g. via a dedicated button).
+ * For backward compatibility `onToday` is kept — callers that relied on the tap
+ * should pass `onYearMonthPress` instead.
  */
 
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
@@ -35,8 +41,19 @@ interface CalendarHeaderProps {
   onPrev: () => void;
   /** Navigate to the next month / week / day. */
   onNext: () => void;
-  /** Jump back to today (triggered by tapping the title). */
+  /**
+   * Jump back to today.
+   * This is no longer triggered by tapping the title — tapping the title now
+   * opens the YearMonthPicker.  `onToday` can be called by any other UI element
+   * the parent exposes (e.g. a dedicated button in the nav bar).
+   */
   onToday: () => void;
+  /**
+   * Called when the user taps the period title.
+   * The parent should open the YearMonthPicker modal in response.
+   * If omitted, tapping the title falls back to `onToday` (backward compat).
+   */
+  onYearMonthPress?: () => void;
   /** Switch between month / week / day views. */
   onViewModeChange: (mode: ViewMode) => void;
 }
@@ -71,6 +88,7 @@ export function CalendarHeader({
   onPrev,
   onNext,
   onToday,
+  onYearMonthPress,
   onViewModeChange,
 }: CalendarHeaderProps) {
   // Resolve active theme colors for dark mode support (TASK-700)
@@ -78,11 +96,15 @@ export function CalendarHeader({
   const colors = useColors();
   const styles = makeStyles(colors);
 
-  /** View mode labels for month/week/day tabs. */
+  /**
+   * View mode labels for month/week/day tabs.
+   * Uses dedicated short-form keys (time.view_month / week / day) so that
+   * all locales display correctly — e.g. "Month" in English, "월" in Korean.
+   */
   const VIEW_MODE_LABELS: Record<ViewMode, string> = {
-    month: t('time.monthly').slice(-1),  // '월' from '매월'
-    week:  t('time.weekly').slice(-1),   // '주' from '매주'
-    day:   t('time.daily').slice(-1),    // '일' from '매일'
+    month: t('time.view_month'),
+    week:  t('time.view_week'),
+    day:   t('time.view_day'),
   };
 
   return (
@@ -98,14 +120,23 @@ export function CalendarHeader({
           <Text style={styles.arrow}>‹</Text>
         </TouchableOpacity>
 
-        {/* Tapping the title jumps to today */}
+        {/*
+          Tapping the title opens the YearMonthPicker so the user can jump to
+          any year/month quickly.  Falls back to onToday if onYearMonthPress is
+          not provided (backward compatibility).
+        */}
         <TouchableOpacity
-          onPress={onToday}
+          onPress={onYearMonthPress ?? onToday}
           hitSlop={HIT_SLOP}
           style={styles.titleWrap}
-          accessibilityLabel="오늘로 이동"
+          accessibilityLabel="년도/월 선택"
+          accessibilityHint="탭하면 년도와 월을 선택하는 피커가 열립니다"
         >
-          <Text style={styles.title}>{buildTitle(viewMode, currentDate)}</Text>
+          <View style={styles.titleInner}>
+            <Text style={styles.title}>{buildTitle(viewMode, currentDate)}</Text>
+            {/* Small chevron-down indicator hints that this is tappable */}
+            <Text style={styles.titleChevron}>▾</Text>
+          </View>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -179,9 +210,21 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     flex: 1,
     alignItems: 'center',
   },
+  /** Row wrapper that places the title text and chevron side-by-side. */
+  titleInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   title: {
     ...textStyles.h4,
     color: colors.textPrimary,
+  },
+  /** Small downward chevron shown next to the title to indicate interactivity. */
+  titleChevron: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
   tabRow: {
     flexDirection: 'row',
