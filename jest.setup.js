@@ -277,6 +277,12 @@ process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY =
   process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? 'test-google-maps-key';
 process.env.EXPO_PUBLIC_WEATHER_API_KEY =
   process.env.EXPO_PUBLIC_WEATHER_API_KEY ?? 'test-weather-key';
+// Kakao custom OAuth (kakao-auth Edge Function) — authService.signInWithKakao
+// embeds this into the Kakao authorize URL. Note: the REAL inlining happens
+// in babel.config.js (transform time); this runtime default is a belt-and-
+// suspenders safeguard for any stray runtime reads.
+process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY =
+  process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY ?? 'test-kakao-rest-api-key';
 
 // ─── Console noise reduction ──────────────────────────────────────────────────
 // Suppress expected React Native warnings that pollute test output.

@@ -40,6 +40,18 @@ if (!supabaseUrl || !supabaseAnonKey) {
  *   const { data } = await supabase.from('events').select('*')
  *   // data is EventRow[] | null — fully typed
  */
+/**
+ * Re-exported Supabase URL / anon key for callers that need to hit Edge
+ * Functions with a raw fetch (e.g. unauthenticated calls to `kakao-auth`
+ * before a session exists). Reading `process.env.EXPO_PUBLIC_*` directly in
+ * other modules is unsafe because babel-preset-expo's inline-env-vars plugin
+ * bakes the value in at transform time, which breaks tests that `delete` the
+ * env var to exercise the "missing credentials" code path. Reading through
+ * these constants keeps the env lookup centralized in this file.
+ */
+export const SUPABASE_URL = supabaseUrl ?? '';
+export const SUPABASE_ANON_KEY = supabaseAnonKey ?? '';
+
 export const supabase = createClient<Database>(supabaseUrl ?? '', supabaseAnonKey ?? '', {
   auth: {
     // Use AsyncStorage for session persistence on React Native

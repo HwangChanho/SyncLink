@@ -58,10 +58,16 @@ jest.mock('expo-linking', () => ({
 
 // @/lib/supabase 전체를 대체 — 실제 createClient 호출 차단
 jest.mock('@/lib/supabase', () => ({
+  // authService.signInWithKakao reads these constants to build the
+  // kakao-auth Edge Function URL. Provide deterministic test values here
+  // so the tests don't depend on babel's inline-env-vars behavior.
+  SUPABASE_URL: 'https://test.supabase.co',
+  SUPABASE_ANON_KEY: 'test-anon-key',
   supabase: {
     auth: {
       signInWithIdToken: jest.fn(),
       signInWithOAuth: jest.fn(),
+      signInWithPassword: jest.fn(),
       exchangeCodeForSession: jest.fn(),
       getSession: jest.fn(),
       refreshSession: jest.fn(),
@@ -76,6 +82,14 @@ jest.mock('@/lib/supabase', () => ({
     },
   },
 }));
+
+// fetch — kakao-auth Edge Function 호출을 가로채기 위해 jest.fn()으로 덮어씀.
+// 각 테스트에서 필요에 따라 mockResolvedValueOnce로 응답을 지정한다.
+const fetchMock = jest.fn();
+(globalThis as Record<string, unknown>).fetch = fetchMock;
+
+// KAKAO REST API 키는 babel.config.js에서 transform 시점에 이미 인라인된다.
+// SUPABASE_URL / SUPABASE_ANON_KEY는 위 jest.mock('@/lib/supabase')에서 제공.
 
 // ─── Imports ──────────────────────────────────────────────────────────────────
 
@@ -353,147 +367,152 @@ describe('authService', () => {
   // signInWithKakao
   // ══════════════════════════════════════════════════════════════════════════
 
+  /**
+   * signInWithKakao는 이제 Supabase 내장 Kakao 프로바이더를 우회하고
+   * 자체 Edge Function(`kakao-auth`)을 호출한다. 커버리지:
+   *  - 정상 흐름: WebBrowser → Edge Function → signInWithPassword
+   *  - 브라우저 취소 (cancel / dismiss)
+   *  - redirect URL에 code 파라미터 없음
+   *  - Edge Function이 에러 반환
+   *  - Edge Function 응답이 불완전(email/password 누락)
+   *  - signInWithPassword 실패
+   */
   describe('signInWithKakao', () => {
-    it('정상 흐름: OAuth URL 열고 code exchange 완료 후 SignInResult 반환', async () => {
-      // 1. Supabase가 Kakao OAuth URL 반환
-      (supabase.auth.signInWithOAuth as jest.Mock).mockResolvedValue({
-        data: { url: 'https://kakao.example.com/oauth/authorize' },
-        error: null,
-      });
-      // 2. 브라우저에서 사용자가 로그인 완료 후 redirect URL 반환
+    /** Edge Function 성공 응답 픽스처 */
+    const edgeOk = {
+      ok: true,
+      status: 200,
+      text: jest.fn().mockResolvedValue(''),
+      json: jest.fn().mockResolvedValue({
+        email: 'kakao_123@kakao.synclink.app',
+        password: 'derived-password',
+      }),
+    };
+
+    beforeEach(() => {
+      // fetch 기본값: 성공 응답. 실패 시나리오는 개별 테스트에서 덮어쓴다.
+      fetchMock.mockReset();
+    });
+
+    it('정상 흐름: WebBrowser → Edge Function → signInWithPassword', async () => {
       (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({
         type: 'success',
         url: 'synclink://auth/callback?code=auth-code-123&state=xyz',
       });
-      // 3. PKCE code exchange 성공
-      (supabase.auth.exchangeCodeForSession as jest.Mock).mockResolvedValue({
-        error: null,
-      });
-      // 4. 세션 조회
-      (supabase.auth.getSession as jest.Mock).mockResolvedValue({
+      fetchMock.mockResolvedValue(edgeOk);
+      (supabase.auth.signInWithPassword as jest.Mock).mockResolvedValue({
         data: { session: mockSession },
         error: null,
       });
 
       const result = await signInWithKakao();
 
-      // OAuth 요청 검증 (skipBrowserRedirect: true 필수)
-      expect(supabase.auth.signInWithOAuth).toHaveBeenCalledWith({
-        provider: 'kakao',
-        options: {
-          redirectTo: 'synclink://auth/callback',
-          skipBrowserRedirect: true,
-        },
+      // Kakao authorize URL로 브라우저가 열렸는지
+      const browserCall = (WebBrowser.openAuthSessionAsync as jest.Mock).mock.calls[0];
+      expect(browserCall[0]).toContain('https://kauth.kakao.com/oauth/authorize');
+      expect(browserCall[0]).toContain('client_id=test-kakao-rest-api-key');
+      expect(browserCall[0]).toContain('response_type=code');
+      expect(browserCall[1]).toBe('synclink://auth/callback');
+
+      // Edge Function 호출 검증
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://test.supabase.co/functions/v1/kakao-auth',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            code: 'auth-code-123',
+            redirect_uri: 'synclink://auth/callback',
+          }),
+        }),
+      );
+
+      // Edge Function이 돌려준 이메일/비밀번호로 Supabase 세션 생성 확인
+      expect(supabase.auth.signInWithPassword).toHaveBeenCalledWith({
+        email: 'kakao_123@kakao.synclink.app',
+        password: 'derived-password',
       });
-      // WebBrowser에 OAuth URL과 redirect URL 전달 검증
-      expect(WebBrowser.openAuthSessionAsync).toHaveBeenCalledWith(
-        'https://kakao.example.com/oauth/authorize',
-        'synclink://auth/callback',
-        { showInRecents: false },
-      );
-      // redirect URL로 code exchange 요청 검증
-      expect(supabase.auth.exchangeCodeForSession).toHaveBeenCalledWith(
-        'synclink://auth/callback?code=auth-code-123&state=xyz',
-      );
+
       expect(result.session.userId).toBe('user-123');
       expect(result.user).toEqual(mockUserRow);
     });
 
     it('취소: 브라우저 type=cancel → "cancelled" 에러 throw', async () => {
-      (supabase.auth.signInWithOAuth as jest.Mock).mockResolvedValue({
-        data: { url: 'https://kakao.example.com/oauth/authorize' },
-        error: null,
-      });
-      (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({
-        type: 'cancel',
-      });
-
+      (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({ type: 'cancel' });
       await expect(signInWithKakao()).rejects.toThrow('cancelled');
+      expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it('취소: 브라우저 type=dismiss → "cancelled" 에러 throw', async () => {
-      (supabase.auth.signInWithOAuth as jest.Mock).mockResolvedValue({
-        data: { url: 'https://kakao.example.com/oauth/authorize' },
-        error: null,
-      });
-      (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({
-        type: 'dismiss',
-      });
-
+      (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({ type: 'dismiss' });
       await expect(signInWithKakao()).rejects.toThrow('cancelled');
     });
 
-    it('OAuth URL 없음: "OAuth URL을 받지 못했습니다." 에러 throw', async () => {
-      (supabase.auth.signInWithOAuth as jest.Mock).mockResolvedValue({
-        data: { url: null },
-        error: null,
-      });
-
-      await expect(signInWithKakao()).rejects.toThrow('OAuth URL을 받지 못했습니다.');
-    });
-
-    it('signInWithOAuth 에러: 에러 그대로 throw', async () => {
-      const oauthError = new Error('Kakao OAuth provider error');
-      (supabase.auth.signInWithOAuth as jest.Mock).mockResolvedValue({
-        data: {},
-        error: oauthError,
-      });
-
-      await expect(signInWithKakao()).rejects.toThrow('Kakao OAuth provider error');
-    });
-
-    it('code exchange 에러: exchangeCodeForSession 실패 시 에러 throw', async () => {
-      (supabase.auth.signInWithOAuth as jest.Mock).mockResolvedValue({
-        data: { url: 'https://kakao.example.com/oauth/authorize' },
-        error: null,
-      });
+    it('redirect URL에 code 파라미터 없음: "Kakao 인증 코드를 받지 못했습니다." throw', async () => {
       (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({
         type: 'success',
-        url: 'synclink://auth/callback?code=bad-code',
-      });
-      const exchangeError = new Error('Invalid PKCE code');
-      (supabase.auth.exchangeCodeForSession as jest.Mock).mockResolvedValue({
-        error: exchangeError,
+        url: 'synclink://auth/callback?error=access_denied',
       });
 
-      await expect(signInWithKakao()).rejects.toThrow('Invalid PKCE code');
+      await expect(signInWithKakao()).rejects.toThrow('Kakao 인증 코드를 받지 못했습니다.');
+      expect(fetchMock).not.toHaveBeenCalled();
     });
 
-    it('code exchange 후 getSession 에러: 에러 throw', async () => {
-      (supabase.auth.signInWithOAuth as jest.Mock).mockResolvedValue({
-        data: { url: 'https://kakao.example.com/oauth/authorize' },
-        error: null,
-      });
+    it('Edge Function 에러 응답: 실패 상세를 포함한 에러 throw', async () => {
       (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({
         type: 'success',
         url: 'synclink://auth/callback?code=auth-code-123',
       });
-      (supabase.auth.exchangeCodeForSession as jest.Mock).mockResolvedValue({ error: null });
-      const sessionError = new Error('Session fetch failed after exchange');
-      (supabase.auth.getSession as jest.Mock).mockResolvedValue({
-        data: { session: null },
-        error: sessionError,
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: jest.fn().mockResolvedValue('server misconfigured'),
       });
 
-      await expect(signInWithKakao()).rejects.toThrow('Session fetch failed after exchange');
+      await expect(signInWithKakao()).rejects.toThrow(/Kakao 로그인에 실패했습니다/);
+      expect(supabase.auth.signInWithPassword).not.toHaveBeenCalled();
     });
 
-    it('code exchange 후 session null: "세션을 가져오지 못했습니다." 에러 throw', async () => {
-      (supabase.auth.signInWithOAuth as jest.Mock).mockResolvedValue({
-        data: { url: 'https://kakao.example.com/oauth/authorize' },
-        error: null,
-      });
+    it('Edge Function 응답에 email/password 누락: 에러 throw', async () => {
       (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({
         type: 'success',
         url: 'synclink://auth/callback?code=auth-code-123',
       });
-      (supabase.auth.exchangeCodeForSession as jest.Mock).mockResolvedValue({ error: null });
-      (supabase.auth.getSession as jest.Mock).mockResolvedValue({
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: jest.fn().mockResolvedValue({ email: 'only@email.com' }),
+      });
+
+      await expect(signInWithKakao()).rejects.toThrow('Kakao 로그인 응답이 올바르지 않습니다.');
+    });
+
+    it('signInWithPassword 실패: 에러 그대로 throw', async () => {
+      (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({
+        type: 'success',
+        url: 'synclink://auth/callback?code=auth-code-123',
+      });
+      fetchMock.mockResolvedValue(edgeOk);
+      const authError = new Error('Invalid login credentials');
+      (supabase.auth.signInWithPassword as jest.Mock).mockResolvedValue({
+        data: { session: null },
+        error: authError,
+      });
+
+      await expect(signInWithKakao()).rejects.toThrow('Invalid login credentials');
+    });
+
+    it('signInWithPassword session=null 반환: "세션을 생성하지 못했습니다." throw', async () => {
+      (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({
+        type: 'success',
+        url: 'synclink://auth/callback?code=auth-code-123',
+      });
+      fetchMock.mockResolvedValue(edgeOk);
+      (supabase.auth.signInWithPassword as jest.Mock).mockResolvedValue({
         data: { session: null },
         error: null,
       });
 
-      await expect(signInWithKakao()).rejects.toThrow('세션을 가져오지 못했습니다.');
+      await expect(signInWithKakao()).rejects.toThrow('세션을 생성하지 못했습니다.');
     });
   });
 

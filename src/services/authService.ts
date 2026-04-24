@@ -20,7 +20,7 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import type { Session } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase';
 import type { UserRow } from '@/types';
 
 // ─── Notification preferences types ──────────────────────────────────────────
@@ -169,66 +169,142 @@ export async function signInWithGoogle(): Promise<SignInResult> {
 }
 
 /**
- * Sign in with Kakao OAuth.
+ * Sign in with Kakao — custom OAuth via our own Edge Function.
+ *
+ * Why bypass Supabase's built-in Kakao provider?
+ *  Supabase's Kakao integration requires a Client Secret, but our Kakao app
+ *  is configured with "Client Secret: Disabled" (the simpler and more common
+ *  setup). Every login attempt through Supabase fails with `invalid_client`.
+ *  So we handle the whole OAuth dance ourselves and only use Supabase to mint
+ *  the final session.
  *
  * Flow:
- *  1. supabase.auth.signInWithOAuth({ provider: 'kakao', skipBrowserRedirect: true })
- *     → returns the Kakao authorization URL
- *  2. WebBrowser.openAuthSessionAsync(url, redirectTo)
- *     → opens in-app browser, waits for redirect to synclink://auth/callback
- *  3. supabase.auth.exchangeCodeForSession(redirectUrl)
- *     → completes PKCE code exchange, establishes session
+ *  1. Build the Kakao authorize URL directly (client_id = REST API key).
+ *  2. WebBrowser.openAuthSessionAsync(authUrl, redirectUri)
+ *     → opens Kakao login, waits for redirect back with ?code=...
+ *  3. Extract the `code` param from the redirect URL.
+ *  4. POST { code, redirect_uri } to our `kakao-auth` Edge Function.
+ *     → Function exchanges the code, upserts a Supabase auth user,
+ *       returns `{ email, password }`.
+ *  5. supabase.auth.signInWithPassword({ email, password }) to create a session.
+ *  6. buildSignInResult → { session, user, isNewUser }.
  *
- * Deep link scheme: synclink:// (configured in app.json)
- * Redirect URI must be registered in Kakao developer console.
+ * Environment variables:
+ *  - EXPO_PUBLIC_KAKAO_REST_API_KEY — REST API key from Kakao Developer Console
+ *  - EXPO_PUBLIC_SUPABASE_URL       — base URL for invoking the Edge Function
  *
- * @throws Error with message 'cancelled' if user closes the browser
+ * Redirect URIs that must be registered in the Kakao Developer Console:
+ *  - synclink://auth/callback                     (native iOS/Android app)
+ *  - http://localhost:8081/auth/callback          (web dev)
+ *  - https://<prod-domain>/auth/callback          (web prod)
+ *
+ * @throws Error with message 'cancelled' if user closes the browser.
+ * @throws Error with descriptive message on any Edge Function / token failure.
  */
 export async function signInWithKakao(): Promise<SignInResult> {
-  // The redirect URL must match what's registered in Kakao developer console
-  // and in Supabase Dashboard > Authentication > Providers > Kakao
-  // In production: 'synclink://auth/callback'
-  // In Expo Go dev: Linking.createURL() returns exp:// which won't match — use a dev build
-  // On web, use the browser's origin for the redirect URL;
-  // on native, use the deep link scheme registered in app.json
-  const origin = (globalThis as typeof globalThis & { location?: { origin?: string } }).location?.origin;
-  const redirectTo = Platform.OS === 'web' && origin
+  // ── 1. Resolve the REST API key and redirect URI ────────────────────────
+  const kakaoRestApiKey = process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY;
+  if (!kakaoRestApiKey) {
+    throw new Error(
+      'Kakao 로그인 설정이 누락되었습니다. (EXPO_PUBLIC_KAKAO_REST_API_KEY 미설정)',
+    );
+  }
+
+  // Web uses the current origin + /auth/callback; native uses the deep link
+  // scheme registered in app.json. Both must be whitelisted in the Kakao
+  // Developer Console.
+  const origin = (globalThis as typeof globalThis & { location?: { origin?: string } })
+    .location?.origin;
+  const redirectUri = Platform.OS === 'web' && origin
     ? `${origin}/auth/callback`
     : Linking.createURL('/auth/callback');
 
-  // Get the Kakao authorization URL from Supabase (skipBrowserRedirect = we open it manually)
-  const { data: oauthData, error: oauthError } = await supabase.auth.signInWithOAuth({
-    provider: 'kakao',
-    options: {
-      redirectTo,
-      skipBrowserRedirect: true,
-    },
-  });
+  // ── 2. Build the Kakao authorize URL ────────────────────────────────────
+  // response_type=code selects the OAuth Authorization Code flow.
+  const authUrl =
+    'https://kauth.kakao.com/oauth/authorize' +
+    `?client_id=${encodeURIComponent(kakaoRestApiKey)}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    '&response_type=code';
 
-  if (oauthError) throw oauthError;
-  if (!oauthData.url) throw new Error('OAuth URL을 받지 못했습니다.');
-
-  // Open Kakao login page in an in-app browser
-  // Waits until the browser redirects to our redirectTo URL and captures it
-  const result = await WebBrowser.openAuthSessionAsync(oauthData.url, redirectTo, {
+  // ── 3. Open Kakao consent UI in the in-app browser ──────────────────────
+  const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri, {
     showInRecents: false,
   });
 
   if (result.type !== 'success') {
-    // User closed the browser (type === 'cancel' or 'dismiss')
+    // User dismissed the browser (cancel / dismiss)
     throw new Error('cancelled');
   }
 
-  // Exchange the PKCE authorization code in the redirect URL for a session
-  const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(result.url);
-  if (exchangeError) throw exchangeError;
+  // ── 4. Extract `code` from the redirect URL ─────────────────────────────
+  // result.url looks like:  synclink://auth/callback?code=...&state=...
+  // or (web):               https://app.example.com/auth/callback?code=...
+  const code = extractQueryParam(result.url, 'code');
+  if (!code) {
+    throw new Error('Kakao 인증 코드를 받지 못했습니다.');
+  }
 
-  // Retrieve the established session
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-  if (sessionError) throw sessionError;
-  if (!sessionData.session) throw new Error('세션을 가져오지 못했습니다.');
+  // ── 5. Call our kakao-auth Edge Function to upsert the user ─────────────
+  // We use a plain fetch (not supabase.functions.invoke) because the call is
+  // unauthenticated — the user has no Supabase session yet. The URL and anon
+  // key come from `lib/supabase` (single source of truth), not from direct
+  // process.env reads, to avoid babel inline-env-vars headaches in tests.
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error('Supabase 설정이 누락되었습니다.');
+  }
 
-  return buildSignInResult(sessionData.session);
+  const fnRes = await fetch(`${SUPABASE_URL}/functions/v1/kakao-auth`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      // Anon key lets the request past Supabase's function gateway.
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      apikey: SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ code, redirect_uri: redirectUri }),
+  });
+
+  if (!fnRes.ok) {
+    const detail = await fnRes.text();
+    throw new Error(`Kakao 로그인에 실패했습니다: ${detail || fnRes.status}`);
+  }
+
+  const { email, password } = (await fnRes.json()) as { email?: string; password?: string };
+  if (!email || !password) {
+    throw new Error('Kakao 로그인 응답이 올바르지 않습니다.');
+  }
+
+  // ── 6. Exchange the derived credentials for a real Supabase session ─────
+  // The password is never stored anywhere on the client — signInWithPassword
+  // hands us session tokens that replace it.
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+  if (!data.session) throw new Error('세션을 생성하지 못했습니다.');
+
+  return buildSignInResult(data.session);
+}
+
+/**
+ * Extract a query-string parameter value from a URL-like string.
+ *
+ * Works for both web URLs (`https://...?code=...`) and custom-scheme deep
+ * links (`synclink://auth/callback?code=...`). Using the native `URL`
+ * constructor would fail on some React Native hosts for non-standard
+ * schemes, so we do a lightweight manual parse.
+ *
+ * @param url   - The full redirect URL returned by WebBrowser
+ * @param key   - Query-string key to look up
+ * @returns The raw (URL-decoded) value, or null if not present.
+ */
+function extractQueryParam(url: string, key: string): string | null {
+  const qIdx = url.indexOf('?');
+  if (qIdx === -1) return null;
+  // Drop anything after a `#` fragment — we only care about the query string.
+  const hashIdx = url.indexOf('#', qIdx);
+  const query = url.slice(qIdx + 1, hashIdx === -1 ? undefined : hashIdx);
+  const params = new URLSearchParams(query);
+  return params.get(key);
 }
 
 /**

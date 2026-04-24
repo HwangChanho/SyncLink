@@ -71,10 +71,13 @@ jest.mock('expo-linking', () => ({
 
 // @/lib/supabase 전체 대체 — 실제 Supabase 호출 차단
 jest.mock('@/lib/supabase', () => ({
+  SUPABASE_URL: 'https://test.supabase.co',
+  SUPABASE_ANON_KEY: 'test-anon-key',
   supabase: {
     auth: {
       signInWithOAuth: jest.fn(),
       signInWithIdToken: jest.fn(),
+      signInWithPassword: jest.fn(),
       exchangeCodeForSession: jest.fn(),
       getSession: jest.fn(),
       refreshSession: jest.fn(),
@@ -85,6 +88,10 @@ jest.mock('@/lib/supabase', () => ({
     from: jest.fn(),
   },
 }));
+
+// fetch mock — kakao-auth Edge Function 호출용
+const fetchMock = jest.fn();
+(globalThis as Record<string, unknown>).fetch = fetchMock;
 
 // ─── Imports ──────────────────────────────────────────────────────────────────
 
@@ -227,44 +234,37 @@ describe('authService (Platform.OS = "web")', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('signInWithKakao (web)', () => {
+    beforeEach(() => {
+      fetchMock.mockReset();
+    });
+
     /**
-     * Kakao PKCE 흐름에서 redirectTo가 window.location.origin 기반인지 확인.
-     * signInWithOAuth가 URL을 반환한 후 WebBrowser.openAuthSessionAsync가 호출되지만,
-     * 여기서는 redirectTo 주입 여부만 검증한다.
+     * 웹에서는 redirect URI가 window.location.origin + /auth/callback 이어야 한다.
+     * signInWithKakao는 이 URI를 Kakao authorize URL과 Edge Function 요청 body 양쪽에
+     * 포함시켜 보낸다.
      */
-    it('redirectTo = window.location.origin + "/auth/callback"', async () => {
-      (supabase.auth.signInWithOAuth as jest.Mock).mockResolvedValue({
-        data: { url: 'https://kauth.kakao.com/oauth/authorize?response_type=code' },
-        error: null,
-      });
-      // WebBrowser는 cancel 반환 → "cancelled" throw (signInWithOAuth 검증 후 진행)
+    it('redirectUri = window.location.origin + "/auth/callback"', async () => {
+      // 브라우저는 cancel을 반환해 짧은 경로로 테스트 종료
       (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({ type: 'cancel' });
 
       await expect(signInWithKakao()).rejects.toThrow('cancelled');
 
-      expect(supabase.auth.signInWithOAuth).toHaveBeenCalledWith(
-        expect.objectContaining({
-          provider: 'kakao',
-          options: expect.objectContaining({
-            redirectTo: `${TEST_ORIGIN}/auth/callback`,
-          }),
-        }),
-      );
+      // 브라우저 호출: authUrl에 client_id 포함, redirectUri가 origin 기반
+      const call = (WebBrowser.openAuthSessionAsync as jest.Mock).mock.calls[0];
+      expect(call[0]).toContain('https://kauth.kakao.com/oauth/authorize');
+      expect(call[0]).toContain(`redirect_uri=${encodeURIComponent(`${TEST_ORIGIN}/auth/callback`)}`);
+      expect(call[1]).toBe(`${TEST_ORIGIN}/auth/callback`);
+
+      // Supabase 내장 Kakao 프로바이더는 더 이상 사용하지 않는다
+      expect(supabase.auth.signInWithOAuth).not.toHaveBeenCalled();
     });
 
     it('origin 미설정 시 Linking.createURL 폴백 사용', async () => {
-      // origin 제거
       delete (globalThis as Record<string, unknown>).location;
-
-      (supabase.auth.signInWithOAuth as jest.Mock).mockResolvedValue({
-        data: { url: 'https://kauth.kakao.com/oauth/authorize' },
-        error: null,
-      });
       (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({ type: 'cancel' });
 
       await expect(signInWithKakao()).rejects.toThrow('cancelled');
 
-      // origin이 없으면 Platform.OS==='web'이지만 origin이 undefined → Linking.createURL 사용
       expect(Linking.createURL).toHaveBeenCalledWith('/auth/callback');
     });
   });
