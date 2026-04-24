@@ -179,6 +179,13 @@ Deno.serve(async (req: Request) => {
   try {
     const url = new URL(req.url);
 
+    // 0) AdMob console "URL 확인" probe pings the endpoint without query
+    //    parameters to check reachability. Reply 200 so the console accepts
+    //    the URL. Real SSV callbacks always include `signature` + `key_id`.
+    if (!url.searchParams.has('signature') || !url.searchParams.has('key_id')) {
+      return new Response('reward-credit endpoint live', { status: 200 });
+    }
+
     // 1) Verify signature — fail fast so AdMob retries only genuine replay.
     await verifySignature(url);
 
