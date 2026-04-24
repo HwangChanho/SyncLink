@@ -174,8 +174,30 @@ function derSignatureToRaw(der: Uint8Array): Uint8Array {
 
 // ─── Handler ─────────────────────────────────────────────────────────────────
 
+// Permissive CORS so AdMob console's in-browser URL probe can reach the
+// endpoint. Real SSV callbacks are server-to-server (no CORS), but the
+// console verification runs from apps.admob.com in the user's browser.
+const CORS_HEADERS: HeadersInit = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'GET, POST, OPTIONS',
+  'access-control-allow-headers': '*',
+};
+
+function cors(body: string, init: ResponseInit = {}): Response {
+  return new Response(body, {
+    ...init,
+    headers: { ...(init.headers ?? {}), ...CORS_HEADERS },
+  });
+}
+
 Deno.serve(async (req: Request) => {
   const startedAt = Date.now();
+
+  // CORS preflight
+  if (req.method === 'OPTIONS') {
+    return cors('', { status: 204 });
+  }
+
   try {
     const url = new URL(req.url);
 
@@ -183,7 +205,7 @@ Deno.serve(async (req: Request) => {
     //    parameters to check reachability. Reply 200 so the console accepts
     //    the URL. Real SSV callbacks always include `signature` + `key_id`.
     if (!url.searchParams.has('signature') || !url.searchParams.has('key_id')) {
-      return new Response('reward-credit endpoint live', { status: 200 });
+      return cors('reward-credit endpoint live', { status: 200 });
     }
 
     // 1) Verify signature. AdMob's console also sends a signed probe with a
@@ -197,7 +219,7 @@ Deno.serve(async (req: Request) => {
       await logToDb('reward-credit.signature', err, {
         key_id: url.searchParams.get('key_id'),
       });
-      return new Response('signature not verified (ignored)', { status: 200 });
+      return cors('signature not verified (ignored)', { status: 200 });
     }
 
     // 2) Extract fields.
@@ -247,7 +269,7 @@ Deno.serve(async (req: Request) => {
       // Postgres error code 23505.
       const msg = insertError.message ?? '';
       if (msg.includes('duplicate') || msg.includes('23505')) {
-        return new Response('ok (duplicate)', { status: 200 });
+        return cors('ok (duplicate)', { status: 200 });
       }
       await logToDb('reward-credit.insert', insertError, { userId, transactionId });
       return new Response('insert failed', { status: 500 });
@@ -281,7 +303,7 @@ Deno.serve(async (req: Request) => {
         Date.now() - startedAt
       }ms`,
     );
-    return new Response('ok', { status: 200 });
+    return cors('ok', { status: 200 });
   } catch (err) {
     await logToDb('reward-credit.handler', err);
     // Signature failures and malformed requests both end here. We return 400
