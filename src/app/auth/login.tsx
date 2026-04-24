@@ -23,7 +23,10 @@ import {
 
 type Provider = 'google' | 'kakao' | 'apple' | 'dev';
 
-const IS_DEV_BUILD = process.env.EXPO_PUBLIC_APP_ENV === 'development';
+// __DEV__ is true in debug builds (npx expo run:ios) and false in release (TestFlight/App Store)
+// This is the correct way to gate simulator-only features — EXPO_PUBLIC_APP_ENV is unreliable
+// because .env sets it to 'production' even for local dev builds.
+const IS_DEV_BUILD = __DEV__;
 
 export default function LoginScreen() {
   const { t } = useTranslation();
@@ -88,18 +91,29 @@ export default function LoginScreen() {
             }
           </TouchableOpacity>
 
-          {/* Kakao — iOS & Android */}
-          <TouchableOpacity
-            style={[styles.button, styles.kakaoButton, isLoading && styles.disabled]}
-            onPress={() => handleSignIn('kakao')}
-            disabled={isLoading}
-            accessibilityLabel="카카오로 로그인"
-          >
-            {loading === 'kakao'
-              ? <ActivityIndicator color="#3A1D1D" />
-              : <Text style={[styles.buttonText, styles.kakaoText]}>{t('auth.login.kakao')}</Text>
-            }
-          </TouchableOpacity>
+          {/* Kakao — iOS & Android only (not available on web: TASK-1305).
+              On web, Supabase does not natively support Kakao as an OAuth provider.
+              We hide the button and show an informational notice instead. */}
+          {Platform.OS !== 'web' ? (
+            <TouchableOpacity
+              style={[styles.button, styles.kakaoButton, isLoading && styles.disabled]}
+              onPress={() => handleSignIn('kakao')}
+              disabled={isLoading}
+              accessibilityLabel="카카오로 로그인"
+            >
+              {loading === 'kakao'
+                ? <ActivityIndicator color="#3A1D1D" />
+                : <Text style={[styles.buttonText, styles.kakaoText]}>{t('auth.login.kakao')}</Text>
+              }
+            </TouchableOpacity>
+          ) : (
+            /* Web: show a subtle notice that Kakao login is app-only */
+            <View style={styles.kakaoWebNotice}>
+              <Text style={styles.kakaoWebNoticeText}>
+                {t('reminder.kakao_web_notice')}
+              </Text>
+            </View>
+          )}
 
           {/* Apple — iOS only */}
           {Platform.OS === 'ios' && (
@@ -203,6 +217,17 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   kakaoText: { color: '#3A1D1D' },
   appleButton: { backgroundColor: '#000000' },
   appleText: { color: '#FFFFFF' },
+  /** Shown on web in place of the Kakao login button (TASK-1305). */
+  kakaoWebNotice: {
+    width: '100%',
+    paddingVertical: spacing[3],
+    alignItems: 'center',
+  },
+  kakaoWebNoticeText: {
+    ...textStyles.bodySm,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
   errorBox: {
     marginTop: spacing[4], width: '100%',
     padding: spacing[3], borderRadius: radius.md,

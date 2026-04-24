@@ -148,6 +148,11 @@ export async function signInWithGoogle(): Promise<SignInResult> {
     if (isStatusCodeError(err, statusCodes.PLAY_SERVICES_NOT_AVAILABLE)) {
       throw new Error('Google Play 서비스를 사용할 수 없습니다. 기기를 확인해 주세요.');
     }
+    // Developer-facing: DEVELOPER_ERROR usually means bundle ID mismatch in Google Cloud Console
+    // Fix: ensure iOS OAuth client is registered with bundle ID io.synclink.app
+    if (isStatusCodeError(err, 10 /* DEVELOPER_ERROR */)) {
+      throw new Error('Google 로그인 설정 오류입니다. (DEVELOPER_ERROR: 번들 ID 불일치 — Google Cloud Console에서 io.synclink.app으로 iOS 클라이언트를 재생성하세요)');
+    }
     throw err;
   }
 
@@ -413,7 +418,24 @@ export async function uploadAvatar(localUri: string): Promise<string> {
       upsert: true, // overwrite existing file
     });
 
-  if (uploadError) throw uploadError;
+  if (uploadError) {
+    // Translate common Supabase Storage errors into Korean user-facing messages
+    // so the UI shows a readable reason instead of an SDK string.
+    // Bucket-not-found is the most common failure mode when the 'avatars' bucket
+    // has not yet been created in the Supabase dashboard.
+    const raw = uploadError.message ?? '';
+    if (/bucket.*not.*found/i.test(raw) || /resource.*not.*found/i.test(raw)) {
+      throw new Error(
+        '프로필 사진 저장소(avatars 버킷)가 설정되지 않았습니다. 관리자에게 문의해 주세요.',
+      );
+    }
+    if (/permission/i.test(raw) || /unauthorized/i.test(raw) || /row.?level.?security/i.test(raw)) {
+      throw new Error('프로필 사진 업로드 권한이 없습니다. 다시 로그인해 주세요.');
+    }
+    // Fall through: preserve original error for engineers while giving
+    // the user a generic message.
+    throw new Error(`프로필 사진 업로드에 실패했습니다: ${raw}`);
+  }
 
   // Get the public URL (bucket must be public in Supabase Storage settings)
   const { data: { publicUrl } } = supabase.storage
