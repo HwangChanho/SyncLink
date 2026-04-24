@@ -325,6 +325,15 @@ export default function CalendarScreen() {
 
   // ─── Swipe gesture ──────────────────────────────────────────────────────────
 
+  /**
+   * Keep the current viewMode in a ref so the PanResponder callbacks
+   * (created once via useRef) always read the latest value. Without this
+   * the closure captured 'month' at first render and swipes kept shifting
+   * by month even after the user switched to week/day mode.
+   */
+  const viewModeRef = useRef(viewMode);
+  useEffect(() => { viewModeRef.current = viewMode; }, [viewMode]);
+
   const panResponder = useRef(
     PanResponder.create({
       // Only claim the gesture if it's predominantly horizontal
@@ -334,10 +343,11 @@ export default function CalendarScreen() {
 
       onPanResponderRelease: (_, gs) => {
         if (Math.abs(gs.dx) < SWIPE_THRESHOLD) return;
+        const mode = viewModeRef.current;
         if (gs.dx < 0) {
-          setSelectedDate((prev) => shiftDate(prev, viewMode, 1));
+          setSelectedDate((prev) => shiftDate(prev, mode, 1));
         } else {
-          setSelectedDate((prev) => shiftDate(prev, viewMode, -1));
+          setSelectedDate((prev) => shiftDate(prev, mode, -1));
         }
       },
     }),

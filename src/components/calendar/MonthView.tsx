@@ -21,7 +21,7 @@ import { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import type { EventSummary } from '@/types';
 import { useColors } from '@/hooks/useColors';
-import { spacing, componentHeight } from '@/constants/spacing';
+import { spacing } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 
 /** Maximum bars to show per day cell before collapsing to "+N". */
@@ -283,7 +283,10 @@ export function MonthView({
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const CELL_HEIGHT = componentHeight.calendarCell; // 60px
+// Cell height: expanded vs the previous 60px default so the Apple-Calendar-
+// style colour bars (title + up to 3 of them) have room without crowding
+// the day number. Comes out to roughly 6 × 82 = 492 px of grid body.
+const CELL_HEIGHT = 82;
 const DATE_CIRCLE = 30;
 
 /**

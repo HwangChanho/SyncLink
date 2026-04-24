@@ -23,48 +23,72 @@ import { spacing, radius } from '@/constants/spacing';
 import { textStyles, fontWeight } from '@/constants/typography';
 
 /**
- * Subtle bouncing chevron used on both sides of the period title to hint
- * that the calendar responds to horizontal swipes. No interaction — the
- * PanResponder on the screen container handles the actual gesture.
+ * Subtle "more content this way" swipe hint rendered on either side of the
+ * period title.
+ *
+ * Design note — previous iteration used bouncing chevrons which felt
+ * cartoonish. This replacement renders three small dots whose opacity
+ * cascades outward in a soft wave (inner dot → outer dot). The cadence is
+ * slow (~1.6 s) so it reads as ambient rather than demanding. The only
+ * visual motion is opacity; no translation, no bounce.
  */
 function SwipeHint({ direction }: { direction: 'left' | 'right' }) {
   const colors = useColors();
-  const translate = useRef(new Animated.Value(0)).current;
+  const dotCount = 3;
+  // Keep one Animated.Value per dot so each can phase independently.
+  const values = useRef(
+    Array.from({ length: dotCount }, () => new Animated.Value(0.08)),
+  ).current;
 
   useEffect(() => {
-    const to = direction === 'left' ? -4 : 4;
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(translate, {
-          toValue: to,
-          duration: 700,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(translate, {
-          toValue: 0,
-          duration: 700,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ]),
+    const MIN = 0.08;
+    const MAX = 0.28;
+    const STEP_MS = 520;
+    // Kick off each dot with a staggered delay so the wave walks outward.
+    // For the left-hand hint the wave runs right → left (closer dot first
+    // for "come this way" feel); right hand mirrors.
+    const stagger = direction === 'left' ? [0, 1, 2] : [2, 1, 0];
+    const loops = values.map((v, i) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(stagger[i]! * (STEP_MS / 2)),
+          Animated.timing(v, {
+            toValue: MAX,
+            duration: STEP_MS,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(v, {
+            toValue: MIN,
+            duration: STEP_MS,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]),
+      ),
     );
-    loop.start();
-    return () => loop.stop();
-  }, [direction, translate]);
+    loops.forEach((l) => l.start());
+    return () => loops.forEach((l) => l.stop());
+  }, [direction, values]);
+
+  // Outer-to-inner order so the rendered row visually walks toward the title.
+  const ordered = direction === 'left' ? [...values].reverse() : values;
 
   return (
-    <Animated.View
-      pointerEvents="none"
-      style={{
-        transform: [{ translateX: translate }],
-        opacity: 0.35,
-      }}
-    >
-      <Text style={{ fontSize: 20, color: colors.textSecondary }}>
-        {direction === 'left' ? '‹' : '›'}
-      </Text>
-    </Animated.View>
+    <View style={{ flexDirection: 'row', gap: 3 }} pointerEvents="none">
+      {ordered.map((v, i) => (
+        <Animated.View
+          key={i}
+          style={{
+            width: 4,
+            height: 4,
+            borderRadius: 2,
+            backgroundColor: colors.textSecondary,
+            opacity: v,
+          }}
+        />
+      ))}
+    </View>
   );
 }
 
@@ -112,9 +136,26 @@ function buildTitle(mode: ViewMode, date: Date): string {
   const y = date.getFullYear();
   const m = date.getMonth() + 1;
 
-  if (mode !== 'day') {
-    // Both month and week modes show the year + month
+  if (mode === 'month') {
+    // Month mode: "2026년 4월"
     return `${y}년 ${m}월`;
+  }
+
+  if (mode === 'week') {
+    // Week mode: show the span so the user knows which week is visible.
+    // Match WeekView's week = Sun…Sat containing the selected date.
+    const sunday = new Date(date);
+    sunday.setDate(sunday.getDate() - sunday.getDay());
+    const saturday = new Date(sunday);
+    saturday.setDate(saturday.getDate() + 6);
+    const sM = sunday.getMonth() + 1;
+    const sD = sunday.getDate();
+    const eM = saturday.getMonth() + 1;
+    const eD = saturday.getDate();
+    if (sM === eM) {
+      return `${y}년 ${sM}월 ${sD}일 ~ ${eD}일`;
+    }
+    return `${y}년 ${sM}월 ${sD}일 ~ ${eM}월 ${eD}일`;
   }
 
   // Day mode: "4월 18일 (금)"

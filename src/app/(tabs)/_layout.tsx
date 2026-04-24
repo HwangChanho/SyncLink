@@ -31,6 +31,12 @@ export default function TabLayout() {
         },
         headerTintColor: colors.textPrimary,
         headerShadowVisible: false,
+        // Larger, bolder top title as requested for clearer section anchoring.
+        headerTitleStyle: {
+          fontSize: 22,
+          fontWeight: '700',
+          color: colors.textPrimary,
+        },
         // Language picker button appears on every tab's top-right header.
         headerRight: () => <LanguageButton />,
         tabBarActiveTintColor: colors.tabActive,
