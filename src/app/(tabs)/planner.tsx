@@ -42,6 +42,7 @@ import type { Todo, Category } from '@/types';
 import { getCategories } from '@/services/categoryService';
 import { TodoEditSheet } from '@/components/planner/TodoEditSheet';
 import { CategoryPickerSheet } from '@/components/planner/CategoryPickerSheet';
+import { DateTimeModal } from '@/components/common/DateTimeModal';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -197,6 +198,7 @@ function CategorySectionHeader({
   onToggleExpand,
   colors,
   styles,
+  labelOverride,
 }: {
   category: Category | null;
   count: number;
@@ -205,9 +207,14 @@ function CategorySectionHeader({
   onToggleExpand: () => void;
   colors: ColorTokens;
   styles: ReturnType<typeof makeStyles>;
+  /**
+   * Optional override for non-category grouping modes (e.g. date/priority).
+   * When provided, takes precedence over `category?.name`.
+   */
+  labelOverride?: string;
 }) {
   const { t: tCat } = useTranslation();
-  const name = category?.name ?? tCat('todo.uncategorized');
+  const name = labelOverride ?? category?.name ?? tCat('todo.uncategorized');
   const color = category?.color ?? colors.textTertiary;
 
   return (
@@ -333,6 +340,14 @@ export default function PlannerScreen() {
   const [quickAddCategoryId, setQuickAddCategoryId] = useState<string | null>(null);
   /** Whether the category picker for the quick-add bar is visible. */
   const [quickAddPickerVisible, setQuickAddPickerVisible] = useState(false);
+  /** Due date preselected for the next quick-add todo. */
+  const [quickAddDueDate, setQuickAddDueDate] = useState<Date | null>(null);
+  /** Priority preselected for the next quick-add todo. */
+  const [quickAddPriority, setQuickAddPriority] = useState<'low' | 'medium' | 'high' | null>(null);
+  /** Whether the native date picker is open for quick-add. */
+  const [quickAddDateModalVisible, setQuickAddDateModalVisible] = useState(false);
+  /** Todo tab view grouping. Default 'category' matches prior behaviour. */
+  const [todoView, setTodoView] = useState<'category' | 'date' | 'priority'>('category');
 
   const inputRef = useRef<TextInput>(null);
 
@@ -388,8 +403,13 @@ export default function PlannerScreen() {
         // CreateTodoInput disallows explicit undefined, so only add the
         // property when a category is actually chosen.
         ...(quickAddCategoryId ? { categoryId: quickAddCategoryId } : {}),
+        ...(quickAddDueDate    ? { dueDate: quickAddDueDate }     : {}),
+        ...(quickAddPriority   ? { priority: quickAddPriority }   : {}),
       });
       setQuickInput('');
+      // Keep category/date/priority selections so rapid entry of several
+      // similar items doesn't require re-selecting each time. User can
+      // clear them explicitly.
     } catch (err) {
       // Error is stored in the todo store (triggers the error useEffect above),
       // but we also log to console for web devtools debugging.
@@ -397,7 +417,7 @@ export default function PlannerScreen() {
     } finally {
       setIsAdding(false);
     }
-  }, [quickInput, activeTab, addTodo, quickAddCategoryId]);
+  }, [quickInput, activeTab, addTodo, quickAddCategoryId, quickAddDueDate, quickAddPriority]);
 
   // ── Toggle expand completed ──────────────────────────────────────────────
 
@@ -419,37 +439,96 @@ export default function PlannerScreen() {
    * Group todos by categoryId.
    * Returns an ordered array of [categoryId | '__uncategorized', Todo[]] tuples.
    */
-  const groupedTodos = useCallback((): Array<{ key: string; category: Category | null; items: Todo[] }> => {
+  /**
+   * Build the ordered, grouped list the todo tab renders. Three modes:
+   *   - 'category': by categoryId, original behaviour
+   *   - 'date': by due date (overdue → today → later → none)
+   *   - 'priority': by priority (high → med → low → none)
+   * The returned `category` field is populated only in 'category' mode;
+   * for the other modes it's null and the `label` field carries the
+   * human-readable bucket name.
+   */
+  const groupedTodos = useCallback((): Array<{
+    key: string;
+    label: string;
+    category: Category | null;
+    items: Todo[];
+  }> => {
     const groups = new Map<string, Todo[]>();
 
+    const dateBucket = (d: Date | null): string => {
+      if (!d) return 'zzz_none';
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const target = new Date(d);
+      target.setHours(0, 0, 0, 0);
+      if (target < today) return '0_overdue';
+      if (target.getTime() === today.getTime()) return '1_today';
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      if (target.getTime() === tomorrow.getTime()) return '2_tomorrow';
+      const in7 = new Date(today);
+      in7.setDate(in7.getDate() + 7);
+      if (target < in7) return '3_this_week';
+      return '4_later';
+    };
+    const dateLabel = (bucket: string): string => ({
+      '0_overdue': '지난 일정',
+      '1_today': '오늘',
+      '2_tomorrow': '내일',
+      '3_this_week': '이번 주',
+      '4_later': '나중에',
+      'zzz_none': '마감일 없음',
+    }[bucket] ?? bucket);
+
+    const priorityBucket = (p: Todo['priority']): string => (p ?? 'zzz_none');
+    const priorityLabel = (bucket: string): string => ({
+      high: '높음',
+      medium: '보통',
+      low: '낮음',
+      'zzz_none': '우선순위 없음',
+    }[bucket] ?? bucket);
+
     for (const todo of todos) {
-      const key = todo.categoryId ?? '__uncategorized';
+      let key: string;
+      if (todoView === 'date') key = dateBucket(todo.dueDate);
+      else if (todoView === 'priority') key = priorityBucket(todo.priority);
+      else key = todo.categoryId ?? '__uncategorized';
       const existing = groups.get(key);
-      if (existing) {
-        existing.push(todo);
-      } else {
-        groups.set(key, [todo]);
-      }
+      if (existing) existing.push(todo);
+      else groups.set(key, [todo]);
     }
 
-    // Sort: categorized first (alphabetically), uncategorized last
-    const result: Array<{ key: string; category: Category | null; items: Todo[] }> = [];
+    const result: Array<{
+      key: string;
+      label: string;
+      category: Category | null;
+      items: Todo[];
+    }> = [];
     for (const [key, items] of groups.entries()) {
-      result.push({
-        key,
-        category: key !== '__uncategorized' ? (categoryMap.get(key) ?? null) : null,
-        items,
-      });
+      let label: string;
+      let category: Category | null = null;
+      if (todoView === 'date') label = dateLabel(key);
+      else if (todoView === 'priority') label = priorityLabel(key);
+      else {
+        category = key !== '__uncategorized' ? (categoryMap.get(key) ?? null) : null;
+        label = category?.name ?? '카테고리 없음';
+      }
+      result.push({ key, label, category, items });
     }
 
+    // Sort: numeric prefix buckets use their natural key order; otherwise by label.
     result.sort((a, b) => {
-      if (a.key === '__uncategorized') return 1;
-      if (b.key === '__uncategorized') return -1;
-      return (a.category?.name ?? '').localeCompare(b.category?.name ?? '');
+      if (todoView === 'category') {
+        if (a.key === '__uncategorized') return 1;
+        if (b.key === '__uncategorized') return -1;
+        return a.label.localeCompare(b.label);
+      }
+      return a.key.localeCompare(b.key);
     });
 
     return result;
-  }, [todos, categoryMap]);
+  }, [todos, categoryMap, todoView]);
 
   const renderTodoTab = () => {
     if (isLoading && todos.length === 0) {
@@ -479,7 +558,7 @@ export default function PlannerScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {groups.map(({ key, category, items }) => {
+        {groups.map(({ key, category, items, label }) => {
           const incompleteTodos = items.filter(t => !t.isCompleted);
           const completedTodos  = items.filter(t => t.isCompleted);
           const isExpanded = expandedSections.has(key);
@@ -494,6 +573,7 @@ export default function PlannerScreen() {
                 onToggleExpand={() => toggleExpand(key)}
                 colors={colors}
                 styles={styles}
+                {...(todoView !== 'category' ? { labelOverride: label } : {})}
               />
 
               {/* Incomplete todos */}
@@ -609,6 +689,33 @@ export default function PlannerScreen() {
         ))}
       </View>
 
+      {/* Todo grouping mode — segmented control under the tab bar. Only
+          visible on the Todo tab. Categorisation mode stays the default. */}
+      {activeTab === 'todo' && (
+        <View style={styles.viewModeBar}>
+          {([
+            { key: 'category', label: '카테고리별' },
+            { key: 'date',     label: '날짜순' },
+            { key: 'priority', label: '우선순위' },
+          ] as const).map((m) => (
+            <TouchableOpacity
+              key={m.key}
+              style={[styles.viewModeItem, todoView === m.key && styles.viewModeItemActive]}
+              onPress={() => setTodoView(m.key)}
+            >
+              <Text
+                style={[
+                  styles.viewModeLabel,
+                  todoView === m.key && styles.viewModeLabelActive,
+                ]}
+              >
+                {m.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
       {/* Content */}
       <KeyboardAvoidingView
         style={styles.flex}
@@ -674,6 +781,60 @@ export default function PlannerScreen() {
               onSubmitEditing={handleQuickAdd}
               editable={!isAdding}
             />
+
+            {/* Date chip — opens DateTimeModal to pick/clear a due date */}
+            <TouchableOpacity
+              style={[
+                styles.quickAddIconBtn,
+                quickAddDueDate && { borderColor: colors.primary },
+              ]}
+              onPress={() => setQuickAddDateModalVisible(true)}
+              accessibilityLabel="마감일 선택"
+            >
+              <Ionicons
+                name="calendar-outline"
+                size={16}
+                color={quickAddDueDate ? colors.primary : colors.textSecondary}
+              />
+              {quickAddDueDate && (
+                <Text style={[styles.quickAddIconLabel, { color: colors.primary }]}>
+                  {`${quickAddDueDate.getMonth() + 1}/${quickAddDueDate.getDate()}`}
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            {/* Priority chip — cycles low → med → high → none on each tap */}
+            <TouchableOpacity
+              style={[
+                styles.quickAddIconBtn,
+                quickAddPriority && {
+                  borderColor:
+                    quickAddPriority === 'high' ? '#E11D48'
+                    : quickAddPriority === 'medium' ? '#F59E0B'
+                    : '#64748B',
+                },
+              ]}
+              onPress={() => {
+                setQuickAddPriority((prev) =>
+                  prev === null ? 'low'
+                  : prev === 'low' ? 'medium'
+                  : prev === 'medium' ? 'high'
+                  : null,
+                );
+              }}
+              accessibilityLabel="우선순위 선택"
+            >
+              <Ionicons
+                name={quickAddPriority ? 'flag' : 'flag-outline'}
+                size={16}
+                color={
+                  quickAddPriority === 'high' ? '#E11D48'
+                  : quickAddPriority === 'medium' ? '#F59E0B'
+                  : quickAddPriority === 'low' ? '#64748B'
+                  : colors.textSecondary
+                }
+              />
+            </TouchableOpacity>
             <TouchableOpacity
               style={[styles.quickAddBtn, (isAdding || quickInput.trim().length === 0) && styles.buttonDisabled]}
               onPress={handleQuickAdd}
@@ -703,6 +864,24 @@ export default function PlannerScreen() {
           });
         }}
       />
+
+      {/* Quick-add due-date picker */}
+      {quickAddDateModalVisible && (
+        <DateTimeModal
+          visible={quickAddDateModalVisible}
+          initialValue={quickAddDueDate ?? (() => {
+            const d = new Date();
+            d.setHours(9, 0, 0, 0);
+            return d;
+          })()}
+          allDay={true}
+          onCancel={() => setQuickAddDateModalVisible(false)}
+          onConfirm={(d) => {
+            setQuickAddDueDate(d);
+            setQuickAddDateModalVisible(false);
+          }}
+        />
+      )}
 
       {/* FAB — Notes tab only */}
       {activeTab === 'notes' && (
@@ -1007,6 +1186,51 @@ function makeStyles(colors: ColorTokens) {
     quickAddCategoryLabel: {
       ...textStyles.caption,
       color: colors.textSecondary,
+    },
+    // Small circular icon button on the quick-add bar (date / priority).
+    quickAddIconBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      paddingHorizontal: spacing[2],
+      height: componentHeight.buttonSm,
+      minWidth: componentHeight.buttonSm,
+      borderRadius: radius.full,
+      borderWidth: 1,
+      borderColor: colors.inputBorder,
+      backgroundColor: colors.inputBackground,
+    },
+    quickAddIconLabel: {
+      ...textStyles.caption,
+    },
+    // Segmented control for Todo tab grouping.
+    viewModeBar: {
+      flexDirection: 'row',
+      paddingHorizontal: spacing[4],
+      paddingVertical: spacing[2],
+      gap: spacing[2],
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    viewModeItem: {
+      paddingHorizontal: spacing[3],
+      paddingVertical: spacing[1],
+      borderRadius: radius.full,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    viewModeItemActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    viewModeLabel: {
+      ...textStyles.caption,
+      color: colors.textSecondary,
+    },
+    viewModeLabelActive: {
+      color: colors.textInverse,
+      fontWeight: '600',
     },
 
     // FAB
