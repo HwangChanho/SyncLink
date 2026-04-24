@@ -283,8 +283,10 @@ export default function RootLayout() {
   const setPlan = useSubscriptionStore((s) => s.setPlan);
   const router = useRouter();
 
-  // App lock state
-  const { isLocked, isEnabled, lock, unlock, hydrate } = useAppLockStore();
+  // App lock state. `isEnabled` and `lock` are not referenced here because
+  // the LockOverlay now owns biometric/PIN prompting; we only need the
+  // `isLocked` boolean for the overlay gate and `unlock`/`hydrate` actions.
+  const { isLocked, unlock, hydrate } = useAppLockStore();
   /** Track previous AppState to detect background→foreground transitions. */
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 

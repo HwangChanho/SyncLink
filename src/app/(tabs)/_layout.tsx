@@ -12,6 +12,7 @@
 import { Tabs } from 'expo-router';
 import { Platform } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { componentHeight } from '@/constants/spacing';
 import { LanguageButton } from '@/components/common/LanguageButton';
@@ -35,6 +36,10 @@ export default function TabLayout() {
         headerShown: true,
         headerStyle: {
           backgroundColor: colors.background,
+          // Tighter header so the bold title sits closer to the content.
+          // 42px is the minimum that still looks balanced with our 22pt
+          // title; anything lower clips the descender glyphs.
+          height: 44,
         },
         headerTintColor: colors.textPrimary,
         headerShadowVisible: false,
@@ -60,28 +65,52 @@ export default function TabLayout() {
         name="index"
         options={{
           title: t('tabs.home'),
-          // tabBarIcon: ({ color }) => <HomeIcon color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? 'home' : 'home-outline'}
+              size={22}
+              color={color}
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="calendar"
         options={{
           title: t('tabs.calendar'),
-          // tabBarIcon: ({ color }) => <CalendarIcon color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? 'calendar' : 'calendar-outline'}
+              size={22}
+              color={color}
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="planner"
         options={{
           title: t('tabs.planner'),
-          // tabBarIcon: ({ color }) => <CheckSquareIcon color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? 'checkbox' : 'checkbox-outline'}
+              size={22}
+              color={color}
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="my"
         options={{
           title: t('tabs.my'),
-          // tabBarIcon: ({ color }) => <UserIcon color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? 'person-circle' : 'person-circle-outline'}
+              size={24}
+              color={color}
+            />
+          ),
         }}
       />
     </Tabs>

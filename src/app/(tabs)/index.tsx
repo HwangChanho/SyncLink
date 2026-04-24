@@ -80,7 +80,7 @@ export default function HomeScreen() {
   return (
     <SafeAreaView
       style={[styles.safeArea, { backgroundColor: colors.background }]}
-      edges={['top', 'left', 'right']}
+      edges={['left', 'right']}
     >
       {/*
        * Web: RefreshControl is no-op on web browsers so we render a manual

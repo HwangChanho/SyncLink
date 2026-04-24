@@ -71,15 +71,6 @@ export default function AppearanceSettingsScreen() {
           })}
         </View>
 
-        <View style={styles.divider} />
-
-        <Pressable
-          style={styles.row}
-          onPress={() => router.push('/settings/licenses')}
-        >
-          <Text style={styles.rowText}>오픈소스 라이선스</Text>
-          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );

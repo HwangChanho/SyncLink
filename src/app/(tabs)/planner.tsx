@@ -629,7 +629,7 @@ export default function PlannerScreen() {
   // ── Main render ──────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.container} edges={['left', 'right']}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>{t('tabs.planner')}</Text>

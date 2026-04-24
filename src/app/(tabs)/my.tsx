@@ -285,7 +285,7 @@ export default function MyScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['left', 'right']}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -515,6 +515,26 @@ export default function MyScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
+            </View>
+          </View>
+        </View>
+
+        {/* ── Service info section — app version + open-source notices. */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>서비스 정보</Text>
+          <View style={styles.menuCard}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => router.push('/settings/licenses')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.menuItemText}>오픈소스 라이선스</Text>
+              <Text style={styles.menuItemChevron}>›</Text>
+            </TouchableOpacity>
+            <View style={styles.menuDivider} />
+            <View style={styles.menuItem}>
+              <Text style={styles.menuItemText}>앱 버전</Text>
+              <Text style={styles.menuItemValue}>1.0.0</Text>
             </View>
           </View>
         </View>
@@ -848,6 +868,10 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     fontSize: 22,
     color: colors.textTertiary,
     fontWeight: '300',
+  },
+  menuItemValue: {
+    ...textStyles.body,
+    color: colors.textSecondary,
   },
   menuDivider: {
     height: 1,

@@ -361,7 +361,7 @@ export default function CalendarScreen() {
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={[]}>
       <View style={styles.container}>
         {/*
           Category filter button — top-left affordance that opens a modal
