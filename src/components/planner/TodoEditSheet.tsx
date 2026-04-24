@@ -126,6 +126,28 @@ export function TodoEditSheet({
     }
   }, [todo, title, memo, priority, categoryId, onSave, onClose, isSaving]);
 
+  /**
+   * Auto-save on close — user asked to drop the explicit Save button so
+   * the sheet feels like Apple Notes: edits persist as soon as you
+   * dismiss. Only fires when there's a non-empty title and the content
+   * actually diverges from the original.
+   */
+  const handleCloseWithSave = useCallback(() => {
+    if (!todo) { onClose(); return; }
+    const trimmed = title.trim();
+    const memoTrim = memo.trim();
+    const dirty =
+      trimmed !== todo.title ||
+      memoTrim !== (todo.content ?? '') ||
+      priority !== todo.priority ||
+      categoryId !== todo.categoryId;
+    if (trimmed.length === 0 || !dirty) {
+      onClose();
+      return;
+    }
+    void handleSave();
+  }, [todo, title, memo, priority, categoryId, handleSave, onClose]);
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   const resolvedCategory = categoryId ? (categoryMap.get(categoryId) ?? null) : null;
@@ -137,9 +159,9 @@ export function TodoEditSheet({
         visible={visible}
         transparent
         animationType="slide"
-        onRequestClose={onClose}
+        onRequestClose={handleCloseWithSave}
       >
-        <Pressable style={styles.overlay} onPress={onClose}>
+        <Pressable style={styles.overlay} onPress={handleCloseWithSave}>
           <Pressable
             style={styles.sheetWrapper}
             onPress={(e) => e.stopPropagation()}
@@ -151,27 +173,23 @@ export function TodoEditSheet({
               {/* Grab handle */}
               <View style={styles.handle} />
 
-              {/* Header */}
+              {/*
+                Header — no explicit Save. Closing the sheet (tap outside,
+                grab-handle, or back gesture) auto-saves. Right slot shows
+                a spinner while a save is in-flight.
+              */}
               <View style={styles.header}>
-                <Pressable onPress={onClose} disabled={isSaving}>
-                  <Text style={styles.headerCancel}>{t('common.cancel')}</Text>
+                <Pressable onPress={handleCloseWithSave} disabled={isSaving}>
+                  <Text style={styles.headerCancel}>{t('common.close', '닫기')}</Text>
                 </Pressable>
                 <Text style={styles.headerTitle}>
                   {t('common.edit')} {t('todo.label')}
                 </Text>
-                <Pressable
-                  onPress={() => void handleSave()}
-                  disabled={isSaving || title.trim().length === 0}
-                  style={[
-                    (isSaving || title.trim().length === 0) && styles.disabled,
-                  ]}
-                >
-                  {isSaving ? (
+                <View style={{ minWidth: 40, alignItems: 'flex-end' }}>
+                  {isSaving && (
                     <ActivityIndicator color={colors.primary} size="small" />
-                  ) : (
-                    <Text style={styles.headerSave}>{t('common.save')}</Text>
                   )}
-                </Pressable>
+                </View>
               </View>
 
               <ScrollView

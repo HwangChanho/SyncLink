@@ -19,7 +19,7 @@
 
 import { useState, useEffect, useCallback, useRef, memo } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TextInput,
+  View, Text, StyleSheet, FlatList,
   TouchableOpacity, ActivityIndicator,
   KeyboardAvoidingView, Platform, ScrollView,
   Pressable,
@@ -41,6 +41,7 @@ import { useTodoStore } from '@/stores/todoStore';
 import type { Todo, Category } from '@/types';
 import { getCategories } from '@/services/categoryService';
 import { TodoEditSheet } from '@/components/planner/TodoEditSheet';
+import { TodoCreateSheet } from '@/components/planner/TodoCreateSheet';
 import { CategoryPickerSheet } from '@/components/planner/CategoryPickerSheet';
 import { DateTimeModal } from '@/components/common/DateTimeModal';
 
@@ -320,9 +321,6 @@ export default function PlannerScreen() {
   const [activeTab, setActiveTab] = useState<PlannerTab>('todo');
   /** Map from categoryId to Category for O(1) lookup. */
   const [categoryMap, setCategoryMap] = useState<Map<string, Category>>(new Map());
-  /** Quick-add input value. */
-  const [quickInput, setQuickInput] = useState('');
-  const [isAdding, setIsAdding] = useState(false);
   /** Which category sections have completed items expanded. */
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   /** Todo currently being edited. */
@@ -342,14 +340,13 @@ export default function PlannerScreen() {
   const [quickAddPickerVisible, setQuickAddPickerVisible] = useState(false);
   /** Due date preselected for the next quick-add todo. */
   const [quickAddDueDate, setQuickAddDueDate] = useState<Date | null>(null);
-  /** Priority preselected for the next quick-add todo. */
-  const [quickAddPriority, setQuickAddPriority] = useState<'low' | 'medium' | 'high' | null>(null);
   /** Whether the native date picker is open for quick-add. */
   const [quickAddDateModalVisible, setQuickAddDateModalVisible] = useState(false);
   /** Todo tab view grouping. Default 'category' matches prior behaviour. */
   const [todoView, setTodoView] = useState<'category' | 'date' | 'priority'>('category');
+  /** TodoCreateSheet visibility — FAB on Todo tab opens it. */
+  const [createSheetOpen, setCreateSheetOpen] = useState(false);
 
-  const inputRef = useRef<TextInput>(null);
 
   // ── Load data on mount ───────────────────────────────────────────────────
 
@@ -389,35 +386,6 @@ export default function PlannerScreen() {
     }
   }, [error, clearError, t]);
 
-  // ── Quick add ────────────────────────────────────────────────────────────
-
-  const handleQuickAdd = useCallback(async () => {
-    const trimmed = quickInput.trim();
-    if (trimmed.length === 0) return;
-
-    setIsAdding(true);
-    try {
-      await addTodo({
-        title: trimmed,
-        contentType: activeTab === 'notes' ? 'note' : 'todo',
-        // CreateTodoInput disallows explicit undefined, so only add the
-        // property when a category is actually chosen.
-        ...(quickAddCategoryId ? { categoryId: quickAddCategoryId } : {}),
-        ...(quickAddDueDate    ? { dueDate: quickAddDueDate }     : {}),
-        ...(quickAddPriority   ? { priority: quickAddPriority }   : {}),
-      });
-      setQuickInput('');
-      // Keep category/date/priority selections so rapid entry of several
-      // similar items doesn't require re-selecting each time. User can
-      // clear them explicitly.
-    } catch (err) {
-      // Error is stored in the todo store (triggers the error useEffect above),
-      // but we also log to console for web devtools debugging.
-      console.error('[Planner] addTodo failed:', err);
-    } finally {
-      setIsAdding(false);
-    }
-  }, [quickInput, activeTab, addTodo, quickAddCategoryId, quickAddDueDate, quickAddPriority]);
 
   // ── Toggle expand completed ──────────────────────────────────────────────
 
@@ -730,123 +698,7 @@ export default function PlannerScreen() {
           {activeTab === 'todo' ? renderTodoTab() : renderNotesTab()}
         </View>
 
-        {/* Quick add bar — Todo tab only */}
-        {activeTab === 'todo' && (
-          <View style={styles.quickAddBar}>
-            {/* Category chip — tap to set default category for new todos */}
-            <TouchableOpacity
-              style={[
-                styles.quickAddCategoryChip,
-                quickAddCategoryId && categoryMap.get(quickAddCategoryId) && {
-                  backgroundColor: categoryMap.get(quickAddCategoryId)!.color + '22',
-                  borderColor: categoryMap.get(quickAddCategoryId)!.color,
-                },
-              ]}
-              onPress={() => setQuickAddPickerVisible(true)}
-              activeOpacity={0.7}
-              accessibilityLabel={t('planner.change_category', '카테고리 변경')}
-            >
-              <Ionicons
-                name="pricetag-outline"
-                size={14}
-                color={
-                  quickAddCategoryId && categoryMap.get(quickAddCategoryId)
-                    ? categoryMap.get(quickAddCategoryId)!.color
-                    : colors.textSecondary
-                }
-              />
-              <Text
-                style={[
-                  styles.quickAddCategoryLabel,
-                  quickAddCategoryId && categoryMap.get(quickAddCategoryId) && {
-                    color: categoryMap.get(quickAddCategoryId)!.color,
-                  },
-                ]}
-                numberOfLines={1}
-              >
-                {quickAddCategoryId && categoryMap.get(quickAddCategoryId)
-                  ? categoryMap.get(quickAddCategoryId)!.name
-                  : t('planner.category_none', '없음')}
-              </Text>
-            </TouchableOpacity>
-
-            <TextInput
-              ref={inputRef}
-              style={styles.quickAddInput}
-              value={quickInput}
-              onChangeText={setQuickInput}
-              placeholder={t('todo.today_list_title') + '...'}
-              placeholderTextColor={colors.textPlaceholder}
-              returnKeyType="done"
-              onSubmitEditing={handleQuickAdd}
-              editable={!isAdding}
-            />
-
-            {/* Date chip — opens DateTimeModal to pick/clear a due date */}
-            <TouchableOpacity
-              style={[
-                styles.quickAddIconBtn,
-                quickAddDueDate && { borderColor: colors.primary },
-              ]}
-              onPress={() => setQuickAddDateModalVisible(true)}
-              accessibilityLabel="마감일 선택"
-            >
-              <Ionicons
-                name="calendar-outline"
-                size={16}
-                color={quickAddDueDate ? colors.primary : colors.textSecondary}
-              />
-              {quickAddDueDate && (
-                <Text style={[styles.quickAddIconLabel, { color: colors.primary }]}>
-                  {`${quickAddDueDate.getMonth() + 1}/${quickAddDueDate.getDate()}`}
-                </Text>
-              )}
-            </TouchableOpacity>
-
-            {/* Priority chip — cycles low → med → high → none on each tap */}
-            <TouchableOpacity
-              style={[
-                styles.quickAddIconBtn,
-                quickAddPriority && {
-                  borderColor:
-                    quickAddPriority === 'high' ? '#E11D48'
-                    : quickAddPriority === 'medium' ? '#F59E0B'
-                    : '#64748B',
-                },
-              ]}
-              onPress={() => {
-                setQuickAddPriority((prev) =>
-                  prev === null ? 'low'
-                  : prev === 'low' ? 'medium'
-                  : prev === 'medium' ? 'high'
-                  : null,
-                );
-              }}
-              accessibilityLabel="우선순위 선택"
-            >
-              <Ionicons
-                name={quickAddPriority ? 'flag' : 'flag-outline'}
-                size={16}
-                color={
-                  quickAddPriority === 'high' ? '#E11D48'
-                  : quickAddPriority === 'medium' ? '#F59E0B'
-                  : quickAddPriority === 'low' ? '#64748B'
-                  : colors.textSecondary
-                }
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.quickAddBtn, (isAdding || quickInput.trim().length === 0) && styles.buttonDisabled]}
-              onPress={handleQuickAdd}
-              disabled={isAdding || quickInput.trim().length === 0}
-            >
-              {isAdding
-                ? <ActivityIndicator size="small" color={colors.textInverse} />
-                : <Ionicons name="add" size={22} color={colors.textInverse} />
-              }
-            </TouchableOpacity>
-          </View>
-        )}
+        {/* Inline quick-add bar removed — replaced by FAB + TodoCreateSheet. */}
       </KeyboardAvoidingView>
 
       {/* Quick-add category picker — controlled by the chip above */}
@@ -883,16 +735,25 @@ export default function PlannerScreen() {
         />
       )}
 
-      {/* FAB — Notes tab only */}
-      {activeTab === 'notes' && (
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={() => router.push('/note/new')}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="add" size={28} color={colors.textInverse} />
-        </TouchableOpacity>
-      )}
+      {/*
+        FAB — opens TodoCreateSheet on Todo tab, or navigates to the note
+        composer on Notes tab. Same bottom-right anchor in both cases so
+        the affordance is consistent.
+      */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => {
+          if (activeTab === 'notes') {
+            router.push('/note/new');
+          } else {
+            setCreateSheetOpen(true);
+          }
+        }}
+        activeOpacity={0.8}
+        accessibilityLabel={activeTab === 'notes' ? '새 노트' : '새 할일'}
+      >
+        <Ionicons name="add" size={28} color={colors.textInverse} />
+      </TouchableOpacity>
 
       {/*
        * Bottom-sheet todo editor (Sprint 14 TASK-1412).
@@ -904,6 +765,19 @@ export default function PlannerScreen() {
         categoryMap={categoryMap}
         onClose={() => setEditingTodo(null)}
         onSave={editTodo}
+      />
+
+      {/*
+        New-todo bottom sheet (replaces the inline quick-add bar).  The
+        sheet owns its own KeyboardAvoidingView so the input never sits
+        under the keyboard, which was the problem report.
+      */}
+      <TodoCreateSheet
+        visible={createSheetOpen}
+        categoryMap={categoryMap}
+        defaultCategoryId={quickAddCategoryId}
+        onClose={() => setCreateSheetOpen(false)}
+        onCreate={(input) => addTodo(input)}
       />
 
       {/*
