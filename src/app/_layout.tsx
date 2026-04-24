@@ -35,6 +35,7 @@ import { useAppLockStore } from '@/stores/appLockStore';
 import { authenticate, isBiometricAvailable } from '@/services/appLockService';
 import { verifyPin } from '@/services/pinLockService';
 import { PinPad } from '@/components/common/PinPad';
+import { OfflineBanner } from '@/components/common/OfflineBanner';
 // Sprint 14 TASK-1402/1406 — AdMob SDK initialization after ATT consent.
 import { initAdMob } from '@/services/adService';
 import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
@@ -497,6 +498,12 @@ export default function RootLayout() {
         <StatusBar style="auto" />
         {/* TASK-900: App lock overlay — rendered above all content when locked */}
         {isLocked && <LockOverlay onUnlock={unlock} />}
+        {/*
+          Sprint 15 TASK-1520 — offline banner.
+          Rendered at the root so every tab / modal sees it, and below the
+          lock overlay so users still know they are offline while locked.
+        */}
+        <OfflineBanner />
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="onboarding/index" />
           <Stack.Screen name="auth/login" />
