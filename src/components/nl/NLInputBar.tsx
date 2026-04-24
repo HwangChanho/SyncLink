@@ -186,24 +186,41 @@ export function NLInputBar({ onEventCreated }: Props) {
           ? { repeatType: p.repeatType.value }
           : {}),
       };
-      const eventId = await createEvent(createInput);
+      // createEvent returns the full Event object — keep it so we can push
+      // an optimistic upsert into the store (calendar refresh is eventual).
+      const created = await createEvent(createInput);
 
-      // Sync store so the calendar reflects the new event immediately
-      if (eventId) {
-        // fetchEvents will be triggered by the parent screen; upsertEvent handles
-        // optimistic updates if the caller provides it.
+      // Optimistic store update so the new event appears immediately without
+      // waiting for the parent-screen's fetchEvents roundtrip.
+      if (created) {
+        upsertEvent({
+          id: created.id,
+          title: created.title,
+          startAt: created.startAt,
+          endAt: created.endAt,
+          allDay: created.allDay,
+          color: created.color ?? colors.primary,
+          isOwn: true,
+        });
       }
 
+      // Reset all input-side state BEFORE notifying the parent so the bar is
+      // clean even if onEventCreated triggers a navigation or refetch that
+      // re-renders this component. Also clears any recognised speech buffer
+      // sitting in the TextInput from a prior voice session — this addresses
+      // the reported "voice input appends to old text" regression.
       setText('');
       setParseResult(null);
       setInputState('idle');
       onEventCreated?.();
-    } catch {
+    } catch (err) {
+      // Surface the real error in Metro so silent-save bugs are debuggable
+      console.error('[NLInputBar] handleConfirm failed:', err);
       setErrorMsg(t('nl.save_failed'));
       setInputState('error');
       setTimeout(() => setInputState('idle'), 4000);
     }
-  }, [parseResult, text, upsertEvent, onEventCreated]);
+  }, [parseResult, text, upsertEvent, onEventCreated, colors.primary, t]);
 
   // ── Edit: navigate to /event/create with pre-fill ──────────────────────────
 
