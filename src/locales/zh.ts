@@ -46,6 +46,10 @@ const zh = {
     weekly: '每周',
     daily: '每天',
     no_repeat: '不重复',
+    /** DateTimeModal 标题 — 当 allDay=false 时显示（同时显示日期和时间选择器）。 */
+    datetime: '日期和时间',
+    /** DateTimeModal 标题 — 当 allDay=true 时显示（仅日期选择器）。 */
+    date: '日期',
     repeat_annual: ' · 每年重复',
     capacity_full: ' · 已满',
     /** Calendar view-mode tab labels (short form for the tab strip). */

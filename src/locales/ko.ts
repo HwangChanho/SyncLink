@@ -50,6 +50,10 @@ const ko = {
     weekly: '매주',
     daily: '매일',
     no_repeat: '반복 없음',
+    /** DateTimeModal header label — shown when allDay=false (both date & time pickers visible). */
+    datetime: '날짜 및 시간',
+    /** DateTimeModal header label — shown when allDay=true (date-only picker). */
+    date: '날짜',
     repeat_annual: ' · 매년 반복',
     capacity_full: ' · 정원 마감',
     /** Calendar view-mode tab labels (short form for the tab strip). */
