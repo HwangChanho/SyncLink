@@ -11,8 +11,8 @@
  * TASK-903 (Sprint 9)
  */
 
-import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator, Pressable } from 'react-native';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -32,48 +32,51 @@ export function WeatherWidget() {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
+  const fetchWeather = useCallback(async () => {
+    setIsLoading(true);
+    setHasError(false);
 
-    const fetchWeather = async () => {
-      setIsLoading(true);
-      setHasError(false);
+    try {
+      let lat = DEFAULT_LAT;
+      let lon = DEFAULT_LON;
 
-      try {
-        let lat = DEFAULT_LAT;
-        let lon = DEFAULT_LON;
+      const { status } = await Location.requestForegroundPermissionsAsync();
 
-        // Request location permission
-        const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        // Step 1: take any last-known fix immediately so we render *something*
+        // even on a cold start.
+        const last = await Location.getLastKnownPositionAsync({});
+        if (last) {
+          lat = last.coords.latitude;
+          lon = last.coords.longitude;
+        }
 
-        if (status === 'granted') {
-          // Use actual device location (low accuracy to minimise battery drain)
+        // Step 2: force a fresh high-accuracy fix. Balanced mode was returning
+        // stale cached positions (carrier-tower resolution) so the widget
+        // kept showing the wrong city. High accuracy hits the GPS.
+        try {
           const loc = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
+            accuracy: Location.Accuracy.High,
           });
           lat = loc.coords.latitude;
           lon = loc.coords.longitude;
-        }
-        // If permission denied, lat/lon remain as Seoul defaults
-
-        const data = await getCurrentWeather(lat, lon);
-        if (!cancelled) {
-          setWeather(data);
-        }
-      } catch {
-        if (!cancelled) {
-          setHasError(true);
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
+        } catch {
+          // Keep the last-known fix if the GPS request fails (e.g. indoors).
         }
       }
-    };
 
-    void fetchWeather();
-    return () => { cancelled = true; };
+      const data = await getCurrentWeather(lat, lon);
+      setWeather(data);
+    } catch {
+      setHasError(true);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void fetchWeather();
+  }, [fetchWeather]);
 
   // ─── Render ──────────────────────────────────────────────────────────────
 
@@ -96,23 +99,23 @@ export function WeatherWidget() {
   }
 
   return (
-    <View style={styles.container}>
-      {/* Weather icon */}
+    // Tap the widget to re-query GPS and refetch weather — useful when
+    // the cached location is stale (e.g. user has travelled since the
+    // last launch).
+    <Pressable
+      style={styles.container}
+      onPress={() => void fetchWeather()}
+      accessibilityLabel="날씨 새로고침"
+    >
       <Ionicons
         name={weather.icon as keyof typeof Ionicons.glyphMap}
         size={24}
         color={colors.primary}
       />
-
-      {/* Temperature */}
       <Text style={styles.temp}>{weather.temp}°</Text>
-
-      {/* City name */}
       <Text style={styles.city} numberOfLines={1}>{weather.city}</Text>
-
-      {/* Description */}
       <Text style={styles.description} numberOfLines={1}>{weather.description}</Text>
-    </View>
+    </Pressable>
   );
 }
 

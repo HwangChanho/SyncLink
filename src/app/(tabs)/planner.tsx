@@ -871,7 +871,8 @@ function makeStyles(colors: ColorTokens) {
     // List
     listContainer: { flex: 1 },
     listContent: {
-      paddingTop: spacing[2],
+      // paddingTop removed so the first category section sits flush
+      // with the view-mode segmented control above it.
       paddingBottom: spacing[20],
     },
 

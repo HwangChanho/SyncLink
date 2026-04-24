@@ -185,7 +185,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingTop:    spacing[2],
+    // paddingTop removed — the tab header already provides spacing and
+    // the extra 8 px made the hero feel disconnected from the title.
     paddingBottom: spacing[20],  // space for NLInputBar
   },
 

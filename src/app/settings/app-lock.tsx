@@ -12,7 +12,6 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
-  Switch,
   StyleSheet,
   Alert,
   ActivityIndicator,
@@ -116,30 +115,62 @@ export default function AppLockScreen() {
           {/* Description */}
           <Text style={styles.description}>{t('settings.app_lock_desc')}</Text>
 
-          {/* Toggle row */}
-          <View style={styles.card}>
-            <View style={styles.toggleRow}>
-              <View style={styles.toggleInfo}>
-                <Text style={styles.toggleLabel}>{t('settings.app_lock')}</Text>
-                {!biometricAvailable && (
-                  <Text style={styles.unavailableText}>
-                    Biometric authentication is not available on this device.
-                  </Text>
-                )}
+          {/*
+            Large tap-target toggle card — replaces the small iOS Switch
+            that felt awkward. Tapping anywhere on the card flips state;
+            colour / label reflects the current value so it reads as a
+            button rather than a fiddly slider.
+          */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.lockToggleCard,
+              isEnabled
+                ? { backgroundColor: colors.primary, borderColor: colors.primary }
+                : { backgroundColor: colors.surface, borderColor: colors.border },
+              (!biometricAvailable || isSaving || pressed) && { opacity: 0.75 },
+            ]}
+            disabled={!biometricAvailable || isSaving}
+            onPress={() => void handleToggle(!isEnabled)}
+            accessibilityLabel={t('settings.app_lock')}
+            accessibilityRole="button"
+          >
+            <View style={styles.lockToggleRow}>
+              <Ionicons
+                name={isEnabled ? 'lock-closed' : 'lock-open-outline'}
+                size={26}
+                color={isEnabled ? colors.textInverse : colors.textSecondary}
+              />
+              <View style={styles.lockToggleText}>
+                <Text
+                  style={[
+                    styles.lockToggleTitle,
+                    { color: isEnabled ? colors.textInverse : colors.textPrimary },
+                  ]}
+                >
+                  {t('settings.app_lock')}
+                </Text>
+                <Text
+                  style={[
+                    styles.lockToggleState,
+                    { color: isEnabled ? colors.textInverse : colors.textSecondary },
+                  ]}
+                >
+                  {isEnabled ? t('common.enabled', '사용 중') : t('common.disabled', '사용 안 함')}
+                </Text>
               </View>
               {isSaving ? (
-                <ActivityIndicator size="small" color={colors.primary} />
-              ) : (
-                <Switch
-                  value={isEnabled}
-                  onValueChange={(val) => void handleToggle(val)}
-                  disabled={!biometricAvailable || isSaving}
-                  trackColor={{ false: colors.border, true: colors.primaryLight }}
-                  thumbColor={isEnabled ? colors.primary : colors.surface}
+                <ActivityIndicator
+                  size="small"
+                  color={isEnabled ? colors.textInverse : colors.primary}
                 />
-              )}
+              ) : null}
             </View>
-          </View>
+            {!biometricAvailable && (
+              <Text style={styles.unavailableText}>
+                Biometric authentication is not available on this device.
+              </Text>
+            )}
+          </Pressable>
         </View>
       )}
     </SafeAreaView>
@@ -231,6 +262,28 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       ...textStyles.caption,
       color: colors.textTertiary,
       marginTop: spacing[0.5],
+    },
+    // Big tap-target card replacing the Switch.
+    lockToggleCard: {
+      borderRadius: radius.xl,
+      borderWidth: 1,
+      padding: spacing[4],
+      marginTop: spacing[3],
+    },
+    lockToggleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing[3],
+    },
+    lockToggleText: {
+      flex: 1,
+    },
+    lockToggleTitle: {
+      ...textStyles.labelLg,
+    },
+    lockToggleState: {
+      ...textStyles.caption,
+      marginTop: 2,
     },
   });
 }

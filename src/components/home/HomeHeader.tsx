@@ -8,7 +8,8 @@
  * TASK-600 (Sprint 6): 다크모드 대응 — makeStyles(colors) 패턴으로 교체
  */
 
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
 import { useColors } from '@/hooks/useColors';
@@ -53,9 +54,25 @@ export function HomeHeader() {
   return (
     <View style={styles.container}>
       <Text style={styles.greeting}>
-        {greeting}, <Text style={styles.name}>{nickname}</Text>님
+        {greeting},{' '}
+        {/* Tapping the nickname jumps to the My tab so the user can edit
+            it or manage their profile without hunting through menus. */}
+        <Text
+          style={styles.name}
+          onPress={() => router.push('/(tabs)/my')}
+          suppressHighlighting
+        >
+          {nickname}
+        </Text>
+        님
       </Text>
-      <Text style={styles.date}>{dateLabel}</Text>
+      <TouchableOpacity
+        activeOpacity={0.6}
+        onPress={() => router.push('/(tabs)')}
+        accessibilityLabel="오늘로 이동"
+      >
+        <Text style={styles.date}>{dateLabel}</Text>
+      </TouchableOpacity>
     </View>
   );
 }
