@@ -1,0 +1,12 @@
+# Supabase project config
+# Ref: https://supabase.com/docs/reference/cli/config
+
+project_id = "uhubhqcymxajdonmkthm"
+
+[functions.kakao-auth]
+# Kakao redirects users here via GET without any Authorization header.
+# Supabase's default JWT verification would reject the request before our
+# handler runs, so we must opt out of verification for this public OAuth
+# callback endpoint. All user-facing security is enforced inside the function
+# (SHA-256 password derivation keyed by KAKAO_REST_API_KEY).
+verify_jwt = false
