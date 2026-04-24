@@ -62,15 +62,21 @@ serve(async (req: Request): Promise<Response> => {
 
     const token = authHeader.replace('Bearer ', '');
 
-    // Create a client with the anon key to verify the JWT
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-    // Verify the user token (this validates the JWT signature)
-    const userClient = createClient(supabaseUrl, token);
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
+    // Service role client — used both for token verification and deletion.
+    // Previous bug: createClient(supabaseUrl, token) passed the user's JWT
+    // as the anon key, which GoTrue always rejects. Using the service role
+    // client and handing the token to getUser() is the documented pattern.
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    const { data: { user }, error: authError } = await adminClient.auth.getUser(token);
 
     if (authError || !user) {
+      console.error('delete-account: getUser failed:', authError?.message ?? 'no user');
       return new Response(
         JSON.stringify({ error: '유효하지 않은 인증 토큰입니다.' }),
         { status: 401, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
@@ -79,15 +85,7 @@ serve(async (req: Request): Promise<Response> => {
 
     const userId = user.id;
 
-    // ── 2. Delete the user using the service role key ────────────────────────
-
-    // Service role client bypasses RLS and can call admin APIs
-    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    });
+    // ── 2. Delete the user using the service role client ─────────────────────
 
     // deleteUser removes the auth.users row.
     // All dependent rows (users, events, todos, space_members, etc.) are
