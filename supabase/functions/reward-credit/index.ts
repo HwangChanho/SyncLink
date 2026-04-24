@@ -186,8 +186,19 @@ Deno.serve(async (req: Request) => {
       return new Response('reward-credit endpoint live', { status: 200 });
     }
 
-    // 1) Verify signature — fail fast so AdMob retries only genuine replay.
-    await verifySignature(url);
+    // 1) Verify signature. AdMob's console also sends a signed probe with a
+    //    dummy signature/key that won't verify against the real verifier keys
+    //    — in that case (and in any forged-callback case) we return 200 with
+    //    no crediting. This keeps the console happy while denying bogus
+    //    rewards silently. Real signed callbacks pass here and proceed.
+    try {
+      await verifySignature(url);
+    } catch (err) {
+      await logToDb('reward-credit.signature', err, {
+        key_id: url.searchParams.get('key_id'),
+      });
+      return new Response('signature not verified (ignored)', { status: 200 });
+    }
 
     // 2) Extract fields.
     const params = url.searchParams;
