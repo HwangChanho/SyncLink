@@ -43,9 +43,13 @@ import { ONBOARDING_STORAGE_KEY } from '@/app/onboarding/index';
  *
  * Routing priority:
  *  1. While auth is loading — do nothing (prevents redirect flash)
- *  2. Unauthenticated + onboarding not done → /onboarding
- *  3. Unauthenticated + onboarding done → /auth/login
- *  4. Authenticated + in auth group → /(tabs)
+ *  2. Unauthenticated → /auth/login  (onboarding is gated behind auth)
+ *  3. Authenticated + onboarding not done → /onboarding
+ *  4. Authenticated + in auth/onboarding group (onboarding done) → /(tabs)
+ *
+ * Onboarding runs AFTER login so that account deletion (which signs the user
+ * out but keeps the onboarding flag) cannot push the first-run onboarding
+ * flow in front of the login screen.
  */
 function useAuthGuard() {
   const { isAuthenticated, isLoading } = useAuthStore();
@@ -76,10 +80,13 @@ function useAuthGuard() {
     // Compute the target path without immediately calling replace()
     let target: string | null = null;
     if (isAuthenticated) {
-      if (inAuthGroup || inOnboarding) target = '/(tabs)';
-    } else {
+      // Post-login: new users must see onboarding before /(tabs)
       if (!onboardingDone && !inOnboarding) target = '/onboarding';
-      else if (onboardingDone && !inAuthGroup) target = '/auth/login';
+      else if (onboardingDone && (inAuthGroup || inOnboarding)) target = '/(tabs)';
+    } else {
+      // Unauthenticated: always send to login. Onboarding never appears
+      // before auth (avoids re-running onboarding after account deletion).
+      if (!inAuthGroup) target = '/auth/login';
     }
 
     // Guard: skip if we already replaced to the same target in the previous render.

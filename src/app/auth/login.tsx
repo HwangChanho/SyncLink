@@ -48,18 +48,19 @@ export default function LoginScreen() {
     setError(null);
 
     try {
-      let result;
       if (provider === 'dev') {
-        result = await signInWithEmail(devEmail.trim(), devPassword);
+        await signInWithEmail(devEmail.trim(), devPassword);
       } else {
         const fn = provider === 'google'
           ? signInWithGoogle
           : provider === 'kakao'
             ? signInWithKakao
             : signInWithApple;
-        result = await fn();
+        await fn();
       }
-      router.replace(result.isNewUser ? '/auth/onboarding' : '/(tabs)');
+      // Navigate to tabs unconditionally; useAuthGuard reroutes first-run
+      // users to /onboarding when the ONBOARDING_STORAGE_KEY flag is unset.
+      router.replace('/(tabs)');
     } catch (err: unknown) {
       if (isCancelError(err)) return;
       setError(err instanceof Error ? err.message : t('auth.login.error'));
