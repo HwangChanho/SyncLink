@@ -19,7 +19,7 @@
  */
 
 import { useEffect } from 'react';
-import { ScrollView, StyleSheet, RefreshControl, Platform, Pressable, Text } from 'react-native';
+import { ScrollView, StyleSheet, RefreshControl, Platform, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useEventStore } from '@/stores/eventStore';
@@ -126,8 +126,20 @@ export default function HomeScreen() {
         {/* Current weather widget — TASK-903 */}
         <WeatherWidget />
 
+        {/*
+         * Visual breathing room between the weather widget and the cards
+         * that follow. Previously these sections touched each other with
+         * no margin, making the home screen feel cramped. A single shared
+         * spacer keeps the gap consistent regardless of which widgets are
+         * rendered (WeatherWidget may collapse to null when location
+         * permission is denied).
+         */}
+        <View style={styles.sectionSpacer} />
+
         {/* AI date suggestion card — TASK-904 */}
         <DateSuggestionCard />
+
+        <View style={styles.sectionSpacer} />
 
         {/* Weekly AI review card — TASK-504 */}
         <WeeklyReviewCard />
@@ -192,5 +204,14 @@ const styles = StyleSheet.create({
   },
   webRefreshText: {
     ...textStyles.caption,
+  },
+
+  /**
+   * Vertical spacer between adjacent home-screen widgets (weather /
+   * DateSuggestion / WeeklyReview). 16 px matches the existing content
+   * padding rhythm on the home screen.
+   */
+  sectionSpacer: {
+    height: spacing[4],
   },
 });
