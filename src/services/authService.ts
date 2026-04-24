@@ -532,12 +532,16 @@ export async function uploadAvatar(localUri: string): Promise<string> {
     throw new Error(`프로필 사진 업로드에 실패했습니다: ${raw}`);
   }
 
-  // Get the public URL (bucket must be public in Supabase Storage settings)
+  // Get the public URL (bucket must be public in Supabase Storage settings).
+  // Append a cache-buster so React Native's Image component refetches on
+  // every upload — Supabase reuses the same path per user, so the URL is
+  // otherwise byte-identical across uploads and RN's image cache would
+  // keep showing the old picture.
   const { data: { publicUrl } } = supabase.storage
     .from('avatars')
     .getPublicUrl(filePath);
 
-  return publicUrl;
+  return `${publicUrl}?t=${Date.now()}`;
 }
 
 /**
