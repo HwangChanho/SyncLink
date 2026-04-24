@@ -293,16 +293,20 @@ export async function createEvent(input: CreateEventInput): Promise<Event> {
     return event;
   } catch (err) {
     // 생성 실패를 중앙 로그로 보내 LEAD가 어떤 필드/RLS 위반인지 즉시 파악 가능
+    const pgErr = err as { code?: string; hint?: string; details?: string; message?: string };
     await logError({
       context: 'event.create',
       error:   err,
       userId,
       details: {
-        // 원본 입력 전체를 넣으면 큰 description이 포함될 수 있으므로 요약만
-        hasTitle:      !!input.title,
-        hasDescription:!!input.description,
-        allDay:        input.allDay ?? false,
-        shareToCount:  input.shareToSpaceIds?.length ?? 0,
+        hasTitle:       !!input.title,
+        hasDescription: !!input.description,
+        allDay:         input.allDay ?? false,
+        shareToCount:   input.shareToSpaceIds?.length ?? 0,
+        // Supabase/Postgrest 에러 필드 명시적 추출 (RLS 위반·FK 등 즉시 식별 가능)
+        supabaseCode:    pgErr.code,
+        supabaseHint:    pgErr.hint,
+        supabaseDetails: pgErr.details,
       },
     });
     throw err;

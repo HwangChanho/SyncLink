@@ -17,6 +17,7 @@
  */
 
 import { supabase, getCurrentUserId } from '@/lib/supabase';
+import { logError } from '@/lib/errorLogger';
 import { memberEventColors } from '@/constants/colors';
 import type {
   Space, SpaceSummary, SpaceMember,
@@ -139,10 +140,9 @@ export async function createSpace(input: CreateSpaceInput): Promise<Space> {
   const userId = await getCurrentUserId();
   if (!userId) throw new Error('로그인이 필요합니다.');
 
-  // 고유한 invite code 생성
   const inviteCode = generateCode();
 
-  // spaces 테이블 INSERT
+  // 1. spaces INSERT
   const { data: spaceRow, error: spaceError } = await supa
     .from('spaces')
     .insert({
@@ -155,9 +155,17 @@ export async function createSpace(input: CreateSpaceInput): Promise<Space> {
     .select()
     .single() as { data: SpaceRow | null; error: Error | null };
 
-  if (spaceError || !spaceRow) throw spaceError ?? new Error('Space 생성에 실패했습니다.');
+  if (spaceError || !spaceRow) {
+    void logError({
+      context: 'space.create.insert',
+      error:   spaceError ?? new Error('Space INSERT returned no row'),
+      userId,
+      details: { step: 'spaces.insert', input, supabaseError: serializeSupabaseError(spaceError) },
+    });
+    throw spaceError ?? new Error('Space 생성에 실패했습니다.');
+  }
 
-  // 생성자를 owner 역할로 멤버 추가 (첫 번째 색상 할당)
+  // 2. owner 멤버 추가
   const ownerColor = memberEventColors[0] as string;
   const { data: memberRow, error: memberError } = await supa
     .from('space_members')
@@ -170,19 +178,50 @@ export async function createSpace(input: CreateSpaceInput): Promise<Space> {
     .select()
     .single() as { data: SpaceMemberRow | null; error: Error | null };
 
-  if (memberError || !memberRow) throw memberError ?? new Error('멤버 추가에 실패했습니다.');
+  if (memberError || !memberRow) {
+    void logError({
+      context: 'space.create.member',
+      error:   memberError ?? new Error('space_members INSERT returned no row'),
+      userId,
+      details: { step: 'space_members.insert', spaceId: spaceRow.id, supabaseError: serializeSupabaseError(memberError) },
+    });
+    throw memberError ?? new Error('멤버 추가에 실패했습니다.');
+  }
 
-  // 생성자의 유저 프로필 조회
+  // 3. 유저 프로필 조회
   const { data: userRow, error: userError } = await supa
     .from('users')
     .select('*')
     .eq('id', userId)
     .single() as { data: UserRow | null; error: Error | null };
 
-  if (userError || !userRow) throw userError ?? new Error('사용자 정보를 가져오지 못했습니다.');
+  if (userError || !userRow) {
+    void logError({
+      context: 'space.create.user-fetch',
+      error:   userError ?? new Error('users SELECT returned no row'),
+      userId,
+      details: { step: 'users.select', supabaseError: serializeSupabaseError(userError) },
+    });
+    throw userError ?? new Error('사용자 정보를 가져오지 못했습니다.');
+  }
 
   const members = [toSpaceMember(memberRow, userRow)];
   return toSpace(spaceRow, members);
+}
+
+/**
+ * Serialize a Supabase error to a plain object safely (includes `code`,
+ * `hint`, `details` when present). Used as `details` for logError.
+ */
+function serializeSupabaseError(err: unknown): Record<string, unknown> | null {
+  if (!err || typeof err !== 'object') return null;
+  const e = err as Record<string, unknown>;
+  return {
+    message: e.message,
+    code:    e.code,
+    hint:    e.hint,
+    details: e.details,
+  };
 }
 
 /**
