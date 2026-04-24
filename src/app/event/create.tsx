@@ -342,8 +342,15 @@ export default function EventCreateScreen() {
 
       // Persist reminders for the newly created event (fire-and-forget;
       // failure must not block navigation — user can edit reminders later).
+      // The `.catch` is important: without it an unhandled promise rejection
+      // from updateReminders (e.g. expo-notifications permission revoked on
+      // iOS) would bubble up to React Native's default handler and could be
+      // mistaken for a "save failed" bug. Log and swallow instead.
       if (reminderMinutes.length > 0) {
-        void updateReminders(newEvent.id, reminderMinutes, newEvent.title, newEvent.startAt);
+        updateReminders(newEvent.id, reminderMinutes, newEvent.title, newEvent.startAt)
+          .catch((remindErr) => {
+            console.warn('[EventCreate] updateReminders failed (non-fatal):', remindErr);
+          });
       }
 
       // Optimistically add to store so calendar reflects the new event immediately
