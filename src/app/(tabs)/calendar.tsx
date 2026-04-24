@@ -346,6 +346,7 @@ export default function CalendarScreen() {
   // ─── Events for current day (DayView) ────────────────────────────────────
 
   const todayEvents: EventSummary[] = displayEventsByDate[toDateKey(selectedDate)] ?? [];
+  const todayTodos = todosByDate[toDateKey(selectedDate)] ?? [];
 
   // ─── Render ──────────────────────────────────────────────────────────────────
 
@@ -435,6 +436,7 @@ export default function CalendarScreen() {
                 setViewMode('day');
               }}
               onReschedule={handleReschedule}
+              todosByDate={todosByDate}
             />
           )}
 
@@ -443,6 +445,7 @@ export default function CalendarScreen() {
               selectedDate={selectedDate}
               events={todayEvents}
               onEventPress={handleEventPress}
+              todos={todayTodos}
             />
           )}
         </View>

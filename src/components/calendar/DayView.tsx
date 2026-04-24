@@ -105,13 +105,24 @@ interface DayViewProps {
   events: EventSummary[];
   /** Called when the user taps an event block. */
   onEventPress: (event: EventSummary) => void;
+  /**
+   * Planner todos whose dueDate falls on the displayed day. Rendered as
+   * outlined chips in the all-day banner so the user sees day-scoped
+   * items alongside all-day events.
+   */
+  todos?: Array<{ id: string; title: string; color: string }>;
 }
 
 /**
  * Single-day time-grid showing all events for one day.
  * Scrolls vertically to cover the full 24 hours.
  */
-export function DayView({ selectedDate: _selectedDate, events, onEventPress }: DayViewProps) {
+export function DayView({
+  selectedDate: _selectedDate,
+  events,
+  onEventPress,
+  todos,
+}: DayViewProps) {
   // Resolve active theme colors for dark mode support (TASK-700)
   const { t } = useTranslation();
   const colors = useColors();
@@ -131,8 +142,9 @@ export function DayView({ selectedDate: _selectedDate, events, onEventPress }: D
 
   return (
     <View style={styles.container}>
-      {/* All-day events banner (shown only when there are all-day events) */}
-      {allDayEvents.length > 0 && (
+      {/* All-day events banner (shown when there are all-day events or
+          planner todos due today). */}
+      {(allDayEvents.length > 0 || (todos && todos.length > 0)) && (
         <View style={styles.allDayBanner}>
           <Text style={styles.allDayLabel}>{t('time.all_day')}</Text>
           <View style={styles.allDayEvents}>
@@ -147,6 +159,26 @@ export function DayView({ selectedDate: _selectedDate, events, onEventPress }: D
                   numberOfLines={1}
                 >
                   {evt.title}
+                </Text>
+              </View>
+            ))}
+            {todos?.map((td) => (
+              <View
+                key={td.id}
+                style={[
+                  styles.allDayChip,
+                  {
+                    backgroundColor: td.color + '1A',
+                    borderLeftWidth: 3,
+                    borderLeftColor: td.color,
+                  },
+                ]}
+              >
+                <Text
+                  style={[styles.allDayTitle, { color: td.color }]}
+                  numberOfLines={1}
+                >
+                  ✓ {td.title}
                 </Text>
               </View>
             ))}

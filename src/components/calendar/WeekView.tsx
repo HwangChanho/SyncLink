@@ -75,6 +75,12 @@ interface WeekViewProps {
     dayDelta: number,
     minuteDelta: number,
   ) => void;
+  /**
+   * Optional planner todos bucketed by ISO date key. Rendered as small
+   * outlined chips in the all-day strip so a user glancing at a week
+   * sees both events and due tasks on the same timeline.
+   */
+  todosByDate?: Record<string, Array<{ id: string; title: string; color: string }>>;
 }
 
 // ─── Date utilities ────────────────────────────────────────────────────────
@@ -198,6 +204,7 @@ export function WeekView({
   onEventPress,
   onDateSelect,
   onReschedule,
+  todosByDate,
 }: WeekViewProps) {
   // Resolve active theme colors for dark mode support (TASK-700)
   const colors = useColors();
@@ -216,10 +223,15 @@ export function WeekView({
     scrollRef.current?.scrollTo({ y: HOUR_HEIGHT * 7, animated: false });
   };
 
-  // Determine if any day this week has all-day events (controls strip visibility)
-  const hasAllDayEvents = weekDays.some((day) =>
-    (eventsByDate[toDateKey(day)] ?? []).some((e) => e.allDay),
-  );
+  // Determine if any day this week has all-day events OR planner todos
+  // (the strip now hosts both so the user sees every day-scoped item in
+  // one place).
+  const hasAllDayEvents = weekDays.some((day) => {
+    const key = toDateKey(day);
+    const hasEvt = (eventsByDate[key] ?? []).some((e) => e.allDay);
+    const hasTodo = (todosByDate?.[key]?.length ?? 0) > 0;
+    return hasEvt || hasTodo;
+  });
 
   return (
     <View style={styles.container}>
@@ -266,6 +278,7 @@ export function WeekView({
           {weekDays.map((day) => {
             const dateKey = toDateKey(day);
             const allDayEvts = (eventsByDate[dateKey] ?? []).filter((e) => e.allDay);
+            const dayTodos = todosByDate?.[dateKey] ?? [];
             return (
               <View key={dateKey} style={styles.allDayCol}>
                 {allDayEvts.map((evt) => (
@@ -275,11 +288,30 @@ export function WeekView({
                     activeOpacity={0.8}
                     style={[styles.allDayChip, { backgroundColor: evt.color ?? colors.primary }]}
                   >
-                    {/* Full-width chip label; truncated if title is too long */}
                     <Text style={styles.allDayChipText} numberOfLines={1}>
                       {evt.title}
                     </Text>
                   </TouchableOpacity>
+                ))}
+                {dayTodos.map((td) => (
+                  <View
+                    key={td.id}
+                    style={[
+                      styles.allDayChip,
+                      {
+                        backgroundColor: td.color + '22',
+                        borderLeftWidth: 3,
+                        borderLeftColor: td.color,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[styles.allDayChipText, { color: td.color }]}
+                      numberOfLines={1}
+                    >
+                      ✓ {td.title}
+                    </Text>
+                  </View>
                 ))}
               </View>
             );
