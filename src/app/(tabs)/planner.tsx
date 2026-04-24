@@ -325,6 +325,14 @@ export default function PlannerScreen() {
    * When non-null, the CategoryPickerSheet opens.
    */
   const [categoryChangeTodo, setCategoryChangeTodo] = useState<Todo | null>(null);
+  /**
+   * Category preselected for the next quick-add todo. Null = 카테고리 없음.
+   * Lets the user pick a category before tapping + so new items land in the
+   * right bucket without opening the edit sheet.
+   */
+  const [quickAddCategoryId, setQuickAddCategoryId] = useState<string | null>(null);
+  /** Whether the category picker for the quick-add bar is visible. */
+  const [quickAddPickerVisible, setQuickAddPickerVisible] = useState(false);
 
   const inputRef = useRef<TextInput>(null);
 
@@ -377,6 +385,9 @@ export default function PlannerScreen() {
       await addTodo({
         title: trimmed,
         contentType: activeTab === 'notes' ? 'note' : 'todo',
+        // CreateTodoInput disallows explicit undefined, so only add the
+        // property when a category is actually chosen.
+        ...(quickAddCategoryId ? { categoryId: quickAddCategoryId } : {}),
       });
       setQuickInput('');
     } catch (err) {
@@ -386,7 +397,7 @@ export default function PlannerScreen() {
     } finally {
       setIsAdding(false);
     }
-  }, [quickInput, activeTab, addTodo]);
+  }, [quickInput, activeTab, addTodo, quickAddCategoryId]);
 
   // ── Toggle expand completed ──────────────────────────────────────────────
 
@@ -602,7 +613,11 @@ export default function PlannerScreen() {
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={componentHeight.tabBar + (Platform.OS === 'ios' ? 20 : 0)}
+        // Set offset to 0: the quick-add bar sits at the bottom of this
+        // KeyboardAvoidingView, so behavior="padding" pushes the whole
+        // content above the keyboard. The previous tabBar offset caused
+        // the bar to stop ~80 px below the keyboard top.
+        keyboardVerticalOffset={0}
       >
         <View style={styles.flex}>
           {activeTab === 'todo' ? renderTodoTab() : renderNotesTab()}
@@ -611,6 +626,43 @@ export default function PlannerScreen() {
         {/* Quick add bar — Todo tab only */}
         {activeTab === 'todo' && (
           <View style={styles.quickAddBar}>
+            {/* Category chip — tap to set default category for new todos */}
+            <TouchableOpacity
+              style={[
+                styles.quickAddCategoryChip,
+                quickAddCategoryId && categoryMap.get(quickAddCategoryId) && {
+                  backgroundColor: categoryMap.get(quickAddCategoryId)!.color + '22',
+                  borderColor: categoryMap.get(quickAddCategoryId)!.color,
+                },
+              ]}
+              onPress={() => setQuickAddPickerVisible(true)}
+              activeOpacity={0.7}
+              accessibilityLabel={t('planner.change_category', '카테고리 변경')}
+            >
+              <Ionicons
+                name="pricetag-outline"
+                size={14}
+                color={
+                  quickAddCategoryId && categoryMap.get(quickAddCategoryId)
+                    ? categoryMap.get(quickAddCategoryId)!.color
+                    : colors.textSecondary
+                }
+              />
+              <Text
+                style={[
+                  styles.quickAddCategoryLabel,
+                  quickAddCategoryId && categoryMap.get(quickAddCategoryId) && {
+                    color: categoryMap.get(quickAddCategoryId)!.color,
+                  },
+                ]}
+                numberOfLines={1}
+              >
+                {quickAddCategoryId && categoryMap.get(quickAddCategoryId)
+                  ? categoryMap.get(quickAddCategoryId)!.name
+                  : t('planner.category_none', '없음')}
+              </Text>
+            </TouchableOpacity>
+
             <TextInput
               ref={inputRef}
               style={styles.quickAddInput}
@@ -635,6 +687,22 @@ export default function PlannerScreen() {
           </View>
         )}
       </KeyboardAvoidingView>
+
+      {/* Quick-add category picker — controlled by the chip above */}
+      <CategoryPickerSheet
+        visible={quickAddPickerVisible}
+        selectedId={quickAddCategoryId}
+        onClose={() => setQuickAddPickerVisible(false)}
+        onSelect={(id) => {
+          setQuickAddCategoryId(id);
+          setQuickAddPickerVisible(false);
+          // Refresh local category map so the chip's color updates immediately
+          // after creating a new category inside the picker.
+          void getCategories().then((list) => {
+            setCategoryMap(new Map(list.map((c) => [c.id, c])));
+          });
+        }}
+      />
 
       {/* FAB — Notes tab only */}
       {activeTab === 'notes' && (
@@ -921,6 +989,24 @@ function makeStyles(colors: ColorTokens) {
       backgroundColor: colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    // Inline category chip on the quick-add bar. Neutral styling by default;
+    // per-chip colour overrides applied inline when a category is selected.
+    quickAddCategoryChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      maxWidth: 110,
+      paddingHorizontal: spacing[2],
+      height: componentHeight.buttonSm,
+      borderRadius: radius.full,
+      borderWidth: 1,
+      borderColor: colors.inputBorder,
+      backgroundColor: colors.inputBackground,
+    },
+    quickAddCategoryLabel: {
+      ...textStyles.caption,
+      color: colors.textSecondary,
     },
 
     // FAB

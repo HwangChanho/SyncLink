@@ -163,35 +163,39 @@ export function DateTimeModal({
           </View>
 
           {/*
-           * Date picker — year / month / day.
-           * display="spinner" on iOS shows three wheels that scroll freely
-           * without auto-closing. On Android display="default" shows an
-           * inline calendar that works well in this layout.
+           * Date picker — full month calendar grid on iOS (display="inline"),
+           * native inline calendar on Android. User taps a date cell instead
+           * of scrolling a wheel.
            */}
           <View style={styles.pickerRow}>
             <DateTimePicker
               value={draft}
               mode="date"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              display={Platform.OS === 'ios' ? 'inline' : 'default'}
               onChange={handleDateChange}
               // Only pass minimumDate when provided (exactOptionalPropertyTypes)
               {...(minimumDate ? { minimumDate } : {})}
-              style={styles.picker}
+              style={styles.datePicker}
             />
           </View>
 
           {/*
-           * Time picker — hour / minute. Hidden when allDay is true.
-           * iOS spinner here shows two wheels; Android shows a clock dial.
+           * Time picker — compact right-aligned button on iOS. Tapping it
+           * reveals the native wheel popover, keeping the modal layout tight
+           * (user feedback: "시간 수정 부분도 좀더 작게"). On Android the
+           * default clock dial stays inline — it's already compact there.
            */}
           {!allDay && (
-            <View style={styles.pickerRow}>
+            <View style={styles.timeRow}>
+              <Text style={styles.timeLabel}>
+                {t('time.time', '시간')}
+              </Text>
               <DateTimePicker
                 value={draft}
                 mode="time"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                display={Platform.OS === 'ios' ? 'compact' : 'default'}
                 onChange={handleTimeChange}
-                style={styles.picker}
+                style={styles.timePicker}
               />
             </View>
           )}
@@ -269,6 +273,25 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     pickerRow: {
       alignItems: 'center',
       paddingVertical: spacing[1],
+    },
+    datePicker: {
+      width: '100%',
+    },
+    timeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing[4],
+      paddingVertical: spacing[2],
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    timeLabel: {
+      ...textStyles.body,
+      color: colors.textPrimary,
+    },
+    timePicker: {
+      flexGrow: 0,
     },
     picker: {
       width: '100%',
