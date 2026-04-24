@@ -20,15 +20,23 @@
 import { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import type { EventSummary } from '@/types';
-import { EventDot } from './EventDot';
 import { useColors } from '@/hooks/useColors';
 import { spacing, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 
-/** Maximum colored dots to show per day cell before showing "+N". */
-const MAX_DOTS = 3;
+/** Maximum bars to show per day cell before collapsing to "+N". */
+const MAX_BARS = 3;
 
 const DOW_LABELS = ['일', '월', '화', '수', '목', '금', '토'] as const;
+
+/** Shape used inside MonthView for per-day items. */
+export interface MonthViewItem {
+  id: string;
+  title: string;
+  color: string;
+  /** 'todo' draws a hollow/striped bar so it reads as different from events. */
+  kind: 'event' | 'todo';
+}
 
 interface MonthViewProps {
   /**
@@ -43,6 +51,17 @@ interface MonthViewProps {
    * Pass eventStore.eventsByDate.
    */
   eventsByDate: Record<string, EventSummary[]>;
+  /**
+   * Optional planner items (todos with dueDate) grouped by ISO date key.
+   * Rendered with a striped bar so they read as different from events.
+   */
+  todosByDate?: Record<string, MonthViewItem[]>;
+  /**
+   * Density of the bottom strip per cell.
+   *   'detailed' → Apple-Calendar-style coloured bars with title text
+   *   'compact'  → small colour dots only (simplified overview)
+   */
+  density?: 'detailed' | 'compact';
   /** Called when the user taps a day cell. */
   onDateSelect: (date: Date) => void;
 }
@@ -110,6 +129,8 @@ export function MonthView({
   currentMonth,
   selectedDate,
   eventsByDate,
+  todosByDate,
+  density = 'detailed',
   onDateSelect,
 }: MonthViewProps) {
   // Resolve active theme colors for dark mode support (TASK-700)
@@ -154,6 +175,16 @@ export function MonthView({
             const isSunday = dayIdx === 0;
             const dateKey = toDateKey(date);
             const dayEvents = eventsByDate[dateKey] ?? [];
+            const dayTodos = todosByDate?.[dateKey] ?? [];
+            // Merge events + todos into a single ordered list so the month
+            // cell shows an Apple-Calendar-style colour bar per item.
+            // Events come first (chronological priority), then todos.
+            const dayItems: MonthViewItem[] = [
+              ...dayEvents.map((e): MonthViewItem => ({
+                id: e.id, title: e.title, color: e.color, kind: 'event',
+              })),
+              ...dayTodos,
+            ];
 
             return (
               <TouchableOpacity
@@ -185,17 +216,60 @@ export function MonthView({
                   </Text>
                 </View>
 
-                {/* Event dot strip */}
-                {dayEvents.length > 0 && (
-                  <View style={styles.dotRow}>
-                    {dayEvents.slice(0, MAX_DOTS).map((evt) => (
-                      <EventDot key={evt.id} color={evt.color} />
+                {/*
+                  Two densities:
+                   - detailed: Apple-Calendar-style coloured bars with title
+                   - compact:  small colour dots only (overview / mobile)
+                */}
+                {dayItems.length > 0 && density === 'detailed' && (
+                  <View style={styles.barStack}>
+                    {dayItems.slice(0, MAX_BARS).map((it) => (
+                      <View
+                        key={it.id}
+                        style={[
+                          styles.itemBar,
+                          it.kind === 'event'
+                            ? { backgroundColor: it.color }
+                            : {
+                                backgroundColor: it.color + '22',
+                                borderLeftWidth: 3,
+                                borderLeftColor: it.color,
+                              },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.itemBarText,
+                            it.kind === 'event'
+                              ? { color: '#1F2937' }
+                              : { color: it.color },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {it.title}
+                        </Text>
+                      </View>
                     ))}
-                    {dayEvents.length > MAX_DOTS && (
+                    {dayItems.length > MAX_BARS && (
                       <Text style={styles.overflowLabel}>
-                        +{dayEvents.length - MAX_DOTS}
+                        +{dayItems.length - MAX_BARS}
                       </Text>
                     )}
+                  </View>
+                )}
+
+                {dayItems.length > 0 && density === 'compact' && (
+                  <View style={styles.dotRow}>
+                    {dayItems.slice(0, 5).map((it) => (
+                      <View
+                        key={it.id}
+                        style={[
+                          styles.compactDot,
+                          { backgroundColor: it.color },
+                          it.kind === 'todo' && styles.compactDotOutline,
+                        ]}
+                      />
+                    ))}
                   </View>
                 )}
               </TouchableOpacity>
@@ -292,8 +366,36 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   overflowLabel: {
     ...textStyles.caption,
     color: colors.textTertiary,
-    marginLeft: 1,
-    lineHeight: 8,
+    lineHeight: 12,
+  },
+  // Apple-Calendar-style colour bars stacked below the day number.
+  barStack: {
+    marginTop: 2,
+    width: '100%',
+    paddingHorizontal: 2,
+    gap: 1,
+  },
+  itemBar: {
+    height: 13,
+    borderRadius: 2,
+    paddingHorizontal: 3,
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  itemBarText: {
+    fontSize: 9,
+    lineHeight: 11,
+  },
+  compactDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginHorizontal: 1,
+  },
+  compactDotOutline: {
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF00',
+    opacity: 0.6,
   },
   });
 }

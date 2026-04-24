@@ -15,11 +15,58 @@
  * should pass `onYearMonthPress` instead.
  */
 
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Animated, View, Text, TouchableOpacity, StyleSheet, Easing } from 'react-native';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles, fontWeight } from '@/constants/typography';
+
+/**
+ * Subtle bouncing chevron used on both sides of the period title to hint
+ * that the calendar responds to horizontal swipes. No interaction — the
+ * PanResponder on the screen container handles the actual gesture.
+ */
+function SwipeHint({ direction }: { direction: 'left' | 'right' }) {
+  const colors = useColors();
+  const translate = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const to = direction === 'left' ? -4 : 4;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(translate, {
+          toValue: to,
+          duration: 700,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(translate, {
+          toValue: 0,
+          duration: 700,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [direction, translate]);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        transform: [{ translateX: translate }],
+        opacity: 0.35,
+      }}
+    >
+      <Text style={{ fontSize: 20, color: colors.textSecondary }}>
+        {direction === 'left' ? '‹' : '›'}
+      </Text>
+    </Animated.View>
+  );
+}
 
 /** The three calendar display modes. */
 export type ViewMode = 'month' | 'week' | 'day';
@@ -85,8 +132,11 @@ const HIT_SLOP = { top: 10, bottom: 10, left: 14, right: 14 } as const;
 export function CalendarHeader({
   viewMode,
   currentDate,
-  onPrev,
-  onNext,
+  // onPrev/onNext are still part of the public props for API compatibility
+  // with callers, but navigation is now driven by swipe on the calendar
+  // surface rather than arrow buttons.
+  onPrev: _onPrev,
+  onNext: _onNext,
   onToday,
   onYearMonthPress,
   onViewModeChange,
@@ -110,21 +160,16 @@ export function CalendarHeader({
   return (
     <View style={styles.container}>
       {/* ─── Period navigation row ─── */}
+      {/*
+        Arrows were removed in favour of horizontal swipe gestures (already
+        wired via PanResponder on the calendar screen).  The title now
+        centres itself and still opens the YearMonthPicker when tapped.
+        A subtle bouncing-chevron animation on either side hints that the
+        whole surface is swipeable.
+      */}
       <View style={styles.navRow}>
-        <TouchableOpacity
-          onPress={onPrev}
-          hitSlop={HIT_SLOP}
-          style={styles.arrowBtn}
-          accessibilityLabel="이전"
-        >
-          <Text style={styles.arrow}>‹</Text>
-        </TouchableOpacity>
+        <SwipeHint direction="left" />
 
-        {/*
-          Tapping the title opens the YearMonthPicker so the user can jump to
-          any year/month quickly.  Falls back to onToday if onYearMonthPress is
-          not provided (backward compatibility).
-        */}
         <TouchableOpacity
           onPress={onYearMonthPress ?? onToday}
           hitSlop={HIT_SLOP}
@@ -134,19 +179,11 @@ export function CalendarHeader({
         >
           <View style={styles.titleInner}>
             <Text style={styles.title}>{buildTitle(viewMode, currentDate)}</Text>
-            {/* Small chevron-down indicator hints that this is tappable */}
             <Text style={styles.titleChevron}>▾</Text>
           </View>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={onNext}
-          hitSlop={HIT_SLOP}
-          style={styles.arrowBtn}
-          accessibilityLabel="다음"
-        >
-          <Text style={styles.arrow}>›</Text>
-        </TouchableOpacity>
+        <SwipeHint direction="right" />
       </View>
 
       {/* ─── View mode tabs ─── */}

@@ -36,6 +36,8 @@ import { DayView } from '@/components/calendar/DayView';
 import { useEventStore } from '@/stores/eventStore';
 import { subscribeToSharedEvents } from '@/services/eventRealtimeService';
 import { updateEvent } from '@/services/eventService';
+import { useTodoStore } from '@/stores/todoStore';
+import type { MonthViewItem } from '@/components/calendar/MonthView';
 import type { EventSummary, Category } from '@/types';
 import { useColors } from '@/hooks/useColors';
 import { getCategories } from '@/services/categoryService';
@@ -125,6 +127,9 @@ export default function CalendarScreen() {
   const styles = makeStyles(colors);
   const router = useRouter();
   const { eventsByDate, fetchEvents, upsertEvent, removeEvent } = useEventStore();
+  // Todos with a due date should surface on the calendar alongside events.
+  const { todos, fetchTodos } = useTodoStore();
+  useEffect(() => { void fetchTodos(); }, [fetchTodos]);
 
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
@@ -158,6 +163,33 @@ export default function CalendarScreen() {
     }).catch(() => {/* non-fatal */});
     return () => { cancelled = true; };
   }, []);
+
+  /** Density mode: detailed bars with titles, or compact colour dots. */
+  const [monthDensity, setMonthDensity] = useState<'detailed' | 'compact'>('detailed');
+
+  /**
+   * Group todos by due-date key. Only todos with a due date and not yet
+   * completed are surfaced on the calendar — completed items would add
+   * noise. The colour is the category colour if we know it, otherwise
+   * a neutral grey so the bar is still visible.
+   */
+  const todosByDate = useMemo(() => {
+    const map: Record<string, MonthViewItem[]> = {};
+    for (const t of todos) {
+      if (!t.dueDate || t.isCompleted) continue;
+      const d = t.dueDate;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const bucket = map[key] ?? (map[key] = []);
+      const cat = t.categoryId ? categories.find((c) => c.id === t.categoryId) : null;
+      bucket.push({
+        id: t.id,
+        title: t.title,
+        color: cat?.color ?? '#64748B',
+        kind: 'todo',
+      });
+    }
+    return map;
+  }, [todos, categories]);
 
   /**
    * Produce a new eventsByDate where events whose category the user has
@@ -340,6 +372,27 @@ export default function CalendarScreen() {
           )}
         </TouchableOpacity>
 
+        {/*
+          Month view only: toggle between detailed (title bars) and
+          compact (colour dots) density. Right-side companion to the
+          category filter button.
+        */}
+        {viewMode === 'month' && (
+          <TouchableOpacity
+            style={styles.densityBtn}
+            onPress={() =>
+              setMonthDensity((d) => (d === 'detailed' ? 'compact' : 'detailed'))
+            }
+            accessibilityLabel="월 뷰 밀도 전환"
+          >
+            <Ionicons
+              name={monthDensity === 'detailed' ? 'list' : 'apps-outline'}
+              size={18}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+        )}
+
         {/* Fixed header: period title + view mode tabs */}
         <CalendarHeader
           viewMode={viewMode}
@@ -366,6 +419,8 @@ export default function CalendarScreen() {
               currentMonth={selectedDate}
               selectedDate={selectedDate}
               eventsByDate={displayEventsByDate}
+              todosByDate={todosByDate}
+              density={monthDensity}
               onDateSelect={handleDateSelect}
             />
           )}
@@ -514,6 +569,17 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       width: 8,
       height: 8,
       borderRadius: 4,
+    },
+    densityBtn: {
+      position: 'absolute',
+      top: 12,
+      left: 52,
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 5,
     },
     catModalBackdrop: {
       flex: 1,
