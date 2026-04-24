@@ -19,8 +19,11 @@
  *  - TASK-302: NL input bar
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, PanResponder, Pressable, StyleSheet } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  View, PanResponder, Pressable, StyleSheet,
+  Modal, TouchableOpacity, Text,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,8 +35,9 @@ import { WeekView } from '@/components/calendar/WeekView';
 import { DayView } from '@/components/calendar/DayView';
 import { useEventStore } from '@/stores/eventStore';
 import { subscribeToSharedEvents } from '@/services/eventRealtimeService';
-import type { EventSummary } from '@/types';
+import type { EventSummary, Category } from '@/types';
 import { useColors } from '@/hooks/useColors';
+import { getCategories } from '@/services/categoryService';
 
 // ─── Swipe detection thresholds ───────────────────────────────────────────────
 
@@ -133,6 +137,57 @@ export default function CalendarScreen() {
    * Opened when the user taps the period title in CalendarHeader.
    */
   const [pickerVisible, setPickerVisible] = useState(false);
+
+  // ── Category filter (TASK-1416) ────────────────────────────────────────────
+  /** All categories known for the user — used to render the toggle list. */
+  const [categories, setCategories] = useState<Category[]>([]);
+  /**
+   * Categories whose events should be rendered dimmed on the calendar.
+   * The sentinel string '__none__' represents events without a category.
+   * Default: empty set = everything fully visible.
+   */
+  const [dimmedCats, setDimmedCats] = useState<Set<string>>(new Set());
+  /** Whether the category filter sheet is open. */
+  const [catFilterVisible, setCatFilterVisible] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getCategories().then((list) => {
+      if (!cancelled) setCategories(list);
+    }).catch(() => {/* non-fatal */});
+    return () => { cancelled = true; };
+  }, []);
+
+  /**
+   * Produce a new eventsByDate where events whose category the user has
+   * toggled off carry an 8-char hex color with a low alpha suffix. Views
+   * render the given `color` verbatim so this is enough to dim them — no
+   * view code needs to change. Sentinel '__none__' dims uncategorised.
+   */
+  const displayEventsByDate = useMemo(() => {
+    if (dimmedCats.size === 0) return eventsByDate;
+    const out: typeof eventsByDate = {};
+    for (const [key, events] of Object.entries(eventsByDate)) {
+      out[key] = events.map((e) => {
+        const bucket = e.categoryId ?? '__none__';
+        if (!dimmedCats.has(bucket)) return e;
+        // Append low-alpha (~19%) to the hex so RN renders it faded.
+        const c = e.color;
+        const dimmed = c.length === 7 ? `${c}30` : c;
+        return { ...e, color: dimmed };
+      });
+    }
+    return out;
+  }, [eventsByDate, dimmedCats]);
+
+  const toggleCategoryDim = useCallback((bucket: string) => {
+    setDimmedCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(bucket)) next.delete(bucket);
+      else next.add(bucket);
+      return next;
+    });
+  }, []);
 
   // ─── Navigation ─────────────────────────────────────────────────────────────
 
@@ -234,13 +289,33 @@ export default function CalendarScreen() {
 
   // ─── Events for current day (DayView) ────────────────────────────────────
 
-  const todayEvents: EventSummary[] = eventsByDate[toDateKey(selectedDate)] ?? [];
+  const todayEvents: EventSummary[] = displayEventsByDate[toDateKey(selectedDate)] ?? [];
 
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.container}>
+        {/*
+          Category filter button — top-left affordance that opens a modal
+          letting the user dim/undim events by category.  Positioned
+          absolutely so the existing CalendarHeader layout stays untouched.
+        */}
+        <TouchableOpacity
+          style={styles.catFilterBtn}
+          onPress={() => setCatFilterVisible(true)}
+          accessibilityLabel="카테고리 필터"
+        >
+          <Ionicons
+            name="funnel-outline"
+            size={18}
+            color={dimmedCats.size > 0 ? colors.primary : colors.textSecondary}
+          />
+          {dimmedCats.size > 0 && (
+            <View style={[styles.catFilterBadge, { backgroundColor: colors.primary }]} />
+          )}
+        </TouchableOpacity>
+
         {/* Fixed header: period title + view mode tabs */}
         <CalendarHeader
           viewMode={viewMode}
@@ -266,7 +341,7 @@ export default function CalendarScreen() {
             <MonthView
               currentMonth={selectedDate}
               selectedDate={selectedDate}
-              eventsByDate={eventsByDate}
+              eventsByDate={displayEventsByDate}
               onDateSelect={handleDateSelect}
             />
           )}
@@ -274,7 +349,7 @@ export default function CalendarScreen() {
           {viewMode === 'week' && (
             <WeekView
               selectedDate={selectedDate}
-              eventsByDate={eventsByDate}
+              eventsByDate={displayEventsByDate}
               onEventPress={handleEventPress}
               onDateSelect={(date) => {
                 setSelectedDate(date);
@@ -315,6 +390,60 @@ export default function CalendarScreen() {
         >
           <Ionicons name="add" size={28} color="#ffffff" />
         </Pressable>
+
+        {/* Category dim filter modal */}
+        <Modal
+          visible={catFilterVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setCatFilterVisible(false)}
+        >
+          <Pressable
+            style={styles.catModalBackdrop}
+            onPress={() => setCatFilterVisible(false)}
+          >
+            <Pressable
+              style={styles.catModalSheet}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <Text style={styles.catModalTitle}>카테고리 필터</Text>
+              <Text style={styles.catModalHint}>
+                체크 해제한 카테고리는 달력에서 연하게 표시됩니다.
+              </Text>
+
+              {/* Row: "카테고리 없음" first so uncategorised events can be toggled. */}
+              {[{ id: '__none__', name: '카테고리 없음', color: colors.textSecondary } as const,
+                ...categories.map((c) => ({ id: c.id, name: c.name, color: c.color }))]
+                .map((row) => {
+                  const active = !dimmedCats.has(row.id);
+                  return (
+                    <TouchableOpacity
+                      key={row.id}
+                      style={styles.catModalRow}
+                      onPress={() => toggleCategoryDim(row.id)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.catModalDot, { backgroundColor: row.color }]} />
+                      <Text
+                        style={[
+                          styles.catModalName,
+                          !active && { opacity: 0.45 },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {row.name}
+                      </Text>
+                      <Ionicons
+                        name={active ? 'checkmark-circle' : 'ellipse-outline'}
+                        size={22}
+                        color={active ? colors.primary : colors.border}
+                      />
+                    </TouchableOpacity>
+                  );
+                })}
+            </Pressable>
+          </Pressable>
+        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -340,6 +469,66 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     },
     content: {
       flex: 1,
+    },
+    // Top-left category filter affordance.
+    catFilterBtn: {
+      position: 'absolute',
+      top: 12,
+      left: 12,
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 5,
+    },
+    catFilterBadge: {
+      position: 'absolute',
+      top: 4,
+      right: 4,
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    catModalBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.35)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    catModalSheet: {
+      width: '85%',
+      maxWidth: 340,
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      padding: 20,
+    },
+    catModalTitle: {
+      fontSize: 17,
+      fontWeight: '700',
+      color: colors.textPrimary,
+      marginBottom: 6,
+    },
+    catModalHint: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginBottom: 16,
+    },
+    catModalRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 10,
+    },
+    catModalDot: {
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      marginRight: 12,
+    },
+    catModalName: {
+      flex: 1,
+      fontSize: 15,
+      color: colors.textPrimary,
     },
     /** Floating action button — bottom-right, positioned above NLInputBar to avoid blocking its send button. */
     fab: {

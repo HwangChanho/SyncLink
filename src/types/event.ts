@@ -60,6 +60,12 @@ export interface EventSummary {
   allDay: boolean;
   color: string;
   isOwn: boolean;
+  /**
+   * Category bucket this event belongs to. null/undefined = uncategorised.
+   * Included so the calendar can dim events whose category the user
+   * has toggled off in the category filter chip.
+   */
+  categoryId?: string | null;
 }
 
 /** Payload when creating a new event (omit server-generated fields). */

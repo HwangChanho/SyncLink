@@ -350,10 +350,22 @@ export default function EventDetailScreen() {
         )}
       </View>
 
+      {/*
+        Wrap the scrollable content AND the fixed comment input in a single
+        KeyboardAvoidingView at the SafeArea level. Nesting KAV inside the
+        ScrollView (the previous layout) prevented iOS from lifting the
+        input because the KAV didn't see the scroll container's coordinates.
+      */}
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={0}
+      >
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {/* Color stripe + title */}
         <View style={[styles.colorStripe, { backgroundColor: event.color ?? colors.primary }]} />
@@ -531,40 +543,40 @@ export default function EventDetailScreen() {
             </View>
           ))}
 
-          {/* Comment input */}
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          >
-            <View style={styles.commentInputRow}>
-              <TextInput
-                ref={commentInputRef}
-                style={styles.commentInput}
-                placeholder={t('note.label') + '...'}
-
-                placeholderTextColor={colors.textPlaceholder}
-                value={commentInput}
-                onChangeText={setCommentInput}
-                maxLength={500}
-                multiline
-                returnKeyType="default"
-              />
-              <TouchableOpacity
-                style={[
-                  styles.commentSendButton,
-                  (!commentInput.trim() || isSubmittingComment) && styles.commentSendDisabled,
-                ]}
-                onPress={handleSubmitComment}
-                disabled={!commentInput.trim() || isSubmittingComment}
-                activeOpacity={0.7}
-              >
-                {isSubmittingComment ? (
-                  <ActivityIndicator size="small" color={colors.textInverse} />
-                ) : (
-                  <Ionicons name="send" size={16} color={colors.textInverse} />
-                )}
-              </TouchableOpacity>
-            </View>
-          </KeyboardAvoidingView>
+          {/*
+            Comment input — sibling of the ScrollView inside the parent
+            KeyboardAvoidingView so iOS can lift the whole layout when the
+            keyboard appears. The previous nested KAV inside the scroll
+            didn't have access to the correct coordinates.
+          */}
+          <View style={styles.commentInputRow}>
+            <TextInput
+              ref={commentInputRef}
+              style={styles.commentInput}
+              placeholder={t('note.label') + '...'}
+              placeholderTextColor={colors.textPlaceholder}
+              value={commentInput}
+              onChangeText={setCommentInput}
+              maxLength={500}
+              multiline
+              returnKeyType="default"
+            />
+            <TouchableOpacity
+              style={[
+                styles.commentSendButton,
+                (!commentInput.trim() || isSubmittingComment) && styles.commentSendDisabled,
+              ]}
+              onPress={handleSubmitComment}
+              disabled={!commentInput.trim() || isSubmittingComment}
+              activeOpacity={0.7}
+            >
+              {isSubmittingComment ? (
+                <ActivityIndicator size="small" color={colors.textInverse} />
+              ) : (
+                <Ionicons name="send" size={16} color={colors.textInverse} />
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Delete button — owner only */}
@@ -582,6 +594,7 @@ export default function EventDetailScreen() {
           </Pressable>
         )}
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -650,6 +663,7 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   },
 
   // Scroll content
+  flex: { flex: 1 },
   scroll: { flex: 1 },
   scrollContent: {
     padding: spacing[5],

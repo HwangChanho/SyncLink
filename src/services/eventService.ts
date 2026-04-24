@@ -48,6 +48,7 @@ function toEventSummary(row: EventRow, isOwn: boolean, color: string): EventSumm
     allDay:  row.all_day,
     color:   row.color ?? color,
     isOwn,
+    categoryId: row.category_id,
   };
 }
 

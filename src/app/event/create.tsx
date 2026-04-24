@@ -42,6 +42,9 @@ import { textStyles } from '@/constants/typography';
 import { PlaceSearchInput } from '@/components/places/PlaceSearchInput';
 import { ReminderPicker } from '@/components/reminders/ReminderPicker';
 import { DateTimeModal } from '@/components/common/DateTimeModal';
+import { CategoryPickerSheet } from '@/components/planner/CategoryPickerSheet';
+import { getCategories } from '@/services/categoryService';
+import type { Category } from '@/types';
 import { showAlert } from '@/lib/webAlert';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -212,9 +215,25 @@ export default function EventCreateScreen() {
   // "저장 기준은 달력에 등록되어있는기준" behaviour requested in Sprint 14.
   const [titleSuggestions, setTitleSuggestions] = useState<EventAutocompleteSuggestion[]>([]);
   const [titleFocused, setTitleFocused]   = useState(false);
-  /** Category id pre-filled by a picked suggestion. Kept local because the
-   * current form doesn't expose a category picker yet — saved with the event. */
+  /** Selected category id — null = 카테고리 없음. Populated either by a
+   * title-autocomplete pick or by tapping the category chip below. */
   const [categoryId, setCategoryId]       = useState<string | null>(null);
+  /** Whether the inline category picker sheet is visible. */
+  const [categoryPickerVisible, setCategoryPickerVisible] = useState(false);
+  /** Cached categories for chip color/name lookup. Refreshed when the
+   * picker closes so inline creation is reflected immediately. */
+  const [categoryMap, setCategoryMap]     = useState<Map<string, Category>>(new Map());
+
+  // Load categories once on mount + whenever the picker closes.
+  useEffect(() => {
+    let cancelled = false;
+    getCategories().then((list) => {
+      if (!cancelled) setCategoryMap(new Map(list.map((c) => [c.id, c])));
+    }).catch(() => {
+      // Non-fatal — chip just shows "없음" until list loads.
+    });
+    return () => { cancelled = true; };
+  }, [categoryPickerVisible]);
 
   // Debounced search as title changes.
   useEffect(() => {
@@ -622,6 +641,46 @@ export default function EventCreateScreen() {
             </ScrollView>
           </FormRow>
 
+          {/*
+            Category — inline chip; tap to open the picker.  When a category
+            is chosen the chip inherits its colour so the event's accent is
+            visible at a glance before saving.
+          */}
+          <FormRow label="카테고리" rowStyle={rowStyle}>
+            {(() => {
+              const cat = categoryId ? categoryMap.get(categoryId) : null;
+              return (
+                <Pressable
+                  style={[
+                    styles.categoryChip,
+                    cat && { backgroundColor: cat.color + '22', borderColor: cat.color },
+                  ]}
+                  onPress={() => setCategoryPickerVisible(true)}
+                >
+                  <Ionicons
+                    name="pricetag-outline"
+                    size={14}
+                    color={cat ? cat.color : colors.textSecondary}
+                  />
+                  <Text
+                    style={[
+                      styles.categoryChipLabel,
+                      cat && { color: cat.color },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {cat ? cat.name : t('planner.category_none', '없음')}
+                  </Text>
+                  <Ionicons
+                    name="chevron-down"
+                    size={14}
+                    color={cat ? cat.color : colors.textSecondary}
+                  />
+                </Pressable>
+              );
+            })()}
+          </FormRow>
+
           {/* Location — GPS shortcut + Google Places Autocomplete (TASK-901 / TASK-1302) */}
           <FormRow label="위치" rowStyle={rowStyle}>
             <View style={styles.locationRow}>
@@ -707,6 +766,17 @@ export default function EventCreateScreen() {
         </View>
       </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Category picker — rendered at root so it overlays the whole screen */}
+      <CategoryPickerSheet
+        visible={categoryPickerVisible}
+        selectedId={categoryId}
+        onClose={() => setCategoryPickerVisible(false)}
+        onSelect={(id) => {
+          setCategoryId(id);
+          setCategoryPickerVisible(false);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -867,6 +937,25 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   chipRow: {
     flexDirection: 'row',
     gap: spacing[2],
+  },
+  // Inline category chip on the event-create form. Mirrors the planner
+  // quick-add chip so the pattern is consistent across screens.
+  categoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1],
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.inputBorder,
+    backgroundColor: colors.inputBackground,
+    minHeight: 32,
+  },
+  categoryChipLabel: {
+    ...textStyles.body,
+    color: colors.textSecondary,
   },
   repeatChip: {
     // Ensure the chip's content is centred both horizontally and vertically.
