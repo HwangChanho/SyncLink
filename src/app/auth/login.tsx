@@ -6,7 +6,8 @@
 import { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ActivityIndicator, Platform, TextInput,
+  ActivityIndicator, Platform, TextInput, KeyboardAvoidingView,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -71,6 +72,22 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/*
+       * Wrap the login form in a KeyboardAvoidingView + ScrollView so that
+       * the dev email/password TextInputs (and any future email login form)
+       * remain visible above the software keyboard on iOS. Android uses
+       * `softwareKeyboardLayoutMode="resize"` so behavior is a no-op there.
+       * Sprint 14 TASK-1411.
+       */}
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
       <View style={styles.content}>
 
         <View style={styles.hero}>
@@ -225,6 +242,8 @@ export default function LoginScreen() {
         </Text>
 
       </View>
+      </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -243,6 +262,10 @@ function isCancelError(err: unknown): boolean {
 function makeStyles(colors: ReturnType<typeof useColors>) {
   return StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  flex: { flex: 1 },
+  scrollContent: {
+    flexGrow: 1,
+  },
   content: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
     padding: spacing[6],

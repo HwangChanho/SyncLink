@@ -19,7 +19,7 @@
 import { useCallback, useState } from 'react';
 import {
   View, Text, TextInput, ScrollView, Switch, Pressable,
-  ActivityIndicator, StyleSheet, Platform,
+  ActivityIndicator, StyleSheet, Platform, KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -409,6 +409,18 @@ export default function EventCreateScreen() {
         </Pressable>
       </View>
 
+      {/*
+       * KeyboardAvoidingView ensures the memo/description TextInput at the
+       * bottom of the form isn't covered by the software keyboard on iOS.
+       * Android uses softwareKeyboardLayoutMode="resize" (app.json) so
+       * `behavior={undefined}` lets the OS resize the activity itself —
+       * stacking both would double-adjust and leave a grey strip above the
+       * keyboard (Sprint 14 TASK-1411).
+       */}
+      <KeyboardAvoidingView
+        style={styles.scroll}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -609,6 +621,7 @@ export default function EventCreateScreen() {
           )}
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, TextInput, ScrollView, Switch, Pressable,
-  ActivityIndicator, Alert, StyleSheet, Platform,
+  ActivityIndicator, Alert, StyleSheet, Platform, KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -390,6 +390,14 @@ export default function EventEditScreen() {
         </Pressable>
       </View>
 
+      {/*
+       * KeyboardAvoidingView keeps the memo/description TextInput above the
+       * software keyboard (Sprint 14 TASK-1411).
+       */}
+      <KeyboardAvoidingView
+        style={styles.scroll}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -564,6 +572,7 @@ export default function EventEditScreen() {
           </Pressable>
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
