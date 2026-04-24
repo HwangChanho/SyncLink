@@ -1,0 +1,93 @@
+# CI workflow — SyncDay
+#
+# Triggered on:
+#   - push to main or develop branches
+#   - pull requests targeting main
+#
+# Jobs:
+#   test:            runs typecheck + Jest on every push/PR
+#   eas-build-preview: triggers EAS build for all platforms on main only
+#                      (requires EXPO_TOKEN secret in GitHub repo settings)
+#
+# Required GitHub Secrets (Settings → Secrets → Actions):
+#   EXPO_TOKEN — Expo access token from expo.dev/accounts/<username>/settings/access-tokens
+#
+# See: docs/app-store/ci-setup.md for full setup guide
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  # ── Type check + tests ──────────────────────────────────────────────────────
+  test:
+    name: Type Check & Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      # Check out the repository code
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Set up Node.js 20 LTS with npm cache for faster installs
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # Install dependencies using the lockfile for reproducibility
+      - name: Install dependencies
+        run: npm ci
+
+      # TypeScript strict mode check — must pass with 0 errors
+      - name: Type check
+        run: npm run typecheck
+
+      # Jest test suite — --ci disables watch mode, --passWithNoTests
+      # avoids failure on newly scaffolded projects with no tests yet
+      - name: Run tests
+        run: npm run test:ci
+
+  # ── EAS preview build (main branch only) ───────────────────────────────────
+  eas-build-preview:
+    name: EAS Preview Build
+    needs: test                    # Only run if tests pass
+    runs-on: ubuntu-latest
+
+    # Only trigger EAS builds when merging to main (not on PRs or develop pushes)
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Install and authenticate the Expo GitHub Action using the EXPO_TOKEN secret.
+      # NEVER hardcode the token here — always use ${{ secrets.EXPO_TOKEN }}.
+      - name: Setup Expo & EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # Trigger a preview build for both iOS and Android in non-interactive mode.
+      # The 'preview' profile must be defined in eas.json.
+      # Build artifacts are available in the Expo dashboard after the job completes.
+      - name: EAS Build (preview)
+        run: eas build --platform all --profile preview --non-interactive

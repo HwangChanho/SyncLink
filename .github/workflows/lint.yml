@@ -1,0 +1,41 @@
+# Lint workflow — SyncDay
+#
+# Triggered on: all pull requests (any base branch)
+#
+# Runs ESLint on the src/ directory with TypeScript + React Native rules.
+# Uses --max-warnings 0 so that warnings are treated as errors in CI.
+#
+# No secrets required for this workflow.
+#
+# Local equivalent: npm run lint
+
+name: Lint
+
+on: [pull_request]
+
+jobs:
+  # ── ESLint ──────────────────────────────────────────────────────────────────
+  lint:
+    name: ESLint
+    runs-on: ubuntu-latest
+
+    steps:
+      # Check out the repository code
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Set up Node.js 20 LTS with npm cache for faster installs
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # Install dependencies using the lockfile for reproducibility
+      - name: Install dependencies
+        run: npm ci
+
+      # Run ESLint — treats any warning as a failure (--max-warnings 0)
+      # to enforce zero-warning policy in pull requests
+      - name: Lint
+        run: npm run lint
