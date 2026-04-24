@@ -18,3 +18,10 @@ verify_jwt = false
 # inside the handler (against Google's public key set).
 # Sprint 14 TASK-1405.
 verify_jwt = false
+
+[functions.translate-event]
+# We perform JWT verification manually inside the handler via
+# supabase.auth.getUser() so we can return detailed 401/403 bodies and so
+# the same request can also enforce Pro-tier subscription gating.
+# Sprint 15 TASK-1501.
+verify_jwt = false

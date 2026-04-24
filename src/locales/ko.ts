@@ -354,6 +354,40 @@ const ko = {
     kakao_web_notice: '카카오 로그인은 앱에서 이용 가능합니다',
   },
 
+  // Sprint 15 TASK-1504 — 공유 이벤트 AI 번역 관련 문자열
+  translation: {
+    badge_translated: '번역됨',
+    show_original: '원문 보기',
+    show_translated: '번역 보기',
+    pro_only: 'Pro 전용 기능입니다.',
+  },
+
+  // Sprint 15 TASK-1510 — PIN 잠금 관련 문자열
+  pin_lock: {
+    title: '비밀번호 잠금',
+    enable: 'PIN 사용',
+    disable: 'PIN 해제',
+    set_title: 'PIN 설정',
+    enter: '비밀번호를 입력하세요',
+    confirm: '비밀번호를 한 번 더 입력하세요',
+    enter_current: '현재 비밀번호를 입력하세요',
+    mismatch: '비밀번호가 일치하지 않습니다.',
+    incorrect: '비밀번호가 올바르지 않습니다.',
+    success: 'PIN이 설정되었습니다.',
+    disabled: 'PIN이 해제되었습니다.',
+    change: 'PIN 변경',
+    forgot: '비밀번호를 잊으셨나요?',
+    use_pin: '비밀번호 입력',
+    use_biometric: '생체 인증 사용',
+    description: '앱을 열 때 4자리 숫자 비밀번호를 요구합니다. 생체 인증 미지원 기기나 생체 인증 실패 시 사용할 수 있습니다.',
+  },
+
+  // Sprint 15 TASK-1520 — 네트워크 오프라인 배너
+  offline: {
+    banner: '오프라인 상태입니다',
+    retry: '재시도',
+  },
+
   paywall: {
     title: 'SyncLink Pro',
     headline: '모든 기능을 제한 없이 사용하세요',

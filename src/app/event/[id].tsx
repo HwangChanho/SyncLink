@@ -38,6 +38,7 @@ import { useEventStore } from '@/stores/eventStore';
 import { useSpaceStore } from '@/stores/spaceStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useColors } from '@/hooks/useColors';
+import { useEventTranslation } from '@/hooks/useEventTranslation';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 
@@ -90,6 +91,13 @@ export default function EventDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  /**
+   * When true the user has tapped "Show original" — we render the raw event
+   * fields instead of the AI translation. Default is false so Pro users see
+   * the translated version first when one is available.
+   * Sprint 15 TASK-1503.
+   */
+  const [showOriginal, setShowOriginal] = useState(false);
   /** Tracks which space share toggles are currently saving. */
   const [sharingInFlight, setSharingInFlight] = useState<Set<string>>(new Set());
 
@@ -302,6 +310,13 @@ export default function EventDetailScreen() {
     }
   }, [event, sharingInFlight]);
 
+  // Sprint 15 TASK-1503 — request an AI translation of the event for the
+  // current UI locale. Must be called at the top level (before the early
+  // returns below) so the hook invocation order stays stable across renders.
+  // The hook itself short-circuits for free users, same-locale events, and
+  // null input, so passing `event` (which is null until loaded) is safe.
+  const translation = useEventTranslation(event);
+
   // ── Render states ───────────────────────────────────────────────────────────
 
   if (isLoading) {
@@ -331,6 +346,19 @@ export default function EventDetailScreen() {
     event.startAt.toDateString() === event.endAt.toDateString();
   const repeatLabel = REPEAT_LABELS[event.repeatType] ?? event.repeatType;
 
+  // Sprint 15 TASK-1503 — render the translated title/description when a Pro
+  // subscriber has a translation available and hasn't toggled "show original".
+  // `translation.translated` is always null for free users, same-locale
+  // events, or while a request is in-flight, so this falls back cleanly.
+  const hasTranslation = translation.translated !== null;
+  const showTranslation = hasTranslation && !showOriginal;
+  const displayTitle       = showTranslation && translation.translated
+    ? translation.translated.title
+    : event.title;
+  const displayDescription = showTranslation && translation.translated
+    ? translation.translated.description
+    : event.description;
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       {/* ── Header bar ── */}
@@ -338,7 +366,7 @@ export default function EventDetailScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle} numberOfLines={1}>{event.title}</Text>
+        <Text style={styles.headerTitle} numberOfLines={1}>{displayTitle}</Text>
         {/* Only the owner can edit */}
         {event.isOwn && (
           <Pressable
@@ -369,7 +397,29 @@ export default function EventDetailScreen() {
       >
         {/* Color stripe + title */}
         <View style={[styles.colorStripe, { backgroundColor: event.color ?? colors.primary }]} />
-        <Text style={styles.title}>{event.title}</Text>
+        <Text style={styles.title}>{displayTitle}</Text>
+
+        {/*
+          Sprint 15 TASK-1503 — "Translated · Show original" toggle.
+          Only rendered when a translation is actually available (i.e. Pro
+          user on a different locale than the event's source). Tapping flips
+          between original and translated rendering without re-fetching.
+        */}
+        {hasTranslation && (
+          <Pressable
+            style={styles.translationBadge}
+            onPress={() => setShowOriginal((prev) => !prev)}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Ionicons name="language-outline" size={14} color={colors.primary} />
+            <Text style={styles.translationBadgeText}>
+              {showOriginal
+                ? t('translation.show_translated')
+                : `${t('translation.badge_translated')} · ${t('translation.show_original')}`}
+            </Text>
+          </Pressable>
+        )}
+
         {!event.isOwn && (
           <Text style={styles.ownerLabel}>by {event.ownerNickname}</Text>
         )}
@@ -417,10 +467,10 @@ export default function EventDetailScreen() {
         ) : null}
 
         {/* Description */}
-        {event.description ? (
+        {displayDescription ? (
           <View style={styles.section}>
             <Ionicons name="document-text-outline" size={18} color={colors.textSecondary} />
-            <Text style={[styles.sectionPrimary, styles.sectionText]}>{event.description}</Text>
+            <Text style={[styles.sectionPrimary, styles.sectionText]}>{displayDescription}</Text>
           </View>
         ) : null}
 
@@ -687,6 +737,28 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     ...textStyles.caption,
     color: colors.textSecondary,
     marginBottom: spacing[4],
+  },
+
+  // Sprint 15 TASK-1503 — compact toggle shown under the title when an AI
+  // translation is available. Laid out inline (flex row) to keep a light
+  // visual footprint next to the title.
+  translationBadge: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             spacing[1],
+    alignSelf:       'flex-start',
+    paddingHorizontal: spacing[2],
+    paddingVertical:   spacing[1],
+    marginBottom:    spacing[2],
+    borderRadius:    radius.full,
+    borderWidth:     1,
+    borderColor:     colors.primaryLight,
+    backgroundColor: colors.primaryLight,
+  },
+  translationBadgeText: {
+    ...textStyles.caption,
+    color: colors.primary,
+    fontWeight: '600',
   },
 
   // Detail rows

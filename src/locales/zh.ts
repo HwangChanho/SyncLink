@@ -340,6 +340,40 @@ const zh = {
     kakao_web_notice: 'Kakao 登录仅在应用中可用',
   },
 
+  // Sprint 15 TASK-1504 — shared-event AI translation strings
+  translation: {
+    badge_translated: '已翻译',
+    show_original: '查看原文',
+    show_translated: '查看译文',
+    pro_only: 'Pro 专属功能。',
+  },
+
+  // Sprint 15 TASK-1510 — PIN lock strings
+  pin_lock: {
+    title: '密码锁',
+    enable: '启用 PIN',
+    disable: '关闭 PIN',
+    set_title: '设置密码',
+    enter: '请输入 4 位数字密码',
+    confirm: '请再次输入以确认',
+    enter_current: '请输入当前密码',
+    mismatch: '密码不一致。',
+    incorrect: '密码错误。',
+    success: '密码已设置。',
+    disabled: '密码已关闭。',
+    change: '更改密码',
+    forgot: '忘记密码?',
+    use_pin: '使用密码',
+    use_biometric: '使用生物识别',
+    description: '打开应用时需要输入 4 位数字密码,可在生物识别不可用或失败时作为备用方案。',
+  },
+
+  // Sprint 15 TASK-1520 — offline banner
+  offline: {
+    banner: '当前处于离线状态',
+    retry: '重试',
+  },
+
   paywall: {
     title: 'SyncLink Pro',
     headline: '无限制使用所有功能',

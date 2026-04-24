@@ -340,6 +340,40 @@ const ja = {
     kakao_web_notice: 'Kakao ログインはアプリでご利用いただけます',
   },
 
+  // Sprint 15 TASK-1504 — shared-event AI translation strings
+  translation: {
+    badge_translated: '翻訳済み',
+    show_original: '原文を表示',
+    show_translated: '翻訳を表示',
+    pro_only: 'Pro 限定機能です。',
+  },
+
+  // Sprint 15 TASK-1510 — PIN lock strings
+  pin_lock: {
+    title: 'パスコードロック',
+    enable: 'PIN を有効化',
+    disable: 'PIN を無効化',
+    set_title: 'パスコードを設定',
+    enter: '4桁のパスコードを入力',
+    confirm: 'もう一度入力してください',
+    enter_current: '現在のパスコードを入力',
+    mismatch: 'パスコードが一致しません。',
+    incorrect: 'パスコードが正しくありません。',
+    success: 'パスコードを設定しました。',
+    disabled: 'パスコードを解除しました。',
+    change: 'パスコードを変更',
+    forgot: 'パスコードをお忘れですか?',
+    use_pin: 'パスコードを使う',
+    use_biometric: '生体認証を使う',
+    description: 'アプリを開く際に4桁のパスコードを要求します。生体認証が使えない場合のフォールバックとして利用できます。',
+  },
+
+  // Sprint 15 TASK-1520 — offline banner
+  offline: {
+    banner: 'オフラインです',
+    retry: '再試行',
+  },
+
   paywall: {
     title: 'SyncLink Pro',
     headline: 'すべての機能を無制限で利用',

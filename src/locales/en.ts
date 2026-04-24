@@ -344,6 +344,40 @@ const en = {
     kakao_web_notice: 'Kakao login is available in the app',
   },
 
+  // Sprint 15 TASK-1504 — shared-event AI translation strings
+  translation: {
+    badge_translated: 'Translated',
+    show_original: 'Show original',
+    show_translated: 'Show translated',
+    pro_only: 'Pro feature.',
+  },
+
+  // Sprint 15 TASK-1510 — PIN lock strings
+  pin_lock: {
+    title: 'Passcode Lock',
+    enable: 'Enable PIN',
+    disable: 'Disable PIN',
+    set_title: 'Set Passcode',
+    enter: 'Enter a 4-digit passcode',
+    confirm: 'Re-enter to confirm',
+    enter_current: 'Enter current passcode',
+    mismatch: 'Passcodes do not match.',
+    incorrect: 'Incorrect passcode.',
+    success: 'Passcode set.',
+    disabled: 'Passcode removed.',
+    change: 'Change Passcode',
+    forgot: 'Forgot your passcode?',
+    use_pin: 'Use passcode',
+    use_biometric: 'Use biometrics',
+    description: 'Requires a 4-digit passcode when opening the app. Works as a fallback when biometrics are unavailable or fail.',
+  },
+
+  // Sprint 15 TASK-1520 — offline banner
+  offline: {
+    banner: 'You are offline',
+    retry: 'Retry',
+  },
+
   paywall: {
     title: 'SyncLink Pro',
     headline: 'Unlock all features without limits',
