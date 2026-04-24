@@ -69,6 +69,13 @@ jest.mock('expo-linking', () => ({
   createURL: jest.fn().mockReturnValue('synclink://auth/callback'),
 }));
 
+// expo-constants: errorLogger가 app_version을 읽기 위해 import함
+// 웹 테스트 환경에선 NativeUnimoduleProxy가 없어서 실제 모듈 로드 시 실패 → mock으로 대체
+jest.mock('expo-constants', () => ({
+  __esModule: true,
+  default: { expoConfig: { version: '1.0.0' } },
+}));
+
 // @/lib/supabase 전체 대체 — 실제 Supabase 호출 차단
 jest.mock('@/lib/supabase', () => ({
   SUPABASE_URL: 'https://test.supabase.co',

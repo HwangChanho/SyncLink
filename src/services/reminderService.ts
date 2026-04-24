@@ -13,6 +13,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { logError } from '@/lib/errorLogger';
 import {
   scheduleEventReminder,
   cancelNotification,
@@ -247,33 +248,46 @@ export async function updateReminders(
   eventTitle: string,
   eventStartAt: Date,
 ): Promise<EventReminder[]> {
-  // Step 1: fetch and cancel existing reminders
-  const existing = await getReminders(eventId);
+  try {
+    // Step 1: fetch and cancel existing reminders
+    const existing = await getReminders(eventId);
 
-  // Cancel all scheduled notifications concurrently (best-effort)
-  await Promise.all(
-    existing
-      .filter((r) => r.notifId !== null)
-      .map((r) => cancelNotification(r.notifId!).catch(() => {})),
-  );
+    // Cancel all scheduled notifications concurrently (best-effort)
+    await Promise.all(
+      existing
+        .filter((r) => r.notifId !== null)
+        .map((r) => cancelNotification(r.notifId!).catch(() => {})),
+    );
 
-  // Delete all existing rows for this event
-  const { error: deleteError } = await (supabase as any)
-    .from('event_reminders')
-    .delete()
-    .eq('event_id', eventId);
+    // Delete all existing rows for this event
+    const { error: deleteError } = await (supabase as any)
+      .from('event_reminders')
+      .delete()
+      .eq('event_id', eventId);
 
-  if (deleteError) throw deleteError;
+    if (deleteError) throw deleteError;
 
-  // Step 2: insert new reminders (deduplicating minute values)
-  const uniqueMinutes = [...new Set(minutesList)];
-  const results = await Promise.all(
-    uniqueMinutes.map((minutes) =>
-      addReminder(eventId, minutes, eventTitle, eventStartAt),
-    ),
-  );
+    // Step 2: insert new reminders (deduplicating minute values)
+    const uniqueMinutes = [...new Set(minutesList)];
+    const results = await Promise.all(
+      uniqueMinutes.map((minutes) =>
+        addReminder(eventId, minutes, eventTitle, eventStartAt),
+      ),
+    );
 
-  return results;
+    return results;
+  } catch (err) {
+    // 리마인더 업데이트 실패 — DELETE 단계/INSERT 단계/권한 어느 쪽인지 details로 확인
+    await logError({
+      context: 'reminder.update',
+      error:   err,
+      details: {
+        eventId,
+        minutesCount: minutesList.length,
+      },
+    });
+    throw err;
+  }
 }
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────

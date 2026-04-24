@@ -24,6 +24,9 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 // @ts-expect-error: Deno remote import — resolved at deploy time, not by tsc.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+// 공통 로거 — 모든 실패 지점에서 error_logs 테이블에 기록
+// @ts-expect-error: Deno 상대 경로 import — tsc는 해석 못하지만 배포 시 정상 동작
+import { logToDb } from '../_shared/logger.ts';
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -95,7 +98,9 @@ serve(async (req: Request): Promise<Response> => {
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : 'unknown error';
-      console.error('[kakao-auth] GET flow error:', message);
+      // GET 플로우 최상위 catch — exchangeCode 안에서 세분화된 context로 이미 기록됐을 수 있지만
+      // 그렇지 않은 예외(JSON 파싱 오류 등)도 모두 잡기 위해 한 번 더 기록
+      await logToDb('kakao-auth.unexpected', err, { flow: 'GET', code: !!code });
       return htmlRedirect(`${returnTo}?error=${encodeURIComponent(message)}`);
     }
   }
@@ -113,7 +118,7 @@ serve(async (req: Request): Promise<Response> => {
       return jsonResponse({ email, password }, 200);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'unknown error';
-      console.error('[kakao-auth] POST flow error:', message);
+      await logToDb('kakao-auth.unexpected', err, { flow: 'POST' });
       return jsonResponse({ error: message }, 500);
     }
   }
@@ -149,7 +154,14 @@ async function exchangeCode(
 
   if (!tokenRes.ok) {
     const errText = await tokenRes.text();
-    throw new Error(`kakao token exchange failed: ${errText}`);
+    const err = new Error(`kakao token exchange failed: ${errText}`);
+    // Kakao 응답 전체를 details로 남김 → invalid_grant / redirect_uri mismatch 등 원인 즉시 파악
+    await logToDb('kakao-auth.token-exchange', err, {
+      status:      tokenRes.status,
+      kakaoBody:   errText,
+      redirectUri: redirectUri,
+    });
+    throw err;
   }
 
   const tokens = (await tokenRes.json()) as KakaoTokenResponse;
@@ -160,7 +172,13 @@ async function exchangeCode(
   });
 
   if (!userRes.ok) {
-    throw new Error('kakao user fetch failed');
+    const errText = await userRes.text().catch(() => '<unreadable>');
+    const err = new Error('kakao user fetch failed');
+    await logToDb('kakao-auth.user-fetch', err, {
+      status:    userRes.status,
+      kakaoBody: errText,
+    });
+    throw err;
   }
 
   const kakaoUser = (await userRes.json()) as KakaoUser;
@@ -198,7 +216,13 @@ async function exchangeCode(
         avatar_url: avatarUrl,
       },
     });
-    if (error) throw new Error(`createUser: ${error.message}`);
+    if (error) {
+      const wrapped = new Error(`createUser: ${error.message}`);
+      await logToDb('kakao-auth.upsert-user', wrapped, {
+        op: 'createUser', email, kakaoId,
+      });
+      throw wrapped;
+    }
   } else {
     const { error } = await admin.auth.admin.updateUserById(existingUser.id, {
       password,
@@ -210,7 +234,13 @@ async function exchangeCode(
         avatar_url: avatarUrl,
       },
     });
-    if (error) throw new Error(`updateUser: ${error.message}`);
+    if (error) {
+      const wrapped = new Error(`updateUser: ${error.message}`);
+      await logToDb('kakao-auth.upsert-user', wrapped, {
+        op: 'updateUser', userId: existingUser.id, email, kakaoId,
+      });
+      throw wrapped;
+    }
   }
 
   return { email, password };

@@ -20,6 +20,7 @@
  */
 
 import { supabase, getCurrentUserId } from '@/lib/supabase';
+import { logError } from '@/lib/errorLogger';
 import { memberEventColors } from '@/constants/colors';
 import { shareEventToSpace, unshareEventFromSpace } from '@/services/eventShareService';
 import { cancelEventReminders } from '@/services/notificationService';
@@ -255,40 +256,57 @@ export async function createEvent(input: CreateEventInput): Promise<Event> {
   const userId = await getCurrentUserId();
   if (!userId) throw new Error('로그인이 필요합니다.');
 
-  const { data: row, error } = await supa
-    .from('events')
-    .insert({
-      user_id:      userId,
-      title:        input.title,
-      description:  input.description ?? null,
-      location:     input.location ?? null,
-      start_at:     input.startAt.toISOString(),
-      end_at:       input.endAt.toISOString(),
-      all_day:      input.allDay ?? false,
-      repeat_type:  input.repeatType ?? 'none',
-      repeat_until: input.repeatUntil?.toISOString() ?? null,
-      category_id:  input.categoryId ?? null,
-      color:        input.color ?? null,
-    })
-    .select()
-    .single() as { data: EventRow | null; error: Error | null };
+  try {
+    const { data: row, error } = await supa
+      .from('events')
+      .insert({
+        user_id:      userId,
+        title:        input.title,
+        description:  input.description ?? null,
+        location:     input.location ?? null,
+        start_at:     input.startAt.toISOString(),
+        end_at:       input.endAt.toISOString(),
+        all_day:      input.allDay ?? false,
+        repeat_type:  input.repeatType ?? 'none',
+        repeat_until: input.repeatUntil?.toISOString() ?? null,
+        category_id:  input.categoryId ?? null,
+        color:        input.color ?? null,
+      })
+      .select()
+      .single() as { data: EventRow | null; error: Error | null };
 
-  if (error || !row) throw error ?? new Error('일정 생성에 실패했습니다.');
+    if (error || !row) throw error ?? new Error('일정 생성에 실패했습니다.');
 
-  // Share to requested spaces (in parallel for speed)
-  if (input.shareToSpaceIds && input.shareToSpaceIds.length > 0) {
-    await Promise.all(
-      input.shareToSpaceIds.map(spaceId => shareEventToSpace(row.id, spaceId)),
-    );
+    // Share to requested spaces (in parallel for speed)
+    if (input.shareToSpaceIds && input.shareToSpaceIds.length > 0) {
+      await Promise.all(
+        input.shareToSpaceIds.map(spaceId => shareEventToSpace(row.id, spaceId)),
+      );
+    }
+
+    const event = await getEventById(row.id);
+
+    // NOTE: Reminder scheduling is now handled by reminderService (TASK-1304).
+    // The caller (create.tsx / edit screen) is responsible for calling
+    // reminderService.updateReminders() after createEvent() returns.
+
+    return event;
+  } catch (err) {
+    // 생성 실패를 중앙 로그로 보내 LEAD가 어떤 필드/RLS 위반인지 즉시 파악 가능
+    await logError({
+      context: 'event.create',
+      error:   err,
+      userId,
+      details: {
+        // 원본 입력 전체를 넣으면 큰 description이 포함될 수 있으므로 요약만
+        hasTitle:      !!input.title,
+        hasDescription:!!input.description,
+        allDay:        input.allDay ?? false,
+        shareToCount:  input.shareToSpaceIds?.length ?? 0,
+      },
+    });
+    throw err;
   }
-
-  const event = await getEventById(row.id);
-
-  // NOTE: Reminder scheduling is now handled by reminderService (TASK-1304).
-  // The caller (create.tsx / edit screen) is responsible for calling
-  // reminderService.updateReminders() after createEvent() returns.
-
-  return event;
 }
 
 /**
@@ -305,51 +323,65 @@ export async function updateEvent(eventId: string, updates: UpdateEventInput): P
   const userId = await getCurrentUserId();
   if (!userId) throw new Error('로그인이 필요합니다.');
 
-  // Build patch with only the provided fields
-  const patch: Record<string, unknown> = {};
-  if (updates.title       !== undefined) patch.title        = updates.title;
-  if (updates.description !== undefined) patch.description  = updates.description || null;
-  if (updates.location    !== undefined) patch.location     = updates.location || null;
-  if (updates.startAt     !== undefined) patch.start_at     = updates.startAt.toISOString();
-  if (updates.endAt       !== undefined) patch.end_at       = updates.endAt.toISOString();
-  if (updates.allDay      !== undefined) patch.all_day      = updates.allDay;
-  if (updates.repeatType  !== undefined) patch.repeat_type  = updates.repeatType;
-  if (updates.repeatUntil !== undefined) patch.repeat_until = updates.repeatUntil?.toISOString() ?? null;
-  if (updates.categoryId  !== undefined) patch.category_id  = updates.categoryId ?? null;
-  if (updates.color       !== undefined) patch.color        = updates.color ?? null;
+  try {
+    // Build patch with only the provided fields
+    const patch: Record<string, unknown> = {};
+    if (updates.title       !== undefined) patch.title        = updates.title;
+    if (updates.description !== undefined) patch.description  = updates.description || null;
+    if (updates.location    !== undefined) patch.location     = updates.location || null;
+    if (updates.startAt     !== undefined) patch.start_at     = updates.startAt.toISOString();
+    if (updates.endAt       !== undefined) patch.end_at       = updates.endAt.toISOString();
+    if (updates.allDay      !== undefined) patch.all_day      = updates.allDay;
+    if (updates.repeatType  !== undefined) patch.repeat_type  = updates.repeatType;
+    if (updates.repeatUntil !== undefined) patch.repeat_until = updates.repeatUntil?.toISOString() ?? null;
+    if (updates.categoryId  !== undefined) patch.category_id  = updates.categoryId ?? null;
+    if (updates.color       !== undefined) patch.color        = updates.color ?? null;
 
-  if (Object.keys(patch).length > 0) {
-    const { error } = await supa
-      .from('events')
-      .update(patch)
-      .eq('id', eventId)
-      .eq('user_id', userId) as { error: Error | null };
+    if (Object.keys(patch).length > 0) {
+      const { error } = await supa
+        .from('events')
+        .update(patch)
+        .eq('id', eventId)
+        .eq('user_id', userId) as { error: Error | null };
 
-    if (error) throw error;
+      if (error) throw error;
+    }
+
+    // Apply space sharing changes if specified
+    if (updates.shareToSpaceIds !== undefined) {
+      const current = await getEventById(eventId);
+      const toAdd    = updates.shareToSpaceIds.filter(id => !current.sharedSpaceIds.includes(id));
+      const toRemove = current.sharedSpaceIds.filter(id => !updates.shareToSpaceIds!.includes(id));
+      await Promise.all([
+        ...toAdd.map(id    => shareEventToSpace(eventId, id)),
+        ...toRemove.map(id => unshareEventFromSpace(eventId, id)),
+      ]);
+    }
+
+    const updatedEvent = await getEventById(eventId);
+
+    // NOTE: Reminder rescheduling is now handled by reminderService (TASK-1304).
+    // The edit screen calls reminderService.updateReminders() on save.
+    // cancelEventReminders is still called here only if startAt changed, to
+    // prevent stale local notifications from a previous state.
+    if (updates.startAt !== undefined) {
+      void cancelEventReminders(eventId);
+    }
+
+    return updatedEvent;
+  } catch (err) {
+    await logError({
+      context: 'event.update',
+      error:   err,
+      userId,
+      details: {
+        eventId,
+        // 어떤 필드를 수정하려 했는지만 남기고 값은 생략 (개인정보 최소화)
+        changedKeys: Object.keys(updates),
+      },
+    });
+    throw err;
   }
-
-  // Apply space sharing changes if specified
-  if (updates.shareToSpaceIds !== undefined) {
-    const current = await getEventById(eventId);
-    const toAdd    = updates.shareToSpaceIds.filter(id => !current.sharedSpaceIds.includes(id));
-    const toRemove = current.sharedSpaceIds.filter(id => !updates.shareToSpaceIds!.includes(id));
-    await Promise.all([
-      ...toAdd.map(id    => shareEventToSpace(eventId, id)),
-      ...toRemove.map(id => unshareEventFromSpace(eventId, id)),
-    ]);
-  }
-
-  const updatedEvent = await getEventById(eventId);
-
-  // NOTE: Reminder rescheduling is now handled by reminderService (TASK-1304).
-  // The edit screen calls reminderService.updateReminders() on save.
-  // cancelEventReminders is still called here only if startAt changed, to
-  // prevent stale local notifications from a previous state.
-  if (updates.startAt !== undefined) {
-    void cancelEventReminders(eventId);
-  }
-
-  return updatedEvent;
 }
 
 /**

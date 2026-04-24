@@ -21,6 +21,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import type { Session } from '@supabase/supabase-js';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase';
+import { logError } from '@/lib/errorLogger';
 import type { UserRow } from '@/types';
 
 // ─── Notification preferences types ──────────────────────────────────────────
@@ -162,8 +163,16 @@ export async function signInWithGoogle(): Promise<SignInResult> {
     token: idToken,
   });
 
-  if (error) throw error;
-  if (!data.session) throw new Error('세션을 생성하지 못했습니다.');
+  if (error) {
+    // Google ID token → Supabase 세션 교환 실패. 사용자/토큰 정보는 민감해서 제외
+    await logError({ context: 'auth.google.exchange', error });
+    throw error;
+  }
+  if (!data.session) {
+    const err = new Error('세션을 생성하지 못했습니다.');
+    await logError({ context: 'auth.google.no-session', error: err });
+    throw err;
+  }
 
   return buildSignInResult(data.session);
 }
@@ -252,20 +261,38 @@ export async function signInWithKakao(): Promise<SignInResult> {
   // (or on web: https://app.example.com/auth/callback?email=...&password=...)
   const errParam = extractQueryParam(result.url, 'error');
   if (errParam) {
-    throw new Error(`Kakao 로그인 오류: ${decodeURIComponent(errParam)}`);
+    const err = new Error(`Kakao 로그인 오류: ${decodeURIComponent(errParam)}`);
+    // Edge Function이 HTML redirect로 돌려보낸 에러 문자열을 기록
+    await logError({ context: 'auth.kakao.edge-error', error: err, details: { errParam } });
+    throw err;
   }
   const email = extractQueryParam(result.url, 'email');
   const password = extractQueryParam(result.url, 'password');
   if (!email || !password) {
-    throw new Error('Kakao 로그인 응답이 올바르지 않습니다.');
+    const err = new Error('Kakao 로그인 응답이 올바르지 않습니다.');
+    // 이메일/비밀번호 중 하나가 없는 비정상 응답 (password 값은 민감하므로 기록하지 않음)
+    await logError({
+      context: 'auth.kakao.malformed-response',
+      error:   err,
+      details: { hasEmail: !!email, hasPassword: !!password },
+    });
+    throw err;
   }
 
   // ── 6. Exchange the derived credentials for a real Supabase session ─────
   // The password is never stored anywhere on the client — signInWithPassword
   // hands us session tokens that replace it.
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) throw error;
-  if (!data.session) throw new Error('세션을 생성하지 못했습니다.');
+  if (error) {
+    // signInWithPassword 실패 → Edge Function이 생성한 유저와 derive된 패스워드 불일치 등
+    await logError({ context: 'auth.kakao.signin-password', error });
+    throw error;
+  }
+  if (!data.session) {
+    const err = new Error('세션을 생성하지 못했습니다.');
+    await logError({ context: 'auth.kakao.no-session', error: err });
+    throw err;
+  }
 
   return buildSignInResult(data.session);
 }
@@ -337,8 +364,15 @@ export async function signInWithApple(): Promise<SignInResult> {
     token: identityToken,
   });
 
-  if (error) throw error;
-  if (!data.session) throw new Error('세션을 생성하지 못했습니다.');
+  if (error) {
+    await logError({ context: 'auth.apple.exchange', error });
+    throw error;
+  }
+  if (!data.session) {
+    const err = new Error('세션을 생성하지 못했습니다.');
+    await logError({ context: 'auth.apple.no-session', error: err });
+    throw err;
+  }
 
   return buildSignInResult(data.session);
 }
@@ -559,10 +593,11 @@ export async function deleteAccount(): Promise<void> {
   // Retrieve the active session — needed to pass the access token to the Edge Function
   const { data: { session }, error: sessionError } = await supabase.auth.getSession();
   if (sessionError || !session) {
-    // Log the underlying Supabase error so Metro shows the root cause when
-    // the session is expired or missing (previously produced only a localised
-    // Korean message on iOS with no hint as to why).
-    console.error('[authService.deleteAccount] no active session:', sessionError);
+    // 세션 누락 — 만료 또는 네트워크 이슈. 서버 쪽에서도 같은 컨텍스트로 추적 가능
+    await logError({
+      context: 'auth.delete-account.no-session',
+      error:   sessionError ?? new Error('no session'),
+    });
     throw new Error('로그인이 필요합니다.');
   }
 
@@ -577,10 +612,12 @@ export async function deleteAccount(): Promise<void> {
   });
 
   if (error) {
-    // Log the full Edge-Function error before re-throwing a user-facing message.
-    // `error` from functions.invoke can be a FunctionsHttpError with a status
-    // code and a context object; stringify both so Metro captures everything.
-    console.error('[authService.deleteAccount] Edge Function returned error:', error);
+    // Edge Function 호출 실패 — 서버 쪽에서도 별도로 로깅되지만 클라이언트 관점 메타데이터 (네트워크 등)도 남김
+    await logError({
+      context: 'auth.delete-account.invoke',
+      error,
+      userId:  session.user.id,
+    });
     // error.message may contain a server-side message; fall back to generic Korean message
     throw new Error(error.message ?? '계정 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.');
   }
