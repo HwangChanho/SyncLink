@@ -1,0 +1,93 @@
+
+# SyncLink Fastlane 설정
+# 사용법:
+#   fastlane beta          → 빌드 번호 자동 증가 + xcodebuild 빌드 + TestFlight 업로드
+#   fastlane upload_only   → 기존 IPA 재업로드 (빌드 생략)
+
+default_platform(:ios)
+
+API_KEY_PATH = File.expand_path("../docs/AuthKey_L7GWWF9WVF.p8", __dir__)
+API_KEY_ID   = "L7GWWF9WVF"
+API_ISSUER   = "5f89581a-d0c6-46c2-9461-78d5c08448fa"
+PROJECT_ROOT = File.expand_path("..", __dir__)
+IPA_PATH     = "#{PROJECT_ROOT}/build/SyncLink-ipa/SyncLink.ipa"
+
+platform :ios do
+
+  # ── beta: 빌드 번호 자동 증가 + xcodebuild + TestFlight 업로드 ───────────────
+  lane :beta do |options|
+    api_key = app_store_connect_api_key(
+      key_id:       API_KEY_ID,
+      issuer_id:    API_ISSUER,
+      key_filepath: API_KEY_PATH,
+      in_house:     false,
+    )
+
+    unless options[:skip_build]
+      # 1. 빌드 번호 자동 증가
+      next_build = latest_testflight_build_number(api_key: api_key) + 1
+      UI.message "빌드 번호: #{next_build}"
+
+      # app.json 업데이트
+      sh("node -e \"const fs=require('fs'); const j=JSON.parse(fs.readFileSync('#{PROJECT_ROOT}/app.json','utf8')); j.expo.ios.buildNumber='#{next_build}'; fs.writeFileSync('#{PROJECT_ROOT}/app.json',JSON.stringify(j,null,2)+'\\n');\"")
+
+      # Info.plist 업데이트
+      increment_build_number(
+        build_number: next_build,
+        xcodeproj:    "#{PROJECT_ROOT}/ios/SyncLink.xcodeproj",
+      )
+
+      # 2. xcodebuild archive (기존에 검증된 방식)
+      sh("rm -rf '#{PROJECT_ROOT}/build/SyncLink.xcarchive' '#{PROJECT_ROOT}/build/SyncLink-ipa'")
+      sh("xcodebuild " \
+         "-workspace '#{PROJECT_ROOT}/ios/SyncLink.xcworkspace' " \
+         "-scheme SyncLink " \
+         "-configuration Release " \
+         "-archivePath '#{PROJECT_ROOT}/build/SyncLink.xcarchive' " \
+         "-allowProvisioningUpdates " \
+         "-authenticationKeyPath '#{API_KEY_PATH}' " \
+         "-authenticationKeyID #{API_KEY_ID} " \
+         "-authenticationKeyIssuerID #{API_ISSUER} " \
+         "SENTRY_DISABLE_AUTO_UPLOAD=true " \
+         "archive")
+
+      # 3. IPA export
+      sh("xcodebuild -exportArchive " \
+         "-archivePath '#{PROJECT_ROOT}/build/SyncLink.xcarchive' " \
+         "-exportPath '#{PROJECT_ROOT}/build/SyncLink-ipa' " \
+         "-exportOptionsPlist '#{PROJECT_ROOT}/ios/ExportOptions.plist' " \
+         "-allowProvisioningUpdates " \
+         "-authenticationKeyPath '#{API_KEY_PATH}' " \
+         "-authenticationKeyID #{API_KEY_ID} " \
+         "-authenticationKeyIssuerID #{API_ISSUER}")
+    end
+
+    # 4. TestFlight 업로드 (암호화 체크 자동 처리)
+    upload_to_testflight(
+      api_key:                           api_key,
+      ipa:                               IPA_PATH,
+      skip_waiting_for_build_processing: true,
+      uses_non_exempt_encryption:        false,
+    )
+
+    UI.success "✅ TestFlight 업로드 완료!"
+  end
+
+  # ── 기존 IPA만 재업로드 ────────────────────────────────────────────────────
+  lane :upload_only do
+    api_key = app_store_connect_api_key(
+      key_id:       API_KEY_ID,
+      issuer_id:    API_ISSUER,
+      key_filepath: API_KEY_PATH,
+      in_house:     false,
+    )
+
+    upload_to_testflight(
+      api_key:                           api_key,
+      ipa:                               IPA_PATH,
+      skip_waiting_for_build_processing: true,
+      uses_non_exempt_encryption:        false,
+    )
+  end
+
+end

@@ -232,6 +232,15 @@ python3 /Users/danielhwang/Desktop/Projects/syncday/syncday/docs/inbox/monitor.p
 2. `docs/escalations/` 확인 (최우선)
 3. 미완료 태스크 확인 후 즉시 시작
 
+## 배포 전 필수 체크리스트 ← 반드시 지킬 것
+
+**TestFlight 업로드 전에 반드시 `docs/QA_CHECKLIST.md` 5개 게이트 통과 확인.**
+
+특히:
+- 새 네이티브 패키지 설치 시 `ios/Podfile.lock`에 포함되었는지 확인 (없으면 `expo prebuild` 필요)
+- DEV 작업 완료 → 시뮬레이터에서 **앱 실행 + 크래시 없음 + 수정 기능 정상 동작** 확인 → 통과 시에만 `fastlane beta`
+- 실패 시 업로드 금지 → DEV 재작업
+
 ## 작업 종료 시 필수 루틴 ← 반드시 지킬 것
 
 스프린트 또는 주요 작업 단위 완료 시 **핸드오프 없이 세션 종료 금지**.

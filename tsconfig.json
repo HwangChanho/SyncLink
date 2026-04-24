@@ -1,35 +1,30 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    // Strict mode — required by project rules (never disable)
     "strict": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
     "noUncheckedIndexedAccess": true,
-
-    // Path aliases for cleaner imports: @/components/Foo → src/components/Foo
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": [
+        "src/*"
+      ]
     },
-
-    // Module resolution
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "allowJs": false,
-
-    // Output
     "noEmit": true,
     "jsx": "react-native",
-
-    // Quality
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "exactOptionalPropertyTypes": true
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
   ],
   "exclude": [
     "node_modules"

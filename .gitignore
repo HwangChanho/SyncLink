@@ -23,6 +23,16 @@ android/build/
 android/app/build/
 android/.gradle/
 
+# Build artifacts
+build/
+*.xcarchive
+
+# Fastlane outputs
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/test_output
+fastlane/README.md
+
 # Metro
 .metro-health-check*
 
