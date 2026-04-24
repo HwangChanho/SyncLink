@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, TextInput, ScrollView, Switch, Pressable,
-  ActivityIndicator, Alert, StyleSheet,
+  ActivityIndicator, Alert, StyleSheet, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -23,6 +23,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import type { Event, RepeatType } from '@/types';
 import { getEventById, updateEvent, deleteEvent } from '@/services/eventService';
+import { getReminders, updateReminders } from '@/services/reminderService';
 import { shareEventToSpace, unshareEventFromSpace } from '@/services/eventShareService';
 import { useEventStore } from '@/stores/eventStore';
 import { useSpaceStore } from '@/stores/spaceStore';
@@ -30,6 +31,9 @@ import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { PlaceSearchInput } from '@/components/places/PlaceSearchInput';
+import { ReminderPicker } from '@/components/reminders/ReminderPicker';
+import { DateTimeModal } from '@/components/common/DateTimeModal';
+import { showAlert } from '@/lib/webAlert';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -140,11 +144,23 @@ export default function EventEditScreen() {
   const [description, setDescription] = useState('');
   const [shareSpaceIds, setShareSpaceIds] = useState<string[]>([]);
 
+  /**
+   * Current reminder offsets (minutes before event start).
+   * Pre-loaded from `event_reminders` table on mount (TASK-1304).
+   */
+  const [reminderMinutes, setReminderMinutes] = useState<number[]>([]);
+
   /** Original event kept for diffing shares on save. */
   const [originalEvent, setOriginalEvent] = useState<Event | null>(null);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  /**
+   * DateTimeModal target — tracks which field (start/end) is being edited.
+   * null = modal closed. Same pattern as create.tsx.
+   */
+  const [pickerTarget, setPickerTarget] = useState<'start' | 'end' | null>(null);
 
   // ── Load event on mount ────────────────────────────────────────────────────
 
@@ -156,7 +172,10 @@ export default function EventEditScreen() {
       setIsLoading(true);
       setLoadError(null);
       try {
-        const ev = await getEventById(id);
+        const [ev, reminders] = await Promise.all([
+          getEventById(id),
+          getReminders(id).catch(() => []), // non-fatal: fall back to empty
+        ]);
         if (cancelled) return;
         setOriginalEvent(ev);
         // Pre-fill form fields
@@ -168,6 +187,8 @@ export default function EventEditScreen() {
         setLocation(ev.location ?? '');
         setDescription(ev.description ?? '');
         setShareSpaceIds(ev.sharedSpaceIds);
+        // Pre-fill reminder offsets from DB
+        setReminderMinutes(reminders.map((r) => r.minutesBefore));
       } catch (err) {
         if (!cancelled) {
           setLoadError(err instanceof Error ? err.message : t('event.load_failed'));
@@ -199,16 +220,40 @@ export default function EventEditScreen() {
     });
   }, []);
 
+  /** Open the DateTimeModal for the start/end field. */
+  const openPicker = useCallback((field: 'start' | 'end') => {
+    setPickerTarget(field);
+  }, []);
+
+  /**
+   * Commit the value chosen in DateTimeModal. Ensures end stays after start.
+   */
+  const handlePickerConfirm = useCallback((selected: Date) => {
+    if (!pickerTarget) return;
+    if (pickerTarget === 'start') {
+      setStartAt(selected);
+      setEndAt((prev) => (prev <= selected ? new Date(selected.getTime() + 60 * 60 * 1000) : prev));
+    } else {
+      setEndAt(selected);
+    }
+    setPickerTarget(null);
+  }, [pickerTarget]);
+
+  /** Close the DateTimeModal without saving. */
+  const handlePickerCancel = useCallback(() => {
+    setPickerTarget(null);
+  }, []);
+
   /** Compute sharing diff and persist. */
   const handleSave = useCallback(async () => {
     if (!id || !originalEvent) return;
 
     if (!title.trim()) {
-      Alert.alert(t('common.error'), t('event.title_placeholder'));
+      showAlert(t('common.error'), t('event.title_placeholder'));
       return;
     }
     if (!allDay && endAt <= startAt) {
-      Alert.alert(t('common.error'), t('event.end_after_start'));
+      showAlert(t('common.error'), t('event.end_after_start'));
       return;
     }
 
@@ -239,7 +284,16 @@ export default function EventEditScreen() {
         ...toRemove.map((sid) => unshareEventFromSpace(id, sid)),
       ]);
 
-      // 3. Update store
+      // 3. Replace all reminders with the current selection (fire-and-forget;
+      //    failure must not block navigation — user can edit reminders later).
+      void updateReminders(
+        id,
+        reminderMinutes,
+        updated.title,
+        updated.startAt,
+      );
+
+      // 4. Update store
       upsertEvent({
         id: updated.id,
         title: updated.title,
@@ -254,13 +308,14 @@ export default function EventEditScreen() {
       router.back();
       router.back();
     } catch (err) {
-      Alert.alert(t('common.error'), err instanceof Error ? err.message : t('event.save_error'));
+      console.error('[EventEdit] handleSave failed:', err);
+      showAlert(t('common.error'), err instanceof Error ? err.message : t('event.save_error'));
       setIsSaving(false);
     }
   }, [
     id, originalEvent, title, allDay, startAt, endAt,
-    repeatType, location, description, shareSpaceIds,
-    upsertEvent, router,
+    repeatType, location, description, shareSpaceIds, reminderMinutes,
+    upsertEvent, router, colors.primary, t,
   ]);
 
   const handleDelete = useCallback(() => {
@@ -361,13 +416,17 @@ export default function EventEditScreen() {
             />
           </FormRow>
 
-          {/* Start */}
+          {/* Start — tap to open DateTimeModal (±30 min shortcuts retained) */}
           <FormRow label="시작" rowStyle={rowStyle}>
             <View style={styles.timeRow}>
               <Pressable style={styles.timeChip} onPress={() => shiftTime('start', -30)}>
                 <Ionicons name="remove" size={16} color={colors.textSecondary} />
               </Pressable>
-              <Text style={styles.timeText}>{formatField(startAt, allDay)}</Text>
+              <Pressable onPress={() => openPicker('start')} style={{ flex: 1 }}>
+                <Text style={[styles.timeText, styles.timeTextClickable]}>
+                  {formatField(startAt, allDay)}
+                </Text>
+              </Pressable>
               <Pressable style={styles.timeChip} onPress={() => shiftTime('start', 30)}>
                 <Ionicons name="add" size={16} color={colors.textSecondary} />
               </Pressable>
@@ -381,12 +440,31 @@ export default function EventEditScreen() {
                 <Pressable style={styles.timeChip} onPress={() => shiftTime('end', -30)}>
                   <Ionicons name="remove" size={16} color={colors.textSecondary} />
                 </Pressable>
-                <Text style={styles.timeText}>{formatField(endAt, false)}</Text>
+                <Pressable onPress={() => openPicker('end')} style={{ flex: 1 }}>
+                  <Text style={[styles.timeText, styles.timeTextClickable]}>
+                    {formatField(endAt, false)}
+                  </Text>
+                </Pressable>
                 <Pressable style={styles.timeChip} onPress={() => shiftTime('end', 30)}>
                   <Ionicons name="add" size={16} color={colors.textSecondary} />
                 </Pressable>
               </View>
             </FormRow>
+          )}
+
+          {/*
+           * DateTimeModal — unified date + time editor (Bug 2 fix, parity with create.tsx).
+           * Hidden on web where the browser's native <input type="datetime-local"> UI is preferred.
+           */}
+          {Platform.OS !== 'web' && pickerTarget !== null && (
+            <DateTimeModal
+              visible={pickerTarget !== null}
+              initialValue={pickerTarget === 'start' ? startAt : endAt}
+              allDay={allDay}
+              {...(pickerTarget === 'end' ? { minimumDate: startAt } : {})}
+              onCancel={handlePickerCancel}
+              onConfirm={handlePickerConfirm}
+            />
           )}
 
           {/* Repeat */}
@@ -432,6 +510,19 @@ export default function EventEditScreen() {
               value={description}
               onChangeText={setDescription}
               multiline
+            />
+          </FormRow>
+
+          {/* Reminders — users can manage multiple offsets (TASK-1304) */}
+          <FormRow label={t('reminder.title')} rowStyle={rowStyle}>
+            <ReminderPicker
+              minutesList={reminderMinutes}
+              onAdd={(min) =>
+                setReminderMinutes((prev) => prev.includes(min) ? prev : [...prev, min])
+              }
+              onRemove={(min) =>
+                setReminderMinutes((prev) => prev.filter((m) => m !== min))
+              }
             />
           </FormRow>
 
@@ -582,6 +673,10 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     color: colors.textPrimary,
     flex: 1,
     textAlign: 'center',
+  },
+  timeTextClickable: {
+    textDecorationLine: 'underline',
+    color: colors.primary,
   },
 
   chipRow: {

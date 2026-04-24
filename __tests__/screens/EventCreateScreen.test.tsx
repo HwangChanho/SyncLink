@@ -225,7 +225,8 @@ describe('EventCreateScreen', () => {
       });
 
       // i18n 적용 후: Alert(t('common.error'), t('event.title_placeholder'))
-      expect(alertSpy).toHaveBeenCalledWith('오류', '제목을 입력해 주세요.');
+      // showAlert passes a third `buttons` arg (undefined when omitted) to Alert.alert.
+      expect(alertSpy).toHaveBeenCalledWith('오류', '제목을 입력해 주세요.', undefined);
     });
 
     it('제목 미입력 시 createEvent가 호출되지 않음', async () => {
@@ -338,6 +339,15 @@ describe('EventCreateScreen', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('저장 실패', () => {
+    // 저장 실패 경로는 console.error로 원본 에러를 로깅 — 테스트 출력 노이즈 억제
+    let errorSpy: jest.SpyInstance;
+    beforeEach(() => {
+      errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    });
+    afterEach(() => {
+      errorSpy.mockRestore();
+    });
+
     it('createEvent 실패 → Alert(error.message) 표시됨', async () => {
       (createEvent as jest.Mock).mockRejectedValue(new Error('네트워크 오류'));
 
@@ -351,7 +361,8 @@ describe('EventCreateScreen', () => {
 
       await waitFor(() => {
         // i18n 적용 후: Alert(t('common.error'), error.message) = Alert('오류', '네트워크 오류')
-        expect(alertSpy).toHaveBeenCalledWith('오류', '네트워크 오류');
+        // showAlert passes a third `buttons` arg (undefined when omitted).
+        expect(alertSpy).toHaveBeenCalledWith('오류', '네트워크 오류', undefined);
       });
     });
 
@@ -385,7 +396,8 @@ describe('EventCreateScreen', () => {
 
       await waitFor(() => {
         // i18n 적용 후: Alert(t('common.error'), t('event.save_error'))
-        expect(alertSpy).toHaveBeenCalledWith('오류', '일정을 저장하지 못했습니다.');
+        // showAlert passes a third `buttons` arg (undefined when omitted).
+        expect(alertSpy).toHaveBeenCalledWith('오류', '일정을 저장하지 못했습니다.', undefined);
       });
     });
   });

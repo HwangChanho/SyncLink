@@ -19,20 +19,25 @@
 import { useCallback, useState } from 'react';
 import {
   View, Text, TextInput, ScrollView, Switch, Pressable,
-  ActivityIndicator, Alert, StyleSheet,
+  ActivityIndicator, StyleSheet, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import * as Location from 'expo-location';
 import type { RepeatType } from '@/types';
 import { createEvent } from '@/services/eventService';
+import { updateReminders } from '@/services/reminderService';
 import { useEventStore } from '@/stores/eventStore';
 import { useSpaceStore } from '@/stores/spaceStore';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { PlaceSearchInput } from '@/components/places/PlaceSearchInput';
+import { ReminderPicker } from '@/components/reminders/ReminderPicker';
+import { DateTimeModal } from '@/components/common/DateTimeModal';
+import { showAlert } from '@/lib/webAlert';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -174,7 +179,25 @@ export default function EventCreateScreen() {
   /** IDs of spaces the user has chosen to share this event to. */
   const [shareSpaceIds, setShareSpaceIds] = useState<string[]>([]);
 
+  /**
+   * Selected reminder offsets (minutes before event start).
+   * Starts empty — the user adds reminders explicitly via ReminderPicker.
+   * Default was 30 min but is now user-controlled (TASK-1304).
+   */
+  const [reminderMinutes, setReminderMinutes] = useState<number[]>([]);
+
   const [isSaving, setIsSaving] = useState(false);
+
+  /**
+   * DateTimeModal state.
+   * Tracks which field (start/end) is being edited. null = modal closed.
+   * The modal internally buffers edits and only commits on 저장.
+   * Replaces the old native DateTimePicker that auto-closed on each change.
+   */
+  const [pickerTarget, setPickerTarget] = useState<'start' | 'end' | null>(null);
+
+  /** Whether a GPS reverse-geocode is in progress. */
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
 
@@ -188,30 +211,118 @@ export default function EventCreateScreen() {
   }, []);
 
   /**
-   * Adjust startAt hours/minutes only (keeps the date).
-   * This is a simplified inline time adjuster (+/- 30 min).
-   * A full date-time picker would require a native modal — deferred to TASK-302.
+   * Open the DateTimeModal for the given date field.
+   * The modal is a single controlled dialog that shows both date and time
+   * pickers simultaneously. User can freely edit year/month/day/hour/minute
+   * before committing via 저장.
+   *
+   * On Web we use a hidden <input type="datetime-local"> (see JSX below).
+   *
+   * @param field - Which date field to edit
    */
-  const shiftTime = useCallback((
-    field: 'start' | 'end',
-    deltaMinutes: number,
-  ) => {
-    const setter = field === 'start' ? setStartAt : setEndAt;
-    setter((prev) => {
-      const next = new Date(prev);
-      next.setMinutes(next.getMinutes() + deltaMinutes);
-      return next;
-    });
+  const openPicker = useCallback((field: 'start' | 'end') => {
+    setPickerTarget(field);
   }, []);
 
-  /** Validate and submit the form. */
+  /**
+   * Commit the chosen value from the DateTimeModal.
+   * Called once when the user taps 저장 in the modal.
+   *
+   * @param selected - The final Date chosen in the modal
+   */
+  const handlePickerConfirm = useCallback((selected: Date) => {
+    if (!pickerTarget) return;
+    if (pickerTarget === 'start') {
+      setStartAt(selected);
+      // If end is now before start, bump end to start + 1h for consistency
+      setEndAt((prev) => (prev <= selected ? new Date(selected.getTime() + 60 * 60 * 1000) : prev));
+    } else {
+      setEndAt(selected);
+    }
+    setPickerTarget(null);
+  }, [pickerTarget]);
+
+  /** Dismiss the DateTimeModal without persisting changes. */
+  const handlePickerCancel = useCallback(() => {
+    setPickerTarget(null);
+  }, []);
+
+  /**
+   * Handle a web <input type="datetime-local"> change event.
+   * The value is a string like "2026-04-23T14:30".
+   *
+   * @param field   - Which date field to update
+   * @param isoStr  - The datetime-local input value string
+   */
+  const handleWebDateChange = useCallback((
+    field: 'start' | 'end',
+    isoStr: string,
+  ) => {
+    if (!isoStr) return;
+    const parsed = new Date(isoStr);
+    if (isNaN(parsed.getTime())) return;
+    const setter = field === 'start' ? setStartAt : setEndAt;
+    setter(parsed);
+  }, []);
+
+  /**
+   * Get the current GPS position and reverse-geocode it to an address string.
+   * Requests foreground location permission if not already granted.
+   * Falls back gracefully if permission is denied or geocoding fails.
+   */
+  const handleGetGPSLocation = useCallback(async () => {
+    setIsGettingLocation(true);
+    try {
+      // Request permission — shows OS permission dialog if needed
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        showAlert(
+          t('notification.permission_required'),
+          t('notification.permission_desc'),
+        );
+        return;
+      }
+
+      // Fetch current position (low accuracy is fast enough for a city-level address)
+      const pos = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      // Reverse-geocode coordinates to a human-readable address
+      const [geo] = await Location.reverseGeocodeAsync({
+        latitude:  pos.coords.latitude,
+        longitude: pos.coords.longitude,
+      });
+
+      if (geo) {
+        // Build a display string from the geocoding result parts
+        const parts = [geo.name, geo.street, geo.city, geo.region, geo.country]
+          .filter(Boolean)
+          .join(', ');
+        setLocation(parts);
+      }
+    } catch (err) {
+      // Non-fatal — user can still type a location manually
+      console.warn('[EventCreate] GPS location error:', err);
+    } finally {
+      setIsGettingLocation(false);
+    }
+  }, [t]);
+
+  /**
+   * Validate and submit the form.
+   *
+   * Uses showAlert (webAlert) so alerts appear on both web (window.alert)
+   * and native (Alert.alert). Adds console.error around the createEvent
+   * call so iOS failures surface in Metro logs (previously silent).
+   */
   const handleSave = useCallback(async () => {
     if (!title.trim()) {
-      Alert.alert(t('common.error'), t('event.title_placeholder'));
+      showAlert(t('common.error'), t('event.title_placeholder'));
       return;
     }
     if (!allDay && endAt <= startAt) {
-      Alert.alert(t('common.error'), t('event.end_after_start'));
+      showAlert(t('common.error'), t('event.end_after_start'));
       return;
     }
 
@@ -229,6 +340,12 @@ export default function EventCreateScreen() {
         shareToSpaceIds: shareSpaceIds,
       });
 
+      // Persist reminders for the newly created event (fire-and-forget;
+      // failure must not block navigation — user can edit reminders later).
+      if (reminderMinutes.length > 0) {
+        void updateReminders(newEvent.id, reminderMinutes, newEvent.title, newEvent.startAt);
+      }
+
       // Optimistically add to store so calendar reflects the new event immediately
       upsertEvent({
         id: newEvent.id,
@@ -242,13 +359,17 @@ export default function EventCreateScreen() {
 
       router.back();
     } catch (err) {
-      Alert.alert(t('common.error'), err instanceof Error ? err.message : t('event.save_error'));
+      // Always log the full error object to Metro — previously the app
+      // showed only the display message which on iOS could be blank.
+      // This helps triage silent-save bugs.
+      console.error('[EventCreate] handleSave failed:', err);
+      showAlert(t('common.error'), err instanceof Error ? err.message : t('event.save_error'));
       setIsSaving(false);
     }
   }, [
     title, allDay, startAt, endAt, repeatType,
-    location, description, shareSpaceIds,
-    upsertEvent, router,
+    location, description, shareSpaceIds, reminderMinutes,
+    upsertEvent, router, colors.primary, t,
   ]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -260,7 +381,14 @@ export default function EventCreateScreen() {
         <Pressable style={styles.headerButton} onPress={() => router.back()}>
           <Text style={styles.headerCancel}>{t('common.cancel')}</Text>
         </Pressable>
-        <Text style={styles.headerTitle}>{t('event.untitled')}</Text>
+        {/*
+         * Show the event title while the user types; fall back to the
+         * i18n placeholder ("제목 없음" / "New Event") when the field is empty,
+         * so the header never shows a raw "Untitled" string.
+         */}
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          {title.trim() || t('event.untitled')}
+        </Text>
         <Pressable
           style={[styles.headerButton, isSaving && styles.headerButtonDisabled]}
           onPress={() => void handleSave()}
@@ -304,42 +432,63 @@ export default function EventCreateScreen() {
 
           {/* Start time */}
           <FormRow label="시작" rowStyle={rowStyle}>
-            <View style={styles.timeRow}>
-              <Pressable
-                style={styles.timeChip}
-                onPress={() => shiftTime('start', -30)}
-              >
-                <Ionicons name="remove" size={16} color={colors.textSecondary} />
+            {Platform.OS === 'web' ? (
+              // Web: use a native datetime-local input for best UX
+              // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+              // @ts-ignore — JSX <input> is not typed for RN but valid on web
+              <input
+                type="datetime-local"
+                value={`${startAt.getFullYear()}-${String(startAt.getMonth() + 1).padStart(2, '0')}-${String(startAt.getDate()).padStart(2, '0')}T${String(startAt.getHours()).padStart(2, '0')}:${String(startAt.getMinutes()).padStart(2, '0')}`}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleWebDateChange('start', e.target.value)}
+                style={{ fontSize: 16, color: colors.textPrimary, background: 'transparent', border: 'none', outline: 'none' }}
+              />
+            ) : (
+              <Pressable onPress={() => openPicker('start')}>
+                <Text style={[styles.timeText, styles.timeTextClickable]}>
+                  {formatField(startAt, allDay)}
+                </Text>
               </Pressable>
-              <Text style={styles.timeText}>{formatField(startAt, allDay)}</Text>
-              <Pressable
-                style={styles.timeChip}
-                onPress={() => shiftTime('start', 30)}
-              >
-                <Ionicons name="add" size={16} color={colors.textSecondary} />
-              </Pressable>
-            </View>
+            )}
           </FormRow>
 
           {/* End time */}
           {!allDay && (
             <FormRow label="종료" rowStyle={rowStyle}>
-              <View style={styles.timeRow}>
-                <Pressable
-                  style={styles.timeChip}
-                  onPress={() => shiftTime('end', -30)}
-                >
-                  <Ionicons name="remove" size={16} color={colors.textSecondary} />
+              {Platform.OS === 'web' ? (
+                // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+                // @ts-ignore
+                <input
+                  type="datetime-local"
+                  value={`${endAt.getFullYear()}-${String(endAt.getMonth() + 1).padStart(2, '0')}-${String(endAt.getDate()).padStart(2, '0')}T${String(endAt.getHours()).padStart(2, '0')}:${String(endAt.getMinutes()).padStart(2, '0')}`}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleWebDateChange('end', e.target.value)}
+                  style={{ fontSize: 16, color: colors.textPrimary, background: 'transparent', border: 'none', outline: 'none' }}
+                />
+              ) : (
+                <Pressable onPress={() => openPicker('end')}>
+                  <Text style={[styles.timeText, styles.timeTextClickable]}>
+                    {formatField(endAt, false)}
+                  </Text>
                 </Pressable>
-                <Text style={styles.timeText}>{formatField(endAt, false)}</Text>
-                <Pressable
-                  style={styles.timeChip}
-                  onPress={() => shiftTime('end', 30)}
-                >
-                  <Ionicons name="add" size={16} color={colors.textSecondary} />
-                </Pressable>
-              </View>
+              )}
             </FormRow>
+          )}
+
+          {/*
+           * DateTimeModal — unified date + time editor (Bug 2 fix).
+           * Replaces the previous native DateTimePicker that closed on
+           * each field change and made time editing impossible on iOS.
+           * The modal keeps a local draft and only commits on 저장.
+           */}
+          {Platform.OS !== 'web' && pickerTarget !== null && (
+            <DateTimeModal
+              visible={pickerTarget !== null}
+              initialValue={pickerTarget === 'start' ? startAt : endAt}
+              allDay={allDay}
+              // Clamp end picker to >= startAt
+              {...(pickerTarget === 'end' ? { minimumDate: startAt } : {})}
+              onCancel={handlePickerCancel}
+              onConfirm={handlePickerConfirm}
+            />
           )}
 
           {/* Repeat */}
@@ -369,13 +518,37 @@ export default function EventCreateScreen() {
             </ScrollView>
           </FormRow>
 
-          {/* Location — Google Places Autocomplete (TASK-901) */}
+          {/* Location — GPS shortcut + Google Places Autocomplete (TASK-901 / TASK-1302) */}
           <FormRow label="위치" rowStyle={rowStyle}>
-            <PlaceSearchInput
-              value={location}
-              onPlaceSelect={setLocation}
-              placeholder={t('places.search_placeholder')}
-            />
+            <View style={styles.locationRow}>
+              {/*
+               * GPS button: only shown on native (iOS/Android).
+               * expo-location is not supported on web, so we hide the button entirely
+               * on the web platform to prevent crashes.
+               */}
+              {Platform.OS !== 'web' && (
+                <Pressable
+                  style={styles.gpsButton}
+                  onPress={() => void handleGetGPSLocation()}
+                  disabled={isGettingLocation}
+                  accessibilityLabel="현재 위치 사용"
+                >
+                  {isGettingLocation ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Ionicons name="locate" size={18} color={colors.primary} />
+                  )}
+                </Pressable>
+              )}
+              {/* Text search (Google Places autocomplete) — works on both web and native */}
+              <View style={styles.locationSearch}>
+                <PlaceSearchInput
+                  value={location}
+                  onPlaceSelect={setLocation}
+                  placeholder={t('places.search_placeholder')}
+                />
+              </View>
+            </View>
           </FormRow>
 
           {/* Description */}
@@ -388,6 +561,19 @@ export default function EventCreateScreen() {
               onChangeText={setDescription}
               multiline
               returnKeyType="default"
+            />
+          </FormRow>
+
+          {/* Reminders — users can add multiple offsets (TASK-1304) */}
+          <FormRow label={t('reminder.title')} rowStyle={rowStyle}>
+            <ReminderPicker
+              minutesList={reminderMinutes}
+              onAdd={(min) =>
+                setReminderMinutes((prev) => prev.includes(min) ? prev : [...prev, min])
+              }
+              onRemove={(min) =>
+                setReminderMinutes((prev) => prev.filter((m) => m !== min))
+              }
             />
           </FormRow>
 
@@ -506,6 +692,30 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     color: colors.textPrimary,
     flex: 1,
     textAlign: 'center',
+  },
+  /** Tappable date/time text — underline hints it is interactive. */
+  timeTextClickable: {
+    textDecorationLine: 'underline',
+    color: colors.primary,
+  },
+
+  // Location row (GPS + search)
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  gpsButton: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.full,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  locationSearch: {
+    flex: 1,
   },
 
   // Repeat chips

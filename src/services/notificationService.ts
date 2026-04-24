@@ -125,6 +125,7 @@ export async function scheduleEventReminder(
   body: string,
   triggerAt: Date,
 ): Promise<string> {
+  if (Platform.OS === 'web') return '';
   const id = await ExpoNotifications.scheduleNotificationAsync({
     content: {
       title,

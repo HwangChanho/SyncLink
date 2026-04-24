@@ -22,7 +22,7 @@
 import { supabase, getCurrentUserId } from '@/lib/supabase';
 import { memberEventColors } from '@/constants/colors';
 import { shareEventToSpace, unshareEventFromSpace } from '@/services/eventShareService';
-import { scheduleEventReminder, cancelEventReminders } from '@/services/notificationService';
+import { cancelEventReminders } from '@/services/notificationService';
 import type {
   Event, EventSummary, CreateEventInput, UpdateEventInput,
   EventRow, DateRange,
@@ -284,12 +284,9 @@ export async function createEvent(input: CreateEventInput): Promise<Event> {
 
   const event = await getEventById(row.id);
 
-  // Schedule 30-min local reminder if the event hasn't started yet.
-  // Fire-and-forget: notification failure must not block event creation.
-  const triggerAt = new Date(event.startAt.getTime() - 30 * 60 * 1000);
-  if (triggerAt > new Date()) {
-    void scheduleEventReminder(event.id, event.title, '30분 후 시작합니다', triggerAt);
-  }
+  // NOTE: Reminder scheduling is now handled by reminderService (TASK-1304).
+  // The caller (create.tsx / edit screen) is responsible for calling
+  // reminderService.updateReminders() after createEvent() returns.
 
   return event;
 }
@@ -344,14 +341,12 @@ export async function updateEvent(eventId: string, updates: UpdateEventInput): P
 
   const updatedEvent = await getEventById(eventId);
 
-  // Reschedule the 30-min reminder whenever startAt changes.
-  // Cancel existing reminders first, then schedule new one if still in the future.
+  // NOTE: Reminder rescheduling is now handled by reminderService (TASK-1304).
+  // The edit screen calls reminderService.updateReminders() on save.
+  // cancelEventReminders is still called here only if startAt changed, to
+  // prevent stale local notifications from a previous state.
   if (updates.startAt !== undefined) {
     void cancelEventReminders(eventId);
-    const triggerAt = new Date(updatedEvent.startAt.getTime() - 30 * 60 * 1000);
-    if (triggerAt > new Date()) {
-      void scheduleEventReminder(updatedEvent.id, updatedEvent.title, '30분 후 시작합니다', triggerAt);
-    }
   }
 
   return updatedEvent;
