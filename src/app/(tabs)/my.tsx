@@ -478,6 +478,20 @@ export default function MyScreen() {
               </>
             )}
 
+            {/*
+              Appearance settings — dedicated sub-screen for header title
+              colour + license notices.
+            */}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => router.push('/settings/appearance')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.menuItemText}>화면 설정</Text>
+              <Text style={styles.menuItemChevron}>›</Text>
+            </TouchableOpacity>
+            <View style={styles.menuDivider} />
+
             {/* Theme selector (inline Segmented Control) */}
             <View style={styles.menuItemTheme}>
               <Text style={styles.menuItemText}>{t('profile.theme.label')}</Text>

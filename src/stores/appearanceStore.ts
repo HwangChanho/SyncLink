@@ -23,6 +23,26 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /** AsyncStorage key for persisting the user's color scheme preference. */
 const APPEARANCE_STORAGE_KEY = 'synclink:appearance:colorScheme';
+/** Separate key so dark/light preference can change without affecting colour. */
+const HEADER_TITLE_COLOR_KEY = 'synclink:appearance:headerTitleColor';
+
+/** Named palette for the top tab title (light mode only uses these). */
+export type HeaderTitleColor =
+  | 'default' // fall back to theme textPrimary
+  | 'primary'
+  | 'rose'
+  | 'emerald'
+  | 'amber'
+  | 'violet';
+
+export const HEADER_TITLE_COLOR_HEX: Record<HeaderTitleColor, string | null> = {
+  default: null,
+  primary: '#6366F1',
+  rose:    '#E11D48',
+  emerald: '#059669',
+  amber:   '#D97706',
+  violet:  '#7C3AED',
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -61,6 +81,10 @@ interface AppearanceState {
    * @param osScheme - New OS scheme from Appearance.addChangeListener
    */
   _syncSystemScheme: (osScheme: ResolvedColorScheme) => void;
+
+  /** Named colour used to tint the top tab title. Default = theme default. */
+  headerTitleColor: HeaderTitleColor;
+  setHeaderTitleColor: (c: HeaderTitleColor) => void;
 }
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -104,6 +128,12 @@ export const useAppearanceStore = create<AppearanceState>((set, get) => ({
       set({ resolvedScheme: osScheme });
     }
   },
+
+  headerTitleColor: 'default',
+  setHeaderTitleColor: (c: HeaderTitleColor) => {
+    set({ headerTitleColor: c });
+    AsyncStorage.setItem(HEADER_TITLE_COLOR_KEY, c).catch(() => {/* non-fatal */});
+  },
 }));
 
 // ─── Initialization ───────────────────────────────────────────────────────────
@@ -118,6 +148,10 @@ export async function initAppearanceStore(): Promise<void> {
     const saved = await AsyncStorage.getItem(APPEARANCE_STORAGE_KEY);
     if (saved === 'light' || saved === 'dark' || saved === 'system') {
       useAppearanceStore.getState().setColorScheme(saved);
+    }
+    const savedColor = await AsyncStorage.getItem(HEADER_TITLE_COLOR_KEY);
+    if (savedColor && savedColor in HEADER_TITLE_COLOR_HEX) {
+      useAppearanceStore.getState().setHeaderTitleColor(savedColor as HeaderTitleColor);
     }
   } catch {
     // AsyncStorage unavailable — use default (system)

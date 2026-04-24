@@ -15,11 +15,18 @@ import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { componentHeight } from '@/constants/spacing';
 import { LanguageButton } from '@/components/common/LanguageButton';
+import {
+  useAppearanceStore,
+  HEADER_TITLE_COLOR_HEX,
+} from '@/stores/appearanceStore';
 
 export default function TabLayout() {
   // Resolve active theme colors for dark mode support (TASK-700)
   const colors = useColors();
   const { t } = useTranslation();
+  const headerTitleColor = useAppearanceStore((s) => s.headerTitleColor);
+  const headerTitleHex =
+    HEADER_TITLE_COLOR_HEX[headerTitleColor] ?? colors.textPrimary;
 
   return (
     <Tabs
@@ -32,10 +39,11 @@ export default function TabLayout() {
         headerTintColor: colors.textPrimary,
         headerShadowVisible: false,
         // Larger, bolder top title as requested for clearer section anchoring.
+        // Colour is user-selectable via /settings/appearance.
         headerTitleStyle: {
           fontSize: 22,
           fontWeight: '700',
-          color: colors.textPrimary,
+          color: headerTitleHex,
         },
         // Language picker button appears on every tab's top-right header.
         headerRight: () => <LanguageButton />,
