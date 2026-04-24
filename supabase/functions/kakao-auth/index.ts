@@ -91,7 +91,12 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     try {
-      const selfUrl = `${url.origin}${url.pathname}`;
+      // Hardcode the Edge Function URL to match what the client sent at
+      // authorize time. `url.origin` may be rewritten by Supabase's edge
+      // proxy to an internal host, causing Kakao to reject with KOE303
+      // (redirect_uri mismatch). Using the public canonical URL avoids this.
+      const selfUrl = 'https://uhubhqcymxajdonmkthm.supabase.co/functions/v1/kakao-auth';
+      console.log('[kakao-auth] token exchange redirect_uri:', selfUrl, 'incoming origin:', url.origin);
       const { email, password } = await exchangeCode(code, selfUrl);
       return htmlRedirect(
         `${returnTo}?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`,
@@ -256,20 +261,20 @@ function jsonResponse(payload: unknown, status: number): Response {
 }
 
 /**
- * Return an HTML page that bounces the user-agent to `target` (custom scheme
- * or https). The in-app WebBrowser on iOS/Android watches for the app's
- * return scheme and closes automatically on match.
+ * Bounce the user-agent to `target` (custom scheme or https).
+ *
+ * Why HTTP 302 instead of HTML meta refresh:
+ *   Supabase's edge gateway rewrites responses to `Content-Type: text/plain`
+ *   and applies a `Content-Security-Policy: sandbox` for public functions,
+ *   which prevents HTML/JS-based redirects from executing (browser shows the
+ *   raw HTML source instead). A server-side 302 with a `Location:` header is
+ *   processed by the in-app WebBrowser BEFORE any CSP evaluation, so it works
+ *   reliably for both custom schemes and HTTPS return URLs.
  */
 function htmlRedirect(target: string): Response {
-  const safe = target.replace(/"/g, '&quot;').replace(/</g, '&lt;');
-  const html = `<!DOCTYPE html>
-<html><head>
-<meta http-equiv="refresh" content="0; url=${safe}">
-<script>window.location.replace(${JSON.stringify(target)});</script>
-</head><body>Redirecting…</body></html>`;
-  return new Response(html, {
-    status: 200,
-    headers: { ...CORS_HEADERS, 'Content-Type': 'text/html; charset=utf-8' },
+  return new Response(null, {
+    status: 302,
+    headers: { ...CORS_HEADERS, Location: target },
   });
 }
 
