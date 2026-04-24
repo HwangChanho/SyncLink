@@ -43,14 +43,20 @@ export interface UseRewardedAdResult {
  * React hook wrapping the AdMob rewarded-ad lifecycle. Safe to call on every
  * platform — degrades to a no-op with `isAvailable=false` where ads are not
  * supported (web, Android without a configured key, etc.).
+ *
+ * @param userId - Current user's UUID. Forwarded to AdMob SSV so the
+ *   `reward-credit` Edge Function can credit the right account. Pass `null`
+ *   while the auth store is still hydrating; the hook will recreate the
+ *   underlying ad instance once the id arrives.
  */
-export function useRewardedAd(): UseRewardedAdResult {
+export function useRewardedAd(userId: string | null): UseRewardedAdResult {
   const handleRef = useRef<RewardedAdHandle | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isAvailable, setIsAvailable] = useState<boolean>(() => canShowAds());
 
-  // Setup on mount, teardown on unmount. We re-check availability defensively
-  // because React may render the component before native modules are linked.
+  // Setup on mount (and when userId changes), teardown on unmount.
+  // We re-check availability defensively because React may render the
+  // component before native modules are linked.
   useEffect(() => {
     let cancelled = false;
 
@@ -58,7 +64,7 @@ export function useRewardedAd(): UseRewardedAdResult {
       await initAdMob();
       if (cancelled) return;
 
-      const handle = createRewardedAd();
+      const handle = createRewardedAd(userId ?? undefined);
       handleRef.current = handle;
       setIsAvailable(handle !== null);
       if (handle) {
@@ -82,7 +88,7 @@ export function useRewardedAd(): UseRewardedAdResult {
       handleRef.current?.dispose();
       handleRef.current = null;
     };
-  }, []);
+  }, [userId]);
 
   const show = useCallback(async (): Promise<boolean> => {
     const handle = handleRef.current;

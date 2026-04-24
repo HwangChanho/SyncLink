@@ -66,6 +66,13 @@ type RewardedAdInstance = {
   load(): void;
   show(): Promise<void>;
   addAdEventListener(type: string, listener: (reward?: unknown) => void): () => void;
+  /**
+   * Attach AdMob server-side verification (SSV) parameters. The `userId` is
+   * echoed back to our `reward-credit` Edge Function so the reward can be
+   * attributed to the right account — without it the SSV endpoint returns
+   * 400 and the user never gets credited.
+   */
+  setServerSideVerificationOptions?(options: { userId?: string; customData?: string }): void;
 };
 
 let cachedSdk: MobileAdsSdk | null | undefined = undefined;
@@ -145,8 +152,12 @@ export interface RewardedAdHandle {
  *
  * The returned handle must be `dispose()`-d when no longer needed — this is
  * typically done inside a React effect's cleanup.
+ *
+ * @param userId - Current authenticated user's UUID. AdMob SSV will echo this
+ *   back as `custom_data` so the `reward-credit` Edge Function can credit the
+ *   correct account. Omit only when ads must render without crediting.
  */
-export function createRewardedAd(): RewardedAdHandle | null {
+export function createRewardedAd(userId?: string): RewardedAdHandle | null {
   const sdk = loadSdk();
   if (!sdk || !canShowAds()) return null;
 
@@ -156,6 +167,17 @@ export function createRewardedAd(): RewardedAdHandle | null {
   const rewarded = sdk.RewardedAd.createForAdRequest(unitId, {
     requestNonPersonalizedAdsOnly: false,
   });
+
+  // Attach SSV options so AdMob's callback to `reward-credit` includes the
+  // user UUID. Not all SDK versions expose this setter; guard defensively.
+  if (userId && typeof rewarded.setServerSideVerificationOptions === 'function') {
+    try {
+      rewarded.setServerSideVerificationOptions({ userId, customData: userId });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[adService] setServerSideVerificationOptions failed:', err);
+    }
+  }
 
   const listeners: Array<() => void> = [];
   let loaded = false;

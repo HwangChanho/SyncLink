@@ -27,6 +27,7 @@ import { radius, spacing } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { useRewardedAd } from '@/hooks/useRewardedAd';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
+import { useAuthStore } from '@/stores/authStore';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -65,7 +66,11 @@ export function QuotaExceededSheet({
   const colors = useColors();
   const styles = makeStyles(colors);
 
-  const rewarded = useRewardedAd();
+  // Pass the authenticated user id into the rewarded-ad flow so AdMob's SSV
+  // callback echoes it back as `custom_data` — the reward-credit Edge Function
+  // requires it to attribute the reward to the correct user.
+  const userId = useAuthStore((s) => s.user?.id ?? null);
+  const rewarded = useRewardedAd(userId);
   const refreshCredits = useSubscriptionStore((s) => s.refreshCredits);
 
   const [watching, setWatching] = useState(false);
