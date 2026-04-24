@@ -171,6 +171,19 @@ export default function AppLockScreen() {
               </Text>
             )}
           </Pressable>
+
+          {/* Sprint 15 TASK-1510 — PIN fallback entry point. */}
+          <Pressable
+            style={styles.pinLink}
+            onPress={() => router.push('/settings/pin')}
+          >
+            <Ionicons name="keypad-outline" size={22} color={colors.primary} />
+            <View style={styles.pinLinkText}>
+              <Text style={styles.pinLinkTitle}>{t('pin_lock.title')}</Text>
+              <Text style={styles.pinLinkState}>{t('pin_lock.description')}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+          </Pressable>
         </View>
       )}
     </SafeAreaView>
@@ -283,6 +296,33 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     },
     lockToggleState: {
       ...textStyles.caption,
+      marginTop: 2,
+    },
+
+    // Sprint 15 TASK-1510 — PIN entry row below the biometric card.
+    pinLink: {
+      flexDirection: 'row',
+      alignItems:    'center',
+      gap:           spacing[3],
+      paddingHorizontal: spacing[4],
+      paddingVertical:   spacing[4],
+      borderRadius:  radius.xl,
+      borderWidth:   1,
+      borderColor:   colors.border,
+      backgroundColor: colors.surface,
+      marginTop: spacing[4],
+      width: '100%',
+    },
+    pinLinkText: {
+      flex: 1,
+    },
+    pinLinkTitle: {
+      ...textStyles.labelLg,
+      color: colors.textPrimary,
+    },
+    pinLinkState: {
+      ...textStyles.caption,
+      color: colors.textSecondary,
       marginTop: 2,
     },
   });

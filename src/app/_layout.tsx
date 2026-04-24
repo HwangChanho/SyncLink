@@ -32,7 +32,9 @@ import {
 import { initializePurchases, checkProStatus } from '@/services/purchaseService';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { useAppLockStore } from '@/stores/appLockStore';
-import { authenticate } from '@/services/appLockService';
+import { authenticate, isBiometricAvailable } from '@/services/appLockService';
+import { verifyPin } from '@/services/pinLockService';
+import { PinPad } from '@/components/common/PinPad';
 // Sprint 14 TASK-1402/1406 — AdMob SDK initialization after ATT consent.
 import { initAdMob } from '@/services/adService';
 import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
@@ -108,26 +110,101 @@ function useAuthGuard() {
  * Lock screen overlay — shown on top of all content when app lock is active.
  * Uses the current theme's colors and i18n translations.
  *
- * @param onUnlock - Called after successful biometric authentication
+ * Sprint 15 TASK-1510: supports both biometric auth and 4-digit PIN. The
+ * overlay picks a default mode based on what the user has enabled:
+ *   - biometrics only  → prompts Face ID / Touch ID immediately
+ *   - PIN only         → shows the PIN keypad
+ *   - both enabled     → prompts biometrics first, offers "Use passcode"
+ *                        to fall back to the PIN keypad on failure
+ *
+ * @param onUnlock - Called after successful authentication
  */
 function LockOverlay({ onUnlock }: { onUnlock: () => void }) {
   const { t } = useTranslation();
   const colors = useColors();
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const { isEnabled: bioEnabled, pinEnabled } = useAppLockStore();
 
-  /** Prompt biometric auth and call onUnlock on success. */
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  /** True while showing the PIN keypad (either by choice or by fallback). */
+  const [showPinPad,       setShowPinPad]       = useState(false);
+  /** Tracks whether biometrics is actually usable on this device. */
+  const [bioAvailable,     setBioAvailable]     = useState<boolean | null>(null);
+  /** PIN error line. */
+  const [pinError,         setPinError]         = useState<string | null>(null);
+  /** Counter used to reset the PinPad's in-progress digits after an error. */
+  const [pinResetKey,      setPinResetKey]      = useState(0);
+
+  // Discover biometric availability once on mount; decide the initial mode.
+  useEffect(() => {
+    let cancelled = false;
+    isBiometricAvailable().then((avail) => {
+      if (cancelled) return;
+      setBioAvailable(avail);
+      // If biometrics isn't possible (device or disabled), jump straight to PIN.
+      if (pinEnabled && (!bioEnabled || !avail)) {
+        setShowPinPad(true);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [bioEnabled, pinEnabled]);
+
+  /** Prompt biometric auth; on failure, surface the PIN fallback if available. */
   const handleAuthenticate = async () => {
     setIsAuthenticating(true);
     try {
       const result = await authenticate(t('settings.authenticate'));
       if (result.success) {
         onUnlock();
+      } else if (pinEnabled) {
+        // Seamless fallback — most users won't know biometrics failed, they
+        // just see the keypad appear instead of the unlock button.
+        setShowPinPad(true);
       }
     } finally {
       setIsAuthenticating(false);
     }
   };
 
+  /** Verify the 4-digit PIN and unlock on match. */
+  const handlePinComplete = async (pin: string) => {
+    const ok = await verifyPin(pin);
+    if (ok) {
+      onUnlock();
+    } else {
+      setPinError(t('pin_lock.incorrect'));
+      setPinResetKey((k) => k + 1);
+    }
+  };
+
+  // ── PIN keypad mode ─────────────────────────────────────────────────────────
+  if (showPinPad) {
+    return (
+      <View style={[lockStyles.overlay, { backgroundColor: colors.background }]}>
+        <Text style={[lockStyles.title, { color: colors.textPrimary }]}>SyncLink</Text>
+        <PinPad
+          label={t('pin_lock.enter')}
+          subLabel={pinError ?? undefined}
+          subLabelIsError={!!pinError}
+          onChange={(v) => { if (v.length === 0) setPinError(null); }}
+          onComplete={(pin) => void handlePinComplete(pin)}
+          resetKey={pinResetKey}
+        />
+        {/* Offer a way back to biometrics when both methods are enabled. */}
+        {bioEnabled && bioAvailable && (
+          <TouchableOpacity
+            style={lockStyles.linkButton}
+            onPress={() => { setShowPinPad(false); setPinError(null); }}
+          >
+            <Text style={[lockStyles.linkText, { color: colors.primary }]}>
+              {t('pin_lock.use_biometric')}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  }
+
+  // ── Biometric mode (with optional "Use passcode" fallback link) ────────────
   return (
     <View style={[lockStyles.overlay, { backgroundColor: colors.background }]}>
       <Text style={[lockStyles.title, { color: colors.textPrimary }]}>SyncLink</Text>
@@ -146,6 +223,16 @@ function LockOverlay({ onUnlock }: { onUnlock: () => void }) {
           <Text style={lockStyles.buttonText}>{t('settings.authenticate')}</Text>
         )}
       </TouchableOpacity>
+      {pinEnabled && (
+        <TouchableOpacity
+          style={lockStyles.linkButton}
+          onPress={() => setShowPinPad(true)}
+        >
+          <Text style={[lockStyles.linkText, { color: colors.primary }]}>
+            {t('pin_lock.use_pin')}
+          </Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -156,7 +243,16 @@ const lockStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 16,
+    paddingTop: 60,
     zIndex: 9999,
+  },
+  linkButton: {
+    paddingHorizontal: 16,
+    paddingVertical:   8,
+  },
+  linkText: {
+    fontSize:   14,
+    fontWeight: '600',
   },
   title: {
     fontSize: 28,
@@ -255,7 +351,8 @@ export default function RootLayout() {
 
       if (prev === 'background' && nextState === 'active') {
         const store = useAppLockStore.getState();
-        if (store.isEnabled) store.lock();
+        // Sprint 15 TASK-1510: lock if either biometric or PIN lock is on.
+        if (store.isEnabled || store.pinEnabled) store.lock();
       }
     });
 
@@ -417,6 +514,8 @@ export default function RootLayout() {
           <Stack.Screen name="note/new" options={{ presentation: 'modal' }} />
           <Stack.Screen name="settings/categories" options={{ presentation: 'modal' }} />
           <Stack.Screen name="settings/app-lock" options={{ presentation: 'modal' }} />
+          {/* Sprint 15 TASK-1510 — 4-digit PIN settings screen. */}
+          <Stack.Screen name="settings/pin" options={{ presentation: 'modal' }} />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>
