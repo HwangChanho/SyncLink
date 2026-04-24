@@ -112,6 +112,15 @@ interface WebSpeechRecognitionErrorEvent {
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Minimum listening duration in milliseconds.
+ * Browsers and native Voice API stop recognition aggressively on short silences
+ * (~1–2s). Users expect the mic to stay open for at least 5 seconds before
+ * deciding they're done speaking. We restart recognition if it ends naturally
+ * before this window elapses; after 5s we let onEnd close the session.
+ */
+const MIN_LISTEN_DURATION_MS = 5000;
+
 export function useSpeechRecognition({
   language = 'ko-KR',
   onResult,
@@ -135,64 +144,98 @@ export function useSpeechRecognition({
     // Hold a ref to the active recognition instance so we can stop it
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const recognitionRef = useRef<WebSpeechRecognitionInstance | null>(null);
+    // Track when listening started to enforce MIN_LISTEN_DURATION_MS
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const startTimeRef = useRef<number>(0);
+    // Whether the user manually requested stop (so we don't auto-restart)
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const userStoppedRef = useRef<boolean>(false);
 
     // Cleanup on unmount
     // eslint-disable-next-line react-hooks/rules-of-hooks
     useEffect(() => {
       return () => {
+        userStoppedRef.current = true;
         recognitionRef.current?.stop();
       };
     }, []);
 
-    const startListening = useCallback(async () => {
-      if (!isSupported || !WebSpeechAPI || isListening) return;
-
+    /**
+     * Create a new recognition instance with all event handlers wired.
+     * Extracted so we can restart recognition when it ends prematurely
+     * (before MIN_LISTEN_DURATION_MS has elapsed).
+     */
+    const createRecognition = useCallback((): WebSpeechRecognitionInstance | null => {
+      if (!WebSpeechAPI) return null;
       const recognition = new WebSpeechAPI();
       recognition.lang = language;
-      recognition.continuous = true;      // keep listening until stopListening()
-      recognition.interimResults = true;  // deliver partial results for live feedback
+      recognition.continuous = true;
+      recognition.interimResults = true;
 
-      /**
-       * Accumulate only newly-confirmed transcript segments.
-       * We track the last `resultIndex` to avoid re-delivering already-processed results.
-       */
       let lastResultIndex = 0;
 
       recognition.onresult = (event: WebSpeechRecognitionEvent) => {
         let finalText = '';
         for (let i = lastResultIndex; i < event.results.length; i++) {
           const result = event.results[i];
-          // result may be undefined in some browser implementations — guard defensively
           if (result && result.isFinal) {
             const alternative = result[0];
-            if (alternative) {
-              finalText += alternative.transcript;
-            }
+            if (alternative) finalText += alternative.transcript;
             lastResultIndex = i + 1;
           }
         }
-        if (finalText && onResult) {
-          onResult(finalText);
-        }
+        if (finalText && onResult) onResult(finalText);
       };
 
       recognition.onerror = (event: WebSpeechRecognitionErrorEvent) => {
         console.error('[SpeechRecognition] web error:', event.error);
+        userStoppedRef.current = true;
         setIsListening(false);
         onError?.(event.error);
       };
 
       recognition.onend = () => {
-        setIsListening(false);
-        onEnd?.();
+        // If user hit stop or we're past the minimum duration, end normally.
+        const elapsed = Date.now() - startTimeRef.current;
+        if (userStoppedRef.current || elapsed >= MIN_LISTEN_DURATION_MS) {
+          setIsListening(false);
+          onEnd?.();
+          return;
+        }
+        // Otherwise restart to satisfy the 5s minimum — browser stopped
+        // due to a transient silence but the user hasn't finished speaking.
+        try {
+          const next = createRecognition();
+          if (next) {
+            recognitionRef.current = next;
+            next.start();
+          } else {
+            setIsListening(false);
+            onEnd?.();
+          }
+        } catch {
+          setIsListening(false);
+          onEnd?.();
+        }
       };
 
+      return recognition;
+    }, [WebSpeechAPI, language, onResult, onEnd, onError]);
+
+    const startListening = useCallback(async () => {
+      if (!isSupported || !WebSpeechAPI || isListening) return;
+
+      userStoppedRef.current = false;
+      startTimeRef.current = Date.now();
+      const recognition = createRecognition();
+      if (!recognition) return;
       recognitionRef.current = recognition;
       recognition.start();
       setIsListening(true);
-    }, [isSupported, WebSpeechAPI, isListening, language, onResult, onEnd, onError]);
+    }, [isSupported, WebSpeechAPI, isListening, createRecognition]);
 
     const stopListening = useCallback(async () => {
+      userStoppedRef.current = true;
       recognitionRef.current?.stop();
       setIsListening(false);
     }, []);
@@ -217,37 +260,49 @@ export function useSpeechRecognition({
 
   const isSupported = true; // Always available on iOS/Android
 
+  // Refs for 5s-minimum enforcement + user-stop detection (same pattern as web).
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const startTimeRef = useRef<number>(0);
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const userStoppedRef = useRef<boolean>(false);
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const languageRef = useRef<string>(language);
+  languageRef.current = language;
+
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
-    /**
-     * Partial results — fire continuously as the user speaks.
-     * We emit each partial result so the caller can show live feedback.
-     */
     Voice.onSpeechPartialResults = (e: { value?: string[] }) => {
       const partial = e.value?.[0];
-      if (partial && onResult) {
-        onResult(partial);
-      }
+      if (partial && onResult) onResult(partial);
     };
 
-    /** Final results — delivered when recognition completes a utterance. */
     Voice.onSpeechResults = (e: { value?: string[] }) => {
       const text = e.value?.[0];
-      if (text && onResult) {
-        onResult(text);
-      }
+      if (text && onResult) onResult(text);
     };
 
     Voice.onSpeechError = (e: { error?: { message?: string } }) => {
       const msg = e.error?.message ?? 'Speech recognition error';
       console.error('[SpeechRecognition] native error:', msg);
+      userStoppedRef.current = true;
       setIsListening(false);
       onError?.(msg);
     };
 
     Voice.onSpeechEnd = () => {
-      setIsListening(false);
-      onEnd?.();
+      const elapsed = Date.now() - startTimeRef.current;
+      // User-requested stop OR past the 5s minimum → close normally.
+      if (userStoppedRef.current || elapsed >= MIN_LISTEN_DURATION_MS) {
+        setIsListening(false);
+        onEnd?.();
+        return;
+      }
+      // Otherwise restart so the user gets at least 5s of listening time.
+      Voice.start(languageRef.current).catch((err: unknown) => {
+        console.error('[SpeechRecognition] native restart failed:', err);
+        setIsListening(false);
+        onEnd?.();
+      });
     };
 
     return () => {
@@ -257,14 +312,14 @@ export function useSpeechRecognition({
       Voice.onSpeechError          = null;
       Voice.onSpeechEnd            = null;
     };
-  // Callbacks are stable references — intentionally excluded from deps to avoid
-  // tearing down Voice listeners on every render.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const startListening = useCallback(async () => {
     if (isListening) return;
     try {
+      userStoppedRef.current = false;
+      startTimeRef.current = Date.now();
       await Voice.start(language);
       setIsListening(true);
     } catch (err) {
@@ -275,6 +330,7 @@ export function useSpeechRecognition({
   }, [isListening, language, Voice, onError]);
 
   const stopListening = useCallback(async () => {
+    userStoppedRef.current = true;
     try {
       await Voice.stop();
     } catch {
