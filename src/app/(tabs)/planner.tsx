@@ -22,8 +22,12 @@ import {
   View, Text, StyleSheet, FlatList, TextInput,
   TouchableOpacity, ActivityIndicator,
   KeyboardAvoidingView, Platform, ScrollView,
-  Pressable, Modal,
+  Pressable,
 } from 'react-native';
+// Swipeable enables the two-way gesture actions (delete vs. change category)
+// required by TASK-1414. Import from gesture-handler's legacy path which is
+// the only bundle compatible with Reanimated 3 as installed in this project.
+import { Swipeable } from 'react-native-gesture-handler';
 import { showAlert } from '@/lib/webAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -36,6 +40,8 @@ import { textStyles } from '@/constants/typography';
 import { useTodoStore } from '@/stores/todoStore';
 import type { Todo, Category } from '@/types';
 import { getCategories } from '@/services/categoryService';
+import { TodoEditSheet } from '@/components/planner/TodoEditSheet';
+import { CategoryPickerSheet } from '@/components/planner/CategoryPickerSheet';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -62,6 +68,7 @@ const TodoRow = memo(function TodoRow({
   onToggle,
   onEdit,
   onDelete,
+  onChangeCategory,
   colors,
   styles,
 }: {
@@ -69,6 +76,8 @@ const TodoRow = memo(function TodoRow({
   onToggle: (id: string) => void;
   onEdit: (todo: Todo) => void;
   onDelete: (id: string) => void;
+  /** Fired when the user swipes in the "category" direction (TASK-1414). */
+  onChangeCategory: (todo: Todo) => void;
   colors: ColorTokens;
   styles: ReturnType<typeof makeStyles>;
 }) {
@@ -88,49 +97,84 @@ const TodoRow = memo(function TodoRow({
     low:    t('todo.priority.low'),
   };
 
+  // Right action (swipe LEFT to reveal): destructive delete. Keeps the
+  // existing long-press confirmation path alive as a fallback for users
+  // who miss the swipe affordance.
+  const renderRightActions = () => (
+    <View style={[styles.swipeAction, styles.swipeDeleteAction]}>
+      <Ionicons name="trash" size={20} color={colors.textInverse} />
+      <Text style={styles.swipeActionText}>{t('common.delete')}</Text>
+    </View>
+  );
+
+  // Left action (swipe RIGHT to reveal): change category (TASK-1414).
+  const renderLeftActions = () => (
+    <View style={[styles.swipeAction, styles.swipeCategoryAction]}>
+      <Ionicons name="folder-open" size={20} color={colors.textInverse} />
+      <Text style={styles.swipeActionText}>{t('planner.change_category')}</Text>
+    </View>
+  );
+
   return (
-    <Pressable
-      style={({ pressed }) => [styles.todoRow, pressed && styles.todoRowPressed]}
-      onPress={() => onEdit(todo)}
-      onLongPress={() => {
-        showAlert(
-          t('todo.delete'),
-          `"${todo.title}"을(를) 삭제하시겠습니까?`,
-          [
-            { text: t('common.cancel'), style: 'cancel' },
-            { text: t('common.delete'), style: 'destructive', onPress: () => onDelete(todo.id) },
-          ],
-        );
+    <Swipeable
+      renderRightActions={renderRightActions}
+      renderLeftActions={renderLeftActions}
+      onSwipeableOpen={(direction, swipeable) => {
+        // React to the gesture then collapse so the row doesn't stay open.
+        swipeable.close();
+        if (direction === 'right') {
+          // "right" here means the user swiped right → revealing LEFT action.
+          onChangeCategory(todo);
+        } else {
+          onDelete(todo.id);
+        }
       }}
+      overshootLeft={false}
+      overshootRight={false}
     >
-      {/* Checkbox */}
-      <TouchableOpacity
-        style={styles.checkboxContainer}
-        onPress={() => onToggle(todo.id)}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      <Pressable
+        style={({ pressed }) => [styles.todoRow, pressed && styles.todoRowPressed]}
+        onPress={() => onEdit(todo)}
+        onLongPress={() => {
+          showAlert(
+            t('todo.delete'),
+            `"${todo.title}"을(를) 삭제하시겠습니까?`,
+            [
+              { text: t('common.cancel'), style: 'cancel' },
+              { text: t('common.delete'), style: 'destructive', onPress: () => onDelete(todo.id) },
+            ],
+          );
+        }}
       >
-        <View style={[styles.checkbox, todo.isCompleted && styles.checkboxChecked]}>
-          {todo.isCompleted && (
-            <Ionicons name="checkmark" size={14} color={colors.textInverse} />
-          )}
-        </View>
-      </TouchableOpacity>
+        {/* Checkbox */}
+        <TouchableOpacity
+          style={styles.checkboxContainer}
+          onPress={() => onToggle(todo.id)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <View style={[styles.checkbox, todo.isCompleted && styles.checkboxChecked]}>
+            {todo.isCompleted && (
+              <Ionicons name="checkmark" size={14} color={colors.textInverse} />
+            )}
+          </View>
+        </TouchableOpacity>
 
-      {/* Title */}
-      <Text
-        style={[styles.todoTitle, todo.isCompleted && styles.todoTitleCompleted]}
-        numberOfLines={2}
-      >
-        {todo.title}
-      </Text>
-
-      {/* Priority badge */}
-      <View style={[styles.priorityBadge, { backgroundColor: priorityColor + '22' }]}>
-        <Text style={[styles.priorityText, { color: priorityColor }]}>
-          {priorityLabels[todo.priority] ?? todo.priority}
+        {/* Title */}
+        <Text
+          style={[styles.todoTitle, todo.isCompleted && styles.todoTitleCompleted]}
+          numberOfLines={2}
+        >
+          {todo.title}
         </Text>
-      </View>
-    </Pressable>
+
+        {/* Priority badge */}
+        <View style={[styles.priorityBadge, { backgroundColor: priorityColor + '22' }]}>
+          <Text style={[styles.priorityText, { color: priorityColor }]}>
+            {priorityLabels[todo.priority] ?? todo.priority}
+          </Text>
+        </View>
+      </Pressable>
+    </Swipeable>
   );
 });
 
@@ -256,98 +300,6 @@ function formatRelativeDate(date: Date): string {
   return `${Math.floor(diffDays / 30)}개월 전`;
 }
 
-// ─── Edit Modal ───────────────────────────────────────────────────────────────
-
-/**
- * Simple inline edit modal for a todo item.
- * Shows title input, priority selector, due date input.
- *
- * @param todo    - The todo being edited (null = not open)
- * @param visible - Whether the modal is visible
- * @param onClose - Called when the modal should close
- * @param onSave  - Called with the updated title
- * @param colors  - Active theme color tokens
- * @param styles  - Pre-computed styles for current theme
- */
-function EditTodoModal({
-  todo,
-  visible,
-  onClose,
-  onSave,
-  colors,
-  styles,
-}: {
-  todo: Todo | null;
-  visible: boolean;
-  onClose: () => void;
-  onSave: (id: string, updates: Partial<Todo>) => Promise<void>;
-  colors: ColorTokens;
-  styles: ReturnType<typeof makeStyles>;
-}) {
-  const [title, setTitle] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-
-  // Sync input when todo changes
-  useEffect(() => {
-    setTitle(todo?.title ?? '');
-  }, [todo]);
-
-  const { t: tModal } = useTranslation();
-
-  const handleSave = useCallback(async () => {
-    if (!todo || title.trim().length === 0) return;
-    setIsSaving(true);
-    try {
-      await onSave(todo.id, { title: title.trim() });
-      onClose();
-    } catch {
-      showAlert(tModal('common.error'), tModal('common.edit_failed'));
-    } finally {
-      setIsSaving(false);
-    }
-  }, [todo, title, onSave, onClose, tModal]);
-
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <Pressable style={styles.modalOverlay} onPress={onClose}>
-        <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
-          <Text style={styles.modalTitle}>{tModal('common.edit')} {tModal('todo.label')}</Text>
-          <TextInput
-            style={styles.modalInput}
-            value={title}
-            onChangeText={setTitle}
-            placeholder={tModal('todo.label')}
-            placeholderTextColor={colors.textPlaceholder}
-            autoFocus
-            returnKeyType="done"
-            onSubmitEditing={handleSave}
-          />
-          <View style={styles.modalActions}>
-            <TouchableOpacity style={styles.modalCancelBtn} onPress={onClose} disabled={isSaving}>
-              <Text style={styles.modalCancelText}>{tModal('common.cancel')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.modalSaveBtn, isSaving && styles.buttonDisabled]}
-              onPress={handleSave}
-              disabled={isSaving}
-            >
-              {isSaving
-                ? <ActivityIndicator size="small" color={colors.textInverse} />
-                : <Text style={styles.modalSaveText}>{tModal('common.save')}</Text>
-              }
-            </TouchableOpacity>
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
-
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function PlannerScreen() {
@@ -368,6 +320,11 @@ export default function PlannerScreen() {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   /** Todo currently being edited. */
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
+  /**
+   * Todo whose category is being changed via swipe (TASK-1414).
+   * When non-null, the CategoryPickerSheet opens.
+   */
+  const [categoryChangeTodo, setCategoryChangeTodo] = useState<Todo | null>(null);
 
   const inputRef = useRef<TextInput>(null);
 
@@ -536,6 +493,7 @@ export default function PlannerScreen() {
                   onToggle={toggleTodo}
                   onEdit={setEditingTodo}
                   onDelete={removeTodo}
+                  onChangeCategory={setCategoryChangeTodo}
                   colors={colors}
                   styles={styles}
                 />
@@ -549,6 +507,7 @@ export default function PlannerScreen() {
                   onToggle={toggleTodo}
                   onEdit={setEditingTodo}
                   onDelete={removeTodo}
+                  onChangeCategory={setCategoryChangeTodo}
                   colors={colors}
                   styles={styles}
                 />
@@ -688,14 +647,40 @@ export default function PlannerScreen() {
         </TouchableOpacity>
       )}
 
-      {/* Edit modal for todos */}
-      <EditTodoModal
+      {/*
+       * Bottom-sheet todo editor (Sprint 14 TASK-1412).
+       * Replaces the old mid-screen EditTodoModal so the keyboard never
+       * obscures the input when editing title / memo.
+       */}
+      <TodoEditSheet
         todo={editingTodo}
-        visible={editingTodo !== null}
+        categoryMap={categoryMap}
         onClose={() => setEditingTodo(null)}
         onSave={editTodo}
-        colors={colors}
-        styles={styles}
+      />
+
+      {/*
+       * Swipe-triggered category picker (TASK-1414).
+       * Opens when the user swipes a row in the "change category" direction.
+       * On select, patches the todo via the todo store (optimistic update
+       * is already handled inside editTodo).
+       */}
+      <CategoryPickerSheet
+        visible={categoryChangeTodo !== null}
+        selectedId={categoryChangeTodo?.categoryId ?? null}
+        onClose={() => setCategoryChangeTodo(null)}
+        onSelect={(newCategoryId) => {
+          if (!categoryChangeTodo) return;
+          const target = categoryChangeTodo;
+          setCategoryChangeTodo(null);
+          void editTodo(target.id, { categoryId: newCategoryId })
+            .then(() => {
+              showAlert(t('planner.category_changed'), '');
+            })
+            .catch(() => {
+              // Surfaced via the store's error state already.
+            });
+        }}
       />
     </SafeAreaView>
   );
@@ -801,6 +786,25 @@ function makeStyles(colors: ColorTokens) {
     completedToggleText: {
       ...textStyles.caption,
       color: colors.primary,
+    },
+
+    // Swipe action backdrops (TASK-1414)
+    swipeAction: {
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: 96,
+      gap: spacing[1],
+    },
+    swipeDeleteAction: {
+      backgroundColor: colors.error,
+    },
+    swipeCategoryAction: {
+      backgroundColor: colors.primary,
+    },
+    swipeActionText: {
+      ...textStyles.labelSm,
+      color: colors.textInverse,
     },
 
     // Todo row
