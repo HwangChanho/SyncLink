@@ -35,6 +35,14 @@ export interface WeatherData {
   city: string;
 }
 
+/** Air quality payload — separate endpoint, combined client-side. */
+export interface AirQualityData {
+  /** µg/m³ of PM2.5 fine particulates. */
+  pm25: number;
+  /** Human-readable grade keyed to our i18n bucket. */
+  grade: 'good' | 'fair' | 'moderate' | 'poor' | 'very_poor';
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 /** OpenWeatherMap Current Weather endpoint. */
@@ -161,4 +169,45 @@ export async function getCurrentWeather(lat: number, lon: number): Promise<Weath
     icon:        mapConditionToIcon(condition.id, isDay),
     city:        json.name,
   };
+}
+
+/**
+ * Fetch current air quality for the given coordinates. Uses OpenWeatherMap's
+ * free Air Pollution endpoint. Returns `null` on failure so the widget can
+ * simply hide the row instead of surfacing an error.
+ */
+export async function getCurrentAirQuality(
+  lat: number,
+  lon: number,
+): Promise<AirQualityData | null> {
+  const key = process.env.EXPO_PUBLIC_WEATHER_API_KEY;
+  if (!key) return null;
+  try {
+    const url = `https://api.openweathermap.org/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=${key}`;
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const json = (await response.json()) as {
+      list?: Array<{
+        main: { aqi: number };
+        components: { pm2_5: number };
+      }>;
+    };
+    const entry = json.list?.[0];
+    if (!entry) return null;
+    // Map OWM's 1..5 AQI scale to our 5 labelled buckets so the UI can
+    // render '좋음' / '보통' / '나쁨' / '아주 나쁨' etc.
+    const gradeMap: Record<number, AirQualityData['grade']> = {
+      1: 'good',
+      2: 'fair',
+      3: 'moderate',
+      4: 'poor',
+      5: 'very_poor',
+    };
+    return {
+      pm25: Math.round(entry.components.pm2_5),
+      grade: gradeMap[entry.main.aqi] ?? 'moderate',
+    };
+  } catch {
+    return null;
+  }
 }

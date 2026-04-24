@@ -326,6 +326,12 @@ const ko = {
   weather: {
     loading: '날씨 정보를 불러오는 중…',
     unavailable: '날씨 정보를 불러올 수 없습니다.',
+    air_pm25: '미세먼지',
+    grade_good: '좋음',
+    grade_fair: '보통',
+    grade_moderate: '보통',
+    grade_poor: '나쁨',
+    grade_very_poor: '매우 나쁨',
   },
 
   date_suggest: {
