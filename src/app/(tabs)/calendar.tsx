@@ -35,6 +35,7 @@ import { WeekView } from '@/components/calendar/WeekView';
 import { DayView } from '@/components/calendar/DayView';
 import { useEventStore } from '@/stores/eventStore';
 import { subscribeToSharedEvents } from '@/services/eventRealtimeService';
+import { updateEvent } from '@/services/eventService';
 import type { EventSummary, Category } from '@/types';
 import { useColors } from '@/hooks/useColors';
 import { getCategories } from '@/services/categoryService';
@@ -179,6 +180,29 @@ export default function CalendarScreen() {
     }
     return out;
   }, [eventsByDate, dimmedCats]);
+
+  // Drag-to-reschedule handler: given an event + pixel-derived deltas from
+  // the grid, compute the new startAt/endAt and persist via eventService.
+  const handleReschedule = useCallback(
+    async (evt: EventSummary, dayDelta: number, minuteDelta: number) => {
+      if (dayDelta === 0 && minuteDelta === 0) return;
+      const newStart = new Date(evt.startAt);
+      newStart.setDate(newStart.getDate() + dayDelta);
+      newStart.setMinutes(newStart.getMinutes() + minuteDelta);
+      const newEnd = new Date(evt.endAt);
+      newEnd.setDate(newEnd.getDate() + dayDelta);
+      newEnd.setMinutes(newEnd.getMinutes() + minuteDelta);
+      try {
+        await updateEvent(evt.id, { startAt: newStart, endAt: newEnd });
+        const range = getViewRange(selectedDate, viewMode);
+        void fetchEvents(range);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[calendar] reschedule failed:', err);
+      }
+    },
+    [selectedDate, viewMode, fetchEvents],
+  );
 
   const toggleCategoryDim = useCallback((bucket: string) => {
     setDimmedCats((prev) => {
@@ -355,6 +379,7 @@ export default function CalendarScreen() {
                 setSelectedDate(date);
                 setViewMode('day');
               }}
+              onReschedule={handleReschedule}
             />
           )}
 

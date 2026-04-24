@@ -20,7 +20,7 @@
  * the time grid, so they never occlude timed events.
  */
 
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -64,6 +64,17 @@ interface WeekViewProps {
   onEventPress: (event: EventSummary) => void;
   /** Called when the user taps a day header to drill into DayView. */
   onDateSelect: (date: Date) => void;
+  /**
+   * Called after a long-press + drag rearranges an event. The parent is
+   * responsible for calling updateEvent() and refreshing the calendar.
+   *   dayDelta    = whole columns moved (negative = earlier in week)
+   *   minuteDelta = 15-minute snapped vertical movement
+   */
+  onReschedule?: (
+    event: EventSummary,
+    dayDelta: number,
+    minuteDelta: number,
+  ) => void;
 }
 
 // ─── Date utilities ────────────────────────────────────────────────────────
@@ -186,6 +197,7 @@ export function WeekView({
   eventsByDate,
   onEventPress,
   onDateSelect,
+  onReschedule,
 }: WeekViewProps) {
   // Resolve active theme colors for dark mode support (TASK-700)
   const colors = useColors();
@@ -194,6 +206,10 @@ export function WeekView({
   const weekDays = getWeekDays(selectedDate);
   const today = new Date();
   const scrollRef = useRef<ScrollView>(null);
+  // Measured width of the 7-day grid (total), used to compute a single
+  // column width passed to EventBlock for drag-to-reschedule snapping.
+  const [gridWidth, setGridWidth] = useState(0);
+  const columnWidth = gridWidth > 0 ? gridWidth / 7 : 0;
 
   // Scroll to 8 AM on mount so mornings are visible by default
   const handleLayout = () => {
@@ -290,8 +306,11 @@ export function WeekView({
             ))}
           </View>
 
-          {/* Event grid area */}
-          <View style={styles.eventsArea}>
+          {/* Event grid area — measured so drag-to-reschedule knows column width */}
+          <View
+            style={styles.eventsArea}
+            onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}
+          >
             {/* Hour separator lines */}
             {HOURS.map((h) => (
               <View
@@ -344,6 +363,8 @@ export function WeekView({
                       widthFraction={lay.widthFraction}
                       leftFraction={lay.leftFraction}
                       onPress={onEventPress}
+                      columnWidth={columnWidth}
+                      {...(onReschedule ? { onReschedule } : {})}
                     />
                   ))}
                 </View>
