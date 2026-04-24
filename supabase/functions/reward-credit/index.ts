@@ -193,6 +193,22 @@ function cors(body: string, init: ResponseInit = {}): Response {
 Deno.serve(async (req: Request) => {
   const startedAt = Date.now();
 
+  // Probe-friendly entry log — writes a breadcrumb for every incoming
+  // request (method, path, query presence) so we can verify whether the
+  // AdMob console verification actually reaches the function.
+  try {
+    const u = new URL(req.url);
+    await logToDb('reward-credit.entry', new Error('request received'), {
+      method: req.method,
+      path: u.pathname,
+      queryKeys: Array.from(u.searchParams.keys()),
+      ua: req.headers.get('user-agent') ?? '',
+      origin: req.headers.get('origin') ?? '',
+    });
+  } catch {
+    // best-effort; don't block on logging failure
+  }
+
   // CORS preflight
   if (req.method === 'OPTIONS') {
     return cors('', { status: 204 });
@@ -232,11 +248,20 @@ Deno.serve(async (req: Request) => {
     const customData = params.get('custom_data') ?? '';
     const userId = customData; // client passes user UUID as custom_data
 
+    // At this point the signature is cryptographically valid — the request
+    // was signed by Google. If `custom_data` is missing this is AdMob's
+    // server-side URL verification probe (they send a signed-but-attribution-
+    // less ping when you click "URL 확인"). Ack with 200 so the console
+    // accepts the endpoint, and skip crediting since there's no user to
+    // attribute to.
+    if (!userId) {
+      await logToDb('reward-credit.probe', new Error('verified probe without custom_data'), {
+        transactionId,
+      });
+      return cors('ok (verified probe)', { status: 200 });
+    }
     if (!transactionId) {
       return new Response('missing transaction_id', { status: 400 });
-    }
-    if (!userId) {
-      return new Response('missing user_id (custom_data)', { status: 400 });
     }
     if (!Number.isFinite(rewardAmount) || rewardAmount <= 0) {
       return new Response('invalid reward_amount', { status: 400 });
