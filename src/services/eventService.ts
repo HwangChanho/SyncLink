@@ -198,6 +198,91 @@ export async function getEventsInRange(range: DateRange): Promise<EventSummary[]
   );
 }
 
+// ─── Title autocomplete (reuse prior events as templates) ────────────────────
+
+/**
+ * Lightweight shape returned by `searchEventsByTitle`. Only the fields that
+ * the create-form pre-fills from are included — the raw row can be converted
+ * via toEvent() later if the caller needs the full object.
+ */
+export interface EventAutocompleteSuggestion {
+  id: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  categoryId: string | null;
+  color: string | null;
+  allDay: boolean;
+  /** The most recent start_at so the UI can show "지난 주 화 14:00" hints. */
+  lastStartAt: Date;
+}
+
+/**
+ * Search the user's own past events by title (case-insensitive prefix/substring
+ * match). Returns at most `limit` suggestions, deduplicated by title —
+ * only the latest occurrence per title survives, so that reusing "주간 회의"
+ * brings up the most recent instance rather than dozens of duplicates.
+ *
+ * Only the owner's events are searched: shared events would leak other
+ * users' private metadata into autocomplete and conflict with the "저장
+ * 기준은 달력에 등록되어있는기준" behaviour the user asked for.
+ */
+export async function searchEventsByTitle(
+  query: string,
+  limit = 8,
+): Promise<EventAutocompleteSuggestion[]> {
+  const trimmed = query.trim();
+  if (trimmed.length === 0) return [];
+
+  const userId = await getCurrentUserId();
+  if (!userId) return [];
+
+  // Oversample so the post-dedup list still fills up to `limit`.
+  const { data, error } = await supa
+    .from('events')
+    .select('id, title, description, location, category_id, color, all_day, start_at')
+    .eq('user_id', userId)
+    .ilike('title', `%${trimmed}%`)
+    .order('start_at', { ascending: false })
+    .limit(limit * 4) as {
+      data: Array<{
+        id: string;
+        title: string;
+        description: string | null;
+        location: string | null;
+        category_id: string | null;
+        color: string | null;
+        all_day: boolean;
+        start_at: string;
+      }> | null;
+      error: Error | null;
+    };
+
+  if (error || !data) return [];
+
+  // Deduplicate by title (case-insensitive), keeping the first occurrence
+  // which is the most recent due to the DESC ordering above.
+  const seen = new Set<string>();
+  const out: EventAutocompleteSuggestion[] = [];
+  for (const row of data) {
+    const key = row.title.trim().toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      location: row.location,
+      categoryId: row.category_id,
+      color: row.color,
+      allDay: row.all_day,
+      lastStartAt: new Date(row.start_at),
+    });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 /**
  * Fetch full event details by ID.
  * Populates sharedSpaceIds and ownerNickname via supplementary queries.

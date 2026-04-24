@@ -16,10 +16,11 @@
  * Route: /event/create?date=YYYY-MM-DD
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, TextInput, ScrollView, Switch, Pressable,
   ActivityIndicator, StyleSheet, Platform, KeyboardAvoidingView,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -27,7 +28,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import * as Location from 'expo-location';
 import type { RepeatType } from '@/types';
-import { createEvent } from '@/services/eventService';
+import {
+  createEvent,
+  searchEventsByTitle,
+  type EventAutocompleteSuggestion,
+} from '@/services/eventService';
 import { updateReminders } from '@/services/reminderService';
 import { useEventStore } from '@/stores/eventStore';
 import { useSpaceStore } from '@/stores/spaceStore';
@@ -199,6 +204,55 @@ export default function EventCreateScreen() {
   /** Whether a GPS reverse-geocode is in progress. */
   const [isGettingLocation, setIsGettingLocation] = useState(false);
 
+  // ── Title autocomplete ─────────────────────────────────────────────────────
+  // As the user types, suggest prior calendar events with matching titles.
+  // Tapping a suggestion pre-fills the form from that event — title, location,
+  // description, category, all_day, and the shape of start/end (time of day +
+  // duration) while keeping the *date* the user was creating on. This is the
+  // "저장 기준은 달력에 등록되어있는기준" behaviour requested in Sprint 14.
+  const [titleSuggestions, setTitleSuggestions] = useState<EventAutocompleteSuggestion[]>([]);
+  const [titleFocused, setTitleFocused]   = useState(false);
+  /** Category id pre-filled by a picked suggestion. Kept local because the
+   * current form doesn't expose a category picker yet — saved with the event. */
+  const [categoryId, setCategoryId]       = useState<string | null>(null);
+
+  // Debounced search as title changes.
+  useEffect(() => {
+    const q = title.trim();
+    if (q.length === 0) {
+      setTitleSuggestions([]);
+      return;
+    }
+    let cancelled = false;
+    const id = setTimeout(() => {
+      searchEventsByTitle(q).then((rows) => {
+        if (!cancelled) setTitleSuggestions(rows);
+      }).catch(() => {
+        if (!cancelled) setTitleSuggestions([]);
+      });
+    }, 200);
+    return () => { cancelled = true; clearTimeout(id); };
+  }, [title]);
+
+  /** Apply a picked suggestion to the current form. */
+  const pickTitleSuggestion = useCallback((s: EventAutocompleteSuggestion) => {
+    setTitle(s.title);
+    setLocation(s.location ?? '');
+    setDescription(s.description ?? '');
+    setAllDay(s.allDay);
+    setCategoryId(s.categoryId);
+    // Preserve the *date* the user opened the create form on, but copy the
+    // time-of-day + duration from the template so "내일 주간 회의" becomes
+    // 내일 14:00–15:00 when the template was some Tue 14:00–15:00.
+    setStartAt((prev) => {
+      const next = new Date(prev);
+      next.setHours(s.lastStartAt.getHours(), s.lastStartAt.getMinutes(), 0, 0);
+      return next;
+    });
+    setTitleSuggestions([]);
+    setTitleFocused(false);
+  }, []);
+
   // ── Handlers ───────────────────────────────────────────────────────────────
 
   /** Toggle a space in the sharing list. */
@@ -337,6 +391,9 @@ export default function EventCreateScreen() {
         repeatType,
         ...(location.trim()     ? { location:    location.trim() }     : {}),
         ...(description.trim()  ? { description: description.trim() }  : {}),
+        // Carry over a category chosen by a title-autocomplete pick so
+        // the reused event keeps the same bucket/color.
+        ...(categoryId          ? { categoryId }                       : {}),
         shareToSpaceIds: shareSpaceIds,
       });
 
@@ -426,16 +483,44 @@ export default function EventCreateScreen() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Title */}
-        <TextInput
-          style={styles.titleInput}
-          placeholder={t('event.title_placeholder')}
-          placeholderTextColor={colors.textSecondary}
-          value={title}
-          onChangeText={setTitle}
-          autoFocus
-          returnKeyType="done"
-        />
+        {/* Title with autocomplete from prior calendar events */}
+        <View style={styles.titleWrapper}>
+          <TextInput
+            style={styles.titleInput}
+            placeholder={t('event.title_placeholder')}
+            placeholderTextColor={colors.textSecondary}
+            value={title}
+            onChangeText={setTitle}
+            onFocus={() => setTitleFocused(true)}
+            onBlur={() => {
+              // Delay so a tap on the suggestion row fires before the list hides.
+              setTimeout(() => setTitleFocused(false), 150);
+            }}
+            autoFocus
+            returnKeyType="done"
+          />
+          {titleFocused && titleSuggestions.length > 0 && (
+            <View style={styles.titleSuggestList}>
+              {titleSuggestions.map((s) => (
+                <TouchableOpacity
+                  key={s.id}
+                  style={styles.titleSuggestRow}
+                  onPress={() => pickTitleSuggestion(s)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.titleSuggestName} numberOfLines={1}>
+                    {s.title}
+                  </Text>
+                  {s.location ? (
+                    <Text style={styles.titleSuggestMeta} numberOfLines={1}>
+                      {s.location}
+                    </Text>
+                  ) : null}
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
 
         <View style={styles.form}>
           {/* All-day toggle */}
@@ -680,12 +765,52 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   },
 
   // Title input
+  titleWrapper: {
+    position: 'relative',
+    zIndex: 10,
+  },
   titleInput: {
     ...textStyles.h3,
     color: colors.textPrimary,
     padding: spacing[5],
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+  },
+  /**
+   * Autocomplete dropdown from prior calendar events. Absolutely positioned
+   * below the title field so it overlaps the first FormRow without pushing
+   * the rest of the form down.
+   */
+  titleSuggestList: {
+    position: 'absolute',
+    left: spacing[2],
+    right: spacing[2],
+    top: '100%',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  titleSuggestRow: {
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  titleSuggestName: {
+    ...textStyles.labelLg,
+    color: colors.textPrimary,
+  },
+  titleSuggestMeta: {
+    ...textStyles.caption,
+    color: colors.textTertiary,
+    marginTop: 2,
   },
 
   // Form rows
