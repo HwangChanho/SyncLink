@@ -1,0 +1,16 @@
+{
+  "$schema": "https://unpkg.com/@bacons/apple-targets/schema.json",
+  "type": "widget",
+  "name": "SyncLinkWidget",
+  "icon": "../../images/SyncDayLogo.png",
+  "deploymentTarget": "16.0",
+  "entitlements": {
+    "com.apple.security.application-groups": [
+      "group.io.synclink.app.widget"
+    ]
+  },
+  "frameworks": [
+    "WidgetKit",
+    "SwiftUI"
+  ]
+}

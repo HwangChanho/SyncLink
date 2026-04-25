@@ -18,8 +18,14 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "io.synclink.app",
+      "appleTeamId": "QUVU2PY6PG",
       "newArchEnabled": false,
       "buildNumber": "31",
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.io.synclink.app.widget"
+        ]
+      },
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "프로필 사진 변경에 사용됩니다.",
         "NSCameraUsageDescription": "프로필 사진 촬영에 사용됩니다.",
@@ -129,7 +135,9 @@
             }
           ]
         }
-      ]
+      ],
+      "@bacons/apple-targets",
+      "./plugins/withAppGroupBridge"
     ],
     "experiments": {
       "typedRoutes": true
