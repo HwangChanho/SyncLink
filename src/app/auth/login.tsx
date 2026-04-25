@@ -159,31 +159,35 @@ export default function LoginScreen() {
             }
           </TouchableOpacity>
 
-          {/* Apple — iOS only */}
-          {Platform.OS === 'ios' && (
-            <TouchableOpacity
-              style={[styles.button, styles.appleButton, isLoading && styles.disabled]}
-              onPress={() => handleSignIn('apple')}
-              disabled={isLoading}
-              accessibilityLabel="Apple로 로그인"
-            >
-              {loading === 'apple'
-                ? <ActivityIndicator color="#FFFFFF" />
-                : (
-                  <View style={styles.buttonRow}>
-                    {/* Apple logo — Ionicons ships the official glyph */}
-                    <Ionicons
-                      name="logo-apple"
-                      size={22}
-                      color="#FFFFFF"
-                      style={styles.buttonIcon}
-                    />
-                    <Text style={[styles.buttonText, styles.appleText]}>{t('auth.login.apple')}</Text>
-                  </View>
-                )
-              }
-            </TouchableOpacity>
-          )}
+          {/*
+            Apple — visible on every platform.
+            - iOS: native AppleAuthentication.signInAsync (best UX)
+            - Android / Web: Supabase OAuth redirect (handled in
+              authService.signInWithApple). Requires the Apple Service ID
+              + Web Domain to be registered in the Apple Developer Console
+              and the Apple provider to be enabled in Supabase Dashboard.
+          */}
+          <TouchableOpacity
+            style={[styles.button, styles.appleButton, isLoading && styles.disabled]}
+            onPress={() => handleSignIn('apple')}
+            disabled={isLoading}
+            accessibilityLabel="Apple로 로그인"
+          >
+            {loading === 'apple'
+              ? <ActivityIndicator color="#FFFFFF" />
+              : (
+                <View style={styles.buttonRow}>
+                  <Ionicons
+                    name="logo-apple"
+                    size={22}
+                    color="#FFFFFF"
+                    style={styles.buttonIcon}
+                  />
+                  <Text style={[styles.buttonText, styles.appleText]}>{t('auth.login.apple')}</Text>
+                </View>
+              )
+            }
+          </TouchableOpacity>
 
         </View>
 

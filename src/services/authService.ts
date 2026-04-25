@@ -247,7 +247,20 @@ export async function signInWithKakao(): Promise<SignInResult> {
   // ── 3. Open Kakao consent UI and watch for the app-return redirect ──────
   // After Kakao redirects to our Edge Function, the function processes the
   // code and redirects (via HTML) to `appReturn?email=...&password=...`.
-  // WebBrowser catches that URL (matches its watch pattern) and closes.
+  //
+  // On web we use a full-page navigation (window.location.assign) instead
+  // of WebBrowser.openAuthSessionAsync — popup-based OAuth from Kakao
+  // breaks under cross-origin/popup-blocker rules in Safari and Chrome
+  // strict mode, and the session would be lost when the popup closes.
+  // The /auth/callback route then finalises the sign-in by reading the
+  // email/password params Edge Function delivered.
+  if (Platform.OS === 'web') {
+    const win = (globalThis as typeof globalThis & { location?: { assign: (u: string) => void } });
+    win.location?.assign(authUrl);
+    // The page is leaving — nothing else to do here.
+    return {} as SignInResult;
+  }
+
   const result = await WebBrowser.openAuthSessionAsync(authUrl, appReturn, {
     showInRecents: false,
   });

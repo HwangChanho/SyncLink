@@ -54,48 +54,73 @@ export default function AuthCallbackScreen() {
 
   async function handleCallback() {
     // Retrieve the current URL for code/token extraction
-    type WebLocation = typeof globalThis & { location?: { href?: string } };
+    type WebLocation = typeof globalThis & {
+      location?: { href?: string };
+      history?: { replaceState: (state: unknown, title: string, url: string) => void };
+    };
     const href = (globalThis as WebLocation).location?.href ?? '';
 
     if (!href) {
-      // Not on web or no URL — redirect to login
       router.replace('/auth/login');
       return;
     }
 
-    // Parse URL to distinguish PKCE (code param) vs implicit (hash fragment) flow
-    let code: string | null = null;
-    let accessToken: string | null = null;
-    let refreshToken: string | null = null;
+    // Parse the URL once and try each known flow in priority order:
+    //   1. ?error=...                   → kakao-auth Edge Function reported failure
+    //   2. ?email=...&password=...      → kakao-auth derived credentials (web Kakao path)
+    //   3. ?code=...                    → PKCE (Google / Apple via Supabase OAuth)
+    //   4. #access_token=...&refresh_token=...  → implicit (legacy)
+    let errorParam:    string | null = null;
+    let emailParam:    string | null = null;
+    let passwordParam: string | null = null;
+    let code:          string | null = null;
+    let accessToken:   string | null = null;
+    let refreshToken:  string | null = null;
 
     try {
-      // URLSearchParams is available in ESNext + React Native polyfill
       const questionIdx = href.indexOf('?');
-      const hashIdx = href.indexOf('#');
-
+      const hashIdx     = href.indexOf('#');
       if (questionIdx !== -1) {
         const query = href.slice(questionIdx + 1, hashIdx > questionIdx ? hashIdx : undefined);
         const params = new URLSearchParams(query);
-        code = params.get('code');
+        errorParam    = params.get('error');
+        emailParam    = params.get('email');
+        passwordParam = params.get('password');
+        code          = params.get('code');
       }
-
       if (hashIdx !== -1) {
         const fragment = href.slice(hashIdx + 1);
         const params = new URLSearchParams(fragment);
-        accessToken = params.get('access_token');
+        accessToken  = params.get('access_token');
         refreshToken = params.get('refresh_token');
       }
     } catch {
-      // URL parsing failed
       throw new Error(t('auth.callback.parse_error'));
     }
 
-    if (code) {
-      // PKCE flow: exchange authorization code for session
+    if (errorParam) {
+      throw new Error(decodeURIComponent(errorParam));
+    }
+
+    if (emailParam && passwordParam) {
+      // Web Kakao: kakao-auth Edge Function HTML-redirected here with
+      // derived credentials. Sign in immediately, then scrub the URL so
+      // the password isn't left in browser history.
+      const { error } = await supabase.auth.signInWithPassword({
+        email: emailParam,
+        password: passwordParam,
+      });
+      if (error) throw error;
+      const replace = (globalThis as WebLocation).history?.replaceState;
+      if (replace) {
+        try { replace.call((globalThis as WebLocation).history, {}, '', '/auth/callback'); } catch { /* non-fatal */ }
+      }
+    } else if (code) {
+      // PKCE: Google / Apple via Supabase OAuth
       const { error } = await supabase.auth.exchangeCodeForSession(href);
       if (error) throw error;
     } else if (accessToken && refreshToken) {
-      // Implicit flow: set session directly from tokens in hash fragment
+      // Implicit
       const { error } = await supabase.auth.setSession({
         access_token: accessToken,
         refresh_token: refreshToken,
