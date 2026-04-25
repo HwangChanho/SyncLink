@@ -8,5 +8,17 @@
     <array>
       <string>Default</string>
     </array>
+    <!--
+      Sprint 19 TASK-1900 — App Group shared with the Widget Extension so the
+      RN host app and the SwiftUI widget can read/write the same UserDefaults
+      suite. The exact identifier is also referenced in:
+        - widgetDataService.ts (writeIOSAppGroup)
+        - SyncLinkWidget.entitlements (widget target)
+        - Apple Developer portal (provisioning profile must include this group)
+    -->
+    <key>com.apple.security.application-groups</key>
+    <array>
+      <string>group.io.synclink.app.widget</string>
+    </array>
   </dict>
 </plist>

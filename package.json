@@ -2,7 +2,7 @@
   "name": "synclink",
   "version": "1.0.0",
   "description": "AI-powered shared calendar for couples, teams, and families",
-  "main": "expo-router/entry",
+  "main": "index.js",
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
@@ -47,6 +47,7 @@
     "react-native-gesture-handler": "~2.20.0",
     "react-native-google-mobile-ads": "^15.8.3",
     "react-native-markdown-display": "^7.0.2",
+    "react-native-android-widget": "^0.16.0",
     "react-native-purchases": "^10.0.1",
     "react-native-reanimated": "~3.16.1",
     "react-native-safe-area-context": "4.12.0",

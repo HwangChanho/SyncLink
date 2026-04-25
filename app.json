@@ -19,7 +19,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "io.synclink.app",
       "newArchEnabled": false,
-      "buildNumber": "30",
+      "buildNumber": "31",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "프로필 사진 변경에 사용됩니다.",
         "NSCameraUsageDescription": "프로필 사진 촬영에 사용됩니다.",
@@ -97,7 +97,23 @@
           "userTrackingPermission": "이 앱은 개인화된 광고를 표시하기 위해 기기 간 활동을 연결할 수 있는 권한을 요청합니다."
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "SyncLinkWidget",
+              "label": "SyncLink",
+              "minWidth": "180dp",
+              "minHeight": "110dp",
+              "description": "오늘의 일정과 마감 임박 할 일을 한눈에.",
+              "previewImage": "./assets/widget-preview.png",
+              "updatePeriodMillis": 1800000
+            }
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

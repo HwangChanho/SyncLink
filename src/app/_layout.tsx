@@ -37,6 +37,7 @@ import { authenticate, isBiometricAvailable } from '@/services/appLockService';
 import { verifyPin } from '@/services/pinLockService';
 import { useIdleLogout } from '@/hooks/useIdleLogout';
 import { useWebPush } from '@/hooks/useWebPush';
+import { useWidgetSync } from '@/hooks/useWidgetSync';
 import { PinPad } from '@/components/common/PinPad';
 import { OfflineBanner } from '@/components/common/OfflineBanner';
 // Sprint 14 TASK-1402/1406 — AdMob SDK initialization after ATT consent.
@@ -306,6 +307,12 @@ export default function RootLayout() {
   // tabs the same way it pushes to native devices via Expo. No-op on
   // native, and silently skipped if VAPID isn't configured yet.
   useWebPush();
+
+  // Native-only: keep the home-screen widget snapshot in sync with the
+  // event/todo stores. Subscribes to both stores and writes a debounced
+  // snapshot to the App Group (iOS) / SharedPreferences-backed AsyncStorage
+  // (Android) on every change. No-op on web.
+  useWidgetSync();
 
   // Midnight rollover for daily / monthly quotas. canUseAI() already
   // resets when the date changes, but the UI counter (e.g. "AI 5/5") is
