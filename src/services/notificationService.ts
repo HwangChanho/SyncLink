@@ -45,13 +45,18 @@ export interface LocalNotification {
 // ─── Notification behavior ────────────────────────────────────────────────────
 
 // Configure how notifications appear when the app is in the foreground.
-ExpoNotifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge:  false,
-  }),
-});
+// Skipped on web because expo-notifications is stubbed out in the web
+// bundle (see metro.config.js) — calling setNotificationHandler on the
+// empty stub would throw at module load and crash the entire web app.
+if (Platform.OS !== 'web') {
+  ExpoNotifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge:  false,
+    }),
+  });
+}
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -176,6 +181,9 @@ export function setupNotificationHandlers(
   onNotificationReceived: (notification: LocalNotification) => void,
   onNotificationTapped: (notification: LocalNotification) => void,
 ): () => void {
+  // Web has no native notification listeners — return a no-op cleanup.
+  if (Platform.OS === 'web') return () => {};
+
   /** Maps an Expo Notification to the internal LocalNotification shape. */
   const toLocal = (n: ExpoNotifications.Notification): LocalNotification => ({
     id:           n.request.identifier,
@@ -244,8 +252,10 @@ export async function scheduleLocalNotification(params: {
  * @returns Promise that resolves when initialization is complete (non-throwing)
  */
 export async function initializeNotifications(): Promise<void> {
+  // Web has no expo-notifications runtime; web push will be handled by
+  // a separate Service Worker integration (Sprint 17 TASK-1701).
+  if (Platform.OS === 'web') return;
   try {
-    // Register push token (also handles permission request internally)
     await registerPushToken();
   } catch (err) {
     // Non-critical — log but don't crash the app
