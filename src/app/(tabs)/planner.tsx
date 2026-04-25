@@ -630,10 +630,13 @@ export default function PlannerScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
-      {/* Header */}
+      {/*
+        Top label removed — the tab navigator already renders "플래너"
+        in its bold title slot, having a second copy below it was
+        redundant. Keep the category-management shortcut, but right-
+        align it on its own row so it remains accessible.
+      */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>{t('tabs.planner')}</Text>
-        {/* Category management shortcut */}
         <TouchableOpacity
           style={styles.headerAction}
           onPress={() => router.push('/settings/categories')}
@@ -825,19 +828,13 @@ function makeStyles(colors: ColorTokens) {
       backgroundColor: colors.background,
     },
 
-    // Header
+    // Header — title removed; this row only holds the right-side action icon.
     header: {
       flexDirection: 'row',
       alignItems: 'center',
-      height: componentHeight.navHeader,
+      justifyContent: 'flex-end',
       paddingHorizontal: spacing[4],
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
-    },
-    headerTitle: {
-      ...textStyles.h3,
-      color: colors.textPrimary,
-      flex: 1,
+      paddingVertical: spacing[2],
     },
     headerAction: {
       padding: spacing[1],
