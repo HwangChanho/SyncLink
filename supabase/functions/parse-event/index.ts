@@ -81,7 +81,7 @@ startAt/endAt이 불분명하면 현재 시각 기준 가장 가까운 미래 �
  * Validates the Authorization header and returns the user's JWT payload.
  * Throws if the token is missing or invalid.
  */
-async function verifyJwt(req: Request): Promise<void> {
+async function verifyJwt(req: Request): Promise<string> {
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
     throw new Error('Missing or malformed Authorization header');
@@ -96,8 +96,9 @@ async function verifyJwt(req: Request): Promise<void> {
     global: { headers: { Authorization: `Bearer ${jwt}` } },
   });
 
-  const { error } = await supabase.auth.getUser();
-  if (error) throw new Error(`Invalid JWT: ${error.message}`);
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) throw new Error(`Invalid JWT: ${error?.message ?? 'no user'}`);
+  return user.id;
 }
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
@@ -113,7 +114,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   try {
     // 1. Verify caller is an authenticated Supabase user
-    await verifyJwt(req);
+    const userId = await verifyJwt(req);
 
     // 2. Parse request body
     const body: AiParseRequest = await req.json();
@@ -122,6 +123,29 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (!text?.trim()) {
       return new Response(JSON.stringify({ error: 'text is required' }), {
         status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // 2.5. Server-side quota gate. Free: 5/day, Pro: 60/hour.
+    // Counts existing usage_metrics rows for this user/function in the
+    // current window. Returns 429 with a stable machine-readable reason
+    // so the client can map it to a user-facing message.
+    const adminClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+    );
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore — Deno import map resolves '../_shared/quota.ts' at deploy time.
+    const { enforceQuota } = await import('../_shared/quota.ts');
+    const quota = await enforceQuota({
+      adminClient,
+      userId,
+      functionName: 'parse-event',
+    });
+    if (!quota.allowed) {
+      return new Response(JSON.stringify({ error: quota.reason, plan: quota.plan }), {
+        status: quota.reason === 'pro_required' ? 403 : 429,
         headers: { 'Content-Type': 'application/json' },
       });
     }

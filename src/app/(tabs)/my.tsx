@@ -250,9 +250,7 @@ export default function MyScreen() {
                   style: 'destructive',
                   onPress: async () => {
                     try {
-                      console.log('[My] deleteAccount: invoking Edge Function');
                       await authService.deleteAccount();
-                      console.log('[My] deleteAccount: success; clearing local state');
                       // Clear auth store — auth-guard will pick this up too.
                       setUser(null);
                       // Belt-and-braces: force navigation to the login screen

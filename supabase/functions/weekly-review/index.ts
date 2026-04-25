@@ -92,6 +92,29 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // ── Quota gate (Free 1/day, Pro 5/hour) ───────────────────────────────────
+    const adminClientForQuota = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+    );
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore — Deno path resolves at deploy time.
+    const { enforceQuota } = await import('../_shared/quota.ts');
+    const quota = await enforceQuota({
+      adminClient: adminClientForQuota,
+      userId: user.id,
+      functionName: 'weekly-review',
+    });
+    if (!quota.allowed) {
+      return new Response(
+        JSON.stringify({ error: quota.reason, plan: quota.plan }),
+        {
+          status: quota.reason === 'pro_required' ? 403 : 429,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        },
+      );
+    }
+
     // ── Query last week's data ────────────────────────────────────────────────
 
     // Events in the previous week (own events only)

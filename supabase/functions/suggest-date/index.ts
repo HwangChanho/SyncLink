@@ -187,6 +187,35 @@ Deno.serve(async (req: Request) => {
       { global: { headers: { Authorization: authHeader } } },
     );
 
+    // ── Quota gate ────────────────────────────────────────────────────────────
+    // Free: 3/day, Pro: 30/hour. Must run before Claude is invoked.
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    if (!user) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid JWT' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+    const adminClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+    );
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore — Deno path resolves at deploy time.
+    const { enforceQuota } = await import('../_shared/quota.ts');
+    const quota = await enforceQuota({
+      adminClient, userId: user.id, functionName: 'suggest-date',
+    });
+    if (!quota.allowed) {
+      return new Response(
+        JSON.stringify({ error: quota.reason, plan: quota.plan }),
+        {
+          status: quota.reason === 'pro_required' ? 403 : 429,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        },
+      );
+    }
+
     // ── Parse request ─────────────────────────────────────────────────────────
     const body = (await req.json()) as SuggestDateRequest;
     const { spaceId, weekStart: weekStartStr } = body;
@@ -242,6 +271,25 @@ Deno.serve(async (req: Request) => {
       firstBlock?.type === 'text'
         ? firstBlock.text.trim()
         : '이번 주 좋은 시간을 찾았어요!';
+
+    // Record cost so the quota counter and the budget dashboard see it.
+    try {
+      const inputTokens = message.usage?.input_tokens ?? 0;
+      const outputTokens = message.usage?.output_tokens ?? 0;
+      const INPUT_COST = 0.80 / 1_000_000;
+      const OUTPUT_COST = 4.00 / 1_000_000;
+      await adminClient.from('usage_metrics').insert({
+        user_id: user.id,
+        function_name: 'suggest-date',
+        model: 'claude-haiku-4-5',
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        cost_usd: inputTokens * INPUT_COST + outputTokens * OUTPUT_COST,
+      });
+    } catch (metricsErr) {
+      // eslint-disable-next-line no-console
+      console.error('[suggest-date] usage_metrics insert failed:', metricsErr);
+    }
 
     const response: SuggestDateResponse = {
       suggestion: suggestionText,

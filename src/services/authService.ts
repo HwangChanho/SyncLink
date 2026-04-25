@@ -690,11 +690,14 @@ async function buildSignInResult(session: Session): Promise<SignInResult> {
 
   // The handle_new_user trigger creates a public.users row automatically.
   // This fetch should always succeed; error here indicates a migration issue.
-  const { data: userRow, error } = await supabase
+  // Cast through `unknown` because the generated Database types omit a
+  // Relationships entry for `users`, which makes the row resolve as `never`.
+  const { data, error } = await supabase
     .from('users')
     .select('*')
     .eq('id', session.user.id)
     .single();
+  const userRow = data as unknown as UserRow | null;
 
   if (error || !userRow) {
     throw new Error('사용자 프로필을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');

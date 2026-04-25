@@ -203,6 +203,27 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return json(403, { error: 'pro_required' });
     }
 
+    // ── Quota gate ─────────────────────────────────────────────────────────
+    // Pro hourly cap of 60 calls per user. The shared helper also rejects
+    // non-Pro accounts; the explicit check above stays as defense in depth
+    // and produces the friendlier error code.
+    const adminClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+    );
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore — Deno path resolves at deploy time.
+    const { enforceQuota } = await import('../_shared/quota.ts');
+    const quota = await enforceQuota({
+      adminClient, userId, functionName: 'translate-event',
+    });
+    if (!quota.allowed) {
+      return json(quota.reason === 'pro_required' ? 403 : 429, {
+        error: quota.reason ?? 'quota',
+        plan: quota.plan,
+      });
+    }
+
     // ── Load the event (enforces visibility via RLS) ──────────────────────
     const { data: event, error: eventErr } = await userClient
       .from('events')
