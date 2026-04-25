@@ -19,8 +19,6 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
-  Platform,
-  Linking,
 } from 'react-native';
 // expo-image provides better caching and performance than React Native's Image (TASK-701)
 import { Image } from 'expo-image';
@@ -30,7 +28,6 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
-import { useAppearanceStore, type ColorSchemePreference } from '@/stores/appearanceStore';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
@@ -39,6 +36,9 @@ import { useAuthStore } from '@/stores/authStore';
 import { useSpaceStore } from '@/stores/spaceStore';
 import { showAlert } from '@/lib/webAlert';
 import type { SpaceSummary } from '@/types';
+import { SettingsSection } from '@/components/my/SettingsSection';
+import { ServiceInfoSection } from '@/components/my/ServiceInfoSection';
+import { AccountSection } from '@/components/my/AccountSection';
 
 // ─── Theme options are now built inside the component using i18n ───────────────
 
@@ -50,14 +50,6 @@ export default function MyScreen() {
   // Build dynamic styles using the current theme's color tokens
   const styles = makeStyles(colors);
 
-  /** Theme options built from i18n to respond to locale changes. */
-  const THEME_OPTIONS: Array<{ value: ColorSchemePreference; label: string }> = [
-    { value: 'light',  label: t('profile.theme.light') },
-    { value: 'dark',   label: t('profile.theme.dark')  },
-    { value: 'system', label: t('profile.theme.system') },
-  ];
-
-  const { colorScheme, setColorScheme } = useAppearanceStore();
   const { plan, aiUsageToday } = useSubscriptionStore();
 
   const { user, setUser } = useAuthStore();
@@ -458,158 +450,15 @@ export default function MyScreen() {
           </View>
         )}
 
-        {/* ── Settings section ─────────────────────────────────────────── */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('common.system')}</Text>
-          <View style={styles.menuCard}>
-            {/* Notification settings */}
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => router.push('/settings/notifications')}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.menuItemText}>{t('notification.event_reminder')}</Text>
-              <Text style={styles.menuItemChevron}>›</Text>
-            </TouchableOpacity>
+        <SettingsSection />
 
-            <View style={styles.menuDivider} />
+        <ServiceInfoSection />
 
-            {/* Category management */}
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => router.push('/settings/categories')}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.menuItemText}>{t('category.edit')}</Text>
-              <Text style={styles.menuItemChevron}>›</Text>
-            </TouchableOpacity>
-
-            <View style={styles.menuDivider} />
-
-            {/*
-             * App Lock (Face ID / Touch ID) — native-only feature.
-             * Hidden on web because biometric APIs are not available in browsers.
-             */}
-            {Platform.OS !== 'web' && (
-              <>
-                <TouchableOpacity
-                  style={styles.menuItem}
-                  onPress={() => router.push('/settings/app-lock')}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.menuItemText}>{t('settings.app_lock')}</Text>
-                  <Text style={styles.menuItemChevron}>›</Text>
-                </TouchableOpacity>
-                <View style={styles.menuDivider} />
-              </>
-            )}
-
-            {/*
-              Appearance settings — dedicated sub-screen for header title
-              colour + license notices.
-            */}
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => router.push('/settings/appearance')}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.menuItemText}>화면 설정</Text>
-              <Text style={styles.menuItemChevron}>›</Text>
-            </TouchableOpacity>
-            <View style={styles.menuDivider} />
-
-            {/* Theme selector (inline Segmented Control) */}
-            <View style={styles.menuItemTheme}>
-              <Text style={styles.menuItemText}>{t('profile.theme.label')}</Text>
-              <View style={styles.themeSegmented}>
-                {THEME_OPTIONS.map(opt => (
-                  <TouchableOpacity
-                    key={opt.value}
-                    style={[
-                      styles.themeSegmentItem,
-                      colorScheme === opt.value && styles.themeSegmentItemActive,
-                    ]}
-                    onPress={() => setColorScheme(opt.value)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[
-                      styles.themeSegmentLabel,
-                      colorScheme === opt.value && styles.themeSegmentLabelActive,
-                    ]}>
-                      {opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* ── Service info section — app version + open-source notices. */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>서비스 정보</Text>
-          <View style={styles.menuCard}>
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => router.push('/settings/licenses')}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.menuItemText}>오픈소스 라이선스</Text>
-              <Text style={styles.menuItemChevron}>›</Text>
-            </TouchableOpacity>
-            <View style={styles.menuDivider} />
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                const subject = encodeURIComponent('[SyncLink] 개발자 문의');
-                const body = encodeURIComponent(
-                  '\n\n---\n앱 버전: 1.0.0\n플랫폼: ' + Platform.OS + '\n',
-                );
-                Linking.openURL(`mailto:cksgh0316@gmail.com?subject=${subject}&body=${body}`)
-                  .catch(() => {/* mailto unsupported */});
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.menuItemText}>개발자에게 문의</Text>
-              <Text style={styles.menuItemChevron}>›</Text>
-            </TouchableOpacity>
-            <View style={styles.menuDivider} />
-            <View style={styles.menuItem}>
-              <Text style={styles.menuItemText}>앱 버전</Text>
-              <Text style={styles.menuItemValue}>1.0.0</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* ── Account section ─────────────────────────────────────────── */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('common.user')}</Text>
-          <View style={styles.menuCard}>
-            <TouchableOpacity
-              style={[styles.menuItem, styles.logoutItem]}
-              onPress={handleLogout}
-              disabled={isLoggingOut}
-              activeOpacity={0.7}
-            >
-              {isLoggingOut ? (
-                <ActivityIndicator size="small" color={colors.error} />
-              ) : (
-                <Text style={styles.logoutText}>{t('auth.logout.button')}</Text>
-              )}
-            </TouchableOpacity>
-
-            <View style={styles.menuDivider} />
-
-            {/* Account deletion */}
-            <TouchableOpacity
-              style={[styles.menuItem, styles.logoutItem]}
-              onPress={handleDeleteAccount}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.deleteAccountText}>{t('auth.delete_account.button')}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <AccountSection
+          isLoggingOut={isLoggingOut}
+          onLogout={handleLogout}
+          onDeleteAccount={handleDeleteAccount}
+        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -899,84 +748,6 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   addSpaceText: {
     ...textStyles.label,
     color: colors.textSecondary,
-  },
-
-  // ── Account / menu card ──────────────────────────────────────────────────
-  menuCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
-  },
-  menuItem: {
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[4],
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  menuItemText: {
-    ...textStyles.labelLg,
-    color: colors.textPrimary,
-  },
-  menuItemChevron: {
-    fontSize: 22,
-    color: colors.textTertiary,
-    fontWeight: '300',
-  },
-  menuItemValue: {
-    ...textStyles.body,
-    color: colors.textSecondary,
-  },
-  menuDivider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginHorizontal: spacing[4],
-  },
-
-  // Theme segmented control row
-  menuItemTheme: {
-    paddingHorizontal: spacing[4],
-    paddingVertical:   spacing[3],
-    flexDirection:     'row',
-    alignItems:        'center',
-    justifyContent:    'space-between',
-  },
-  themeSegmented: {
-    flexDirection:   'row',
-    borderWidth:     1,
-    borderColor:     colors.border,
-    borderRadius:    radius.lg,
-    overflow:        'hidden',
-  },
-  themeSegmentItem: {
-    paddingHorizontal: spacing[3],
-    paddingVertical:   spacing[1.5],
-    backgroundColor:   colors.surface,
-  },
-  themeSegmentItemActive: {
-    backgroundColor: colors.primary,
-  },
-  themeSegmentLabel: {
-    ...textStyles.caption,
-    color: colors.textSecondary,
-  },
-  themeSegmentLabelActive: {
-    color: colors.textInverse,
-    fontWeight: '600',
-  },
-
-  logoutItem: {
-    justifyContent: 'center',
-  },
-  logoutText: {
-    ...textStyles.labelLg,
-    color: colors.error,
-  },
-  deleteAccountText: {
-    ...textStyles.labelLg,
-    color: colors.textTertiary,
   },
 
   // ── Subscription banner ───────────────────────────────────────────────────

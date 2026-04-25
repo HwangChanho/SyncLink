@@ -20,7 +20,7 @@
  * the time grid, so they never occlude timed events.
  */
 
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -32,6 +32,7 @@ import {
 import type { EventSummary } from '@/types';
 import { EventBlock } from './EventBlock';
 import { useColors } from '@/hooks/useColors';
+import { useTranslatedTitles } from '@/hooks/useTranslatedTitles';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 
@@ -268,6 +269,21 @@ export function WeekView({
     }),
   ).current;
 
+  // Sprint 19 TASK-1907 — collect every event ID visible across the 7-day
+  // grid so a single cache-only SELECT yields translations for the whole
+  // view (Pro users on a non-default locale).
+  const visibleEventIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const day of weekDays) {
+      const k = toDateKey(day);
+      const list = eventsByDate[k];
+      if (!list) continue;
+      for (const e of list) ids.push(e.id);
+    }
+    return ids;
+  }, [weekDays, eventsByDate]);
+  const translatedTitles = useTranslatedTitles(visibleEventIds);
+
   // Determine if any day this week has all-day events OR planner todos
   // (the strip now hosts both so the user sees every day-scoped item in
   // one place).
@@ -334,7 +350,7 @@ export function WeekView({
                     style={[styles.allDayChip, { backgroundColor: evt.color ?? colors.primary }]}
                   >
                     <Text style={styles.allDayChipText} numberOfLines={1}>
-                      {evt.title}
+                      {translatedTitles.get(evt.id) ?? evt.title}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -431,19 +447,23 @@ export function WeekView({
                     },
                   ]}
                 >
-                  {layouts.map((lay) => (
-                    <EventBlock
-                      key={lay.event.id}
-                      event={lay.event}
-                      topOffset={lay.topOffset}
-                      height={lay.height}
-                      widthFraction={lay.widthFraction}
-                      leftFraction={lay.leftFraction}
-                      onPress={onEventPress}
-                      columnWidth={columnWidth}
-                      {...(onReschedule ? { onReschedule } : {})}
-                    />
-                  ))}
+                  {layouts.map((lay) => {
+                    const tt = translatedTitles.get(lay.event.id);
+                    return (
+                      <EventBlock
+                        key={lay.event.id}
+                        event={lay.event}
+                        topOffset={lay.topOffset}
+                        height={lay.height}
+                        widthFraction={lay.widthFraction}
+                        leftFraction={lay.leftFraction}
+                        onPress={onEventPress}
+                        columnWidth={columnWidth}
+                        {...(tt ? { translatedTitle: tt } : {})}
+                        {...(onReschedule ? { onReschedule } : {})}
+                      />
+                    );
+                  })}
                 </View>
               );
             })}

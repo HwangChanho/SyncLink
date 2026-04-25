@@ -13,12 +13,13 @@
  * simultaneous events appear side by side within the single column.
  */
 
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { EventSummary } from '@/types';
 import { EventBlock } from './EventBlock';
 import { useColors } from '@/hooks/useColors';
+import { useTranslatedTitles } from '@/hooks/useTranslatedTitles';
 import { spacing } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 
@@ -150,6 +151,10 @@ export function DayView({
   const allDayEvents = events.filter((e) => e.allDay);
   const timedEvents = layouts.filter((l) => !l.event.allDay);
 
+  // Sprint 19 TASK-1907 — cache-only translated titles for the day's events.
+  const visibleEventIds = useMemo(() => events.map((e) => e.id), [events]);
+  const translatedTitles = useTranslatedTitles(visibleEventIds);
+
   return (
     <View style={styles.container}>
       {/* All-day events banner (shown when there are all-day events or
@@ -168,7 +173,7 @@ export function DayView({
                   style={[styles.allDayTitle, { color: evt.color }]}
                   numberOfLines={1}
                 >
-                  {evt.title}
+                  {translatedTitles.get(evt.id) ?? evt.title}
                 </Text>
               </View>
             ))}
@@ -248,17 +253,21 @@ export function DayView({
               ))}
 
               {/* Timed event blocks */}
-              {timedEvents.map((lay) => (
-                <EventBlock
-                  key={lay.event.id}
-                  event={lay.event}
-                  topOffset={lay.topOffset}
-                  height={lay.height}
-                  widthFraction={lay.widthFraction}
-                  leftFraction={lay.leftFraction}
-                  onPress={onEventPress}
-                />
-              ))}
+              {timedEvents.map((lay) => {
+                const tt = translatedTitles.get(lay.event.id);
+                return (
+                  <EventBlock
+                    key={lay.event.id}
+                    event={lay.event}
+                    topOffset={lay.topOffset}
+                    height={lay.height}
+                    widthFraction={lay.widthFraction}
+                    leftFraction={lay.leftFraction}
+                    onPress={onEventPress}
+                    {...(tt ? { translatedTitle: tt } : {})}
+                  />
+                );
+              })}
             </View>
           </ScrollView>
         </View>

@@ -21,6 +21,7 @@ import { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import type { EventSummary } from '@/types';
 import { useColors } from '@/hooks/useColors';
+import { useTranslatedTitles } from '@/hooks/useTranslatedTitles';
 import { spacing } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 
@@ -152,6 +153,24 @@ export function MonthView({
 
   const today = new Date();
 
+  // Sprint 19 TASK-1907 — translated titles for events visible in this
+  // month (Pro + non-default locale only). Cache-only: we never invoke the
+  // Edge Function for list views. Collect IDs across the visible grid so a
+  // single SELECT fans out to all month cells.
+  const visibleEventIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const week of weeks) {
+      for (const d of week) {
+        const k = toDateKey(d);
+        const list = eventsByDate[k];
+        if (!list) continue;
+        for (const e of list) ids.push(e.id);
+      }
+    }
+    return ids;
+  }, [weeks, eventsByDate]);
+  const translatedTitles = useTranslatedTitles(visibleEventIds);
+
   return (
     <View style={styles.container}>
       {/* Day-of-week header */}
@@ -181,7 +200,12 @@ export function MonthView({
             // Events come first (chronological priority), then todos.
             const dayItems: MonthViewItem[] = [
               ...dayEvents.map((e): MonthViewItem => ({
-                id: e.id, title: e.title, color: e.color, kind: 'event',
+                id: e.id,
+                // Prefer the cached translation when one is available — falls
+                // back to the original title when not Pro / locale matches.
+                title: translatedTitles.get(e.id) ?? e.title,
+                color: e.color,
+                kind: 'event',
               })),
               ...dayTodos,
             ];

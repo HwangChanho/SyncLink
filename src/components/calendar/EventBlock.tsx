@@ -61,6 +61,12 @@ interface EventBlockProps {
    * horizontal snapping (DayView case).
    */
   columnWidth?: number;
+  /**
+   * Optional pre-resolved translated title (Sprint 19 TASK-1907). Parent
+   * looks this up via useTranslatedTitles for the whole visible range so
+   * we don't fetch per-block. Falls back to event.title when undefined.
+   */
+  translatedTitle?: string;
 }
 
 export function EventBlock({
@@ -72,6 +78,7 @@ export function EventBlock({
   onPress,
   onReschedule,
   columnWidth = 0,
+  translatedTitle,
 }: EventBlockProps) {
   const blockHeight = Math.max(height, MIN_HEIGHT);
   const showSubtitle = blockHeight >= 38;
@@ -181,7 +188,7 @@ export function EventBlock({
       ]}
     >
       <Text style={styles.title} numberOfLines={showSubtitle ? 2 : 1}>
-        {event.title}
+        {translatedTitle ?? event.title}
       </Text>
     </Animated.View>
   );
