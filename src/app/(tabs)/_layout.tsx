@@ -34,13 +34,12 @@ export default function TabLayout() {
       screenOptions={{
         // Show the header so the LanguageButton is always accessible.
         headerShown: true,
-        // Compact header. expo-router defaults to a 96 pt large-title
-        // header on iOS which left a noticeable empty band between the
-        // title and the first content row. Force a small fixed height
-        // and disable large-title mode so the tab body sits flush.
+        // Default header height — forcing a smaller `height` was clipping
+        // the calendar's view-mode tabs (월/주/일) below the status bar
+        // on iOS. Spacing between the title and content is now handled
+        // by SafeAreaView edges + headerTitleContainerStyle padding.
         headerStyle: {
           backgroundColor: colors.background,
-          height: Platform.OS === 'ios' ? 44 : 56,
         },
         // Bias the title to the leading edge so it reads as a section
         // anchor rather than a centered nav-bar title — visually similar

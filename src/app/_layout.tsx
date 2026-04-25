@@ -34,6 +34,7 @@ import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { useAppLockStore } from '@/stores/appLockStore';
 import { authenticate, isBiometricAvailable } from '@/services/appLockService';
 import { verifyPin } from '@/services/pinLockService';
+import { useIdleLogout } from '@/hooks/useIdleLogout';
 import { PinPad } from '@/components/common/PinPad';
 import { OfflineBanner } from '@/components/common/OfflineBanner';
 // Sprint 14 TASK-1402/1406 — AdMob SDK initialization after ATT consent.
@@ -291,6 +292,12 @@ export default function RootLayout() {
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   useAuthGuard();
+
+  // Web-only: sign the user out after 30 minutes of inactivity. Native
+  // sessions stay live because the OS lock screen + in-app PIN already
+  // protect the device; the threat model on the web (shared computers)
+  // is what makes idle-logout worth the friction.
+  useIdleLogout();
 
   // TASK-1301: Restore the user-persisted language from AsyncStorage on every startup.
   // initI18n() is async so we call it in a useEffect; i18next was already initialised
