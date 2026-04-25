@@ -25,6 +25,7 @@ import {
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
@@ -369,6 +370,32 @@ export default function MyScreen() {
           {user.email && (
             <Text style={styles.email}>{user.email}</Text>
           )}
+
+          {/* Plan badge — sits below the email so the user always knows
+              which tier they're on without scrolling to the subscription
+              banner. Pro shows a filled chip; Free is a subtle outline. */}
+          <View
+            style={[
+              styles.planBadge,
+              plan === 'pro'
+                ? { backgroundColor: colors.primary, borderColor: colors.primary }
+                : { backgroundColor: 'transparent', borderColor: colors.border },
+            ]}
+          >
+            <Ionicons
+              name={plan === 'pro' ? 'star' : 'star-outline'}
+              size={12}
+              color={plan === 'pro' ? colors.textInverse : colors.textSecondary}
+            />
+            <Text
+              style={[
+                styles.planBadgeText,
+                { color: plan === 'pro' ? colors.textInverse : colors.textSecondary },
+              ]}
+            >
+              {plan === 'pro' ? 'SyncLink Pro' : 'SyncLink Free'}
+            </Text>
+          </View>
         </View>
 
         {/* ── My Spaces section ───────────────────────────────────────── */}
@@ -747,6 +774,20 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   email: {
     ...textStyles.bodySm,
     color: colors.textTertiary,
+  },
+  planBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: spacing[1],
+    paddingHorizontal: spacing[3],
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  planBadgeText: {
+    ...textStyles.caption,
+    fontWeight: '600',
   },
 
   // ── Sections ─────────────────────────────────────────────────────────────

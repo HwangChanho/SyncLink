@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
+  Keyboard,
   Modal,
   Platform,
   Pressable,
@@ -85,6 +85,16 @@ export function TodoEditSheet({
 
   /** Sub-sheet visibility for category picker. */
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  /** Imperative keyboard height — Modal-hosted KeyboardAvoidingView is
+   * unreliable on iOS, so we lift the sheet by the keyboard amount. */
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  useEffect(() => {
+    const show = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hide = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(show, (e) => setKeyboardHeight(e.endCoordinates.height));
+    const hideSub = Keyboard.addListener(hide, () => setKeyboardHeight(0));
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, []);
 
   // Sync form state whenever the given todo changes (opens / switches).
   useEffect(() => {
@@ -163,13 +173,10 @@ export function TodoEditSheet({
       >
         <Pressable style={styles.overlay} onPress={handleCloseWithSave}>
           <Pressable
-            style={styles.sheetWrapper}
+            style={[styles.sheetWrapper, { paddingBottom: keyboardHeight }]}
             onPress={(e) => e.stopPropagation()}
           >
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-              style={styles.sheet}
-            >
+            <View style={styles.sheet}>
               {/* Grab handle */}
               <View style={styles.handle} />
 
@@ -254,7 +261,7 @@ export function TodoEditSheet({
                   multiline
                 />
               </ScrollView>
-            </KeyboardAvoidingView>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>

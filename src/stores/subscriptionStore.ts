@@ -179,26 +179,10 @@ function persist(state: Partial<SubscriptionState>): void {
   });
 }
 
-/**
- * Push the latest plan value into users.subscription_plan so server-side
- * gating (translate-event Edge Function, future moderation tools) sees
- * the same source of truth as the client. Best-effort — never throws.
- */
-async function mirrorPlanToServer(plan: SubscriptionPlan): Promise<void> {
-  try {
-    // Late require avoids a circular import between subscriptionStore and
-    // anything that pulls in supabase (which itself can pull this file).
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { supabase } = require('@/lib/supabase') as typeof import('@/lib/supabase');
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    await (supabase.from('users') as any)
-      .update({ subscription_plan: plan })
-      .eq('id', user.id);
-  } catch {
-    // Network or auth not ready — local state is still correct.
-  }
-}
+// (mirrorPlanToServer removed — server-authoritative plan now comes from
+//  the RevenueCat webhook + LEAD admin tooling. Migration 016's trigger
+//  rejects client-side writes to subscription_plan / is_admin /
+//  ai_ad_credits anyway, so calling it would only generate noise.)
 
 // ─── Store ────────────────────────────────────────────────────────────────────
 
@@ -320,11 +304,14 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
   setPlan: (plan: SubscriptionPlan) => {
     set({ plan });
     persist({ ...get(), plan });
-    // Mirror the client-side plan into the users table so server-side
-    // gating (e.g. translate-event Edge Function checks
-    // users.subscription_plan === 'pro') works without an extra round
-    // trip. Fire-and-forget — the local state is already updated.
-    void mirrorPlanToServer(plan);
+    // NOTE: we used to mirror this into users.subscription_plan from the
+    // client. That path is now blocked by the
+    // protect_user_privileged_columns trigger (migration 016) — the
+    // server-authoritative source is the RevenueCat → Supabase webhook
+    // (Sprint 18) and the LEAD's manual SQL update via Supabase Studio.
+    // The local plan flag is still useful for instant UX after a
+    // RevenueCat purchase; the next session refresh from the server
+    // reconciles authoritative state.
   },
 
   hydrate: async () => {

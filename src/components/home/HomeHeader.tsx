@@ -9,9 +9,11 @@
  */
 
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
+import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { useColors } from '@/hooks/useColors';
 import type { ColorTokens } from '@/hooks/useColors';
 import { spacing } from '@/constants/spacing';
@@ -39,6 +41,7 @@ export function HomeHeader() {
   const styles    = makeStyles(colors);
   const user      = useAuthStore(s => s.user);
   const nickname  = user?.nickname ?? t('common.user');
+  const plan      = useSubscriptionStore(s => s.plan);
 
   /** Returns a time-of-day greeting using i18n. */
   function getGreeting(): string {
@@ -53,19 +56,25 @@ export function HomeHeader() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.greeting}>
-        {greeting},{' '}
-        {/* Tapping the nickname jumps to the My tab so the user can edit
-            it or manage their profile without hunting through menus. */}
-        <Text
-          style={styles.name}
-          onPress={() => router.push('/(tabs)/my')}
-          suppressHighlighting
-        >
-          {nickname}
+      <View style={styles.greetingRow}>
+        <Text style={styles.greeting}>
+          {greeting},{' '}
+          <Text
+            style={styles.name}
+            onPress={() => router.push('/(tabs)/my')}
+            suppressHighlighting
+          >
+            {nickname}
+          </Text>
+          님
         </Text>
-        님
-      </Text>
+        {plan === 'pro' && (
+          <View style={styles.proBadge}>
+            <Ionicons name="star" size={10} color={colors.textInverse} />
+            <Text style={styles.proBadgeText}>PRO</Text>
+          </View>
+        )}
+      </View>
       <TouchableOpacity
         activeOpacity={0.6}
         onPress={() => router.push('/(tabs)')}
@@ -90,6 +99,27 @@ function makeStyles(colors: ColorTokens) {
       paddingHorizontal: spacing[4],
       paddingTop:        spacing[4],
       paddingBottom:     spacing[2],
+    },
+    greetingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing[2],
+      flexWrap: 'wrap',
+    },
+    proBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 999,
+      backgroundColor: colors.primary,
+    },
+    proBadgeText: {
+      color: colors.textInverse,
+      fontSize: 10,
+      fontWeight: '700',
+      letterSpacing: 0.5,
     },
     greeting: {
       fontSize:   fontSize.xl,

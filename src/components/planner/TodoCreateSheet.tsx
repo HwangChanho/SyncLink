@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
+  Keyboard,
   Modal,
   Platform,
   Pressable,
@@ -65,6 +65,20 @@ export function TodoCreateSheet({
 
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
+  /**
+   * Live keyboard height. Modal-hosted KeyboardAvoidingView is unreliable
+   * on iOS — the inputs stayed under the keyboard. Tracking the height
+   * imperatively via Keyboard events and lifting the sheet by that
+   * amount works on both platforms.
+   */
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  useEffect(() => {
+    const show = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hide = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(show, (e) => setKeyboardHeight(e.endCoordinates.height));
+    const hideSub = Keyboard.addListener(hide, () => setKeyboardHeight(0));
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, []);
 
   // Reset form every time the sheet opens.
   useEffect(() => {
@@ -116,11 +130,11 @@ export function TodoCreateSheet({
         onRequestClose={onClose}
       >
         <Pressable style={styles.overlay} onPress={onClose}>
-          <Pressable style={styles.sheetWrapper} onPress={(e) => e.stopPropagation()}>
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-              style={styles.sheet}
-            >
+          <Pressable
+            style={[styles.sheetWrapper, { paddingBottom: keyboardHeight }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.sheet}>
               <View style={styles.handle} />
 
               <View style={styles.header}>
@@ -221,7 +235,7 @@ export function TodoCreateSheet({
                   multiline
                 />
               </ScrollView>
-            </KeyboardAvoidingView>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
