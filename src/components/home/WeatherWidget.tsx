@@ -77,7 +77,31 @@ export function WeatherWidget() {
         getCurrentWeather(lat, lon),
         getCurrentAirQuality(lat, lon),
       ]);
-      setWeather(data);
+      // OpenWeatherMap returns the nearest weather station's locality which
+      // in Korea often resolves to a small dong (e.g. "Pungnap-tong") even
+      // when the user is several kilometres away. Apple/Google's native
+      // reverse geocoder is much closer to user intuition, so override the
+      // city label using expo-location when available.
+      let displayCity = data.city;
+      try {
+        const places = await Location.reverseGeocodeAsync({
+          latitude: lat,
+          longitude: lon,
+        });
+        const top = places[0];
+        if (top) {
+          // Prefer subregion (예: 강남구), then city (예: 서울특별시), then
+          // region. Strip "특별시"/"광역시" so the chip stays compact.
+          const candidate =
+            top.subregion ?? top.city ?? top.region ?? top.district ?? null;
+          if (candidate) {
+            displayCity = candidate.replace(/(특별시|광역시|특별자치시|특별자치도)$/, '');
+          }
+        }
+      } catch {
+        // Fallback to OWM's city — better than nothing.
+      }
+      setWeather({ ...data, city: displayCity });
       setAir(airData);
     } catch {
       setHasError(true);
