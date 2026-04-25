@@ -127,45 +127,37 @@ export default function LoginScreen() {
             }
           </TouchableOpacity>
 
-          {/* Kakao — iOS & Android only (not available on web: TASK-1305).
-              On web, Supabase does not natively support Kakao as an OAuth provider.
-              We hide the button and show an informational notice instead. */}
-          {Platform.OS !== 'web' ? (
-            <TouchableOpacity
-              style={[styles.button, styles.kakaoButton, isLoading && styles.disabled]}
-              onPress={() => handleSignIn('kakao')}
-              disabled={isLoading}
-              accessibilityLabel="카카오로 로그인"
-            >
-              {loading === 'kakao'
-                ? <ActivityIndicator color="#3A1D1D" />
-                : (
-                  <View style={styles.buttonRow}>
-                    {/*
-                     * Kakao chat bubble — Ionicons' `chatbubble` shape is close
-                     * to the official KakaoTalk speech-bubble mark. Rendered in
-                     * the brand's dark-brown ink colour so it reads against the
-                     * Kakao-yellow button background without bundling a PNG.
-                     */}
-                    <Ionicons
-                      name="chatbubble"
-                      size={20}
-                      color="#3A1D1D"
-                      style={styles.buttonIcon}
-                    />
-                    <Text style={[styles.buttonText, styles.kakaoText]}>{t('auth.login.kakao')}</Text>
-                  </View>
-                )
-              }
-            </TouchableOpacity>
-          ) : (
-            /* Web: show a subtle notice that Kakao login is app-only */
-            <View style={styles.kakaoWebNotice}>
-              <Text style={styles.kakaoWebNoticeText}>
-                {t('reminder.kakao_web_notice')}
-              </Text>
-            </View>
-          )}
+          {/*
+            Kakao — iOS, Android and web. The custom Edge Function
+            (`kakao-auth`) supports both deep-link and HTTPS return paths;
+            authService.signInWithKakao routes the appropriate appReturn
+            based on Platform.OS. On web the browser pops the Kakao
+            consent page and bounces back to `${origin}/auth/callback`.
+            For local web testing (`npm run web`) the LEAD must register
+            `http://localhost:8081/auth/callback` as a redirect URI in
+            the Kakao Developer Console.
+          */}
+          <TouchableOpacity
+            style={[styles.button, styles.kakaoButton, isLoading && styles.disabled]}
+            onPress={() => handleSignIn('kakao')}
+            disabled={isLoading}
+            accessibilityLabel="카카오로 로그인"
+          >
+            {loading === 'kakao'
+              ? <ActivityIndicator color="#3A1D1D" />
+              : (
+                <View style={styles.buttonRow}>
+                  <Ionicons
+                    name="chatbubble"
+                    size={20}
+                    color="#3A1D1D"
+                    style={styles.buttonIcon}
+                  />
+                  <Text style={[styles.buttonText, styles.kakaoText]}>{t('auth.login.kakao')}</Text>
+                </View>
+              )
+            }
+          </TouchableOpacity>
 
           {/* Apple — iOS only */}
           {Platform.OS === 'ios' && (
