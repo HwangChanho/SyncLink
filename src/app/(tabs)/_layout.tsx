@@ -34,13 +34,18 @@ export default function TabLayout() {
       screenOptions={{
         // Show the header so the LanguageButton is always accessible.
         headerShown: true,
+        // Compact header. expo-router defaults to a 96 pt large-title
+        // header on iOS which left a noticeable empty band between the
+        // title and the first content row. Force a small fixed height
+        // and disable large-title mode so the tab body sits flush.
         headerStyle: {
           backgroundColor: colors.background,
-          // Tighter header so the bold title sits closer to the content.
-          // 42px is the minimum that still looks balanced with our 22pt
-          // title; anything lower clips the descender glyphs.
-          height: 44,
+          height: Platform.OS === 'ios' ? 44 : 56,
         },
+        // Bias the title to the leading edge so it reads as a section
+        // anchor rather than a centered nav-bar title — visually similar
+        // to Apple's own "Inbox" / "Today" patterns.
+        headerTitleAlign: 'left',
         headerTintColor: colors.textPrimary,
         headerShadowVisible: false,
         // Larger, bolder top title as requested for clearer section anchoring.
@@ -49,6 +54,12 @@ export default function TabLayout() {
           fontSize: 22,
           fontWeight: '700',
           color: headerTitleHex,
+        },
+        // Pull the title block up against the top edge so we don't get
+        // any baked-in vertical padding from the navigation header.
+        headerTitleContainerStyle: {
+          paddingVertical: 0,
+          marginVertical: 0,
         },
         // Language picker button appears on every tab's top-right header.
         headerRight: () => <LanguageButton />,
