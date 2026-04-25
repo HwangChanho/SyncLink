@@ -11,8 +11,7 @@
     "test": "jest --watchAll",
     "test:ci": "jest --ci --passWithNoTests --forceExit",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src --ext .ts,.tsx --max-warnings 0",
-    "eas-build-pre-install": "sudo gem install xcodeproj -v '~> 1.27' && sudo gem install cocoapods -v '~> 1.16'"
+    "lint": "eslint src --ext .ts,.tsx --max-warnings 0"
   },
   "dependencies": {
     "@gorhom/bottom-sheet": "^5.2.10",
