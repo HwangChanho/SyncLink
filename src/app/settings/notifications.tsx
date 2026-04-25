@@ -23,9 +23,15 @@ import {
   Switch,
   ActivityIndicator,
   Alert,
+  Platform,
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
+import {
+  requestWebPushPermission,
+  getWebPushPermission,
+  type WebPushRegistrationResult,
+} from '@/hooks/useWebPush';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -87,6 +93,46 @@ export default function NotificationsSettingsScreen() {
 
   /** True while saving a preference change to the server. */
   const [savingKey, setSavingKey] = useState<keyof NotificationPreferences | null>(null);
+
+  // ── Web push permission state ────────────────────────────────────────────
+  // On web only: track whether the browser has granted notification access.
+  // Drives the "알림 활성화" CTA visibility below the toggles.
+  const [webPushPerm, setWebPushPerm] = useState<NotificationPermission | 'unsupported'>('unsupported');
+  const [webPushBusy, setWebPushBusy] = useState(false);
+  useEffect(() => {
+    if (Platform.OS === 'web') setWebPushPerm(getWebPushPermission());
+  }, []);
+
+  /**
+   * Click-to-enable handler. Browsers reject Notification.requestPermission
+   * unless invoked from a real user gesture, so this MUST run on press —
+   * not on mount or in an effect.
+   */
+  const handleEnableWebPush = useCallback(async () => {
+    setWebPushBusy(true);
+    try {
+      const result: WebPushRegistrationResult = await requestWebPushPermission();
+      setWebPushPerm(getWebPushPermission());
+      if (result === 'granted') {
+        Alert.alert('알림 활성화 완료', '이제 이 브라우저로 알림을 받습니다.');
+      } else if (result === 'denied') {
+        Alert.alert(
+          '알림 권한 필요',
+          '브라우저에서 알림이 차단되어 있습니다. 주소창 왼쪽 자물쇠 아이콘 → 알림 → 허용으로 변경해 주세요.',
+        );
+      } else if (result === 'no-user') {
+        Alert.alert('로그인 필요', '먼저 로그인 후 다시 시도해 주세요.');
+      } else if (result === 'not-configured') {
+        Alert.alert('설정 누락', 'VAPID 공개키가 설정되지 않았습니다 (관리자 문의).');
+      } else if (result === 'unsupported') {
+        Alert.alert('미지원 브라우저', '이 브라우저는 웹 푸시를 지원하지 않습니다.');
+      } else {
+        Alert.alert('등록 실패', '알림 등록 중 오류가 발생했습니다. 콘솔을 확인해 주세요.');
+      }
+    } finally {
+      setWebPushBusy(false);
+    }
+  }, []);
 
   // Keep local state in sync if user profile is updated externally
   useEffect(() => {
@@ -195,6 +241,34 @@ export default function NotificationsSettingsScreen() {
           ))}
         </View>
 
+        {/*
+          Web-only: explicit "알림 활성화" CTA. Browsers (especially Safari)
+          reject Notification.requestPermission() unless triggered from a
+          user gesture, so we can't auto-prompt on mount — the user has to
+          tap this button.
+        */}
+        {Platform.OS === 'web' && webPushPerm !== 'unsupported' && webPushPerm !== 'granted' && (
+          <TouchableOpacity
+            style={styles.webPushCta}
+            onPress={() => { void handleEnableWebPush(); }}
+            disabled={webPushBusy}
+            activeOpacity={0.85}
+          >
+            {webPushBusy
+              ? <ActivityIndicator color={colors.textInverse} />
+              : (
+                <Text style={styles.webPushCtaText}>
+                  {webPushPerm === 'denied' ? '브라우저에서 알림 차단됨' : '이 브라우저에 알림 활성화'}
+                </Text>
+              )}
+          </TouchableOpacity>
+        )}
+        {Platform.OS === 'web' && webPushPerm === 'granted' && (
+          <Text style={[styles.note, { color: colors.success ?? colors.primary }]}>
+            ✓ 이 브라우저는 알림이 활성화되어 있습니다.
+          </Text>
+        )}
+
         {/* Info note */}
         <Text style={styles.note}>
           알림을 받으려면 기기의 알림 권한이 허용되어 있어야 합니다.
@@ -302,6 +376,20 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     color:     colors.textTertiary,
     textAlign: 'center',
     paddingHorizontal: spacing[2],
+  },
+
+  // ── Web push CTA ─────────────────────────────────────────────────────────
+  webPushCta: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing[3],
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  webPushCtaText: {
+    ...textStyles.labelLg,
+    color: colors.textInverse,
+    fontWeight: '600',
   },
   });
 }

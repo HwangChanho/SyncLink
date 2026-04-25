@@ -20,14 +20,24 @@ import {
   useAppearanceStore,
   HEADER_TITLE_COLOR_HEX,
 } from '@/stores/appearanceStore';
+import { contrastingTextColor } from '@/lib/colorContrast';
 
 export default function TabLayout() {
   // Resolve active theme colors for dark mode support (TASK-700)
   const colors = useColors();
   const { t } = useTranslation();
   const headerTitleColor = useAppearanceStore((s) => s.headerTitleColor);
-  const headerTitleHex =
-    HEADER_TITLE_COLOR_HEX[headerTitleColor] ?? colors.textPrimary;
+
+  // The colour the user picked in /settings/appearance is now applied as
+  // the **header background** (the strip surrounding the title). When the
+  // option is "default" we fall back to the theme background so dark mode
+  // still looks native. The title + back-chevron + LanguageButton tint use
+  // an automatically computed contrasting colour so any swatch stays legible.
+  const accentHex = HEADER_TITLE_COLOR_HEX[headerTitleColor];
+  const headerBg     = accentHex ?? colors.background;
+  const headerFg     = accentHex
+    ? contrastingTextColor(accentHex)
+    : colors.textPrimary;
 
   return (
     <Tabs
@@ -39,20 +49,21 @@ export default function TabLayout() {
         // on iOS. Spacing between the title and content is now handled
         // by SafeAreaView edges + headerTitleContainerStyle padding.
         headerStyle: {
-          backgroundColor: colors.background,
+          backgroundColor: headerBg,
         },
         // Bias the title to the leading edge so it reads as a section
         // anchor rather than a centered nav-bar title — visually similar
         // to Apple's own "Inbox" / "Today" patterns.
         headerTitleAlign: 'left',
-        headerTintColor: colors.textPrimary,
+        // headerTintColor drives back chevron + headerRight icon colour;
+        // matching it to the title keeps the bar visually unified.
+        headerTintColor: headerFg,
         headerShadowVisible: false,
-        // Larger, bolder top title as requested for clearer section anchoring.
-        // Colour is user-selectable via /settings/appearance.
+        // Larger, bolder top title with auto-contrast against the header bg.
         headerTitleStyle: {
           fontSize: 22,
           fontWeight: '700',
-          color: headerTitleHex,
+          color: headerFg,
         },
         // Pull the title block up against the top edge so we don't get
         // any baked-in vertical padding from the navigation header.
