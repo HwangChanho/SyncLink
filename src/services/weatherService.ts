@@ -18,6 +18,8 @@
  * TASK-903 (Sprint 9)
  */
 
+import i18next from 'i18next';
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 /** Weather data returned to UI components. */
@@ -126,12 +128,10 @@ function mapConditionToIcon(conditionId: number, isDay: boolean): string {
 export async function getCurrentWeather(lat: number, lon: number): Promise<WeatherData> {
   const key = getApiKey();
 
-  // OpenWeatherMap language codes: ko / en / ja / zh_cn
-  // Map our i18next locale → OWM language. Dynamic import avoids a circular
-  // dep with error logging that also touches supabase.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const i18n = require('@/lib/i18n').default as { language?: string };
-  const lang = mapLangForOWM(i18n?.language ?? 'en');
+  // OpenWeatherMap language codes: ko / en / ja / zh_cn.
+  // Read directly from the i18next package — `i18next.language` reflects
+  // whatever locale our /lib/i18n bootstrapped, with no dependency cycle.
+  const lang = mapLangForOWM(i18next.language ?? 'en');
 
   const params = new URLSearchParams({
     lat:   lat.toString(),

@@ -30,6 +30,7 @@ import {
   StyleSheet,
   Keyboard,
 } from 'react-native';
+import i18next from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
@@ -150,10 +151,9 @@ export function PlaceSearchInput({
       setIsSearching(true);
       try {
         // Pass current i18n language so Google returns localized place names.
-        // Dynamic require avoids a circular dep with logging that also imports supabase.
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const i18n = require('@/lib/i18n').default as { language?: string };
-        const lang = mapLangForGooglePlaces(i18n?.language ?? 'ko');
+        // i18next package exposes the active locale directly, so we don't
+        // need a dynamic require to dodge module-load order issues.
+        const lang = mapLangForGooglePlaces(i18next.language ?? 'ko');
         const results = await searchPlaces(debouncedQuery, sessionTokenRef.current, lang);
         if (!cancelled) {
           setSuggestions(results);
