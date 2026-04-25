@@ -24,6 +24,10 @@
     "production": {
       "autoIncrement": true,
       "channel": "production",
+      "ios": {
+        "image": "latest",
+        "cocoapods": "1.16.2"
+      },
       "env": {
         "EXPO_PUBLIC_APP_ENV": "production"
       }

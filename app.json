@@ -49,7 +49,18 @@
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.USE_BIOMETRIC",
-        "android.permission.USE_FINGERPRINT"
+        "android.permission.USE_FINGERPRINT",
+        "com.google.android.gms.permission.AD_ID",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "com.google.android.gms.permission.AD_ID"
       ]
     },
     "web": {
@@ -131,6 +142,10 @@
         "projectId": "c9ef6634-3221-4503-9ca0-3dee0e53ac45"
       }
     },
-    "owner": "danielhwang"
+    "owner": "danielhwang",
+    "runtimeVersion": "1.0.0",
+    "updates": {
+      "url": "https://u.expo.dev/c9ef6634-3221-4503-9ca0-3dee0e53ac45"
+    }
   }
 }

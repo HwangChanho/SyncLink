@@ -76,3 +76,6 @@ docs/
 
 expo-env.d.ts
 # @end expo-cli
+
+# Local credential store — see credentials/README.md (Sprint 19)
+credentials/
