@@ -25,3 +25,10 @@ verify_jwt = false
 # the same request can also enforce Pro-tier subscription gating.
 # Sprint 15 TASK-1501.
 verify_jwt = false
+
+[functions.revenuecat-webhook]
+# RevenueCat → server webhook. Auth is a fixed shared secret in the
+# Authorization header (configured in RevenueCat dashboard, stored in
+# `supabase secrets` as REVENUECAT_WEBHOOK_SECRET). No Supabase JWT.
+# Sprint 18.
+verify_jwt = false

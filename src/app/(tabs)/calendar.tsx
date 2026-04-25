@@ -23,6 +23,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, PanResponder, Pressable, StyleSheet,
   Modal, TouchableOpacity, Text,
+  Animated, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -334,6 +335,37 @@ export default function CalendarScreen() {
   const viewModeRef = useRef(viewMode);
   useEffect(() => { viewModeRef.current = viewMode; }, [viewMode]);
 
+  // ─── Swipe transition animation ───────────────────────────────────────────
+  // Animated.Value drives a horizontal translate on the calendar body so
+  // pan motion is visible in real time, and a quick spring-back snaps the
+  // committed period change. Uses native driver — no JS thread overhead.
+  const swipeX = useRef(new Animated.Value(0)).current;
+  const screenWidth = Dimensions.get('window').width;
+
+  const animateCommit = useCallback((direction: -1 | 1) => {
+    Animated.sequence([
+      // Fly the current view off the edge in the swipe direction.
+      Animated.timing(swipeX, {
+        toValue: -direction * screenWidth,
+        duration: 160,
+        useNativeDriver: true,
+      }),
+      // Reset instantly to opposite edge, ready for the new period to slide in.
+      Animated.timing(swipeX, {
+        toValue: direction * screenWidth,
+        duration: 0,
+        useNativeDriver: true,
+      }),
+      // Slide the new period in.
+      Animated.spring(swipeX, {
+        toValue: 0,
+        useNativeDriver: true,
+        bounciness: 6,
+        speed: 14,
+      }),
+    ]).start();
+  }, [swipeX, screenWidth]);
+
   const panResponder = useRef(
     PanResponder.create({
       // Only claim the gesture if it's predominantly horizontal
@@ -341,14 +373,27 @@ export default function CalendarScreen() {
         Math.abs(gs.dx) > Math.abs(gs.dy) * SWIPE_RATIO &&
         Math.abs(gs.dx) > 10,
 
+      onPanResponderMove: (_, gs) => {
+        // Follow the finger with mild rubber-banding so over-pull feels natural.
+        swipeX.setValue(gs.dx * 0.6);
+      },
+
       onPanResponderRelease: (_, gs) => {
-        if (Math.abs(gs.dx) < SWIPE_THRESHOLD) return;
+        if (Math.abs(gs.dx) < SWIPE_THRESHOLD) {
+          // Below threshold — bounce back.
+          Animated.spring(swipeX, {
+            toValue: 0, useNativeDriver: true, bounciness: 4,
+          }).start();
+          return;
+        }
         const mode = viewModeRef.current;
-        if (gs.dx < 0) {
+        const direction: -1 | 1 = gs.dx < 0 ? 1 : -1;
+        if (direction === 1) {
           setSelectedDate((prev) => shiftDate(prev, mode, 1));
         } else {
           setSelectedDate((prev) => shiftDate(prev, mode, -1));
         }
+        animateCommit(direction);
       },
     }),
   ).current;
@@ -424,7 +469,10 @@ export default function CalendarScreen() {
         />
 
         {/* Swipe-enabled content area */}
-        <View style={styles.content} {...panResponder.panHandlers}>
+        <Animated.View
+          style={[styles.content, { transform: [{ translateX: swipeX }] }]}
+          {...panResponder.panHandlers}
+        >
           {viewMode === 'month' && (
             <MonthView
               currentMonth={selectedDate}
@@ -458,7 +506,7 @@ export default function CalendarScreen() {
               todos={todayTodos}
             />
           )}
-        </View>
+        </Animated.View>
 
         {/* NLInputBar: TASK-302 — natural language event creation */}
         <NLInputBar

@@ -30,6 +30,7 @@ import {
   setupNotificationHandlers,
 } from '@/services/notificationService';
 import { initializePurchases, checkProStatus } from '@/services/purchaseService';
+import { supabase } from '@/lib/supabase';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { useAppLockStore } from '@/stores/appLockStore';
 import { authenticate, isBiometricAvailable } from '@/services/appLockService';
@@ -299,6 +300,29 @@ export default function RootLayout() {
   // is what makes idle-logout worth the friction.
   useIdleLogout();
 
+  // Midnight rollover for daily / monthly quotas. canUseAI() already
+  // resets when the date changes, but the UI counter (e.g. "AI 5/5") is
+  // only refreshed on next render. Touching the store with the latest
+  // ymd at midnight forces a re-render and zeroes out the visible
+  // counter without the user having to interact first.
+  useEffect(() => {
+    const tick = () => {
+      const s = useSubscriptionStore.getState();
+      const ymd = new Date().toISOString().slice(0, 10);
+      const month = ymd.slice(0, 7);
+      const patch: Partial<typeof s> = {};
+      if (s.lastResetDate !== ymd)
+        Object.assign(patch, { aiUsageToday: 0, lastResetDate: ymd });
+      if (s.lastReviewResetMonth !== month)
+        Object.assign(patch, { weeklyReviewUsedThisMonth: 0, lastReviewResetMonth: month });
+      if (Object.keys(patch).length > 0) useSubscriptionStore.setState(patch);
+    };
+    // Check every minute — much cheaper than computing the precise
+    // ms-until-midnight handle, and survives device clock changes.
+    const id = setInterval(tick, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   // TASK-1301: Restore the user-persisted language from AsyncStorage on every startup.
   // initI18n() is async so we call it in a useEffect; i18next was already initialised
   // with the system locale at module load time, so there is no flash of untranslated text.
@@ -397,11 +421,37 @@ export default function RootLayout() {
     const userId = authStore.user?.id;
     if (!isAuthenticated || !userId) return;
 
+    // Two server-authoritative sources for plan, in order of precedence:
+    //   1. users.subscription_plan — set by the RevenueCat webhook AND
+    //      by manual LEAD edits via Supabase Studio (admin promotion).
+    //   2. RevenueCat's local CustomerInfo cache — only sees the SDK's
+    //      view, which is updated client-side after a purchase.
+    //
+    // Either source returning 'pro' wins; if both say 'free' the user
+    // is downgraded (e.g. subscription expired). This closes the gap
+    // where DB had 'pro' but RevenueCat hadn't been billed yet, so the
+    // client showed Free indefinitely.
     initializePurchases(userId)
       .then(() => checkProStatus())
-      .then((isPro) => {
-        // Sync local plan state with RevenueCat's server-side entitlement
-        if (isPro) setPlan('pro');
+      .then(async (isProFromRC) => {
+        let isPro = isProFromRC;
+        try {
+          const { data } = await supabase
+            .from('users')
+            .select('subscription_plan')
+            .eq('id', userId)
+            .maybeSingle();
+          // The generated row type is `never` because Database types miss
+          // a Relationships entry — cast through unknown to read the
+          // string column.
+          const dbPlan = (data as unknown as { subscription_plan?: string } | null)
+            ?.subscription_plan;
+          if (dbPlan === 'pro') isPro = true;
+          else if (dbPlan === 'free' && !isProFromRC) isPro = false;
+        } catch {
+          // Network or table missing — keep RevenueCat's verdict.
+        }
+        setPlan(isPro ? 'pro' : 'free');
       })
       .catch(console.error); // Non-fatal — app works without purchase sync
   }, [isAuthenticated, setPlan]);

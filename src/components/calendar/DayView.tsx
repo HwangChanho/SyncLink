@@ -26,6 +26,8 @@ import { textStyles } from '@/constants/typography';
 
 /** Pixel height per hour in the time grid. */
 const HOUR_HEIGHT = 60;
+/** Minimum width per overlap column. Anything narrower clips titles. */
+const MIN_COLUMN_WIDTH = 220;
 /** Total pixel height of the 24-hour grid. */
 const TOTAL_HEIGHT = HOUR_HEIGHT * 24;
 /** Width of the hour-label column on the left. */
@@ -130,6 +132,14 @@ export function DayView({
 
   const scrollRef = useRef<ScrollView>(null);
   const layouts = computeLayout(events);
+  // Each layout's widthFraction is 1/N where N is the size of the
+  // overlap-column group it belongs to. Rounding the reciprocal gives us
+  // the maximum number of columns we need to make room for so the
+  // horizontal scroll container can size itself.
+  const maxOverlapColumns = layouts.reduce<number>(
+    (max, l) => Math.max(max, Math.round(1 / l.widthFraction)),
+    1,
+  );
 
   // Scroll to 8 AM on mount
   const handleLayout = () => {
@@ -205,33 +215,52 @@ export function DayView({
             ))}
           </View>
 
-          {/* Event area */}
-          <View style={styles.eventsArea}>
-            {/* Hour separator lines */}
-            {HOURS.map((h) => (
-              <View
-                key={h}
-                style={[
-                  styles.hourLine,
-                  { top: h * HOUR_HEIGHT },
-                  h % 6 === 0 && styles.majorHourLine,
-                ]}
-              />
-            ))}
+          {/*
+            Event area — horizontally scrollable so heavily booked days
+            (many overlapping events) keep each column wide enough to
+            read.  computeLayout assigns widthFraction = 1/cols, so the
+            number of overlap columns is the reciprocal of the smallest
+            fraction.  Below 4 columns we fit on screen; from 4+ we let
+            the user pan horizontally.
+          */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={timedEvents.length > 0}
+            style={styles.eventsAreaScroll}
+            contentContainerStyle={{ minWidth: '100%' }}
+          >
+            <View
+              style={[
+                styles.eventsArea,
+                { minWidth: Math.max(1, maxOverlapColumns) * MIN_COLUMN_WIDTH },
+              ]}
+            >
+              {/* Hour separator lines */}
+              {HOURS.map((h) => (
+                <View
+                  key={h}
+                  style={[
+                    styles.hourLine,
+                    { top: h * HOUR_HEIGHT },
+                    h % 6 === 0 && styles.majorHourLine,
+                  ]}
+                />
+              ))}
 
-            {/* Timed event blocks */}
-            {timedEvents.map((lay) => (
-              <EventBlock
-                key={lay.event.id}
-                event={lay.event}
-                topOffset={lay.topOffset}
-                height={lay.height}
-                widthFraction={lay.widthFraction}
-                leftFraction={lay.leftFraction}
-                onPress={onEventPress}
-              />
-            ))}
-          </View>
+              {/* Timed event blocks */}
+              {timedEvents.map((lay) => (
+                <EventBlock
+                  key={lay.event.id}
+                  event={lay.event}
+                  topOffset={lay.topOffset}
+                  height={lay.height}
+                  widthFraction={lay.widthFraction}
+                  leftFraction={lay.leftFraction}
+                  onPress={onEventPress}
+                />
+              ))}
+            </View>
+          </ScrollView>
         </View>
 
         {/* Empty state for days with no events */}
@@ -316,12 +345,16 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     ...textStyles.caption,
     color: colors.textTertiary,
   },
+  eventsAreaScroll: {
+    flex: 1,
+  },
   eventsArea: {
     flex: 1,
     position: 'relative',
     borderLeftWidth: StyleSheet.hairlineWidth,
     borderLeftColor: colors.border,
     paddingHorizontal: spacing[1],
+    height: TOTAL_HEIGHT,
   },
   hourLine: {
     position: 'absolute',
