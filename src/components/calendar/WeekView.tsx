@@ -27,6 +27,7 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
+  PanResponder,
 } from 'react-native';
 import type { EventSummary } from '@/types';
 import { EventBlock } from './EventBlock';
@@ -223,6 +224,50 @@ export function WeekView({
     scrollRef.current?.scrollTo({ y: HOUR_HEIGHT * 7, animated: false });
   };
 
+  /**
+   * Drag-on-day-headers gesture (TASK-1901).
+   * The user lays a finger on any day-of-week header and drags left or
+   * right to scrub through days without lifting. We map cumulative dx
+   * into integer day deltas (one day per ~32 px of horizontal movement)
+   * and call onDateSelect with the new date.
+   *
+   * The PanResponder only takes over when the gesture is clearly a
+   * horizontal drag (>5 px and predominantly horizontal); short taps
+   * still bubble down to the TouchableOpacity onPress so single-tap
+   * navigation keeps working.
+   */
+  const headerDragRef = useRef<{ baseDate: Date | null; lastDelta: number }>({
+    baseDate: null,
+    lastDelta: 0,
+  });
+  const headerPan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gs) =>
+        Math.abs(gs.dx) > 5 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
+      onPanResponderGrant: () => {
+        headerDragRef.current = { baseDate: selectedDate, lastDelta: 0 };
+      },
+      onPanResponderMove: (_, gs) => {
+        const base = headerDragRef.current.baseDate;
+        if (!base) return;
+        // Scrub speed: one day per 32 px of finger travel.
+        const delta = Math.round(-gs.dx / 32);
+        if (delta === headerDragRef.current.lastDelta) return;
+        headerDragRef.current.lastDelta = delta;
+        const next = new Date(base);
+        next.setDate(next.getDate() + delta);
+        onDateSelect(next);
+      },
+      onPanResponderRelease: () => {
+        headerDragRef.current = { baseDate: null, lastDelta: 0 };
+      },
+      onPanResponderTerminate: () => {
+        headerDragRef.current = { baseDate: null, lastDelta: 0 };
+      },
+    }),
+  ).current;
+
   // Determine if any day this week has all-day events OR planner todos
   // (the strip now hosts both so the user sees every day-scoped item in
   // one place).
@@ -235,8 +280,8 @@ export function WeekView({
 
   return (
     <View style={styles.container}>
-      {/* ─── Day header row (fixed) ─── */}
-      <View style={styles.dayHeaderRow}>
+      {/* ─── Day header row (fixed; pannable for drag-to-scrub) ─── */}
+      <View style={styles.dayHeaderRow} {...headerPan.panHandlers}>
         {/* Spacer aligning with the time label column */}
         <View style={{ width: TIME_COL_WIDTH }} />
         {weekDays.map((day, idx) => {

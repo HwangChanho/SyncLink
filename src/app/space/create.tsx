@@ -29,6 +29,7 @@ import { textStyles } from '@/constants/typography';
 import * as spaceService from '@/services/spaceService';
 import { useSpaceStore } from '@/stores/spaceStore';
 import type { SpaceType } from '@/types';
+import { logError } from '@/lib/errorLogger';
 
 // ─── Space type options ────────────────────────────────────────────────────────
 
@@ -92,7 +93,7 @@ export default function CreateSpaceScreen() {
     } catch (err) {
       const message =
         err instanceof Error ? err.message : t('space.create_failed');
-      // Log to console for web devtools debugging
+      void logError({ context: 'space.create.ui', error: err });
       console.error('[SpaceCreate] create failed:', err);
       showAlert(t('common.error'), message);
     } finally {

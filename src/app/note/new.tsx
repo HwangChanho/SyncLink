@@ -32,6 +32,7 @@ import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { useTodoStore } from '@/stores/todoStore';
+import { logError } from '@/lib/errorLogger';
 
 export default function NoteNewScreen() {
   const { t } = useTranslation();
@@ -140,7 +141,8 @@ export default function NoteNewScreen() {
       });
       router.back();
     } catch (err) {
-      // Log to console for web devtools debugging
+      // Log to error_logs (production triage) and console (web devtools).
+      void logError({ context: 'note.new.save', error: err });
       console.error('[NoteNew] save failed:', err);
       showAlert(t('common.error'), err instanceof Error ? err.message : t('note.save_failed'));
     } finally {

@@ -44,6 +44,7 @@ import { ReminderPicker } from '@/components/reminders/ReminderPicker';
 import { DateTimeModal } from '@/components/common/DateTimeModal';
 import { CategoryPickerSheet } from '@/components/planner/CategoryPickerSheet';
 import { getCategories } from '@/services/categoryService';
+import { logError } from '@/lib/errorLogger';
 import type { Category } from '@/types';
 import { showAlert } from '@/lib/webAlert';
 
@@ -442,9 +443,10 @@ export default function EventCreateScreen() {
 
       router.back();
     } catch (err) {
-      // Always log the full error object to Metro — previously the app
-      // showed only the display message which on iOS could be blank.
-      // This helps triage silent-save bugs.
+      // Always log the full error object to Metro and to error_logs so
+      // production sessions surface silent-save bugs (LEAD report: iOS
+      // sometimes showed blank message + no trace).
+      void logError({ context: 'event.create.ui', error: err });
       console.error('[EventCreate] handleSave failed:', err);
       showAlert(t('common.error'), err instanceof Error ? err.message : t('event.save_error'));
       setIsSaving(false);

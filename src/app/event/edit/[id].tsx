@@ -25,6 +25,7 @@ import type { Event, RepeatType } from '@/types';
 import { getEventById, updateEvent, deleteEvent } from '@/services/eventService';
 import { getReminders, updateReminders } from '@/services/reminderService';
 import { shareEventToSpace, unshareEventFromSpace } from '@/services/eventShareService';
+import { logError } from '@/lib/errorLogger';
 import { useEventStore } from '@/stores/eventStore';
 import { useSpaceStore } from '@/stores/spaceStore';
 import { useColors } from '@/hooks/useColors';
@@ -308,6 +309,7 @@ export default function EventEditScreen() {
       router.back();
       router.back();
     } catch (err) {
+      void logError({ context: 'event.edit.ui', error: err });
       console.error('[EventEdit] handleSave failed:', err);
       showAlert(t('common.error'), err instanceof Error ? err.message : t('event.save_error'));
       setIsSaving(false);

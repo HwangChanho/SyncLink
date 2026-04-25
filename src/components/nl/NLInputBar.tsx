@@ -27,6 +27,7 @@ import { ConfirmModal } from './ConfirmModal';
 import { QuotaExceededSheet } from '@/components/ai/QuotaExceededSheet';
 import { parseNaturalLanguage } from '@/services/aiService';
 import { createEvent } from '@/services/eventService';
+import { logError } from '@/lib/errorLogger';
 import { useEventStore } from '@/stores/eventStore';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import type { NLParseResult } from '@/types';
@@ -223,7 +224,7 @@ export function NLInputBar({ onEventCreated }: Props) {
       setInputState('idle');
       onEventCreated?.();
     } catch (err) {
-      // Surface the real error in Metro so silent-save bugs are debuggable
+      void logError({ context: 'nl.confirm', error: err });
       console.error('[NLInputBar] handleConfirm failed:', err);
       setErrorMsg(t('nl.save_failed'));
       setInputState('error');

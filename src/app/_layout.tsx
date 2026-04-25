@@ -36,6 +36,7 @@ import { useAppLockStore } from '@/stores/appLockStore';
 import { authenticate, isBiometricAvailable } from '@/services/appLockService';
 import { verifyPin } from '@/services/pinLockService';
 import { useIdleLogout } from '@/hooks/useIdleLogout';
+import { useWebPush } from '@/hooks/useWebPush';
 import { PinPad } from '@/components/common/PinPad';
 import { OfflineBanner } from '@/components/common/OfflineBanner';
 // Sprint 14 TASK-1402/1406 — AdMob SDK initialization after ATT consent.
@@ -299,6 +300,12 @@ export default function RootLayout() {
   // protect the device; the threat model on the web (shared computers)
   // is what makes idle-logout worth the friction.
   useIdleLogout();
+
+  // Web-only: register the Service Worker + PushSubscription so the
+  // smart-reminder pipeline can fan out notifications to open browser
+  // tabs the same way it pushes to native devices via Expo. No-op on
+  // native, and silently skipped if VAPID isn't configured yet.
+  useWebPush();
 
   // Midnight rollover for daily / monthly quotas. canUseAI() already
   // resets when the date changes, but the UI counter (e.g. "AI 5/5") is
