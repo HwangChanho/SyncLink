@@ -72,23 +72,20 @@ function withRegisterBridgeInProject(config) {
     const target = project.pbxTargetByName(HOST_TARGET_NAME);
     if (!target) return cfg;
 
-    // The PBXGroup whose `path = SyncLink` already exists for the host
-    // app source tree. Adding files there means the build resolves them
-    // at ios/SyncLink/<relPath>, which matches where withCopyBridgeSources
-    // wrote them.
+    // Pinning to mainGroup (path='') means addSourceFile treats the
+    // supplied filepath as ios-root-relative ("ios/<filepath>"). With
+    // `SyncLink/AppGroupBridge/<file>` we land at
+    // `ios/SyncLink/AppGroupBridge/<file>`, which is exactly where
+    // withCopyBridgeSources wrote the source.
     const mainGroup = project.getFirstProject().firstProject.mainGroup;
-    const hostGroupKey = findChildGroup(project, mainGroup, HOST_TARGET_NAME);
-    if (!hostGroupKey) return cfg;
 
     for (const fileName of SOURCE_FILES) {
       if (isFileAlreadyInTarget(project, target.uuid, fileName)) continue;
-      // Path is relative to the host group's `path` attribute (= "SyncLink"),
-      // so just supply "AppGroupBridge/<file>".
-      const relFromHost = `${SOURCE_DIR_NAME}/${fileName}`;
+      const relFromIos = `${HOST_TARGET_NAME}/${SOURCE_DIR_NAME}/${fileName}`;
       project.addSourceFile(
-        relFromHost,
+        relFromIos,
         { target: target.uuid },
-        hostGroupKey,
+        mainGroup,
       );
     }
 
