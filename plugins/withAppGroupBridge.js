@@ -59,45 +59,36 @@ function withCopyBridgeSources(config) {
 
 /**
  * Add AppGroupBridge.{m,swift} to the SyncLink target's Sources build
- * phase. Skips when the files are already part of the project so the
- * plugin is safe to run on existing prebuilt projects too.
+ * phase. We attach them directly to the host SyncLink PBXGroup rather
+ * than creating a nested AppGroupBridge group — the previous nested
+ * approach caused Xcode to resolve the file at
+ * `ios/AppGroupBridge/SyncLink/AppGroupBridge/...` (path doubled) and
+ * the build couldn't find the source. Idempotent across reruns.
  */
 function withRegisterBridgeInProject(config) {
   return withXcodeProject(config, (cfg) => {
     const project = cfg.modResults;
 
     const target = project.pbxTargetByName(HOST_TARGET_NAME);
-    if (!target) {
-      // Target not yet present (very early prebuild) — bail without error.
-      return cfg;
-    }
+    if (!target) return cfg;
 
-    // Find or create a PBXGroup for AppGroupBridge under the host target's
-    // main group so the files appear in the Project navigator.
+    // The PBXGroup whose `path = SyncLink` already exists for the host
+    // app source tree. Adding files there means the build resolves them
+    // at ios/SyncLink/<relPath>, which matches where withCopyBridgeSources
+    // wrote them.
     const mainGroup = project.getFirstProject().firstProject.mainGroup;
     const hostGroupKey = findChildGroup(project, mainGroup, HOST_TARGET_NAME);
     if (!hostGroupKey) return cfg;
 
-    let bridgeGroupKey = findChildGroup(project, hostGroupKey, SOURCE_DIR_NAME);
-    if (!bridgeGroupKey) {
-      const created = project.addPbxGroup(
-        [],
-        SOURCE_DIR_NAME,
-        SOURCE_DIR_NAME,
-        '"<group>"',
-      );
-      bridgeGroupKey = created.uuid;
-      // Attach to the host group so it shows up in the navigator.
-      project.addToPbxGroup(bridgeGroupKey, hostGroupKey);
-    }
-
     for (const fileName of SOURCE_FILES) {
-      const relPath = `${HOST_TARGET_NAME}/${SOURCE_DIR_NAME}/${fileName}`;
       if (isFileAlreadyInTarget(project, target.uuid, fileName)) continue;
+      // Path is relative to the host group's `path` attribute (= "SyncLink"),
+      // so just supply "AppGroupBridge/<file>".
+      const relFromHost = `${SOURCE_DIR_NAME}/${fileName}`;
       project.addSourceFile(
-        relPath,
+        relFromHost,
         { target: target.uuid },
-        bridgeGroupKey,
+        hostGroupKey,
       );
     }
 
