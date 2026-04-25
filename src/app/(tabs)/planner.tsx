@@ -512,7 +512,6 @@ export default function PlannerScreen() {
         <View style={styles.centered}>
           <Ionicons name="checkmark-circle-outline" size={48} color={colors.textTertiary} />
           <Text style={styles.emptyText}>{t('todo.label')} {t('common.none')}</Text>
-          <Text style={styles.emptySubText}>{t('common.unknown')}</Text>
         </View>
       );
     }
@@ -594,7 +593,6 @@ export default function PlannerScreen() {
         <View style={styles.centered}>
           <Ionicons name="document-text-outline" size={48} color={colors.textTertiary} />
           <Text style={styles.emptyText}>{t('note.label')} {t('common.none')}</Text>
-          <Text style={styles.emptySubText}>{t('common.unknown')}</Text>
         </View>
       );
     }

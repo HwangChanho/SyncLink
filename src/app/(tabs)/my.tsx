@@ -20,6 +20,7 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  Linking,
 } from 'react-native';
 // expo-image provides better caching and performance than React Native's Image (TASK-701)
 import { Image } from 'expo-image';
@@ -556,6 +557,22 @@ export default function MyScreen() {
               activeOpacity={0.7}
             >
               <Text style={styles.menuItemText}>오픈소스 라이선스</Text>
+              <Text style={styles.menuItemChevron}>›</Text>
+            </TouchableOpacity>
+            <View style={styles.menuDivider} />
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                const subject = encodeURIComponent('[SyncLink] 개발자 문의');
+                const body = encodeURIComponent(
+                  '\n\n---\n앱 버전: 1.0.0\n플랫폼: ' + Platform.OS + '\n',
+                );
+                Linking.openURL(`mailto:cksgh0316@gmail.com?subject=${subject}&body=${body}`)
+                  .catch(() => {/* mailto unsupported */});
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.menuItemText}>개발자에게 문의</Text>
               <Text style={styles.menuItemChevron}>›</Text>
             </TouchableOpacity>
             <View style={styles.menuDivider} />
