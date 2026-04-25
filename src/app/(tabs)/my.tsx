@@ -18,7 +18,6 @@ import {
   ScrollView,
   TextInput,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 // expo-image provides better caching and performance than React Native's Image (TASK-701)
 import { Image } from 'expo-image';
@@ -99,11 +98,11 @@ export default function MyScreen() {
 
     // Validation: at least 1 char, max 20 chars
     if (trimmed.length === 0) {
-      Alert.alert(t('common.error'), t('profile.nickname_required'));
+      showAlert(t('common.error'), t('profile.nickname_required'));
       return;
     }
     if (trimmed.length > 20) {
-      Alert.alert(t('common.error'), t('profile.nickname_too_long'));
+      showAlert(t('common.error'), t('profile.nickname_too_long'));
       return;
     }
     // Skip network call if unchanged
@@ -118,7 +117,7 @@ export default function MyScreen() {
       setUser(updated);
       setIsEditingNickname(false);
     } catch (err) {
-      Alert.alert(t('common.error'), err instanceof Error ? err.message : t('profile.nickname_failed'));
+      showAlert(t('common.error'), err instanceof Error ? err.message : t('profile.nickname_failed'));
     } finally {
       setIsSavingNickname(false);
     }
@@ -134,7 +133,7 @@ export default function MyScreen() {
     // Request permission to access the media library (required on iOS)
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert(
+      showAlert(
         t('notification.permission_required'),
         t('profile.avatar_permission'),
       );
@@ -225,7 +224,7 @@ export default function MyScreen() {
    *   Metro. Previously the user only saw the localised error title.
    */
   const handleDeleteAccount = useCallback(() => {
-    Alert.alert(
+    showAlert(
       t('auth.delete_account.button'),
       t('auth.delete_account.confirm'),
       [
@@ -235,7 +234,7 @@ export default function MyScreen() {
           style: 'destructive',
           onPress: () => {
             // Second confirmation to prevent accidental tap
-            Alert.alert(
+            showAlert(
               t('common.confirm'),
               t('common.irreversible'),
               [
@@ -257,7 +256,7 @@ export default function MyScreen() {
                       // failures that previously surfaced only as a generic
                       // localised message on iOS.
                       console.error('[My] deleteAccount failed:', err);
-                      Alert.alert(
+                      showAlert(
                         t('common.error'),
                         err instanceof Error ? err.message : t('auth.delete_account.failed'),
                       );

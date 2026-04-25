@@ -326,6 +326,17 @@ const ja = {
     grade_very_poor: '非常に悪い',
   },
 
+  calendar: {
+    title: {
+      month: '{{year}}年{{month}}月',
+      week:  '{{year}}年 {{startMonth}}月{{startDay}}日 ~ {{endMonth}}月{{endDay}}日',
+      day:   '{{year}}年{{month}}月{{day}}日 ({{dow}})',
+    },
+    weekday: {
+      sun: '日', mon: '月', tue: '火', wed: '水', thu: '木', fri: '金', sat: '土',
+    },
+  },
+
   date_suggest: {
     title: '日程提案',
     loading: '提案を生成中…',

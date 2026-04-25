@@ -131,39 +131,51 @@ interface CalendarHeaderProps {
   onViewModeChange: (mode: ViewMode) => void;
 }
 
-const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'] as const;
+const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 
-/** Produces a human-readable title for the current viewing period. */
-function buildTitle(mode: ViewMode, date: Date): string {
+/**
+ * Build the period title via i18n so each locale gets its native format.
+ * All three modes show year/month/day (the bug was: "월. " — only the
+ * month escaped from a half-localised format).
+ *
+ * Translation contract (calendar.title.*):
+ *   - month: "{{year}} / {{month}}"
+ *   - week:  "{{year}} / {{startMonth}}-{{startDay}} ~ {{endMonth}}-{{endDay}}"
+ *   - day:   "{{year}} / {{month}} / {{day}} ({{dow}})"
+ */
+// `t` is the i18next translator. We type it loosely as `unknown` because
+// useTranslation()'s strict generic signature collides with our local
+// helper's structural typing under exactOptionalPropertyTypes.
+function buildTitle(
+  mode: ViewMode,
+  date: Date,
+  t: (key: string, opts?: Record<string, string | number>) => string | unknown,
+): string {
   const y = date.getFullYear();
   const m = date.getMonth() + 1;
 
   if (mode === 'month') {
-    // Month mode: "2026년 4월"
-    return `${y}년 ${m}월`;
+    return String(t('calendar.title.month', { year: y, month: m }));
   }
 
   if (mode === 'week') {
-    // Week mode: show the span so the user knows which week is visible.
-    // Match WeekView's week = Sun…Sat containing the selected date.
     const sunday = new Date(date);
     sunday.setDate(sunday.getDate() - sunday.getDay());
     const saturday = new Date(sunday);
     saturday.setDate(saturday.getDate() + 6);
-    const sM = sunday.getMonth() + 1;
-    const sD = sunday.getDate();
-    const eM = saturday.getMonth() + 1;
-    const eD = saturday.getDate();
-    if (sM === eM) {
-      return `${y}년 ${sM}월 ${sD}일 ~ ${eD}일`;
-    }
-    return `${y}년 ${sM}월 ${sD}일 ~ ${eM}월 ${eD}일`;
+    return String(t('calendar.title.week', {
+      year:       y,
+      startMonth: sunday.getMonth() + 1,
+      startDay:   sunday.getDate(),
+      endMonth:   saturday.getMonth() + 1,
+      endDay:     saturday.getDate(),
+    }));
   }
 
-  // Day mode: "4월 18일 (금)"
   const d = date.getDate();
-  const dow = DAY_NAMES[date.getDay()] ?? '일';
-  return `${m}월 ${d}일 (${dow})`;
+  const dowKey = DOW_KEYS[date.getDay()] ?? 'sun';
+  const dow = String(t(`calendar.weekday.${dowKey}`));
+  return String(t('calendar.title.day', { year: y, month: m, day: d, dow }));
 }
 
 const HIT_SLOP = { top: 10, bottom: 10, left: 14, right: 14 } as const;
@@ -221,7 +233,7 @@ export function CalendarHeader({
           accessibilityHint="탭하면 년도와 월을 선택하는 피커가 열립니다"
         >
           <View style={styles.titleInner}>
-            <Text style={styles.title}>{buildTitle(viewMode, currentDate)}</Text>
+            <Text style={styles.title}>{buildTitle(viewMode, currentDate, t as unknown as (k: string, o?: Record<string, string | number>) => string)}</Text>
             <Text style={styles.titleChevron}>▾</Text>
           </View>
         </TouchableOpacity>

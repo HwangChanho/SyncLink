@@ -337,6 +337,17 @@ const en = {
     create_event: 'Create Event',
   },
 
+  calendar: {
+    title: {
+      month: '{{month}}/{{year}}',
+      week:  '{{startMonth}}/{{startDay}} – {{endMonth}}/{{endDay}}, {{year}}',
+      day:   '{{month}}/{{day}}/{{year}} ({{dow}})',
+    },
+    weekday: {
+      sun: 'Sun', mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat',
+    },
+  },
+
   reminder: {
     title: 'Reminder',
     add: 'Add reminder',

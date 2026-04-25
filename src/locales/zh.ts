@@ -326,6 +326,17 @@ const zh = {
     grade_very_poor: '非常差',
   },
 
+  calendar: {
+    title: {
+      month: '{{year}}年{{month}}月',
+      week:  '{{year}}年 {{startMonth}}月{{startDay}}日 ~ {{endMonth}}月{{endDay}}日',
+      day:   '{{year}}年{{month}}月{{day}}日 ({{dow}})',
+    },
+    weekday: {
+      sun: '日', mon: '一', tue: '二', wed: '三', thu: '四', fri: '五', sat: '六',
+    },
+  },
+
   date_suggest: {
     title: '日期推荐',
     loading: '正在生成推荐…',

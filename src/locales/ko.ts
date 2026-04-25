@@ -341,6 +341,17 @@ const ko = {
     create_event: '일정 만들기',
   },
 
+  calendar: {
+    title: {
+      month: '{{year}}년 {{month}}월',
+      week:  '{{year}}년 {{startMonth}}월 {{startDay}}일 ~ {{endMonth}}월 {{endDay}}일',
+      day:   '{{year}}년 {{month}}월 {{day}}일 ({{dow}})',
+    },
+    weekday: {
+      sun: '일', mon: '월', tue: '화', wed: '수', thu: '목', fri: '금', sat: '토',
+    },
+  },
+
   reminder: {
     title: '리마인더',
     add: '리마인더 추가',

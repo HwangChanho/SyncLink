@@ -59,7 +59,10 @@ export function LanguageButton() {
    * Present the language picker appropriate for the current platform.
    * iOS:     ActionSheetIOS (native bottom sheet)
    * Android: Alert with button list (no ActionSheet API on Android)
-   * Web:     Alert with button list
+   * Web:     cycle through the four languages on each tap. React Native
+   *          Web's Alert with 4+ buttons silently no-ops, so we fall back
+   *          to a simple "click to advance" UX where the header label
+   *          (KO/EN/ZH/JA) doubles as the visible state.
    */
   const handlePress = () => {
     const optionLabels = LANG_OPTIONS.map(o => o.label);
@@ -79,10 +82,14 @@ export function LanguageButton() {
           }
         },
       );
+    } else if (Platform.OS === 'web') {
+      // Cycle: ko → en → zh → ja → ko
+      const idx = LANG_OPTIONS.findIndex((o) => o.locale === currentLanguage);
+      const next = LANG_OPTIONS[(idx + 1) % LANG_OPTIONS.length];
+      if (next) void changeLanguage(next.locale);
     } else {
-      // Android / Web: use Alert buttons
+      // Android — Alert with button list works here.
       Alert.alert(
-        // Title — use a safe fallback in case the translation key isn't loaded yet
         t('time.lang_ko', '언어 선택'),
         undefined,
         [
