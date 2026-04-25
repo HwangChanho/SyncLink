@@ -1,0 +1,7 @@
+<resources>
+  <string name="app_name">SyncLink</string>
+  <string name="expo_splash_screen_resize_mode" translatable="false">contain</string>
+  <string name="expo_splash_screen_status_bar_translucent" translatable="false">false</string>
+  <string name="expo_system_ui_user_interface_style" translatable="false">automatic</string>
+  <string name="widget_synclinkwidget_description" translatable="false">오늘의 일정과 마감 임박 할 일을 한눈에.</string>
+</resources>
