@@ -32,6 +32,7 @@ import {
   getWebPushPermission,
   type WebPushRegistrationResult,
 } from '@/hooks/useWebPush';
+import { showAlert } from '@/lib/webAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -113,21 +114,26 @@ export default function NotificationsSettingsScreen() {
     try {
       const result: WebPushRegistrationResult = await requestWebPushPermission();
       setWebPushPerm(getWebPushPermission());
+      // showAlert maps to window.alert on web; native Alert.alert sometimes
+      // doesn't render under React Native Web.
       if (result === 'granted') {
-        Alert.alert('알림 활성화 완료', '이제 이 브라우저로 알림을 받습니다.');
+        showAlert('알림 활성화 완료', '이제 이 브라우저로 알림을 받습니다.');
       } else if (result === 'denied') {
-        Alert.alert(
+        showAlert(
           '알림 권한 필요',
-          '브라우저에서 알림이 차단되어 있습니다. 주소창 왼쪽 자물쇠 아이콘 → 알림 → 허용으로 변경해 주세요.',
+          '브라우저에서 이 사이트의 알림이 차단되어 있어 다시 요청할 수 없습니다.\n\n' +
+          '• Chrome: 주소창 왼쪽 자물쇠/정보 아이콘 → 알림 → 허용\n' +
+          '• Safari: 환경설정 → 웹사이트 → 알림 → SyncLink → 허용\n' +
+          '• Firefox: 주소창 왼쪽 방패 아이콘 → 사이트 권한 → 알림 → 허용',
         );
       } else if (result === 'no-user') {
-        Alert.alert('로그인 필요', '먼저 로그인 후 다시 시도해 주세요.');
+        showAlert('로그인 필요', '먼저 로그인 후 다시 시도해 주세요.');
       } else if (result === 'not-configured') {
-        Alert.alert('설정 누락', 'VAPID 공개키가 설정되지 않았습니다 (관리자 문의).');
+        showAlert('설정 누락', 'VAPID 공개키가 설정되지 않았습니다 (관리자 문의).');
       } else if (result === 'unsupported') {
-        Alert.alert('미지원 브라우저', '이 브라우저는 웹 푸시를 지원하지 않습니다.');
+        showAlert('미지원 브라우저', '이 브라우저는 웹 푸시를 지원하지 않습니다.');
       } else {
-        Alert.alert('등록 실패', '알림 등록 중 오류가 발생했습니다. 콘솔을 확인해 주세요.');
+        showAlert('등록 실패', '알림 등록 중 오류가 발생했습니다. 브라우저 콘솔의 [webpush] 로그를 확인해 주세요.');
       }
     } finally {
       setWebPushBusy(false);

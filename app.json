@@ -16,7 +16,7 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "io.synclink.app",
       "newArchEnabled": false,
       "buildNumber": "31",
@@ -107,6 +107,11 @@
               "label": "SyncLink",
               "minWidth": "180dp",
               "minHeight": "110dp",
+              "targetCellWidth": 3,
+              "targetCellHeight": 2,
+              "maxResizeWidth": "640dp",
+              "maxResizeHeight": "480dp",
+              "resizeMode": "horizontal|vertical",
               "description": "오늘의 일정과 마감 임박 할 일을 한눈에.",
               "previewImage": "./assets/widget-preview.png",
               "updatePeriodMillis": 1800000

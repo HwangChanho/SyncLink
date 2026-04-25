@@ -154,13 +154,23 @@ interface Family { eventLimit: number; todoLimit: number; }
 
 /**
  * Pick how many rows to render based on the physical widget size that
- * Android passes us at render time. Thresholds chosen so a 2x1 home grid
- * cell collapses cleanly while a 4x2 cell shows the rich layout.
+ * Android passes us at render time.
+ *
+ * Thresholds (dp):
+ *   - small   (≈ 2x1 phone)   width < 280, height < 140
+ *   - medium  (≈ 4x1 phone)   width ≥ 280, height < 200
+ *   - large   (≈ 4x2 phone)   height ≥ 200, width < 480
+ *   - tablet  (≈ 4x4 / 5x4)   width  ≥ 480 OR height ≥ 360 (resized on tablet)
+ *
+ * The widget is `resizeMode: "horizontal|vertical"` so users on Android
+ * tablets / foldables can drag any corner to grow the cell — we honour
+ * the larger render area by surfacing more rows.
  */
 function pickFamily(width: number, height: number): Family {
-  if (height >= 200)         return { eventLimit: 4, todoLimit: 4 }; // large
-  if (width >= 280)          return { eventLimit: 3, todoLimit: 2 }; // medium
-  return                            { eventLimit: 2, todoLimit: 0 }; // small
+  if (width >= 480 || height >= 360) return { eventLimit: 8, todoLimit: 6 }; // tablet
+  if (height >= 200)                 return { eventLimit: 4, todoLimit: 4 }; // large
+  if (width >= 280)                  return { eventLimit: 3, todoLimit: 2 }; // medium
+  return                                    { eventLimit: 2, todoLimit: 0 }; // small
 }
 
 function formatToday(): string {

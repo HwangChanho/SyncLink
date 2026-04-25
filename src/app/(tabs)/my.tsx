@@ -178,7 +178,10 @@ export default function MyScreen() {
   // ─── Logout ──────────────────────────────────────────────────────────────
 
   const handleLogout = useCallback(() => {
-    Alert.alert(
+    // Use showAlert (not Alert.alert) so the confirm dialog actually shows
+    // on web — React Native Web's Alert.alert is a no-op for some action
+    // sheets, which previously made the logout button look unresponsive.
+    showAlert(
       t('auth.logout.button'),
       t('auth.logout.confirm'),
       [
@@ -193,7 +196,7 @@ export default function MyScreen() {
               // Clear user from store — _layout.tsx's auth guard will redirect to /auth/login
               setUser(null);
             } catch (err) {
-              Alert.alert(t('common.error'), err instanceof Error ? err.message : t('auth.logout.failed'));
+              showAlert(t('common.error'), err instanceof Error ? err.message : t('auth.logout.failed'));
               setIsLoggingOut(false);
             }
           },

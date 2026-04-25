@@ -2,12 +2,12 @@
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="180dp"
     android:minHeight="110dp"
+    android:targetCellWidth="3"
+    android:targetCellHeight="2"
+    android:maxResizeWidth="640dp"
+    android:maxResizeHeight="480dp"
 
-
-
-
-
-    android:resizeMode="none"
+    android:resizeMode="horizontal|vertical"
 
     android:description="@string/widget_synclinkwidget_description"
 

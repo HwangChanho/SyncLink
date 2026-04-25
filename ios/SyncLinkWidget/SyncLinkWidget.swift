@@ -1,9 +1,9 @@
 //
 //  SyncLinkWidget.swift
 //
-//  iOS home-screen widget for SyncLink. Reads a JSON snapshot written by
-//  the host app (src/services/widgetDataService.ts via AppGroupBridge) and
-//  renders today's events + due todos.
+//  iOS / iPadOS home-screen widget for SyncLink. Reads a JSON snapshot
+//  written by the host app (src/services/widgetDataService.ts via
+//  AppGroupBridge) and renders today's events + due todos.
 //
 //  Architecture:
 //    - Provider:    builds a Timeline of WidgetSnapshotEntry from the App
@@ -12,7 +12,8 @@
 //                   running; the host calls WidgetCenter.reloadAllTimelines()
 //                   on actual data changes for instant updates.
 //    - Entry:       decoded WidgetSnapshot (matches the JS contract).
-//    - View:        SwiftUI layout, three families (small / medium / large).
+//    - View:        SwiftUI layout, four families covering iPhone + iPad:
+//                     small / medium / large / extraLarge (iPad).
 //
 //  Sprint 19 TASK-1900.
 //
@@ -73,21 +74,14 @@ struct SnapshotEntry: TimelineEntry {
 
 struct Provider: TimelineProvider {
 
-  /// Placeholder shown in the widget gallery. Hard-coded sample so the
-  /// system has something to render before the App Group data exists.
   func placeholder(in context: Context) -> SnapshotEntry {
     SnapshotEntry(date: Date(), snapshot: WidgetSnapshot.empty)
   }
 
-  /// Snapshot for the gallery / quick add. Same as the live read — there is
-  /// no fast / slow path because reading UserDefaults is essentially free.
   func getSnapshot(in context: Context, completion: @escaping (SnapshotEntry) -> Void) {
     completion(SnapshotEntry(date: Date(), snapshot: loadSnapshot()))
   }
 
-  /// Build the timeline. We schedule one entry now and one half-hour out so
-  /// iOS will always have a fallback render if the host app fails to call
-  /// WidgetCenter.reloadAllTimelines() on a data change.
   func getTimeline(in context: Context, completion: @escaping (Timeline<SnapshotEntry>) -> Void) {
     let now = Date()
     let entry = SnapshotEntry(date: now, snapshot: loadSnapshot())
@@ -95,8 +89,6 @@ struct Provider: TimelineProvider {
     completion(Timeline(entries: [entry], policy: .after(nextRefresh)))
   }
 
-  /// Read JSON from the App Group UserDefaults suite, decode to snapshot.
-  /// Returns the empty snapshot on any failure so the widget never crashes.
   private func loadSnapshot() -> WidgetSnapshot {
     guard
       let defaults = UserDefaults(suiteName: APP_GROUP_SUITE),
@@ -125,12 +117,10 @@ struct SyncLinkWidgetEntryView: View {
           .foregroundColor(.secondary)
         Spacer()
       } else {
-        // Events block (limit by family)
         ForEach(Array(snap.events.prefix(eventLimit))) { evt in
           EventRow(event: evt)
         }
 
-        // Todos block — only on medium / large.
         if family != .systemSmall && !snap.todos.isEmpty {
           if !snap.events.isEmpty {
             Divider().padding(.vertical, 2)
@@ -171,19 +161,26 @@ struct SyncLinkWidgetEntryView: View {
     return f.string(from: Date())
   }
 
+  /// Density curve covering iPhone (small/medium/large) and iPad
+  /// (extraLarge — typically 2× the cells of `large`). The exact
+  /// numbers are tuned so each family fills its grid without empty space.
   private var eventLimit: Int {
     switch family {
-      case .systemSmall:  return 2
-      case .systemMedium: return 3
-      default:            return 4
+      case .systemSmall:      return 2
+      case .systemMedium:     return 3
+      case .systemLarge:      return 5
+      case .systemExtraLarge: return 8
+      default:                return 4
     }
   }
 
   private var todoLimit: Int {
     switch family {
-      case .systemSmall:  return 0
-      case .systemMedium: return 2
-      default:            return 4
+      case .systemSmall:      return 0
+      case .systemMedium:     return 2
+      case .systemLarge:      return 4
+      case .systemExtraLarge: return 6
+      default:                return 4
     }
   }
 }
@@ -225,8 +222,6 @@ private struct TodoRow: View {
 // MARK: - Color hex helper
 
 private extension Color {
-  /// Decode `#RRGGBB` (or `RRGGBB`) into a SwiftUI Color. Falls back to gray
-  /// when the input is malformed so the widget doesn't crash on bad data.
   init(hex: String) {
     var s = hex.trimmingCharacters(in: .whitespacesAndNewlines)
     if s.hasPrefix("#") { s.removeFirst() }
@@ -253,6 +248,8 @@ struct SyncLinkWidget: Widget {
     }
     .configurationDisplayName("SyncLink")
     .description("오늘의 일정과 마감 임박 할 일을 한눈에.")
-    .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+    // .systemExtraLarge is iPad-only (iOS 15+). The system silently ignores
+    // unsupported families on iPhone, so we can list them all together.
+    .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .systemExtraLarge])
   }
 }
