@@ -179,6 +179,27 @@ function persist(state: Partial<SubscriptionState>): void {
   });
 }
 
+/**
+ * Push the latest plan value into users.subscription_plan so server-side
+ * gating (translate-event Edge Function, future moderation tools) sees
+ * the same source of truth as the client. Best-effort — never throws.
+ */
+async function mirrorPlanToServer(plan: SubscriptionPlan): Promise<void> {
+  try {
+    // Late require avoids a circular import between subscriptionStore and
+    // anything that pulls in supabase (which itself can pull this file).
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { supabase } = require('@/lib/supabase') as typeof import('@/lib/supabase');
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await (supabase.from('users') as any)
+      .update({ subscription_plan: plan })
+      .eq('id', user.id);
+  } catch {
+    // Network or auth not ready — local state is still correct.
+  }
+}
+
 // ─── Store ────────────────────────────────────────────────────────────────────
 
 export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
@@ -299,6 +320,11 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
   setPlan: (plan: SubscriptionPlan) => {
     set({ plan });
     persist({ ...get(), plan });
+    // Mirror the client-side plan into the users table so server-side
+    // gating (e.g. translate-event Edge Function checks
+    // users.subscription_plan === 'pro') works without an extra round
+    // trip. Fire-and-forget — the local state is already updated.
+    void mirrorPlanToServer(plan);
   },
 
   hydrate: async () => {
