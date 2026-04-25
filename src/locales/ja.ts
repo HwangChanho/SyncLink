@@ -318,6 +318,12 @@ const ja = {
   weather: {
     loading: '天気情報を読み込み中…',
     unavailable: '天気情報を取得できません。',
+    air_pm25: 'PM2.5',
+    grade_good: '良い',
+    grade_fair: '普通',
+    grade_moderate: '普通',
+    grade_poor: '悪い',
+    grade_very_poor: '非常に悪い',
   },
 
   date_suggest: {

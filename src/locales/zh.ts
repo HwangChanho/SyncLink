@@ -318,6 +318,12 @@ const zh = {
   weather: {
     loading: '正在加载天气…',
     unavailable: '无法获取天气信息。',
+    air_pm25: 'PM2.5',
+    grade_good: '良好',
+    grade_fair: '一般',
+    grade_moderate: '一般',
+    grade_poor: '较差',
+    grade_very_poor: '非常差',
   },
 
   date_suggest: {

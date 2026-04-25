@@ -40,6 +40,7 @@ import { useWebPush } from '@/hooks/useWebPush';
 import { useWidgetSync } from '@/hooks/useWidgetSync';
 import { PinPad } from '@/components/common/PinPad';
 import { OfflineBanner } from '@/components/common/OfflineBanner';
+import { AppSplash } from '@/components/common/AppSplash';
 // Sprint 14 TASK-1402/1406 — AdMob SDK initialization after ATT consent.
 import { initAdMob } from '@/services/adService';
 import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
@@ -61,7 +62,16 @@ import { ONBOARDING_STORAGE_KEY } from '@/app/onboarding/index';
  * out but keeps the onboarding flag) cannot push the first-run onboarding
  * flow in front of the login screen.
  */
-function useAuthGuard() {
+/**
+ * Auth-routing guard.
+ *
+ * Returns `routingReady` so the root layout can hide the Stack behind a
+ * splash until the auth + onboarding state has been resolved AND the
+ * router has arrived at the correct route. Without this gate the user
+ * briefly sees the default route (e.g. Home) before the redirect to
+ * /auth/login lands. Sprint 19 fix.
+ */
+function useAuthGuard(): { routingReady: boolean } {
   const { isAuthenticated, isLoading } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
@@ -107,6 +117,39 @@ function useAuthGuard() {
       router.replace(target as '/(tabs)' | '/auth/login' | '/onboarding');
     }
   }, [isAuthenticated, isLoading, onboardingDone, segments, router]);
+
+  // routingReady = (a) auth + onboarding hydrated AND (b) the current route
+  // already matches what the guard wants. The second check handles the
+  // first-render flash where Stack would otherwise paint the default
+  // /(tabs) screen for an unauthenticated user before replace() lands.
+  // Cast to a generic readonly string array so we can safely test for
+  // length === 0 (the empty-segments first-paint state). expo-router's
+  // tuple type doesn't include the empty case but it does occur at runtime.
+  const segs = segments as readonly string[];
+  const hydrated = !isLoading && onboardingDone !== null;
+  const inAuthGroup  = segs[0] === 'auth';
+  const inOnboarding = segs[0] === 'onboarding';
+  const inTabs       = segs[0] === '(tabs)' || segs.length === 0;
+  let routedCorrectly = false;
+  if (hydrated) {
+    if (isAuthenticated) {
+      routedCorrectly = onboardingDone ? !inAuthGroup && !inOnboarding : inOnboarding;
+    } else {
+      routedCorrectly = inAuthGroup;
+    }
+    // Empty segments (= "/") on web first-paint counts as wrong unless
+    // the user is authenticated AND has finished onboarding.
+    if (segs.length === 0 && !(isAuthenticated && onboardingDone)) {
+      routedCorrectly = false;
+    }
+    // Modal routes (segs[0] === 'event' / 'space' / etc.) are always OK
+    // when authenticated — they sit on top of (tabs) and aren't part of the
+    // routing decision tree above.
+    if (isAuthenticated && onboardingDone && !inAuthGroup && !inOnboarding && !inTabs) {
+      routedCorrectly = true;
+    }
+  }
+  return { routingReady: hydrated && routedCorrectly };
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -294,7 +337,7 @@ export default function RootLayout() {
   /** Track previous AppState to detect background→foreground transitions. */
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
-  useAuthGuard();
+  const { routingReady } = useAuthGuard();
 
   // Web-only: sign the user out after 30 minutes of inactivity. Native
   // sessions stay live because the OS lock screen + in-app PIN already
@@ -577,6 +620,12 @@ export default function RootLayout() {
           lock overlay so users still know they are offline while locked.
         */}
         <OfflineBanner />
+        {/*
+          Sprint 19 — auth + routing not yet settled. Render the splash on
+          top of the Stack so the user never sees the default-route Home
+          screen flash before useAuthGuard's redirect lands.
+        */}
+        {!routingReady && <AppSplash />}
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="onboarding/index" />
           <Stack.Screen name="auth/login" />

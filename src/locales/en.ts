@@ -322,6 +322,12 @@ const en = {
   weather: {
     loading: 'Loading weather…',
     unavailable: 'Weather unavailable.',
+    air_pm25: 'PM2.5',
+    grade_good: 'Good',
+    grade_fair: 'Fair',
+    grade_moderate: 'Moderate',
+    grade_poor: 'Poor',
+    grade_very_poor: 'Very Poor',
   },
 
   date_suggest: {

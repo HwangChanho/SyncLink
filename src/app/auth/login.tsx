@@ -25,10 +25,16 @@ import {
 
 type Provider = 'google' | 'kakao' | 'apple' | 'dev';
 
-// __DEV__ is true in debug builds (npx expo run:ios) and false in release (TestFlight/App Store)
-// This is the correct way to gate simulator-only features — EXPO_PUBLIC_APP_ENV is unreliable
-// because .env sets it to 'production' even for local dev builds.
-const IS_DEV_BUILD = __DEV__;
+// Show the email/password dev shortcut only when BOTH conditions hold:
+//   1. The current bundle is a debug build (`__DEV__` — false in TestFlight / App Store).
+//   2. The configured environment is not production (`.env` `EXPO_PUBLIC_APP_ENV`).
+//
+// Why both: `__DEV__` is also true under `npm run web`, which is how the
+// production web bundle is normally previewed. Without the second check
+// the dev login appears on the live web preview — not what we want.
+// To re-enable it locally, set `EXPO_PUBLIC_APP_ENV=development` in `.env`.
+const IS_DEV_BUILD =
+  __DEV__ && process.env.EXPO_PUBLIC_APP_ENV !== 'production';
 
 export default function LoginScreen() {
   const { t } = useTranslation();
