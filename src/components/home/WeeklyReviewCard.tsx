@@ -20,7 +20,8 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { SkeletonLines } from '@/components/common/Skeleton';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
@@ -178,13 +179,15 @@ export function WeeklyReviewCard() {
 
       {/* Content */}
       {isLoading ? (
-        // Loading skeleton
-        <View style={styles.skeletonContainer}>
-          <View style={styles.skeletonLine} />
-          <View style={[styles.skeletonLine, styles.skeletonLineMid]} />
-          <View style={[styles.skeletonLine, styles.skeletonLineShort]} />
-          <ActivityIndicator size="small" color={colors.primary} style={styles.spinner} />
-        </View>
+        // Animated skeleton placeholder — communicates progress without
+        // a spinner, and the layout pre-shapes the eventual reveal.
+        <SkeletonLines
+          lines={3}
+          lineHeight={14}
+          spacing={10}
+          widths={['100%', '92%', '70%']}
+          style={styles.skeletonContainer}
+        />
       ) : error ? (
         // Error state
         <View style={styles.errorContainer}>

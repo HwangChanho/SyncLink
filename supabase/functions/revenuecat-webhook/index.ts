@@ -93,6 +93,20 @@ function isProAfterEvent(evt: NonNullable<RcWebhookEvent['event']>): boolean {
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {
+  // 0) Entry breadcrumb — drop a row for every incoming request so we can
+  //    confirm RevenueCat is actually reaching the function and see the
+  //    headers / method it sent. Stash only header *names* so we don't
+  //    persist the shared secret.
+  try {
+    await logToDb('revenuecat-webhook.entry', new Error('request received'), {
+      method: req.method,
+      url: req.url,
+      ua: req.headers.get('user-agent') ?? '',
+      contentType: req.headers.get('content-type') ?? '',
+      hasAuth: !!req.headers.get('authorization'),
+    });
+  } catch {/* logging is best-effort */}
+
   // 1) Auth — fixed-secret header set in RevenueCat dashboard.
   const expected = Deno.env.get('REVENUECAT_WEBHOOK_SECRET');
   const got = req.headers.get('authorization');
@@ -101,6 +115,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return bad(500, { error: 'server misconfigured' });
   }
   if (got !== expected) {
+    // Log so we can tell test events apart from genuine misconfiguration.
+    // Stash only the prefix of the received header so the secret never
+    // ends up in our database in plaintext.
+    await logToDb('revenuecat-webhook.unauthorized', new Error('header mismatch'), {
+      receivedPrefix: (got ?? '').slice(0, 8),
+      receivedLength: got?.length ?? 0,
+      expectedLength: expected.length,
+    });
     return bad(401, { error: 'unauthorized' });
   }
 
@@ -129,6 +151,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
+  // RevenueCat's "Send test event" uses synthetic app_user_id values that
+  // don't exist in our users table. Skip the DB write but still confirm
+  // success so the dashboard reports a healthy 200 + we have a trace.
+  if (evt.type === 'TEST' || userId.startsWith('test-')) {
+    await logToDb('revenuecat-webhook.test', new Error('test event accepted'), {
+      userId, evtType: evt.type, plan,
+    });
+    return ok({ status: 'ok', test: true, event_id: evt.id });
+  }
+
   const { error: updErr } = await admin
     .from('users')
     .update({ subscription_plan: plan })
@@ -139,13 +171,23 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   // 5) Audit row in usage_metrics so we can dedupe / inspect later.
-  await admin.from('usage_metrics').insert({
+  const { error: auditErr } = await admin.from('usage_metrics').insert({
     user_id:        userId,
     function_name:  'revenuecat-webhook',
     model:          evt.type,
     input_tokens:   0,
     output_tokens:  0,
     cost_usd:       0,
+  });
+  if (auditErr) {
+    // Non-fatal: the user-row update already succeeded. Log so we know.
+    await logToDb('revenuecat-webhook.audit', auditErr, { userId, plan, evtType: evt.type });
+  }
+
+  // Success breadcrumb — easier to grep in production logs than scanning
+  // usage_metrics, especially when audit insert fails (e.g. FK violations).
+  await logToDb('revenuecat-webhook.success', new Error('plan applied'), {
+    userId, plan, evtType: evt.type, eventId: evt.id,
   });
 
   return ok({ status: 'ok', plan, event_id: evt.id });

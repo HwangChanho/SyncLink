@@ -347,7 +347,12 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     color: colors.textPrimary,
   },
   dimText: {
-    color: colors.textTertiary,
+    // Previous month / next month days. textTertiary was so close to
+    // the background in light mode that the digits looked invisible
+    // (LEAD report: "월 뷰에서 일자가 안 떠"). Use textSecondary which
+    // still reads as "secondary context" but stays clearly legible.
+    color: colors.textSecondary,
+    opacity: 0.55,
   },
   sundayText: {
     color: colors.accent,

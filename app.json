@@ -19,7 +19,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "io.synclink.app",
       "newArchEnabled": false,
-      "buildNumber": "26",
+      "buildNumber": "28",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "프로필 사진 변경에 사용됩니다.",
         "NSCameraUsageDescription": "프로필 사진 촬영에 사용됩니다.",

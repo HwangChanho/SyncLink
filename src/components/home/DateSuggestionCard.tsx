@@ -19,12 +19,12 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
+import { SkeletonLines } from '@/components/common/Skeleton';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { useSpaceStore } from '@/stores/spaceStore';
@@ -114,10 +114,13 @@ export function DateSuggestionCard() {
 
       {/* Content */}
       {isLoading ? (
-        <View style={styles.loadingRow}>
-          <ActivityIndicator size="small" color={colors.primary} />
-          <Text style={styles.loadingText}>{t('date_suggest.loading')}</Text>
-        </View>
+        <SkeletonLines
+          lines={2}
+          lineHeight={14}
+          spacing={10}
+          widths={['90%', '60%']}
+          style={styles.loadingRow}
+        />
       ) : hasError || !result ? (
         <Text style={styles.emptyText}>{t('date_suggest.empty')}</Text>
       ) : (

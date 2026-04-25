@@ -41,8 +41,10 @@ function SwipeHint({ direction }: { direction: 'left' | 'right' }) {
   ).current;
 
   useEffect(() => {
-    const MIN = 0.08;
-    const MAX = 0.28;
+    // Dimmed further per LEAD feedback — earlier values made the dots
+    // read like punctuation next to the month-mode tabs ("일.").
+    const MIN = 0.04;
+    const MAX = 0.14;
     const STEP_MS = 520;
     // Kick off each dot with a staggered delay so the wave walks outward.
     // For the left-hand hint the wave runs right → left (closer dot first
