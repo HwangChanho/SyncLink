@@ -250,6 +250,7 @@ export function MonthView({
                     {dayItems.slice(0, MAX_BARS).map((it) => (
                       <View
                         key={it.id}
+                        testID="event-bar"
                         style={[
                           styles.itemBar,
                           it.kind === 'event'

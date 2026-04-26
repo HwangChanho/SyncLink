@@ -23,7 +23,6 @@
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 import { MonthView } from '@/components/calendar/MonthView';
-import { EventDot } from '@/components/calendar/EventDot';
 import type { EventSummary } from '@/types';
 
 // ─── 픽스처 헬퍼 ─────────────────────────────────────────────────────────────
@@ -155,87 +154,85 @@ describe('MonthView', () => {
   });
 
   // ══════════════════════════════════════════════════════════════════════════
-  // EventDot 렌더링
+  // 이벤트 바 렌더링 (Apple Calendar 스타일 컬러 바 — detailed density)
   // ══════════════════════════════════════════════════════════════════════════
 
-  describe('EventDot', () => {
-    it('이벤트 있는 날짜에 EventDot 컴포넌트 렌더링', () => {
+  describe('이벤트 바', () => {
+    it('이벤트 있는 날짜에 컬러 바 렌더링', () => {
       const events: EventSummary[] = [
         makeEvent({ id: 'e1', color: '#6C63FF' }),
       ];
 
-      const { UNSAFE_getAllByType } = render(
+      const { getAllByTestId } = render(
         <MonthView
           {...defaultProps}
           eventsByDate={{ '2026-02-15': events }}
         />,
       );
 
-      const dots = UNSAFE_getAllByType(EventDot);
-      expect(dots).toHaveLength(1);
+      expect(getAllByTestId('event-bar')).toHaveLength(1);
     });
 
-    it('EventDot에 이벤트 color prop 전달', () => {
+    it('이벤트 바에 이벤트 타이틀 표시', () => {
       const events: EventSummary[] = [
-        makeEvent({ id: 'e1', color: '#FF6584' }),
+        makeEvent({ id: 'e1', color: '#FF6584', title: 'My Meeting' }),
       ];
 
-      const { UNSAFE_getAllByType } = render(
+      const { getByText } = render(
         <MonthView
           {...defaultProps}
           eventsByDate={{ '2026-02-15': events }}
         />,
       );
 
-      const [dot] = UNSAFE_getAllByType(EventDot);
-      expect(dot!.props.color).toBe('#FF6584');
+      expect(getByText('My Meeting')).toBeTruthy();
     });
 
-    it('이벤트 없는 날짜에는 EventDot 미렌더링', () => {
-      const { UNSAFE_queryAllByType } = render(
+    it('이벤트 없는 날짜에는 바 미렌더링', () => {
+      const { queryAllByTestId } = render(
         <MonthView {...defaultProps} eventsByDate={{}} />,
       );
 
-      expect(UNSAFE_queryAllByType(EventDot)).toHaveLength(0);
+      expect(queryAllByTestId('event-bar')).toHaveLength(0);
     });
 
-    it('MAX_DOTS(3)개 이벤트 → 점 3개 렌더링', () => {
+    it('MAX_BARS(3)개 이벤트 → 바 3개 렌더링, 오버플로우 없음', () => {
       const events: EventSummary[] = [
-        makeEvent({ id: 'e1', color: '#111111' }),
-        makeEvent({ id: 'e2', color: '#222222' }),
-        makeEvent({ id: 'e3', color: '#333333' }),
+        makeEvent({ id: 'e1', color: '#111111', title: 'Event 1' }),
+        makeEvent({ id: 'e2', color: '#222222', title: 'Event 2' }),
+        makeEvent({ id: 'e3', color: '#333333', title: 'Event 3' }),
       ];
 
-      const { UNSAFE_getAllByType, queryByText } = render(
+      const { getAllByTestId, queryByText } = render(
         <MonthView
           {...defaultProps}
           eventsByDate={{ '2026-02-15': events }}
         />,
       );
 
-      expect(UNSAFE_getAllByType(EventDot)).toHaveLength(3);
+      expect(getAllByTestId('event-bar')).toHaveLength(3);
       // 오버플로우 없음
       expect(queryByText(/^\+/)).toBeNull();
     });
 
-    it('4개 이상 이벤트 → 점 3개 + "+N" 오버플로우 텍스트 렌더링', () => {
+    it('4개 이상 이벤트 → 바 3개 + "+N" 오버플로우 텍스트 렌더링', () => {
       const events: EventSummary[] = [
-        makeEvent({ id: 'e1', color: '#111111' }),
-        makeEvent({ id: 'e2', color: '#222222' }),
-        makeEvent({ id: 'e3', color: '#333333' }),
-        makeEvent({ id: 'e4', color: '#444444' }),
-        makeEvent({ id: 'e5', color: '#555555' }),
+        makeEvent({ id: 'e1', color: '#111111', title: 'Event 1' }),
+        makeEvent({ id: 'e2', color: '#222222', title: 'Event 2' }),
+        makeEvent({ id: 'e3', color: '#333333', title: 'Event 3' }),
+        makeEvent({ id: 'e4', color: '#444444', title: 'Event 4' }),
+        makeEvent({ id: 'e5', color: '#555555', title: 'Event 5' }),
       ];
 
-      const { UNSAFE_getAllByType, getByText } = render(
+      const { getAllByTestId, getByText } = render(
         <MonthView
           {...defaultProps}
           eventsByDate={{ '2026-02-15': events }}
         />,
       );
 
-      // 점은 최대 3개
-      expect(UNSAFE_getAllByType(EventDot)).toHaveLength(3);
+      // 최대 3개 바
+      expect(getAllByTestId('event-bar')).toHaveLength(3);
       // 오버플로우: 5 - 3 = "+2"
       expect(getByText('+2')).toBeTruthy();
     });
