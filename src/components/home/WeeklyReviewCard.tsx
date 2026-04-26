@@ -30,35 +30,6 @@ import { textStyles } from '@/constants/typography';
 import { getWeeklyReview } from '@/services/aiService';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
 
-/**
- * Curated fallback quotes shown when the weekly review has nothing to
- * summarise (e.g. no events logged that week or the Edge Function is
- * unavailable). Kept deliberately short and in Korean since the card
- * headline is Korean.
- */
-const MOTIVATIONAL_QUOTES = [
-  '오늘 내디딘 작은 한 걸음이 내일의 길을 만듭니다.',
-  '바쁘게 산 한 주보다, 의미 있게 산 한 주가 더 깁니다.',
-  '잘 쉬는 것도 성장의 한 부분이에요.',
-  '완벽하지 않아도 괜찮아요. 지속하는 것이 답입니다.',
-  '기록한 하루는 사라지지 않습니다.',
-  '가장 좋은 계획은, 지금 시작하는 계획입니다.',
-  '당신의 속도대로 가세요. 어디로 향하는지만 잊지 마세요.',
-  '어제보다 오늘 1%만 더 나아지면 충분합니다.',
-  '할 일을 해낸 당신에게 박수를 보냅니다.',
-  '쉬는 것도 일입니다. 잘 쉬고, 잘 돌아오세요.',
-  '지나간 한 주를 돌아보는 지금, 이미 성장하고 있는 거예요.',
-  '조급함은 내일을 훔칩니다. 오늘에 머무르세요.',
-];
-
-/** Pick a quote that's stable for the given day so it doesn't flicker. */
-function pickMotivationalQuote(): string {
-  const d = new Date();
-  const dayStamp = d.getFullYear() * 1000 + d.getMonth() * 40 + d.getDate();
-  const idx = dayStamp % MOTIVATIONAL_QUOTES.length;
-  return MOTIVATIONAL_QUOTES[idx] ?? MOTIVATIONAL_QUOTES[0]!;
-}
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
