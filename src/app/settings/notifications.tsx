@@ -182,7 +182,7 @@ export default function NotificationsSettingsScreen() {
     } finally {
       setSavingKey(null);
     }
-  }, [prefs, setUser]);
+  }, [prefs, setUser, t]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 

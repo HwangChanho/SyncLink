@@ -103,7 +103,7 @@ export function SpaceActivityFeed() {
       },
     );
     return unsubscribe;
-  }, [addActivity, colors.border]);
+  }, [addActivity, colors.border, t]);
 
   return (
     <View style={styles.container}>

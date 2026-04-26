@@ -50,6 +50,7 @@ export default function AuthCallbackScreen() {
     handleCallback().catch((err) => {
       setError(err instanceof Error ? err.message : t('auth.callback.processing'));
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleCallback() {

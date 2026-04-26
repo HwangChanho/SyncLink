@@ -202,7 +202,7 @@ export default function PaywallScreen() {
     } finally {
       setPurchasing(false);
     }
-  }, [packages, selectedIndex, purchasing, setPlan]);
+  }, [packages, selectedIndex, purchasing, setPlan, t]);
 
   // ── Restore handler ─────────────────────────────────────────────────────────
   const handleRestore = useCallback(async () => {
@@ -231,7 +231,7 @@ export default function PaywallScreen() {
     } finally {
       setPurchasing(false);
     }
-  }, [purchasing, setPlan]);
+  }, [purchasing, setPlan, t]);
 
   // ── Dismiss handler ─────────────────────────────────────────────────────────
   const handleDismiss = useCallback(() => {

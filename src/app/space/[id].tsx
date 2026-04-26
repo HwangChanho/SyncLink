@@ -122,7 +122,7 @@ export default function SpaceDetailScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [spaceId, fetchSpaceById]);
+  }, [spaceId, fetchSpaceById, t]);
 
   const loadAnniversaries = useCallback(async () => {
     if (!spaceId) return;
@@ -310,7 +310,7 @@ export default function SpaceDetailScreen() {
     } finally {
       setFtIsSearching(false);
     }
-  }, [spaceId, ftStartDate, ftEndDate, ftMinDuration]);
+  }, [spaceId, ftStartDate, ftEndDate, ftMinDuration, t]);
 
   // ─── Anniversary modal actions ────────────────────────────────────────────
 
@@ -395,6 +395,7 @@ export default function SpaceDetailScreen() {
     anniversaryDay,
     anniversaryRepeatYearly,
     loadAnniversaries,
+    t,
   ]);
 
   /** Delete an anniversary. */

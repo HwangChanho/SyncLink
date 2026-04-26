@@ -116,7 +116,7 @@ export default function OnboardingScreen() {
     const nextPage = currentPage + 1;
     scrollRef.current?.scrollTo({ x: nextPage * SCREEN_WIDTH, animated: true });
     setCurrentPage(nextPage);
-  }, [currentPage, handleFinish]);
+  }, [currentPage, handleFinish, pages.length]);
 
   /**
    * Sync the current page indicator with the user's manual scroll position.

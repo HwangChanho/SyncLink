@@ -81,6 +81,7 @@ export const useSpaceStore = create<SpaceState>((set, get) => ({
   removeSpace: (spaceId) =>
     set((state) => {
       // Remove from detail cache
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { [spaceId]: _removed, ...restDetails } = state.spaceDetails;
       // Remove from summary list
       const updatedSpaces = state.spaces.filter(s => s.id !== spaceId);

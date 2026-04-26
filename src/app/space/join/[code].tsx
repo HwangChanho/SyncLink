@@ -73,7 +73,7 @@ export default function SpaceJoinPreviewScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [code]);
+  }, [code, t]);
 
   useEffect(() => {
     void loadSpace();
@@ -96,7 +96,7 @@ export default function SpaceJoinPreviewScreen() {
       Alert.alert(t('space.join_fail_title'), err instanceof Error ? err.message : t('space.join_error'));
       setIsJoining(false);
     }
-  }, [space, fetchMySpaces, setActiveSpaceId]);
+  }, [space, fetchMySpaces, setActiveSpaceId, t]);
 
   // ── Render states ─────────────────────────────────────────────────────────
 

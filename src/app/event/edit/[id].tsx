@@ -200,7 +200,7 @@ export default function EventEditScreen() {
     })();
 
     return () => { cancelled = true; };
-  }, [id]);
+  }, [id, t]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
 

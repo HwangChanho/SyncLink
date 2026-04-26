@@ -83,12 +83,6 @@ export default function PlannerScreen() {
 
   // ── Load data on mount ───────────────────────────────────────────────────
 
-  useEffect(() => {
-    void fetchTodos();
-    void fetchNotes();
-    loadCategories();
-  }, [fetchTodos, fetchNotes]);
-
   const loadCategories = useCallback(async () => {
     try {
       const cats = await getCategories();
@@ -98,6 +92,12 @@ export default function PlannerScreen() {
       // Non-critical — categories are optional
     }
   }, []);
+
+  useEffect(() => {
+    void fetchTodos();
+    void fetchNotes();
+    loadCategories();
+  }, [fetchTodos, fetchNotes, loadCategories]);
 
   // ── Error display ────────────────────────────────────────────────────────
 

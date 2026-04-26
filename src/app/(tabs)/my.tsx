@@ -122,7 +122,7 @@ export default function MyScreen() {
     } finally {
       setIsSavingNickname(false);
     }
-  }, [nicknameInput, user?.nickname, setUser]);
+  }, [nicknameInput, user?.nickname, setUser, t]);
 
   // ─── Avatar change ───────────────────────────────────────────────────────
 

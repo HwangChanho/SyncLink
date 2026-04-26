@@ -95,7 +95,7 @@ export default function NoteDetailScreen() {
     } finally {
       setIsSaving(false);
     }
-  }, [note, draftTitle, draftContent, editNote]);
+  }, [note, draftTitle, draftContent, editNote, t]);
 
   const handleCancelEdit = useCallback(() => {
     if (!note) return;

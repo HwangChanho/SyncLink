@@ -260,7 +260,7 @@ export default function CategoriesScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void loadCategories();

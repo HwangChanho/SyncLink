@@ -127,7 +127,7 @@ export default function EventDetailScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [id]);
+  }, [id, t]);
 
   useEffect(() => { void loadEvent(); }, [loadEvent]);
 
@@ -182,7 +182,7 @@ export default function EventDetailScreen() {
     } finally {
       setIsTogglingReaction(null);
     }
-  }, [id, isTogglingReaction, loadReactions]);
+  }, [id, isTogglingReaction, loadReactions, t]);
 
   // ── Comment submit ─────────────────────────────────────────────────────────
 
@@ -201,7 +201,7 @@ export default function EventDetailScreen() {
     } finally {
       setIsSubmittingComment(false);
     }
-  }, [commentInput, id, isSubmittingComment]);
+  }, [commentInput, id, isSubmittingComment, t]);
 
   // ── Comment delete ─────────────────────────────────────────────────────────
 
@@ -308,7 +308,7 @@ export default function EventDetailScreen() {
         return next;
       });
     }
-  }, [event, sharingInFlight]);
+  }, [event, sharingInFlight, t]);
 
   // Sprint 15 TASK-1503 — request an AI translation of the event for the
   // current UI locale. Must be called at the top level (before the early

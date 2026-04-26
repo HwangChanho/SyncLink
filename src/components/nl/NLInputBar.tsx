@@ -172,7 +172,7 @@ export function NLInputBar({ onEventCreated }: Props) {
 
     setParseResult(result);
     setInputState('preview');
-  }, [text, inputState]);
+  }, [text, inputState, canUseAI, consumeAI]);
 
   // ── Confirm: create event and close ────────────────────────────────────────
 

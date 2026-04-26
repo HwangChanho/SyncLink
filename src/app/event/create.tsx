@@ -454,7 +454,7 @@ export default function EventCreateScreen() {
   }, [
     title, allDay, startAt, endAt, repeatType,
     location, description, shareSpaceIds, reminderMinutes,
-    upsertEvent, router, colors.primary, t,
+    upsertEvent, router, colors.primary, t, categoryId,
   ]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
