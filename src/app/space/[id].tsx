@@ -19,7 +19,6 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Alert,
   Share,
   Modal,
   TextInput,
@@ -36,6 +35,7 @@ import { useColors } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import * as spaceService from '@/services/spaceService';
+import { showAlert } from '@/lib/webAlert';
 import { findFreeTimeSlots } from '@/services/freeTimeService';
 import { useSpaceStore } from '@/stores/spaceStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -148,7 +148,7 @@ export default function SpaceDetailScreen() {
 
   /** Regenerate invite code (owner only). */
   const handleRegenerateCode = () => {
-    Alert.alert(
+    showAlert(
       t('space.invite_regen'),
       t('space.regen_confirm'),
       [
@@ -165,7 +165,7 @@ export default function SpaceDetailScreen() {
               setSpace(updated);
               setSpaceDetail(updated);
             } catch (err) {
-              Alert.alert(t('common.error'), err instanceof Error ? err.message : t('space.regen_failed'));
+              showAlert(t('common.error'), err instanceof Error ? err.message : t('space.regen_failed'));
             } finally {
               setIsActionLoading(false);
             }
@@ -177,7 +177,7 @@ export default function SpaceDetailScreen() {
 
   /** Remove a member (owner only). */
   const handleRemoveMember = (member: SpaceMember) => {
-    Alert.alert(
+    showAlert(
       t('space.kick'),
       `${member.nickname}님을 Space에서 내보낼까요?`,
       [
@@ -192,7 +192,7 @@ export default function SpaceDetailScreen() {
               await spaceService.removeMember(space.id, member.userId);
               await loadSpace();
             } catch (err) {
-              Alert.alert(t('common.error'), err instanceof Error ? err.message : t('space.kick_failed'));
+              showAlert(t('common.error'), err instanceof Error ? err.message : t('space.kick_failed'));
             } finally {
               setIsActionLoading(false);
             }
@@ -204,7 +204,7 @@ export default function SpaceDetailScreen() {
 
   /** Leave the space. */
   const handleLeaveSpace = () => {
-    Alert.alert(
+    showAlert(
       t('space.leave'),
       isOwner
         ? t('space.leave_owner')
@@ -222,7 +222,7 @@ export default function SpaceDetailScreen() {
               removeSpace(space.id);
               router.back();
             } catch (err) {
-              Alert.alert(t('common.error'), err instanceof Error ? err.message : t('space.leave_failed'));
+              showAlert(t('common.error'), err instanceof Error ? err.message : t('space.leave_failed'));
               setIsActionLoading(false);
             }
           },
@@ -302,7 +302,7 @@ export default function SpaceDetailScreen() {
 
     const title = anniversaryTitle.trim();
     if (title.length === 0) {
-      Alert.alert(t('common.error'), t('anniversary.title_placeholder'));
+      showAlert(t('common.error'), t('anniversary.title_placeholder'));
       return;
     }
 
@@ -317,7 +317,7 @@ export default function SpaceDetailScreen() {
       month < 1 || month > 12 ||
       day < 1 || day > 31
     ) {
-      Alert.alert(t('anniversary.input_error'), t('anniversary.date_example'));
+      showAlert(t('anniversary.input_error'), t('anniversary.date_example'));
       return;
     }
 
@@ -330,7 +330,7 @@ export default function SpaceDetailScreen() {
       date.getMonth() + 1 !== month ||
       date.getDate() !== day
     ) {
-      Alert.alert(t('anniversary.input_error'), t('anniversary.date_not_exist'));
+      showAlert(t('anniversary.input_error'), t('anniversary.date_not_exist'));
       return;
     }
 
@@ -345,7 +345,7 @@ export default function SpaceDetailScreen() {
       setIsAnniversaryModalVisible(false);
       await loadAnniversaries();
     } catch (err) {
-      Alert.alert(t('common.error'), err instanceof Error ? err.message : t('anniversary.add_failed'));
+      showAlert(t('common.error'), err instanceof Error ? err.message : t('anniversary.add_failed'));
     } finally {
       setIsSavingAnniversary(false);
     }
@@ -361,7 +361,7 @@ export default function SpaceDetailScreen() {
 
   /** Delete an anniversary. */
   const handleDeleteAnniversary = (anniversary: Anniversary) => {
-    Alert.alert(
+    showAlert(
       t('anniversary.delete'),
       `"${anniversary.title}"을(를) 삭제할까요?`,
       [
@@ -374,7 +374,7 @@ export default function SpaceDetailScreen() {
               await spaceService.deleteAnniversary(anniversary.id);
               setAnniversaries(prev => prev.filter(a => a.id !== anniversary.id));
             } catch (err) {
-              Alert.alert(t('common.error'), err instanceof Error ? err.message : t('common.delete_failed'));
+              showAlert(t('common.error'), err instanceof Error ? err.message : t('common.delete_failed'));
             }
           },
         },

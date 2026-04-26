@@ -6,8 +6,8 @@
 
 default_platform(:ios)
 
-API_KEY_PATH = File.expand_path("../docs/AuthKey_L7GWWF9WVF.p8", __dir__)
-API_KEY_ID   = "L7GWWF9WVF"
+API_KEY_PATH = File.expand_path("../credentials/AuthKey_2GBSCKXQJ4.p8", __dir__)
+API_KEY_ID   = "2GBSCKXQJ4"
 API_ISSUER   = "5f89581a-d0c6-46c2-9461-78d5c08448fa"
 PROJECT_ROOT = File.expand_path("..", __dir__)
 IPA_PATH     = "#{PROJECT_ROOT}/build/SyncLink-ipa/SyncLink.ipa"

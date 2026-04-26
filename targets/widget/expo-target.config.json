@@ -3,6 +3,7 @@
   "type": "widget",
   "name": "SyncLinkWidget",
   "bundleIdentifier": "io.synclink.app.SyncLinkWidget",
+  "appleTeamId": "QUVU2PY6PG",
   "icon": "../../images/SyncDayLogo.png",
   "deploymentTarget": "16.0",
   "entitlements": {

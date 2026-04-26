@@ -64,7 +64,7 @@ export async function findFreeTimeSlots(
 
   // If no events, the entire range is free
   if (!eventRows || eventRows.length === 0) {
-    const durationMinutes = (rangeEndMs - rangeStartMs) / 60_000;
+    const durationMinutes = Math.round((rangeEndMs - rangeStartMs) / 60_000);
     if (durationMinutes >= minDurationMinutes) {
       return [{
         startAt: range.start,
@@ -105,7 +105,7 @@ export async function findFreeTimeSlots(
     freeSlots.push({
       startAt:         new Date(rangeStartMs),
       endAt:           new Date(firstGapEnd),
-      durationMinutes: (firstGapEnd - rangeStartMs) / 60_000,
+      durationMinutes: Math.round((firstGapEnd - rangeStartMs) / 60_000),
       participantIds:  memberIds,
     });
   }
@@ -118,7 +118,7 @@ export async function findFreeTimeSlots(
       freeSlots.push({
         startAt:         new Date(gapStart),
         endAt:           new Date(gapEnd),
-        durationMinutes: (gapEnd - gapStart) / 60_000,
+        durationMinutes: Math.round((gapEnd - gapStart) / 60_000),
         participantIds:  memberIds,
       });
     }
@@ -130,7 +130,7 @@ export async function findFreeTimeSlots(
     freeSlots.push({
       startAt:         new Date(lastBusy.end),
       endAt:           new Date(rangeEndMs),
-      durationMinutes: (rangeEndMs - lastBusy.end) / 60_000,
+      durationMinutes: Math.round((rangeEndMs - lastBusy.end) / 60_000),
       participantIds:  memberIds,
     });
   }
