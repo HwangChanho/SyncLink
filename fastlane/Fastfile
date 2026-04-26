@@ -73,6 +73,24 @@ platform :ios do
     UI.success "✅ TestFlight 업로드 완료!"
   end
 
+  # ── 배포용 프로파일 다운로드 ────────────────────────────────────────────────
+  lane :download_profiles do
+    api_key = app_store_connect_api_key(
+      key_id:       API_KEY_ID,
+      issuer_id:    API_ISSUER,
+      key_filepath: API_KEY_PATH,
+      in_house:     false,
+    )
+    ["io.synclink.app", "io.synclink.app.SyncLinkWidget"].each do |id|
+      get_provisioning_profile(
+        api_key:        api_key,
+        app_identifier: id,
+        skip_install:   false,
+        force:          true,
+      )
+    end
+  end
+
   # ── 기존 IPA만 재업로드 ────────────────────────────────────────────────────
   lane :upload_only do
     api_key = app_store_connect_api_key(
