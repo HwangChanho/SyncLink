@@ -226,7 +226,11 @@ describe('categoryService', () => {
       const cat = result[0];
       expect(cat.id).toBe('cat-system-1');
       expect(cat.userId).toBeNull();
-      expect(cat.name).toBe('개인');
+      // Sprint 19 — system rows are localised via category.builtin.* keys.
+      // The displayed name now depends on the active i18n locale, not the
+      // raw DB value. Match against both Korean and English defaults so
+      // the test passes regardless of the locale the test runner picks up.
+      expect(['개인', 'Personal']).toContain(cat.name);
       expect(cat.color).toBe('#4A90E2');
       expect(cat.icon).toBe('person');
       expect(cat.createdAt).toBeInstanceOf(Date);
