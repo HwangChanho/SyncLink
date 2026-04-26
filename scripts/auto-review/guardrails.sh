@@ -48,17 +48,24 @@ guard_call_cap() {
 # After Claude finishes, scan its commits / files for forbidden patterns.
 # Run BEFORE we trust the run as successful.
 guard_output_sanity() {
-  # Forbidden patterns the agent should never have introduced.
+  # Forbidden patterns the agent should never have introduced into a real
+  # code change. Each is scoped to a "real shell context" via word
+  # boundaries / start-of-line where possible to reduce false positives
+  # from markdown prose that *talks about* the patterns (this very file
+  # being the canonical example).
   local patterns=(
-    'git push --force'
-    'git reset --hard'
-    'rm -rf /'
-    'DROP TABLE'
-    'DELETE FROM users'
-    'DELETE FROM auth\.'
-    'service_role.*JWT'
-    'AuthKey_.*\.p8'
+    '^[^#"]*git push --force'
+    '^[^#"]*git reset --hard'
+    'rm -rf /[^a-zA-Z]'
+    'DROP TABLE [a-zA-Z_]'
+    'DELETE FROM (users|auth\.)'
+    'service_role[^"]*JWT'
+    'AuthKey_[A-Z0-9]{8,}\.p8'
   )
+
+  # Paths whose entire purpose is to describe the forbidden patterns to
+  # Claude. Skipped from the scan so we don't self-trip.
+  local self_paths_re='^(scripts/auto-review/|docs/architecture/AUTO_REVIEW\.md$|\.github/workflows/auto-review\.yml$)'
 
   # New / modified files in the working tree (uncommitted).
   local files_dirty
@@ -72,6 +79,8 @@ guard_output_sanity() {
       (cd "$PROJECT_ROOT" && git checkout -- "$f" 2>/dev/null || true)
       return 1
     fi
+    # Skip our own self-describing files.
+    if [[ "$f" =~ $self_paths_re ]]; then continue; fi
     # Pattern scan.
     for p in "${patterns[@]}"; do
       if grep -qE "$p" "$PROJECT_ROOT/$f" 2>/dev/null; then
@@ -82,18 +91,25 @@ guard_output_sanity() {
     done
   done
 
-  # Recent commits (last 5 minutes) — same scan.
+  # Recent commits (last 5 minutes) — per-file scan that honours the
+  # same self-path skip, so a legitimate commit touching auto-review/'s
+  # own files never trips the guard.
   local recent_commits
   recent_commits="$(cd "$PROJECT_ROOT" && git log --since='5 minutes ago' --pretty='%H')"
   for sha in $recent_commits; do
-    local diff
-    diff="$(cd "$PROJECT_ROOT" && git show --no-patch --format='' "$sha"; cd "$PROJECT_ROOT" && git show "$sha")"
-    for p in "${patterns[@]}"; do
-      if echo "$diff" | grep -qE "$p"; then
-        log "GUARD: forbidden pattern '$p' in commit $sha — reverting."
-        (cd "$PROJECT_ROOT" && git revert --no-edit "$sha") || true
-        return 1
-      fi
+    local files_in_commit
+    files_in_commit="$(cd "$PROJECT_ROOT" && git show --name-only --pretty='' "$sha")"
+    for f in $files_in_commit; do
+      if [[ "$f" =~ $self_paths_re ]]; then continue; fi
+      local file_diff
+      file_diff="$(cd "$PROJECT_ROOT" && git show "$sha" -- "$f")"
+      for p in "${patterns[@]}"; do
+        if echo "$file_diff" | grep -qE "$p"; then
+          log "GUARD: forbidden pattern '$p' in commit $sha (file $f) — reverting."
+          (cd "$PROJECT_ROOT" && git revert --no-edit "$sha") || true
+          return 1
+        fi
+      done
     done
   done
 
