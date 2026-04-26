@@ -1,0 +1,106 @@
+# 10_golden_path_login — 로그인 + 탭 네비게이션 골든 패스
+#
+# 검증 항목:
+#   - Dev 이메일 로그인 (e2e@synclink.test)
+#   - 알림 권한 허용 (clearState 시마다 뜨는 시스템 팝업)
+#   - 온보딩 건너뛰기 (신규/초기화된 계정)
+#   - 홈 → 캘린더 → 플래너 → 내 정보 탭 이동
+#
+# 실행:
+#   maestro --device <UDID> test e2e/flows/10_golden_path_login.yaml
+#
+# ⚠️ 알려진 이슈:
+#   - clearState 시 온보딩이 매번 나타남. 알림 → 온보딩 순서 처리 필요.
+#   - 플래너 탭은 스켈레톤 로딩이 있어 extendedWaitUntil 필요.
+#   - "건너뛰기" 텍스트 대신 accessibilityLabel 사용 권장.
+
+appId: io.synclink.app
+---
+# ── 1. 앱 실행 ────────────────────────────────────────────────────────────────
+- launchApp:
+    clearState: true
+
+- waitForAnimationToEnd
+
+# 알림 권한 다이얼로그가 로그인보다 먼저 뜨는 경우 처리
+- runFlow:
+    when:
+      visible:
+        text: "허용"
+    commands:
+      - tapOn:
+          text: "허용"
+      - waitForAnimationToEnd
+
+# ── 2. 로그인 ─────────────────────────────────────────────────────────────────
+- extendedWaitUntil:
+    visible:
+      text: "이메일로 로그인"
+    timeout: 10000
+
+- tapOn:
+    text: "이메일"
+- eraseText: 50
+- inputText: "e2e@synclink.test"
+- tapOn:
+    text: "비밀번호"
+- eraseText: 50
+- inputText: "e2etest1234"
+- tapOn:
+    text: "이메일로 로그인"
+
+# ── 3. 알림 권한 허용 (온보딩 위에 뜨는 시스템 팝업) ─────────────────────────
+- extendedWaitUntil:
+    visible:
+      text: "허용"
+    timeout: 10000
+- tapOn:
+    text: "허용"
+- waitForAnimationToEnd
+
+# ── 4. 온보딩 건너뛰기 ────────────────────────────────────────────────────────
+# TODO: accessibilityLabel로 더 안정적으로 처리 필요
+- tapOn:
+    text: "건너뛰기"
+    optional: true
+- waitForAnimationToEnd
+
+# ── 5. 홈 탭 확인 ─────────────────────────────────────────────────────────────
+- extendedWaitUntil:
+    visible:
+      text: "홈"
+    timeout: 15000
+
+- extendedWaitUntil:
+    visible:
+      text: "오늘 일정"
+    timeout: 10000
+
+- takeScreenshot: screenshots/gp_01_home
+
+# ── 6. 캘린더 탭 ──────────────────────────────────────────────────────────────
+- tapOn:
+    label: "캘린더, tab, 2 of 4"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/gp_02_calendar
+
+# ── 7. 플래너 탭 ──────────────────────────────────────────────────────────────
+- tapOn:
+    label: "플래너, tab, 3 of 4"
+- extendedWaitUntil:
+    visible:
+      text: "할일"
+    timeout: 12000
+- takeScreenshot: screenshots/gp_03_planner
+
+# ── 8. 내 정보 탭 ─────────────────────────────────────────────────────────────
+- tapOn:
+    label: "내 정보, tab, 4 of 4"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/gp_04_my
+
+# ── 9. 홈 복귀 ────────────────────────────────────────────────────────────────
+- tapOn:
+    label: "홈, tab, 1 of 4"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/gp_05_home_return
