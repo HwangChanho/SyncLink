@@ -1,0 +1,100 @@
+# 20_real_device_smoke — TestFlight 실기기 스모크 테스트
+#
+# 목적: TestFlight 빌드가 실기기에서 정상 동작하는지 확인
+#
+# 전제 조건:
+#   - 실기기에 TestFlight 빌드 설치 완료
+#   - 기기를 Mac에 USB 연결
+#   - 기기 UDID 확인: `xcrun xctrace list devices`
+#
+# 실행:
+#   TEST_EMAIL=e2e@synclink.test TEST_PASSWORD=e2etest1234 \
+#   maestro --device <REAL_DEVICE_UDID> test e2e/flows/20_real_device_smoke.yaml
+#
+# 특이사항:
+#   - TestFlight 빌드는 DEV 로그인 버튼 없음 → 표준 이메일 로그인 사용
+#   - clearState: false (프로덕션 빌드 상태 보존)
+#   - 알림 권한은 이미 허용 상태일 수 있음
+
+appId: io.synclink.app
+env:
+  TEST_EMAIL: ${TEST_EMAIL:-e2e@synclink.test}
+  TEST_PASSWORD: ${TEST_PASSWORD:-e2etest1234}
+---
+
+# ── 1. 앱 시작 ─────────────────────────────────────────────────────────────────
+- launchApp:
+    clearState: false
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/rd_01_launch
+
+# ── 2. 로그인 (이미 로그인되어 있으면 건너뜀) ──────────────────────────────────
+- runFlow:
+    when:
+      visible:
+        text: "이메일로 로그인"
+    commands:
+      - tapOn:
+          text: "이메일"
+      - eraseText: 50
+      - inputText: ${TEST_EMAIL}
+      - tapOn:
+          text: "비밀번호"
+      - eraseText: 50
+      - inputText: ${TEST_PASSWORD}
+      - tapOn:
+          text: "이메일로 로그인"
+      - waitForAnimationToEnd
+
+# 알림 권한 (처음 로그인 시)
+- runFlow:
+    when:
+      visible:
+        text: "허용"
+    commands:
+      - tapOn:
+          text: "허용"
+      - waitForAnimationToEnd
+
+# ── 3. 홈 화면 검증 ────────────────────────────────────────────────────────────
+- extendedWaitUntil:
+    visible:
+      text: "오늘 일정"
+    timeout: 20000
+- takeScreenshot: screenshots/rd_02_home
+- assertVisible: "오늘 일정"
+
+# ── 4. 탭 네비게이션 ───────────────────────────────────────────────────────────
+- tapOn:
+    label: "캘린더, 탭, 2 of 4"
+    optional: true
+- runFlow:
+    when:
+      notVisible:
+        label: "캘린더, 탭, 2 of 4, 선택됨"
+    commands:
+      - tapOn:
+          text: "캘린더"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/rd_03_calendar
+
+- tapOn:
+    text: "플래너"
+- waitForAnimationToEnd
+- assertVisible: "할일"
+- takeScreenshot: screenshots/rd_04_planner
+
+- tapOn:
+    text: "내 정보"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/rd_05_my
+
+# Dev 대시보드가 프로덕션 빌드에서 보이지 않는지 확인
+- assertNotVisible: "Dev — AI Cost Dashboard"
+
+# ── 5. 홈 복귀 ─────────────────────────────────────────────────────────────────
+- tapOn:
+    text: "홈"
+- waitForAnimationToEnd
+- assertVisible: "오늘 일정"
+- takeScreenshot: screenshots/rd_06_home_final
