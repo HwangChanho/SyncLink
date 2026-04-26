@@ -2,8 +2,10 @@
 <!--
   SyncLink Auto-Reviewer — daily review LaunchAgent.
 
-  Runs `scripts/auto-review/run.sh daily-review` every day at 03:00 KST
-  on the LEAD's Mac. Logs to ~/Library/Logs/synclink-auto-review.log.
+  Runs `scripts/auto-review/run.sh daily-review` four times a day
+  (03:00 / 09:00 / 15:00 / 21:00 KST) on the LEAD's Mac so big code
+  changes get a fresh review within ~6h instead of waiting overnight.
+  Logs to ~/Library/Logs/synclink-auto-review.log.
 
   Install / load:
      bash scripts/auto-review/install.sh
@@ -29,14 +31,14 @@
   <key>WorkingDirectory</key>
   <string>__PROJECT_ROOT__</string>
 
-  <!-- 03:00 KST daily. macOS uses local time. -->
+  <!-- Every 6 hours — local Mac time. -->
   <key>StartCalendarInterval</key>
-  <dict>
-    <key>Hour</key>
-    <integer>3</integer>
-    <key>Minute</key>
-    <integer>0</integer>
-  </dict>
+  <array>
+    <dict><key>Hour</key><integer>3</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Hour</key><integer>15</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Hour</key><integer>21</integer><key>Minute</key><integer>0</integer></dict>
+  </array>
 
   <key>RunAtLoad</key>
   <false/>

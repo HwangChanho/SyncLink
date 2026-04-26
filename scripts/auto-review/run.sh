@@ -42,7 +42,8 @@ fi
 
 # ── Pre-flight guards ────────────────────────────────────────────────────
 guard_kill_switch || exit 0
-guard_call_cap "$PROMPT_NAME" 5 || exit 0
+# 6 base runs/day per prompt + headroom for manual ad-hoc calls.
+guard_call_cap "$PROMPT_NAME" 12 || exit 0
 
 log "===== START $PROMPT_NAME (dry-run=$DRY_RUN) ====="
 

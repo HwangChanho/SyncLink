@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  SyncLink Auto-Reviewer — daily issue triage.
-  Runs at 04:00 KST, right after the daily-review at 03:00, so the
-  triager can ingest the freshest review.
+  SyncLink Auto-Reviewer — issue triage.
+  Runs 30 min after each daily-review (03:30 / 09:30 / 15:30 / 21:30 KST)
+  so it can ingest the freshest review.
   Sprint 19.
 -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -22,12 +22,12 @@
   <string>__PROJECT_ROOT__</string>
 
   <key>StartCalendarInterval</key>
-  <dict>
-    <key>Hour</key>
-    <integer>4</integer>
-    <key>Minute</key>
-    <integer>0</integer>
-  </dict>
+  <array>
+    <dict><key>Hour</key><integer>3</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Hour</key><integer>15</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Hour</key><integer>21</integer><key>Minute</key><integer>30</integer></dict>
+  </array>
 
   <key>RunAtLoad</key>
   <false/>
