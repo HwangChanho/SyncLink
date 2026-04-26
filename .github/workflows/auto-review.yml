@@ -1,0 +1,114 @@
+name: auto-review
+
+# SyncLink Auto-Reviewer — push-triggered cloud review.
+#
+# Complements the macOS LaunchAgents (which run on the LEAD's Mac) by
+# letting reviews fire even when the laptop is off. Every push to main
+# (or PR) runs the daily-review prompt; results are posted as a PR
+# comment / issue rather than committed.
+#
+# Required GitHub secrets:
+#   ANTHROPIC_API_KEY  — Claude API key (Console → Settings → API Keys)
+#
+# Sprint 19 — see docs/architecture/AUTO_REVIEW.md.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Manual trigger from the Actions tab for ad-hoc reviews.
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: 'Which prompt to run'
+        required: true
+        default: 'daily-review'
+        type: choice
+        options:
+          - daily-review
+          - test-fix
+          - cost-monitor
+          - issue-triage
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    # Skip if the latest commit is itself an auto-fix to avoid loops.
+    if: "!contains(github.event.head_commit.message, 'chore(auto-fix)')"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Need history for daily-review's `git log` analysis.
+          fetch-depth: 50
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci --prefer-offline
+
+      - name: Install Claude CLI
+        run: |
+          curl -fsSL https://github.com/anthropics/anthropic-sdk-cli/releases/latest/download/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Auto-review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          REVIEW_DATE: ${{ github.event.head_commit.timestamp || github.run_started_at }}
+        run: |
+          PROMPT="${{ github.event.inputs.prompt || 'daily-review' }}"
+          # Cloud runs always go through the dry-run safety gate — they
+          # never commit code; the result is uploaded as an artifact and
+          # posted as a comment.
+          bash scripts/auto-review/run.sh "$PROMPT" --dry-run
+
+      - name: Surface inbox results
+        if: always()
+        run: |
+          ls -la docs/inbox/ || true
+          for f in docs/inbox/*.md; do
+            [ -f "$f" ] || continue
+            echo "::group::$f"
+            cat "$f"
+            echo "::endgroup::"
+          done
+
+      - name: Comment on PR with review
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          SAFE_PROMPT: ${{ github.event.inputs.prompt || 'daily-review' }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const inboxDir = 'docs/inbox';
+            const today = new Date().toISOString().slice(0, 10);
+            const candidates = fs.readdirSync(inboxDir)
+              .filter(f => f.includes(today))
+              .map(f => path.join(inboxDir, f));
+            if (candidates.length === 0) return;
+            const body = candidates
+              .map(f => `### ${path.basename(f)}\n\n${fs.readFileSync(f, 'utf8')}`)
+              .join('\n\n---\n\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              issue_number: context.issue.number,
+              body: `🤖 Auto-Reviewer (\`${process.env.SAFE_PROMPT}\`)\n\n${body}`,
+            });
+
+      - name: Upload artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-review-${{ github.run_id }}
+          path: docs/inbox/
+          if-no-files-found: ignore
