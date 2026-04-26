@@ -236,14 +236,18 @@ function serializeSupabaseError(err: unknown): Record<string, unknown> | null {
  *
  * Sprint 19 — owner-editable Space metadata.
  */
-export async function uploadSpaceCover(spaceId: string, localUri: string): Promise<string> {
+export async function uploadSpaceCover(
+  spaceId: string,
+  localUri: string,
+  base64?: string | null,
+): Promise<string> {
   const userId = await getCurrentUserId();
   if (!userId) throw new Error('로그인이 필요합니다.');
   await assertOwner(spaceId, userId);
 
-  // Reuse authService's binary-safe reader (works around RN's empty-blob
-  // bug for `file://` URIs on iOS/Android).
-  const { ext, mimeType, body } = await readImageBinary(localUri);
+  // Caller (EditSpaceModal) hands us ImagePicker's pre-decoded base64 so
+  // we can sidestep iOS photo-asset URI handling entirely.
+  const { ext, mimeType, body } = await readImageBinary(localUri, base64);
   const filePath = `space-covers/${spaceId}/cover.${ext}`;
 
   const { error: uploadError } = await supa.storage

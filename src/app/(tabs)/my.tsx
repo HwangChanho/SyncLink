@@ -141,12 +141,19 @@ export default function MyScreen() {
       return;
     }
 
-    // Open the image picker (gallery)
+    // Open the image picker (gallery).
+    //
+    // `base64: true` makes ImagePicker decode the asset for us, so we
+    // never have to round-trip through expo-file-system. That round-trip
+    // returned an empty string for some iOS photo URIs (ph:// scheme)
+    // and silently uploaded a 0-byte avatar. Diagnosis is documented in
+    // docs/inbox/DEBUG_2026-04-26_avatar-upload.md.
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,    // crop to square
       aspect: [1, 1],
       quality: 0.7,           // 70% quality keeps file size reasonable
+      base64: true,
     });
 
     // User cancelled
@@ -157,8 +164,9 @@ export default function MyScreen() {
 
     setIsUploadingAvatar(true);
     try {
-      // Upload to Supabase Storage
-      const publicUrl = await authService.uploadAvatar(asset.uri);
+      // Pass both the URI (for web fetch fallback) and the picker's
+      // already-decoded base64 (the reliable path on native).
+      const publicUrl = await authService.uploadAvatar(asset.uri, asset.base64 ?? null);
       // eslint-disable-next-line no-console
       console.info('[handleChangeAvatar] publicUrl', publicUrl);
       // Update user profile with new URL

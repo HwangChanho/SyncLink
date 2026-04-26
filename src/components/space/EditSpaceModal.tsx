@@ -56,6 +56,8 @@ export function EditSpaceModal({ visible, space, onClose, onSaved }: EditSpaceMo
   /** Picked from the local image library, distinct from coverUri so we
    *  know whether to upload (vs. keep the existing public URL). */
   const [pickedLocalUri, setPickedLocalUri] = useState<string | null>(null);
+  /** ImagePicker's pre-decoded base64 — bypasses the ph:// 0-byte path. */
+  const [pickedBase64, setPickedBase64] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   /** Reset draft when the modal reopens for a different Space. */
@@ -85,11 +87,13 @@ export function EditSpaceModal({ visible, space, onClose, onSaved }: EditSpaceMo
       // 16:9 fits the cover band on the Space detail screen.
       aspect: [16, 9],
       quality: 0.8,
+      base64: true,
     });
     if (!res.canceled && res.assets[0]) {
-      const uri = res.assets[0].uri;
-      setPickedLocalUri(uri);
-      setCoverUri(uri); // preview
+      const a = res.assets[0];
+      setPickedLocalUri(a.uri);
+      setPickedBase64(a.base64 ?? null);
+      setCoverUri(a.uri); // preview
     }
   };
 
@@ -105,7 +109,7 @@ export function EditSpaceModal({ visible, space, onClose, onSaved }: EditSpaceMo
     try {
       let coverUrl: string | undefined;
       if (pickedLocalUri) {
-        coverUrl = await spaceService.uploadSpaceCover(space.id, pickedLocalUri);
+        coverUrl = await spaceService.uploadSpaceCover(space.id, pickedLocalUri, pickedBase64);
       }
       const updates: { name?: string; coverImageUrl?: string } = {};
       if (name.trim() !== space.name) updates.name = name.trim();

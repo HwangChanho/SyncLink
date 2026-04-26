@@ -515,7 +515,17 @@ export async function updateProfile(
  * - Web: file:// access is denied, but the picker returns an http(s) or
  *   blob: URI which `fetch` handles correctly. Returns the Blob directly.
  */
-export async function readImageBinary(localUri: string): Promise<{
+export async function readImageBinary(
+  localUri: string,
+  /**
+   * Optional base64 string already decoded by the caller (e.g.
+   * `ImagePicker.launchImageLibraryAsync({ base64: true })`). When
+   * present we bypass expo-file-system entirely — that path returns an
+   * empty string for some iOS photo asset URIs (ph://) which silently
+   * uploaded 0-byte files. See DEBUG_2026-04-26_avatar-upload.md.
+   */
+  preDecodedBase64?: string | null,
+): Promise<{
   uri: string; ext: string; mimeType: string; body: Uint8Array | Blob;
 }> {
   const lastDot = localUri.lastIndexOf('.');
@@ -526,12 +536,22 @@ export async function readImageBinary(localUri: string): Promise<{
                   : ext === 'webp' ? 'image/webp'
                   : 'image/jpeg';
 
+  // Caller-supplied base64 is the most reliable path on native — short
+  // circuit before we touch the file system.
+  if (preDecodedBase64 && preDecodedBase64.length > 0) {
+    return { uri: localUri, ext, mimeType, body: base64ToUint8Array(preDecodedBase64) };
+  }
+
   if (Platform.OS === 'web') {
     const res  = await fetch(localUri);
     const blob = await res.blob();
     return { uri: localUri, ext, mimeType, body: blob };
   }
 
+  // Native fallback — only reached when the caller doesn't supply
+  // base64 (e.g. uploadSpaceCover from EditSpaceModal which still uses
+  // file:// URIs). Known to produce empty strings for ph:// — callers
+  // hitting that case should switch to base64-true ImagePicker too.
   const base64 = await FileSystem.readAsStringAsync(localUri, {
     encoding: FileSystem.EncodingType.Base64,
   });
@@ -561,20 +581,20 @@ function base64ToUint8Array(base64: string): Uint8Array {
   return out;
 }
 
-export async function uploadAvatar(localUri: string): Promise<string> {
+export async function uploadAvatar(
+  localUri: string,
+  /**
+   * Pre-decoded base64 from `ImagePicker.launchImageLibraryAsync({ base64: true })`.
+   * Strongly preferred — bypasses iOS photo-asset URI quirks that cause
+   * silent 0-byte uploads (DEBUG_2026-04-26_avatar-upload.md).
+   */
+  base64?: string | null,
+): Promise<string> {
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) throw new Error('로그인이 필요합니다.');
 
   // Read the picked file as a binary ArrayBuffer.
-  //
-  // Why not `await fetch(localUri).then(r => r.blob())`?
-  //   On iOS/Android React Native's `fetch` against a `file://` URI
-  //   returns a Blob whose body is empty (0 bytes). Supabase Storage
-  //   accepts the upload but writes a 0-byte object, so the user sees
-  //   "upload succeeded" while the avatar never actually changes.
-  //   expo-file-system + base64→bytes is the documented Supabase
-  //   workaround that works on iOS, Android, and web.
-  const { uri, ext, mimeType, body } = await readImageBinary(localUri);
+  const { uri, ext, mimeType, body } = await readImageBinary(localUri, base64);
   // Diagnostic: confirm we actually read bytes (RN's empty-blob bug
   // would silently send 0). Surfaces in Metro/browser console.
   const bodySize = body instanceof Uint8Array ? body.byteLength : (body as Blob).size;
