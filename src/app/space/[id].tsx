@@ -28,6 +28,7 @@ import {
 } from 'react-native';
 // expo-image provides better caching and performance than React Native's Image (TASK-701)
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -36,6 +37,7 @@ import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import * as spaceService from '@/services/spaceService';
 import { showAlert } from '@/lib/webAlert';
+import { EditSpaceModal } from '@/components/space/EditSpaceModal';
 import { findFreeTimeSlots } from '@/services/freeTimeService';
 import { useSpaceStore } from '@/stores/spaceStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -77,6 +79,9 @@ export default function SpaceDetailScreen() {
   const [ftResults, setFtResults] = useState<FreeTimeSlot[] | null>(null);
   const [ftIsSearching, setFtIsSearching] = useState(false);
   const [ftError, setFtError] = useState<string | null>(null);
+
+  // ─── Edit Space modal (owner only) ───────────────────────────────────────
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
 
   // ─── Anniversary add modal state ─────────────────────────────────────────
   /** Whether the add-anniversary modal is visible */
@@ -133,14 +138,44 @@ export default function SpaceDetailScreen() {
 
   // ─── Actions ─────────────────────────────────────────────────────────────
 
-  /** Copy invite code to clipboard and share via native share sheet. */
+  /**
+   * Open the OS share sheet (native) or browser Web Share / clipboard
+   * fallback (web). Lets the user route the invite to KakaoTalk, Slack,
+   * email, SMS — whatever is installed.
+   *
+   * Sprint 19 — LEAD requested external-channel inviting.
+   */
   const handleShareInviteCode = async () => {
     if (!space) return;
+    const message = `SyncLink Space "${space.name}"에 초대합니다!\n초대 코드: ${space.inviteCode}\n참여 링크: synclink://space/join/${space.inviteCode}`;
+    const title   = `${space.name} 초대`;
+
+    if (Platform.OS === 'web') {
+      // Modern browsers (Chrome Android, Safari iOS) expose navigator.share
+      // which opens the OS share sheet just like RN's Share. Desktop browsers
+      // typically don't support it — fall back to clipboard + alert.
+      const nav = (globalThis as typeof globalThis & {
+        navigator?: { share?: (data: { title: string; text: string }) => Promise<void>; clipboard?: { writeText: (s: string) => Promise<void> } };
+      }).navigator;
+      if (nav?.share) {
+        try { await nav.share({ title, text: message }); } catch { /* cancelled */ }
+        return;
+      }
+      if (nav?.clipboard?.writeText) {
+        try {
+          await nav.clipboard.writeText(message);
+          showAlert('복사됨', '초대 메시지가 클립보드에 복사되었습니다. 카카오톡/Slack/이메일 등 원하는 곳에 붙여넣으세요.');
+        } catch {
+          showAlert('초대 메시지', message);
+        }
+        return;
+      }
+      showAlert('초대 메시지', message);
+      return;
+    }
+
     try {
-      await Share.share({
-        message: `SyncLink Space "${space.name}"에 초대합니다!\n초대 코드: ${space.inviteCode}\n참여 링크: synclink://space/join/${space.inviteCode}`,
-        title: `${space.name} 초대`,
-      });
+      await Share.share({ message, title });
     } catch {
       // User cancelled share — ignore
     }
@@ -432,6 +467,19 @@ export default function SpaceDetailScreen() {
         </View>
       )}
 
+      {/* ── Edit Space Modal (owner only) ─────────────────────────────── */}
+      {isOwner && (
+        <EditSpaceModal
+          visible={isEditModalVisible}
+          space={space}
+          onClose={() => setIsEditModalVisible(false)}
+          onSaved={(next) => {
+            setSpace(next);
+            setSpaceDetail(next);
+          }}
+        />
+      )}
+
       {/* ── Anniversary Add Modal ─────────────────────────────────────── */}
       <AnniversaryAddModal
         visible={isAnniversaryModalVisible}
@@ -468,7 +516,18 @@ export default function SpaceDetailScreen() {
               </Text>
             )}
           </View>
-          <Text style={styles.spaceName}>{space.name}</Text>
+          <View style={styles.spaceNameRow}>
+            <Text style={styles.spaceName}>{space.name}</Text>
+            {isOwner && (
+              <TouchableOpacity
+                onPress={() => setIsEditModalVisible(true)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityLabel="Space 편집"
+              >
+                <Ionicons name="create-outline" size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+            )}
+          </View>
           <View style={styles.spaceTypeBadge}>
             <Text style={styles.spaceTypeText}>{typeLabel}</Text>
           </View>
@@ -1057,10 +1116,15 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   spaceAvatarEmoji: {
     fontSize: 36,
   },
+  spaceNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    marginBottom: spacing[2],
+  },
   spaceName: {
     ...textStyles.h3,
     color: colors.textPrimary,
-    marginBottom: spacing[2],
   },
   spaceTypeBadge: {
     paddingHorizontal: spacing[3],

@@ -225,6 +225,42 @@ function serializeSupabaseError(err: unknown): Record<string, unknown> | null {
 }
 
 /**
+ * Upload a Space cover image to Storage and return a public URL.
+ *
+ * Mirrors authService.uploadAvatar but stores under
+ * `space-covers/{spaceId}/cover.{ext}` so each Space has at most one
+ * persistent cover. Bucket name `avatars` is reused — a single public
+ * bucket avoids extra Supabase admin work; the {spaceId} prefix keeps
+ * uploads namespaced.
+ *
+ * Sprint 19 — owner-editable Space metadata.
+ */
+export async function uploadSpaceCover(spaceId: string, localUri: string): Promise<string> {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error('로그인이 필요합니다.');
+  await assertOwner(spaceId, userId);
+
+  const response = await fetch(localUri);
+  const blob = await response.blob();
+  const mimeType = blob.type || 'image/jpeg';
+  const fileExt  = mimeType.split('/')[1] ?? 'jpg';
+  const filePath = `space-covers/${spaceId}/cover.${fileExt}`;
+
+  const { error: uploadError } = await supa.storage
+    .from('avatars')
+    .upload(filePath, blob, { contentType: mimeType, upsert: true });
+  if (uploadError) {
+    throw new Error(`Space 커버 업로드에 실패했습니다: ${uploadError.message}`);
+  }
+
+  const { data: { publicUrl } } = supa.storage
+    .from('avatars')
+    .getPublicUrl(filePath);
+  // Cache-buster so RN Image refetches after re-upload.
+  return `${publicUrl}?t=${Date.now()}`;
+}
+
+/**
  * Update space details (name, cover image).
  * Only the owner can update space details.
  *
