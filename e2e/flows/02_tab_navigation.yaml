@@ -1,0 +1,40 @@
+# 02_tab_navigation — 탭 네비게이션 골든 패스
+#
+# 로그인 완료 상태에서 4개 탭을 순서대로 이동하며 각 화면이
+# 크래시 없이 렌더링되는지 검증한다.
+#
+# 선행 조건: 01_login_dev.yaml 실행 후 홈 탭 상태
+# 실행: maestro test e2e/flows/02_tab_navigation.yaml
+
+appId: io.synclink.app
+---
+# 홈 탭 (기본 진입 탭)
+- assertVisible: "홈"
+- takeScreenshot: screenshots/02_home_tab
+
+# 캘린더 탭 이동
+- tapOn: "캘린더"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/02_calendar_tab
+
+# 플래너 탭 이동
+- tapOn: "플래너"
+- waitForAnimationToEnd
+# 플래너의 탭 전환 검증
+- assertVisible: "할일"
+- assertVisible: "노트"
+- takeScreenshot: screenshots/02_planner_tab
+
+# 할일 → 노트 탭 전환
+- tapOn: "노트"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/02_planner_notes_tab
+
+# 내 정보 탭 이동
+- tapOn: "내 정보"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/02_my_tab
+
+# 홈으로 복귀
+- tapOn: "홈"
+- waitForAnimationToEnd

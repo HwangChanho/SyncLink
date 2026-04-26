@@ -1,0 +1,26 @@
+# 00_launch — 앱 실행 + 로그인 화면 도달 검증
+#
+# 서버 연결 불필요. 앱이 크래시 없이 시작되고 로그인 화면까지
+# 정상 도달하는지만 확인한다.
+#
+# 실행: maestro test e2e/flows/00_launch.yaml
+
+appId: io.synclink.app
+---
+# 앱 실행
+- launchApp:
+    clearState: true
+
+# 스플래시 / 초기 로딩 대기
+- waitForAnimationToEnd
+
+# 로그인 화면 요소 확인
+- assertVisible: "SyncLink"
+- assertVisible:
+    text: "Google로 시작하기"
+- assertVisible:
+    text: "Apple로 시작하기"
+- assertVisible:
+    text: "카카오로 시작하기"
+
+- takeScreenshot: screenshots/00_login_screen

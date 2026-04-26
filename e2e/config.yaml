@@ -1,0 +1,11 @@
+# Maestro E2E 공통 설정
+#
+# 실행 전 필요:
+#   1. iOS 시뮬레이터 또는 Android 에뮬레이터 실행
+#   2. 앱 개발 빌드 설치: npx expo run:ios --simulator
+#
+# 환경 변수 (선택, Dev 로그인 테스트 시 필요):
+#   TEST_EMAIL=<계정 이메일>
+#   TEST_PASSWORD=<계정 비밀번호>
+
+appId: io.synclink.app

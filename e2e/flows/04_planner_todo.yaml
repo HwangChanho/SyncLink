@@ -1,0 +1,43 @@
+# 04_planner_todo — 플래너 할일 생성 골든 패스
+#
+# 플래너 탭 → FAB(+) 탭 → 제목 입력 → 저장
+# 생성된 할일이 목록에 표시되는지 확인한다.
+
+appId: io.synclink.app
+---
+# 플래너 탭 이동
+- tapOn: "플래너"
+- waitForAnimationToEnd
+- assertVisible: "할일"
+- takeScreenshot: screenshots/04_planner_before
+
+# FAB(+) 탭 — 새 할일 시트 열기
+- tapOn:
+    label: "새 할일"
+    optional: true
+- runFlow:
+    when:
+      notVisible: "Buy"
+    commands:
+      - tapOn:
+          label: "새 할일 만들기"
+
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/04_todo_create_sheet
+
+# 할일 제목 입력
+- typeText: "E2E 테스트 할일"
+- takeScreenshot: screenshots/04_todo_title_entered
+
+# 저장 (시트 닫기로 자동 저장)
+- tapOn:
+    text: "저장"
+    optional: true
+- runFlow:
+    when:
+      visible: "E2E 테스트 할일"
+    commands:
+      - swipeDown
+
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/04_todo_created

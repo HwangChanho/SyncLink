@@ -1,0 +1,84 @@
+# 05_golden_path — 전체 골든 패스 (로그인 → 주요 기능 순서대로)
+#
+# 완전한 E2E 스모크 테스트. 각 세부 플로우를 순서대로 실행한다.
+# 한 번에 전체 앱 흐름을 검증하고 싶을 때 사용.
+#
+# 실행:
+#   TEST_EMAIL=test@example.com TEST_PASSWORD=secret \
+#   maestro test e2e/flows/05_golden_path.yaml
+
+appId: io.synclink.app
+env:
+  TEST_EMAIL: ${TEST_EMAIL}
+  TEST_PASSWORD: ${TEST_PASSWORD}
+---
+# ── 1. 앱 실행 + 로그인 화면 검증 ────────────────────────────────────────────
+- launchApp:
+    clearState: true
+- waitForAnimationToEnd
+- assertVisible: "SyncLink"
+- takeScreenshot: screenshots/gp_01_login
+
+# ── 2. Dev 로그인 ─────────────────────────────────────────────────────────────
+- tapOn:
+    text: "이메일"
+- typeText: ${TEST_EMAIL}
+- tapOn:
+    text: "비밀번호"
+- typeText: ${TEST_PASSWORD}
+- tapOn:
+    text: "이메일로 로그인"
+- waitForAnimationToEnd
+- assertVisible: "홈"
+- takeScreenshot: screenshots/gp_02_home
+
+# ── 3. 탭 네비게이션 ──────────────────────────────────────────────────────────
+- tapOn: "캘린더"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/gp_03_calendar
+
+- tapOn: "플래너"
+- waitForAnimationToEnd
+- assertVisible: "할일"
+- takeScreenshot: screenshots/gp_04_planner
+
+- tapOn: "내 정보"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/gp_05_my
+
+- tapOn: "홈"
+- waitForAnimationToEnd
+
+# ── 4. 이벤트 생성 ────────────────────────────────────────────────────────────
+- tapOn: "캘린더"
+- waitForAnimationToEnd
+- tapOn:
+    label: "새 일정 만들기"
+- waitForAnimationToEnd
+- typeText: "E2E 골든패스 이벤트"
+- takeScreenshot: screenshots/gp_06_event_form
+- tapOn:
+    text: "저장"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/gp_07_event_done
+
+# ── 5. 할일 생성 ──────────────────────────────────────────────────────────────
+- tapOn: "플래너"
+- waitForAnimationToEnd
+- tapOn:
+    label: "새 할일"
+    optional: true
+- runFlow:
+    when:
+      notVisible: "제목"
+    commands:
+      - tapOn:
+          label: "새 할일 만들기"
+- waitForAnimationToEnd
+- typeText: "E2E 골든패스 할일"
+- tapOn:
+    text: "저장"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/gp_08_todo_done

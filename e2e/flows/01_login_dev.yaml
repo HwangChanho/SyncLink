@@ -1,0 +1,50 @@
+# 01_login_dev — Dev 빌드 이메일 로그인 후 홈 탭 도달
+#
+# 개발 빌드(__DEV__)에서만 "이메일로 로그인" 버튼이 표시된다.
+# 환경 변수: TEST_EMAIL, TEST_PASSWORD
+#
+# 실행:
+#   TEST_EMAIL=test@example.com TEST_PASSWORD=secret \
+#   maestro test e2e/flows/01_login_dev.yaml
+
+appId: io.synclink.app
+env:
+  TEST_EMAIL: ${TEST_EMAIL}
+  TEST_PASSWORD: ${TEST_PASSWORD}
+---
+- launchApp:
+    clearState: true
+
+- waitForAnimationToEnd
+
+# Dev 전용 섹션이 보일 때까지 대기
+- assertVisible:
+    text: "이메일로 로그인"
+
+# 이메일 입력
+- tapOn:
+    text: "이메일"
+- clearText
+- typeText: ${TEST_EMAIL}
+
+# 비밀번호 입력
+- tapOn:
+    text: "비밀번호"
+- clearText
+- typeText: ${TEST_PASSWORD}
+
+# 로그인 버튼 탭
+- tapOn:
+    text: "이메일로 로그인"
+
+- waitForAnimationToEnd
+
+- takeScreenshot: screenshots/01_after_login
+
+# 홈 탭 도달 확인 — 탭 바의 "홈" 탭이 보여야 함
+- assertVisible: "홈"
+- assertVisible: "캘린더"
+- assertVisible: "플래너"
+- assertVisible: "내 정보"
+
+- takeScreenshot: screenshots/01_home_tab

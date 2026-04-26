@@ -11,7 +11,11 @@
     "test": "jest --watchAll",
     "test:ci": "jest --ci --passWithNoTests --forceExit",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src --ext .ts,.tsx --max-warnings 30"
+    "lint": "eslint src --ext .ts,.tsx --max-warnings 30",
+    "test:e2e": "maestro test e2e/flows/",
+    "test:e2e:launch": "maestro test e2e/flows/00_launch.yaml",
+    "test:e2e:golden": "maestro test e2e/flows/05_golden_path.yaml",
+    "test:e2e:studio": "maestro studio"
   },
   "dependencies": {
     "@gorhom/bottom-sheet": "^5.2.10",

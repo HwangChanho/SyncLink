@@ -1,3 +1,7 @@
+# E2E 스크린샷 (테스트 실행 시 자동 생성)
+e2e/screenshots/*.png
+e2e/screenshots/*.jpg
+
 # Dependencies
 node_modules/
 .pnp
