@@ -34,6 +34,7 @@ import * as authService from '@/services/authService';
 import { useAuthStore } from '@/stores/authStore';
 import { useSpaceStore } from '@/stores/spaceStore';
 import { showAlert } from '@/lib/webAlert';
+import { logError } from '@/lib/errorLogger';
 import type { SpaceSummary } from '@/types';
 import { SettingsSection } from '@/components/my/SettingsSection';
 import { ServiceInfoSection } from '@/components/my/ServiceInfoSection';
@@ -164,6 +165,7 @@ export default function MyScreen() {
     } catch (err) {
       // Log raw error so engineers can triage via Metro logs.
       // showAlert works on both web (window.alert) and native (Alert.alert).
+      void logError({ context: 'my.changeAvatar', error: err });
       console.error('[MyTab] handleChangeAvatar failed:', err);
       showAlert(
         t('common.error'),
@@ -255,6 +257,7 @@ export default function MyScreen() {
                       // Always log the raw error — helps triage Edge Function
                       // failures that previously surfaced only as a generic
                       // localised message on iOS.
+                      void logError({ context: 'my.deleteAccount', error: err });
                       console.error('[My] deleteAccount failed:', err);
                       showAlert(
                         t('common.error'),

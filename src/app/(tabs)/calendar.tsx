@@ -28,6 +28,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { logError } from '@/lib/errorLogger';
 import { NLInputBar } from '@/components/nl/NLInputBar';
 import { CalendarHeader, type ViewMode } from '@/components/calendar/CalendarHeader';
 import { YearMonthPicker } from '@/components/calendar/YearMonthPicker';
@@ -230,6 +231,9 @@ export default function CalendarScreen() {
         const range = getViewRange(selectedDate, viewMode);
         void fetchEvents(range);
       } catch (err) {
+        // Mirror to errorLogger so production crashes surface in Sentry
+        // alongside the local Metro/console trail. Sprint 19 — auto-review #2.
+        void logError({ context: 'calendar.reschedule', error: err });
         // eslint-disable-next-line no-console
         console.error('[calendar] reschedule failed:', err);
       }

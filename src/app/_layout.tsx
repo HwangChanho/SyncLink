@@ -44,6 +44,7 @@ import { AppSplash } from '@/components/common/AppSplash';
 import { initAdMob } from '@/services/adService';
 import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
 import { useColors } from '@/hooks/useColors';
+import { logError } from '@/lib/errorLogger';
 import { ONBOARDING_STORAGE_KEY } from '@/app/onboarding/index';
 initSentry();
 
@@ -511,7 +512,12 @@ export default function RootLayout() {
         }
         setPlan(isPro ? 'pro' : 'free');
       })
-      .catch(console.error); // Non-fatal — app works without purchase sync
+      .catch((err) => {
+        // Non-fatal — app works without purchase sync, but route to
+        // errorLogger so production traces this in Sentry instead of
+        // disappearing into a console nobody reads.
+        void logError({ context: 'rootLayout.purchaseSync', error: err });
+      });
   }, [isAuthenticated, setPlan]);
 
   // TASK-403: Initialize push notifications after user authenticates.
@@ -520,7 +526,9 @@ export default function RootLayout() {
     if (!isAuthenticated) return;
 
     // Request permission + register Expo push token
-    initializeNotifications().catch(console.error);
+    initializeNotifications().catch((err) => {
+      void logError({ context: 'rootLayout.initNotifications', error: err });
+    });
 
     // Wire notification tap → in-app routing
     // Returns a cleanup function to remove listeners on unmount
