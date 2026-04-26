@@ -1,11 +1,9 @@
 # 01_login_dev — Dev 빌드 이메일 로그인 후 홈 탭 도달
-#
-# 개발 빌드(__DEV__)에서만 "이메일로 로그인" 버튼이 표시된다.
 # 환경 변수: TEST_EMAIL, TEST_PASSWORD
 #
 # 실행:
 #   TEST_EMAIL=test@example.com TEST_PASSWORD=secret \
-#   maestro test e2e/flows/01_login_dev.yaml
+#   maestro --device <UDID> test e2e/flows/01_login_dev.yaml
 
 appId: io.synclink.app
 env:
@@ -15,21 +13,37 @@ env:
 - launchApp:
     clearState: true
 
-- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      text: "SyncLink"
+    timeout: 10000
 
-# Dev 전용 섹션이 보일 때까지 대기
-- assertVisible:
-    text: "이메일로 로그인"
+# Dev 전용 이메일 입력 필드가 보일 때까지 대기
+- extendedWaitUntil:
+    visible:
+      text: "이메일로 로그인"
+    timeout: 5000
 
 # 이메일 입력
 - tapOn:
-    text: "이메일"
+    label: "이메일 주소 입력"
+    optional: true
+- runFlow:
+    when:
+      notVisible:
+        label: "이메일 주소 입력"
+    commands:
+      - tapOn:
+          index: 0
+          below:
+            text: "개발자 로그인"
 - clearText
 - typeText: ${TEST_EMAIL}
 
 # 비밀번호 입력
 - tapOn:
-    text: "비밀번호"
+    label: "비밀번호 입력"
+    optional: true
 - clearText
 - typeText: ${TEST_PASSWORD}
 
@@ -41,7 +55,12 @@ env:
 
 - takeScreenshot: screenshots/01_after_login
 
-# 홈 탭 도달 확인 — 탭 바의 "홈" 탭이 보여야 함
+# 홈 탭 도달 확인
+- extendedWaitUntil:
+    visible:
+      text: "홈"
+    timeout: 15000
+
 - assertVisible: "홈"
 - assertVisible: "캘린더"
 - assertVisible: "플래너"
