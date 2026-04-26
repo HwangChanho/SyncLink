@@ -19,6 +19,7 @@ import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-si
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import * as FileSystem from 'expo-file-system';
 import type { Session } from '@supabase/supabase-js';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase';
 import { logError } from '@/lib/errorLogger';
@@ -504,26 +505,85 @@ export async function updateProfile(
  * @returns Public URL of the uploaded avatar
  * @throws Error if not authenticated or upload fails
  */
+/**
+ * Read a local image URI into a binary payload Supabase Storage will
+ * accept on every platform.
+ *
+ * - Native (iOS/Android): expo-file-system reads as base64, then we
+ *   convert to a Uint8Array. Avoids the empty-blob bug RN's `fetch` has
+ *   against `file://` URIs.
+ * - Web: file:// access is denied, but the picker returns an http(s) or
+ *   blob: URI which `fetch` handles correctly. Returns the Blob directly.
+ */
+export async function readImageBinary(localUri: string): Promise<{
+  uri: string; ext: string; mimeType: string; body: Uint8Array | Blob;
+}> {
+  const lastDot = localUri.lastIndexOf('.');
+  const rawExt  = lastDot > -1 ? localUri.slice(lastDot + 1).toLowerCase() : '';
+  const ext     = rawExt.replace(/[^a-z0-9]/g, '').slice(0, 4) || 'jpg';
+  const mimeType = ext === 'png'  ? 'image/png'
+                  : ext === 'gif' ? 'image/gif'
+                  : ext === 'webp' ? 'image/webp'
+                  : 'image/jpeg';
+
+  if (Platform.OS === 'web') {
+    const res  = await fetch(localUri);
+    const blob = await res.blob();
+    return { uri: localUri, ext, mimeType, body: blob };
+  }
+
+  const base64 = await FileSystem.readAsStringAsync(localUri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  const body = base64ToUint8Array(base64);
+  return { uri: localUri, ext, mimeType, body };
+}
+
+/** Decode a base64 string to bytes without depending on `atob` polyfills. */
+function base64ToUint8Array(base64: string): Uint8Array {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const lookup = new Uint8Array(256);
+  for (let i = 0; i < chars.length; i++) lookup[chars.charCodeAt(i)] = i;
+  let len = base64.length;
+  while (len > 0 && base64.charCodeAt(len - 1) === 61) len--;
+  const byteLen = (len * 3) >> 2;
+  const out = new Uint8Array(byteLen);
+  let p = 0;
+  for (let i = 0; i < len; i += 4) {
+    const c0 = lookup[base64.charCodeAt(i)]     ?? 0;
+    const c1 = lookup[base64.charCodeAt(i + 1)] ?? 0;
+    const c2 = lookup[base64.charCodeAt(i + 2)] ?? 0;
+    const c3 = lookup[base64.charCodeAt(i + 3)] ?? 0;
+    if (p < byteLen) out[p++] = (c0 << 2) | (c1 >> 4);
+    if (p < byteLen) out[p++] = ((c1 & 15) << 4) | (c2 >> 2);
+    if (p < byteLen) out[p++] = ((c2 & 3) << 6) | c3;
+  }
+  return out;
+}
+
 export async function uploadAvatar(localUri: string): Promise<string> {
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) throw new Error('로그인이 필요합니다.');
 
-  // Fetch the file as a blob — works for both file:// (iOS) and content:// (Android) URIs
-  const response = await fetch(localUri);
-  const blob = await response.blob();
+  // Read the picked file as a binary ArrayBuffer.
+  //
+  // Why not `await fetch(localUri).then(r => r.blob())`?
+  //   On iOS/Android React Native's `fetch` against a `file://` URI
+  //   returns a Blob whose body is empty (0 bytes). Supabase Storage
+  //   accepts the upload but writes a 0-byte object, so the user sees
+  //   "upload succeeded" while the avatar never actually changes.
+  //   expo-file-system + base64→bytes is the documented Supabase
+  //   workaround that works on iOS, Android, and web.
+  const { uri, ext, mimeType, body } = await readImageBinary(localUri);
+  void uri; // (kept for diagnostics if we ever log)
 
-  // Derive extension from MIME type (e.g. 'image/jpeg' → 'jpeg')
-  const mimeType = blob.type || 'image/jpeg';
-  const fileExt = mimeType.split('/')[1] ?? 'jpg';
-
-  // Store at {userId}/avatar.{ext} — overwrite on re-upload
-  const filePath = `${user.id}/avatar.${fileExt}`;
+  const filePath = `${user.id}/avatar.${ext}`;
 
   const { error: uploadError } = await supabase.storage
     .from('avatars')
-    .upload(filePath, blob, {
+    .upload(filePath, body, {
       contentType: mimeType,
-      upsert: true, // overwrite existing file
+      upsert: true,
     });
 
   if (uploadError) {

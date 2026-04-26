@@ -402,13 +402,22 @@ export default function MyScreen() {
           ) : spaces.length === 0 ? (
             <View style={styles.emptySpacesCard}>
               <Text style={styles.emptySpacesText}>{t('common.none')}</Text>
-              <TouchableOpacity
-                style={styles.createSpaceButton}
-                onPress={() => router.push('/space/create')}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.createSpaceButtonText}>Space {t('category.new')}</Text>
-              </TouchableOpacity>
+              <View style={styles.spaceActionsRow}>
+                <TouchableOpacity
+                  style={styles.createSpaceButton}
+                  onPress={() => router.push('/space/create')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.createSpaceButtonText}>Space {t('category.new')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.joinSpaceButton}
+                  onPress={() => router.push('/space/join')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.joinSpaceButtonText}>초대 코드로 참여</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           ) : (
             <>
@@ -419,14 +428,24 @@ export default function MyScreen() {
                   onPress={() => router.push(`/space/${space.id}`)}
                 />
               ))}
-              {/* Add space button at the bottom of the list */}
-              <TouchableOpacity
-                style={styles.addSpaceRow}
-                onPress={() => router.push('/space/create')}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.addSpaceText}>+ Space {t('category.new')}</Text>
-              </TouchableOpacity>
+              {/* Add space buttons at the bottom of the list — owner can
+                  create a new Space, member can join via invite code. */}
+              <View style={styles.spaceActionsRow}>
+                <TouchableOpacity
+                  style={styles.addSpaceRow}
+                  onPress={() => router.push('/space/create')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.addSpaceText}>+ Space {t('category.new')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.addSpaceRow}
+                  onPress={() => router.push('/space/join')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.addSpaceText}>↗ 초대 코드로 참여</Text>
+                </TouchableOpacity>
+              </View>
             </>
           )}
         </View>
@@ -739,6 +758,7 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     fontWeight: '300',
   },
   addSpaceRow: {
+    flex: 1,
     paddingVertical: spacing[3],
     alignItems: 'center',
     borderWidth: 1,
@@ -750,6 +770,21 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   addSpaceText: {
     ...textStyles.label,
     color: colors.textSecondary,
+  },
+  spaceActionsRow: {
+    flexDirection: 'row',
+    gap: spacing[2],
+  },
+  joinSpaceButton: {
+    paddingHorizontal: spacing[6],
+    paddingVertical: spacing[3],
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  joinSpaceButtonText: {
+    ...textStyles.labelLg,
+    color: colors.primary,
   },
 
   // ── Subscription banner ───────────────────────────────────────────────────

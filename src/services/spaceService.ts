@@ -17,6 +17,7 @@
  */
 
 import { supabase, getCurrentUserId } from '@/lib/supabase';
+import { readImageBinary } from './authService';
 import { logError } from '@/lib/errorLogger';
 import { memberEventColors } from '@/constants/colors';
 import type {
@@ -240,15 +241,14 @@ export async function uploadSpaceCover(spaceId: string, localUri: string): Promi
   if (!userId) throw new Error('로그인이 필요합니다.');
   await assertOwner(spaceId, userId);
 
-  const response = await fetch(localUri);
-  const blob = await response.blob();
-  const mimeType = blob.type || 'image/jpeg';
-  const fileExt  = mimeType.split('/')[1] ?? 'jpg';
-  const filePath = `space-covers/${spaceId}/cover.${fileExt}`;
+  // Reuse authService's binary-safe reader (works around RN's empty-blob
+  // bug for `file://` URIs on iOS/Android).
+  const { ext, mimeType, body } = await readImageBinary(localUri);
+  const filePath = `space-covers/${spaceId}/cover.${ext}`;
 
   const { error: uploadError } = await supa.storage
     .from('avatars')
-    .upload(filePath, blob, { contentType: mimeType, upsert: true });
+    .upload(filePath, body, { contentType: mimeType, upsert: true });
   if (uploadError) {
     throw new Error(`Space 커버 업로드에 실패했습니다: ${uploadError.message}`);
   }
@@ -256,7 +256,6 @@ export async function uploadSpaceCover(spaceId: string, localUri: string): Promi
   const { data: { publicUrl } } = supa.storage
     .from('avatars')
     .getPublicUrl(filePath);
-  // Cache-buster so RN Image refetches after re-upload.
   return `${publicUrl}?t=${Date.now()}`;
 }
 
