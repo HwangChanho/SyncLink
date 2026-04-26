@@ -230,6 +230,11 @@ const zh = {
     edit: '编辑分类',
     name_placeholder: '请输入分类名称',
     load_failed: '无法加载分类。',
+    builtin: {
+      personal: '个人',
+      work:     '工作',
+      other:    '其他',
+    },
   },
 
   notification: {

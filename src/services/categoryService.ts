@@ -10,6 +10,7 @@
  * They are seeded in migration 004_todos_enhancement.sql.
  */
 
+import i18next from '@/lib/i18n';
 import { supabase, getCurrentUserId } from '@/lib/supabase';
 import type {
   Category, CreateCategoryInput, UpdateCategoryInput,
@@ -20,16 +21,38 @@ import type {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const supa = supabase as any;
 
+/**
+ * System categories are seeded in Korean in the DB (migration 004), but
+ * the rest of the app supports en/zh/ja. Mapping the well-known seed names
+ * to i18n keys lets us localise on read without a DB schema migration.
+ *
+ * The keys live under `category.builtin.*` in src/locales/*.ts.
+ * Unknown system rows (e.g. ones added after seed) fall back to the raw
+ * DB name so the user still sees something.
+ */
+const SYSTEM_NAME_TO_I18N: Record<string, string> = {
+  '개인': 'category.builtin.personal',
+  '업무': 'category.builtin.work',
+  '기타': 'category.builtin.other',
+};
+
 // ─── Mapper ───────────────────────────────────────────────────────────────────
 
 /**
  * Maps a raw CategoryRow (snake_case) to a Category domain object (camelCase).
+ * For system rows (user_id = NULL) we substitute the localised name so any
+ * UI consumer can render `category.name` directly without an extra t() call.
  */
 function toCategory(row: CategoryRow): Category {
+  const isSystem = row.user_id === null;
+  const i18nKey  = isSystem ? SYSTEM_NAME_TO_I18N[row.name] : undefined;
+  // i18next.t() called on the singleton — we already initialise i18n in
+  // _layout.tsx before any service runs, so the lookup is always ready.
+  const localisedName = i18nKey ? String(i18next.t(i18nKey)) : row.name;
   return {
     id:        row.id,
     userId:    row.user_id,
-    name:      row.name,
+    name:      localisedName,
     color:     row.color,
     icon:      row.icon,
     createdAt: new Date(row.created_at),

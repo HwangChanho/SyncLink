@@ -230,6 +230,11 @@ const en = {
     edit: 'Edit Category',
     name_placeholder: 'Category name',
     load_failed: 'Failed to load categories.',
+    builtin: {
+      personal: 'Personal',
+      work:     'Work',
+      other:    'Other',
+    },
   },
 
   notification: {

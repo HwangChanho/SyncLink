@@ -234,6 +234,11 @@ const ko = {
     edit: '카테고리 수정',
     name_placeholder: '카테고리 이름을 입력해 주세요.',
     load_failed: '카테고리를 불러오지 못했습니다.',
+    builtin: {
+      personal: '개인',
+      work:     '업무',
+      other:    '기타',
+    },
   },
 
   notification: {

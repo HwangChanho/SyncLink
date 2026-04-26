@@ -230,6 +230,11 @@ const ja = {
     edit: 'カテゴリを編集',
     name_placeholder: 'カテゴリ名を入力してください',
     load_failed: 'カテゴリを読み込めませんでした。',
+    builtin: {
+      personal: '個人',
+      work:     '仕事',
+      other:    'その他',
+    },
   },
 
   notification: {
