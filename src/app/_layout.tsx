@@ -83,6 +83,13 @@ function useAuthGuard(): { routingReady: boolean } {
   /** Prevent duplicate replaces to the same target during re-renders. */
   const lastReplacedRef = useRef<string | null>(null);
 
+  /**
+   * Tracks whether the user was on the onboarding screen in the previous render.
+   * Used to detect onboarding→other navigation transitions so we can re-read
+   * AsyncStorage fresh (fixes stale onboardingDone after E2E clearState + skip).
+   */
+  const prevInOnboardingRef = useRef(false);
+
   // Read onboarding flag ONCE at mount. Re-running on segment change caused
   // redundant AsyncStorage reads which fed back into the routing effect below.
   useEffect(() => {
@@ -90,6 +97,36 @@ function useAuthGuard(): { routingReady: boolean } {
       .then((value) => setOnboardingDone(value !== null))
       .catch(() => setOnboardingDone(true));
   }, []);
+
+  /**
+   * Re-read the onboarding flag from AsyncStorage whenever the user leaves
+   * the onboarding screen while authenticated.
+   *
+   * Background: useAuthGuard reads AsyncStorage only once at mount (empty deps).
+   * After E2E clearState the key is absent → onboardingDone=false.  The guard
+   * correctly routes to /onboarding.  Once the user taps "skip", onboarding
+   * writes the key and calls router.replace('/auth/login').  But the guard's
+   * in-memory onboardingDone is still false (stale), so the routing logic
+   * re-targets /onboarding and lastReplacedRef blocks the redirect, leaving
+   * the user stuck on /auth/login with routingReady=false → AppSplash forever.
+   *
+   * Fix: detect the onboarding→other transition and do a fresh AsyncStorage
+   * read so the guard picks up the newly-written key.
+   */
+  useEffect(() => {
+    const inOnboardingNow = segments[0] === 'onboarding';
+    const justLeftOnboarding = prevInOnboardingRef.current && !inOnboardingNow;
+    prevInOnboardingRef.current = inOnboardingNow;
+
+    if (justLeftOnboarding && isAuthenticated) {
+      // Clear the de-duplicate guard so the routing effect can redirect again
+      // once the fresh AsyncStorage value comes back.
+      lastReplacedRef.current = null;
+      AsyncStorage.getItem(ONBOARDING_STORAGE_KEY)
+        .then((value) => setOnboardingDone(value !== null))
+        .catch(() => setOnboardingDone(true));
+    }
+  }, [segments, isAuthenticated]);
 
   useEffect(() => {
     // Wait for both auth hydration and AsyncStorage read to complete
