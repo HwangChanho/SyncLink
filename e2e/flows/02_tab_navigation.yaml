@@ -1,8 +1,38 @@
 # 02_tab_navigation — 4개 탭 이동 + 각 화면 렌더링 검증
-# 선행 조건: 로그인 완료 상태 (01_login_dev 이후)
+# 자체 로그인 포함 — 단독 실행 가능
 
 appId: io.synclink.app
 ---
+# ── 로그인 ─────────────────────────────────────────────────────────────────────
+- stopApp
+- launchApp:
+    clearState: false
+
+- waitForAnimationToEnd
+
+# 로그인 화면이 있으면 로그인 진행
+- runFlow:
+    when:
+      visible:
+        text: "이메일로 로그인"
+    commands:
+      - tapOn:
+          text: "이메일"
+      - eraseText: 50
+      - inputText: "e2e@synclink.test"
+      - tapOn:
+          text: "비밀번호"
+      - eraseText: 50
+      - inputText: "e2etest1234"
+      - tapOn:
+          text: "로그인"
+
+- extendedWaitUntil:
+    visible:
+      text: "오늘 일정"
+    timeout: 20000
+
+# ── 탭 네비게이션 검증 ──────────────────────────────────────────────────────────
 # 홈 탭 확인
 - assertVisible: "홈"
 - takeScreenshot: screenshots/02_home_tab
