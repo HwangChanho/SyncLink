@@ -38,6 +38,7 @@ import { textStyles } from '@/constants/typography';
 import * as spaceService from '@/services/spaceService';
 import { showAlert } from '@/lib/webAlert';
 import { EditSpaceModal } from '@/components/space/EditSpaceModal';
+import { ContactPickerModal } from '@/components/space/ContactPickerModal';
 import { findFreeTimeSlots } from '@/services/freeTimeService';
 import { useSpaceStore } from '@/stores/spaceStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -82,6 +83,8 @@ export default function SpaceDetailScreen() {
 
   // ─── Edit Space modal (owner only) ───────────────────────────────────────
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  // ─── Contact picker modal — invite from OS contacts ──────────────────────
+  const [isContactPickerVisible, setIsContactPickerVisible] = useState(false);
 
   // ─── Anniversary add modal state ─────────────────────────────────────────
   /** Whether the add-anniversary modal is visible */
@@ -467,6 +470,14 @@ export default function SpaceDetailScreen() {
         </View>
       )}
 
+      {/* ── Contact picker modal (native only — web uses share fallback) ── */}
+      <ContactPickerModal
+        visible={isContactPickerVisible}
+        spaceName={space.name}
+        inviteCode={space.inviteCode}
+        onClose={() => setIsContactPickerVisible(false)}
+      />
+
       {/* ── Edit Space Modal (owner only) ─────────────────────────────── */}
       {isOwner && (
         <EditSpaceModal
@@ -537,13 +548,25 @@ export default function SpaceDetailScreen() {
         <SectionCard title="초대 코드" colors={colors} styles={styles}>
           <View style={styles.inviteCodeRow}>
             <Text style={styles.inviteCode}>{space.inviteCode}</Text>
-            <TouchableOpacity
-              style={styles.shareButton}
-              onPress={handleShareInviteCode}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.shareButtonText}>공유</Text>
-            </TouchableOpacity>
+            <View style={styles.inviteActions}>
+              <TouchableOpacity
+                style={styles.shareButton}
+                onPress={handleShareInviteCode}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.shareButtonText}>공유</Text>
+              </TouchableOpacity>
+              {Platform.OS !== 'web' && (
+                <TouchableOpacity
+                  style={styles.contactButton}
+                  onPress={() => setIsContactPickerVisible(true)}
+                  activeOpacity={0.7}
+                  accessibilityLabel="연락처에서 초대"
+                >
+                  <Ionicons name="people" size={16} color={colors.primary} />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
           {isOwner && (
             <TouchableOpacity
@@ -1180,6 +1203,20 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   shareButtonText: {
     ...textStyles.label,
     color: colors.textInverse,
+  },
+  inviteActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  contactButton: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   regenerateButton: {
     paddingVertical: spacing[1],
