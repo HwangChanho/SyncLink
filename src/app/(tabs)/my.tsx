@@ -39,6 +39,7 @@ import type { SpaceSummary } from '@/types';
 import { SettingsSection } from '@/components/my/SettingsSection';
 import { ServiceInfoSection } from '@/components/my/ServiceInfoSection';
 import { AccountSection } from '@/components/my/AccountSection';
+import { DevDashboard } from '@/components/DevDashboard';
 
 // ─── Theme options are now built inside the component using i18n ───────────────
 
@@ -487,6 +488,10 @@ export default function MyScreen() {
         )}
 
         <SettingsSection />
+
+        {/* ── Dev-only AI cost dashboard ───────────────────────────── */}
+        {/* Rendered only in local development; never visible in production */}
+        {process.env.EXPO_PUBLIC_APP_ENV === 'development' && <DevDashboard />}
 
         <ServiceInfoSection />
 
