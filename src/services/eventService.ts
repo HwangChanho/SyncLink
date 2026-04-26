@@ -126,7 +126,7 @@ export async function getEventsInRange(range: DateRange): Promise<EventSummary[]
     .from('space_members')
     .select('space_id, color')
     .eq('user_id', userId) as {
-      data: Array<{ space_id: string; color: string }> | null;
+      data: { space_id: string; color: string }[] | null;
       error: Error | null;
     };
 
@@ -140,7 +140,7 @@ export async function getEventsInRange(range: DateRange): Promise<EventSummary[]
     .from('event_shares')
     .select('event_id')
     .in('space_id', mySpaceIds) as {
-      data: Array<{ event_id: string }> | null;
+      data: { event_id: string }[] | null;
       error: Error | null;
     };
 
@@ -173,7 +173,7 @@ export async function getEventsInRange(range: DateRange): Promise<EventSummary[]
     .select('user_id, color')
     .in('user_id', ownerIds)
     .in('space_id', mySpaceIds) as {
-      data: Array<{ user_id: string; color: string }> | null;
+      data: { user_id: string; color: string }[] | null;
       error: Error | null;
     };
 
@@ -246,7 +246,7 @@ export async function searchEventsByTitle(
     .ilike('title', `%${trimmed}%`)
     .order('start_at', { ascending: false })
     .limit(limit * 4) as {
-      data: Array<{
+      data: {
         id: string;
         title: string;
         description: string | null;
@@ -255,7 +255,7 @@ export async function searchEventsByTitle(
         color: string | null;
         all_day: boolean;
         start_at: string;
-      }> | null;
+      }[] | null;
       error: Error | null;
     };
 
@@ -310,7 +310,7 @@ export async function getEventById(eventId: string): Promise<Event> {
     .from('event_shares')
     .select('space_id')
     .eq('event_id', eventId) as {
-      data: Array<{ space_id: string }> | null;
+      data: { space_id: string }[] | null;
       error: Error | null;
     };
 

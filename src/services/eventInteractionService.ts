@@ -185,9 +185,9 @@ export async function getComments(eventId: string): Promise<EventComment[]> {
     .select('*, users(nickname, avatar_url)')
     .eq('event_id', eventId)
     .order('created_at') as {
-      data: Array<EventCommentRow & {
+      data: (EventCommentRow & {
         users?: { nickname?: string; avatar_url?: string | null } | null;
-      }> | null;
+      })[] | null;
       error: Error | null;
     };
 

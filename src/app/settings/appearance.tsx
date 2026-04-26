@@ -18,7 +18,7 @@ import {
   type HeaderTitleColor,
 } from '@/stores/appearanceStore';
 
-const COLOR_OPTIONS: Array<{ key: HeaderTitleColor; label: string }> = [
+const COLOR_OPTIONS: { key: HeaderTitleColor; label: string }[] = [
   { key: 'default', label: '기본' },
   { key: 'primary', label: '인디고' },
   { key: 'rose',    label: '로즈' },

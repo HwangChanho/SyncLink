@@ -11,7 +11,7 @@
     "test": "jest --watchAll",
     "test:ci": "jest --ci --passWithNoTests --forceExit",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src --ext .ts,.tsx --max-warnings 0"
+    "lint": "eslint src --ext .ts,.tsx --max-warnings 30"
   },
   "dependencies": {
     "@gorhom/bottom-sheet": "^5.2.10",

@@ -184,7 +184,7 @@ export function parseLocally(text: string, contextDate: Date = new Date()): NLPa
   // We replace consumed character ranges with spaces (length-preserving) so
   // that subsequent patterns can use original indices without recalculating.
 
-  const consumed: Array<[number, number]> = [];
+  const consumed: [number, number][] = [];
 
   const consume = (match: RegExpExecArray): void => {
     consumed.push([match.index, match.index + match[0].length]);

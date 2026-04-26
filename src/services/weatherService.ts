@@ -150,7 +150,7 @@ export async function getCurrentWeather(lat: number, lon: number): Promise<Weath
   const json = (await response.json()) as {
     name: string;
     main: { temp: number };
-    weather: Array<{ id: number; description: string }>;
+    weather: { id: number; description: string }[];
     sys: { sunrise: number; sunset: number };
     dt: number;
   };
@@ -187,10 +187,10 @@ export async function getCurrentAirQuality(
     const response = await fetch(url);
     if (!response.ok) return null;
     const json = (await response.json()) as {
-      list?: Array<{
+      list?: {
         main: { aqi: number };
         components: { pm2_5: number };
-      }>;
+      }[];
     };
     const entry = json.list?.[0];
     if (!entry) return null;

@@ -35,7 +35,7 @@ export async function findFreeTimeSlots(
     .from('space_members')
     .select('user_id')
     .eq('space_id', spaceId) as {
-      data: Array<{ user_id: string }> | null;
+      data: { user_id: string }[] | null;
       error: Error | null;
     };
 
@@ -52,7 +52,7 @@ export async function findFreeTimeSlots(
     .eq('all_day', false)
     .lte('start_at', range.end.toISOString())
     .gte('end_at', range.start.toISOString()) as {
-      data: Array<{ user_id: string; start_at: string; end_at: string; all_day: boolean }> | null;
+      data: { user_id: string; start_at: string; end_at: string; all_day: boolean }[] | null;
       error: Error | null;
     };
 
@@ -85,7 +85,7 @@ export async function findFreeTimeSlots(
     .filter((p: { start: number; end: number }) => p.end > p.start)
     .sort((a: { start: number }, b: { start: number }) => a.start - b.start);
 
-  const merged: Array<{ start: number; end: number }> = [];
+  const merged: { start: number; end: number }[] = [];
   for (const period of busyPeriods) {
     const last = merged[merged.length - 1];
     if (last && period.start <= last.end) {

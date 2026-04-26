@@ -48,7 +48,7 @@ export async function getMySpaces(): Promise<SpaceSummary[]> {
   const { data: myMemberships, error: membershipError } = await supa
     .from('space_members')
     .select('space_id')
-    .eq('user_id', userId) as { data: Array<{ space_id: string }> | null; error: Error | null };
+    .eq('user_id', userId) as { data: { space_id: string }[] | null; error: Error | null };
 
   if (membershipError) throw membershipError;
   if (!myMemberships || myMemberships.length === 0) return [];
@@ -69,7 +69,7 @@ export async function getMySpaces(): Promise<SpaceSummary[]> {
   const { data: allMembers, error: countError } = await supa
     .from('space_members')
     .select('space_id')
-    .in('space_id', spaceIds) as { data: Array<{ space_id: string }> | null; error: Error | null };
+    .in('space_id', spaceIds) as { data: { space_id: string }[] | null; error: Error | null };
 
   if (countError) throw countError;
 
@@ -398,7 +398,7 @@ export async function getSpaceByInviteCode(code: string): Promise<SpaceSummary> 
   const { data: members, error: countError } = await supa
     .from('space_members')
     .select('space_id')
-    .eq('space_id', spaceRow.id) as { data: Array<{ space_id: string }> | null; error: Error | null };
+    .eq('space_id', spaceRow.id) as { data: { space_id: string }[] | null; error: Error | null };
 
   if (countError) throw countError;
 
@@ -421,7 +421,7 @@ export async function joinSpace(spaceId: string): Promise<void> {
   const { data: currentMembers, error: fetchError } = await supa
     .from('space_members')
     .select('user_id')
-    .eq('space_id', spaceId) as { data: Array<{ user_id: string }> | null; error: Error | null };
+    .eq('space_id', spaceId) as { data: { user_id: string }[] | null; error: Error | null };
 
   if (fetchError) throw fetchError;
 

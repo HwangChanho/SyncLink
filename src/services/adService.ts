@@ -179,7 +179,7 @@ export function createRewardedAd(userId?: string): RewardedAdHandle | null {
     }
   }
 
-  const listeners: Array<() => void> = [];
+  const listeners: (() => void)[] = [];
   let loaded = false;
 
   // Internal state for the current show() call. Replaced on each show().

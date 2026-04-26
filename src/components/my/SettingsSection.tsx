@@ -28,7 +28,7 @@ export function SettingsSection() {
 
   // Theme segmented control labels — built every render so locale changes
   // propagate without an extra useEffect.
-  const themeOptions: Array<{ value: ColorSchemePreference; label: string }> = [
+  const themeOptions: { value: ColorSchemePreference; label: string }[] = [
     { value: 'light',  label: t('profile.theme.light')  },
     { value: 'dark',   label: t('profile.theme.dark')   },
     { value: 'system', label: t('profile.theme.system') },

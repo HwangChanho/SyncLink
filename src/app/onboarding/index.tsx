@@ -68,7 +68,7 @@ interface PageData {
 }
 
 /** Ionicons icon names for each onboarding page (index-matched to onboarding.pages). */
-const PAGE_ICONS: Array<keyof typeof import('@expo/vector-icons').Ionicons.glyphMap> = [
+const PAGE_ICONS: (keyof typeof import('@expo/vector-icons').Ionicons.glyphMap)[] = [
   'people',
   'chatbubble-ellipses',
   'notifications',
@@ -82,7 +82,7 @@ export default function OnboardingScreen() {
   const styles = makeStyles(colors);
 
   /** Translated page data (title + subtitle) from i18n. */
-  const pages = t('onboarding.pages', { returnObjects: true }) as Array<{ title: string; subtitle: string }>;
+  const pages = t('onboarding.pages', { returnObjects: true }) as { title: string; subtitle: string }[];
 
   /** Zero-based index of the currently visible page */
   const [currentPage, setCurrentPage] = useState(0);

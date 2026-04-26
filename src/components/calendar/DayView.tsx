@@ -113,7 +113,7 @@ interface DayViewProps {
    * outlined chips in the all-day banner so the user sees day-scoped
    * items alongside all-day events.
    */
-  todos?: Array<{ id: string; title: string; color: string }>;
+  todos?: { id: string; title: string; color: string }[];
 }
 
 /**

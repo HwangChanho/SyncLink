@@ -94,7 +94,7 @@ export function useIdleLogout(idleMs: number = DEFAULT_IDLE_MS): void {
     // Initial schedule based on the persisted timestamp (cross-tab continuity).
     scheduleLogout(readPersisted());
 
-    const events: Array<keyof WindowEventMap> = [
+    const events: (keyof WindowEventMap)[] = [
       'mousemove', 'keydown', 'pointerdown', 'touchstart', 'scroll', 'focus',
     ];
     events.forEach((evt) => window.addEventListener(evt, markActive, { passive: true }));

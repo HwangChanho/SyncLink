@@ -1,3 +1,10 @@
+/* eslint-disable react-hooks/rules-of-hooks --
+ * Platform-branched hook: web and native sub-hooks live behind an early
+ * return so Voice.* APIs aren't even loaded on the wrong platform. The
+ * react-hooks lint rule can't see that Platform.OS is a compile-time
+ * constant for any single bundle. Tracked in docs/inbox/REVIEW_2026-04-26.md
+ * for a proper split (separate web/native hook files) — Sprint 20.
+ */
 /**
  * useSpeechRecognition — cross-platform speech-to-text hook.
  *

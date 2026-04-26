@@ -104,14 +104,14 @@ export async function searchPlaces(
 
   const json = (await response.json()) as {
     status: string;
-    predictions: Array<{
+    predictions: {
       place_id: string;
       description: string;
       structured_formatting: {
         main_text: string;
         secondary_text?: string;
       };
-    }>;
+    }[];
     error_message?: string;
   };
 

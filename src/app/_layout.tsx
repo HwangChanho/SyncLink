@@ -12,7 +12,6 @@
 
 import '@/lib/i18n'; // initialize i18n before any component renders (synchronous default locale)
 import { initSentry } from '@/lib/sentry';
-initSentry();
 import { useEffect, useRef, useState } from 'react';
 import { AppState, AppStateStatus, Platform, View, StyleSheet, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
@@ -46,6 +45,7 @@ import { initAdMob } from '@/services/adService';
 import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
 import { useColors } from '@/hooks/useColors';
 import { ONBOARDING_STORAGE_KEY } from '@/app/onboarding/index';
+initSentry();
 
 // ─── Auth guard ───────────────────────────────────────────────────────────────
 
@@ -448,7 +448,8 @@ export default function RootLayout() {
     });
 
     return () => subscription.remove();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps — reads latest state via getState()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- reads latest state via getState()
+  }, []);
 
   useEffect(() => {
     // Subscribe to auth state — fires immediately with current session.

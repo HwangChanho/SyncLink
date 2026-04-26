@@ -102,7 +102,7 @@ export function subscribeToSharedEvents(
       .from('space_members')
       .select('space_id')
       .eq('user_id', userId) as {
-        data: Array<{ space_id: string }> | null;
+        data: { space_id: string }[] | null;
         error: Error | null;
       };
 

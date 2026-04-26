@@ -60,7 +60,7 @@ export interface KeyboardAwareScreenProps {
    * forms usually place a submit button at the bottom that already accounts
    * for the bottom inset itself.
    */
-  edges?: Array<'top' | 'bottom' | 'left' | 'right'>;
+  edges?: ('top' | 'bottom' | 'left' | 'right')[];
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────

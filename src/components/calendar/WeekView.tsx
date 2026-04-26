@@ -82,7 +82,7 @@ interface WeekViewProps {
    * outlined chips in the all-day strip so a user glancing at a week
    * sees both events and due tasks on the same timeline.
    */
-  todosByDate?: Record<string, Array<{ id: string; title: string; color: string }>>;
+  todosByDate?: Record<string, { id: string; title: string; color: string }[]>;
 }
 
 // ─── Date utilities ────────────────────────────────────────────────────────

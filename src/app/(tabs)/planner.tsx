@@ -416,12 +416,12 @@ export default function PlannerScreen() {
    * for the other modes it's null and the `label` field carries the
    * human-readable bucket name.
    */
-  const groupedTodos = useCallback((): Array<{
+  const groupedTodos = useCallback((): {
     key: string;
     label: string;
     category: Category | null;
     items: Todo[];
-  }> => {
+  }[] => {
     const groups = new Map<string, Todo[]>();
 
     const dateBucket = (d: Date | null): string => {
@@ -467,12 +467,12 @@ export default function PlannerScreen() {
       else groups.set(key, [todo]);
     }
 
-    const result: Array<{
+    const result: {
       key: string;
       label: string;
       category: Category | null;
       items: Todo[];
-    }> = [];
+    }[] = [];
     for (const [key, items] of groups.entries()) {
       let label: string;
       let category: Category | null = null;
