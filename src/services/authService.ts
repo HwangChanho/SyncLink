@@ -575,16 +575,25 @@ export async function uploadAvatar(localUri: string): Promise<string> {
   //   expo-file-system + base64→bytes is the documented Supabase
   //   workaround that works on iOS, Android, and web.
   const { uri, ext, mimeType, body } = await readImageBinary(localUri);
-  void uri; // (kept for diagnostics if we ever log)
+  // Diagnostic: confirm we actually read bytes (RN's empty-blob bug
+  // would silently send 0). Surfaces in Metro/browser console.
+  const bodySize = body instanceof Uint8Array ? body.byteLength : (body as Blob).size;
+  // eslint-disable-next-line no-console
+  console.info('[uploadAvatar] read', { uri, ext, mimeType, bytes: bodySize });
+  if (bodySize === 0) {
+    throw new Error('이미지 파일을 읽지 못했습니다 (0 bytes). 다시 시도해 주세요.');
+  }
 
   const filePath = `${user.id}/avatar.${ext}`;
 
-  const { error: uploadError } = await supabase.storage
+  const { data: uploadData, error: uploadError } = await supabase.storage
     .from('avatars')
     .upload(filePath, body, {
       contentType: mimeType,
       upsert: true,
     });
+  // eslint-disable-next-line no-console
+  console.info('[uploadAvatar] storage result', { path: filePath, ok: !uploadError, error: uploadError?.message, data: uploadData });
 
   if (uploadError) {
     // Translate common Supabase Storage errors into Korean user-facing messages

@@ -67,3 +67,25 @@ the wrapper script reads the file directly.
   stop the review and instead create
   `docs/escalations/ESCALATION_<TIMESTAMP>.md` with a 5-line summary,
   then exit. The wrapper will surface the escalation immediately.
+
+## Debug protocol (when you observe an error / failure)
+
+If during the review you observe a concrete failure — a stack trace in a
+recent commit, a stuck issue, a Sentry/error_logs spike, a test that's
+been red for >24h — do NOT just mention it in the summary. Open a new
+file at `docs/inbox/DEBUG_<DATE>_<short-topic>.md` following the
+template at `docs/architecture/DEBUG_PROTOCOL.md`:
+
+  1. End-to-end data flow (UI → service → network → DB → response → UI)
+  2. Step-by-step failure points + how to verify each
+  3. Diagnostic logging you've added (or recommend)
+  4. Server-side SQL queries (when applicable)
+  5. Hypothesis ranking
+  6. Next steps for LEAD
+  7. Post-mortem / conclusion (left blank until cause is confirmed)
+
+Then in this daily review, add a one-line pointer under "## Notes":
+  → "Filed DEBUG_<DATE>_<topic>.md for <component>"
+
+Never abandon a real failure with just "looks broken" — always either
+file a debug doc or cite an existing one.

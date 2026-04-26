@@ -159,8 +159,12 @@ export default function MyScreen() {
     try {
       // Upload to Supabase Storage
       const publicUrl = await authService.uploadAvatar(asset.uri);
+      // eslint-disable-next-line no-console
+      console.info('[handleChangeAvatar] publicUrl', publicUrl);
       // Update user profile with new URL
       const updated = await authService.updateProfile({ avatar_url: publicUrl });
+      // eslint-disable-next-line no-console
+      console.info('[handleChangeAvatar] updateProfile result', { id: updated.id, avatar_url: updated.avatar_url });
       setUser(updated);
     } catch (err) {
       // Log raw error so engineers can triage via Metro logs.
