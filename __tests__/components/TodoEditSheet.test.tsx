@@ -1,14 +1,14 @@
 /**
  * TodoEditSheet — open/close and save-path smoke tests.
  * Sprint 14 TASK-1412
+ *
+ * Sprint 14 변경: 명시적 Save 버튼 제거, 닫기 버튼 탭 시 자동 저장.
  */
 
 import { fireEvent, render } from '@testing-library/react-native';
 import { TodoEditSheet } from '@/components/planner/TodoEditSheet';
 import type { Todo } from '@/types';
 
-// Ensure category service isn't hit (it's called only by the nested picker
-// when opened). Stub to be safe.
 jest.mock('@/services/categoryService', () => ({
   getCategories: jest.fn(async () => []),
   createCategory: jest.fn(),
@@ -42,11 +42,10 @@ describe('TodoEditSheet', () => {
         onSave={jest.fn()}
       />,
     );
-    // Header label is only visible when the modal is visible.
     expect(queryByText(/편집|Edit/)).toBeNull();
   });
 
-  it('invokes onSave with the edited title', async () => {
+  it('invokes onSave with the edited title (via close auto-save)', async () => {
     const onSave = jest.fn(async () => undefined);
     const onClose = jest.fn();
     const { getByDisplayValue, getByText } = render(
@@ -61,8 +60,9 @@ describe('TodoEditSheet', () => {
     const input = getByDisplayValue('Buy milk');
     fireEvent.changeText(input, 'Buy oat milk');
 
-    const saveBtn = getByText(/^(저장|Save|保存|儲存)$/);
-    fireEvent.press(saveBtn);
+    // Sprint 14: explicit Save button removed — closing the sheet triggers auto-save.
+    const closeBtn = getByText(/닫기|Close/);
+    fireEvent.press(closeBtn);
 
     // Flush the async save handler.
     await Promise.resolve();

@@ -213,12 +213,9 @@ export function WeeklyReviewCard() {
           )}
         </View>
       ) : (
-        // Empty state — previously just said "no review" which felt cold.
-        // Rotate through a curated pool of motivational quotes so the card
-        // still feels worth glancing at in a quiet week. Deterministic by
-        // day so the quote doesn't flicker on re-renders.
+        // Empty state (no review generated yet, or error suppressed).
         <View style={styles.emptyContainer}>
-          <Text style={styles.reviewText}>{pickMotivationalQuote()}</Text>
+          <Text style={styles.reviewText}>이번 주 리뷰가 없습니다.</Text>
         </View>
       )}
 

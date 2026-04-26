@@ -88,14 +88,7 @@
     "testPathIgnorePatterns": [
       "/node_modules/",
       "/__tests__/components/MonthView.test.tsx",
-      "/__tests__/components/WeekView.test.tsx",
-      "/__tests__/components/EventCard.test.tsx",
-      "/__tests__/components/TodoEditSheet.test.tsx",
-      "/__tests__/components/WeeklyReviewCard.test.tsx",
-      "/__tests__/screens/LoginScreen.test.tsx",
-      "/__tests__/services/authService.web.test.ts",
-      "/__tests__/services/pinLockService.test.ts",
-      "/__tests__/hooks/useNetworkStatus.test.ts"
+      "/__tests__/components/WeekView.test.tsx"
     ]
   },
   "private": true

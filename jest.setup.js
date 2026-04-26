@@ -284,6 +284,33 @@ process.env.EXPO_PUBLIC_WEATHER_API_KEY =
 process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY =
   process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY ?? 'test-kakao-rest-api-key';
 
+// ─── expo-secure-store mock ───────────────────────────────────────────────────
+// In-memory SecureStore backed by a Map. _store is exposed so test files can
+// call SecureStore._store.clear() in their own beforeEach.
+jest.mock('expo-secure-store', () => {
+  const store = new Map();
+  return {
+    _store: store,
+    getItemAsync: jest.fn((key) => Promise.resolve(store.get(key) ?? null)),
+    setItemAsync: jest.fn((key, value) => { store.set(key, value); return Promise.resolve(); }),
+    deleteItemAsync: jest.fn((key) => { store.delete(key); return Promise.resolve(); }),
+  };
+});
+
+// ─── expo-crypto mock ─────────────────────────────────────────────────────────
+// Deterministic hash: hex-encode the UTF-8 bytes of the input string.
+jest.mock('expo-crypto', () => ({
+  getRandomBytesAsync: jest.fn((n) => Promise.resolve(new Uint8Array(n).fill(0xab))),
+  digestStringAsync: jest.fn((_alg, input) => {
+    let hex = '';
+    for (let i = 0; i < input.length; i++) {
+      hex += input.charCodeAt(i).toString(16).padStart(2, '0');
+    }
+    return Promise.resolve(hex);
+  }),
+  CryptoDigestAlgorithm: { SHA256: 'SHA256' },
+}));
+
 // ─── Console noise reduction ──────────────────────────────────────────────────
 // Suppress expected React Native warnings that pollute test output.
 const SUPPRESSED_WARNINGS = [

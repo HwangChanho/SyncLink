@@ -122,8 +122,11 @@ const TEST_ORIGIN = 'https://app.syncday.com';
 describe('authService (Platform.OS = "web")', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // 웹 환경의 window.location.origin 시뮬레이션
-    (globalThis as Record<string, unknown>).location = { origin: TEST_ORIGIN };
+    // 웹 환경의 window.location 시뮬레이션 (assign 포함)
+    (globalThis as Record<string, unknown>).location = {
+      origin: TEST_ORIGIN,
+      assign: jest.fn(),
+    };
   });
 
   afterEach(() => {
@@ -250,34 +253,37 @@ describe('authService (Platform.OS = "web")', () => {
      * WebBrowser는 app 복귀 URL을 watch 한다.
      */
     it('redirect_uri = Edge Function URL, state = web app 복귀 URL', async () => {
-      (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({ type: 'cancel' });
+      // web 흐름: location.assign(authUrl)으로 페이지 이동 후 {} 반환
+      const loc = (globalThis as Record<string, unknown>).location as { assign: jest.Mock };
 
-      await expect(signInWithKakao()).rejects.toThrow('cancelled');
+      await signInWithKakao();
 
-      const call = (WebBrowser.openAuthSessionAsync as jest.Mock).mock.calls[0];
-      expect(call[0]).toContain('https://kauth.kakao.com/oauth/authorize');
+      expect(loc.assign).toHaveBeenCalledTimes(1);
+      const assignedUrl: string = loc.assign.mock.calls[0][0];
+
+      expect(assignedUrl).toContain('https://kauth.kakao.com/oauth/authorize');
       // redirect_uri = Edge Function URL (HTTPS)
-      expect(call[0]).toContain(
+      expect(assignedUrl).toContain(
         `redirect_uri=${encodeURIComponent('https://test.supabase.co/functions/v1/kakao-auth')}`,
       );
       // state = web 복귀 URL
-      expect(call[0]).toContain(
+      expect(assignedUrl).toContain(
         `state=${encodeURIComponent(`${TEST_ORIGIN}/auth/callback`)}`,
       );
-      // WebBrowser watches for the app-return URL
-      expect(call[1]).toBe(`${TEST_ORIGIN}/auth/callback`);
 
       // Supabase 내장 Kakao 프로바이더는 더 이상 사용하지 않는다
       expect(supabase.auth.signInWithOAuth).not.toHaveBeenCalled();
     });
 
     it('origin 미설정 시 Linking.createURL 폴백 사용', async () => {
-      delete (globalThis as Record<string, unknown>).location;
-      (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({ type: 'cancel' });
+      // origin 없이 assign 함수만 있는 상태
+      (globalThis as Record<string, unknown>).location = { assign: jest.fn() };
+      const loc = (globalThis as Record<string, unknown>).location as { assign: jest.Mock };
 
-      await expect(signInWithKakao()).rejects.toThrow('cancelled');
+      await signInWithKakao();
 
       expect(Linking.createURL).toHaveBeenCalledWith('/auth/callback');
+      expect(loc.assign).toHaveBeenCalled();
     });
   });
 });

@@ -24,8 +24,8 @@ import * as Crypto from 'expo-crypto';
 
 // ─── Storage keys ─────────────────────────────────────────────────────────────
 
-const PIN_SALT_KEY = 'synclink_pin_salt';
-const PIN_HASH_KEY = 'synclink_pin_hash';
+const PIN_SALT_KEY = '@synclink/pin_salt';
+const PIN_HASH_KEY = '@synclink/pin_hash';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

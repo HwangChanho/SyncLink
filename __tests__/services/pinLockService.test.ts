@@ -1,12 +1,11 @@
 /**
  * Sprint 15 TASK-1510 — pinLockService tests.
  *
- * Verifies the PIN lifecycle (set, verify, clear, hasPin) using the real
- * AsyncStorage jest mock as the backing store. Each test starts with a
- * clean slate via `AsyncStorage.clear()`.
+ * Verifies the PIN lifecycle (set, verify, clear, hasPin).
+ * Uses the in-memory expo-secure-store mock from jest.setup.js.
  */
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import {
   setPin,
   verifyPin,
@@ -14,10 +13,10 @@ import {
   hasPin,
 } from '@/services/pinLockService';
 
-// The global jest.setup.js already swaps in the official AsyncStorage mock,
-// so we only need to clear it before each test.
-beforeEach(async () => {
-  await AsyncStorage.clear();
+// jest.setup.js provides the in-memory SecureStore mock with _store exposed.
+// Clear it before each test so each test starts with a blank slate.
+beforeEach(() => {
+  (SecureStore as unknown as { _store: Map<string, string> })._store.clear();
 });
 
 describe('pinLockService', () => {
@@ -25,8 +24,9 @@ describe('pinLockService', () => {
     it('persists the PIN hash and auto-creates a salt on first use', async () => {
       await setPin('1234');
 
-      const salt = await AsyncStorage.getItem('@synclink/pin_salt');
-      const hash = await AsyncStorage.getItem('@synclink/pin_hash');
+      const store = (SecureStore as unknown as { _store: Map<string, string> })._store;
+      const salt = store.get('@synclink/pin_salt');
+      const hash = store.get('@synclink/pin_hash');
       expect(salt).toMatch(/^[0-9a-f]+$/);
       expect(hash).toMatch(/^[0-9a-f]+$/);
       // The hash must not equal the PIN — we are storing a digest.
@@ -41,14 +41,15 @@ describe('pinLockService', () => {
 
     it('reuses an existing salt when rotating the PIN', async () => {
       await setPin('1234');
-      const salt1 = await AsyncStorage.getItem('@synclink/pin_salt');
+      const store = (SecureStore as unknown as { _store: Map<string, string> })._store;
+      const salt1 = store.get('@synclink/pin_salt');
 
       await setPin('9999');
-      const salt2 = await AsyncStorage.getItem('@synclink/pin_salt');
+      const salt2 = store.get('@synclink/pin_salt');
 
       expect(salt2).toBe(salt1);
       // But the hash should have rotated.
-      const hash2 = await AsyncStorage.getItem('@synclink/pin_hash');
+      const hash2 = store.get('@synclink/pin_hash');
       expect(hash2).toBeDefined();
     });
   });
@@ -84,12 +85,13 @@ describe('pinLockService', () => {
 
     it('clearPin removes the hash but keeps the salt for consistency', async () => {
       await setPin('1234');
-      const saltBefore = await AsyncStorage.getItem('@synclink/pin_salt');
+      const store = (SecureStore as unknown as { _store: Map<string, string> })._store;
+      const saltBefore = store.get('@synclink/pin_salt');
 
       await clearPin();
 
       await expect(hasPin()).resolves.toBe(false);
-      const saltAfter = await AsyncStorage.getItem('@synclink/pin_salt');
+      const saltAfter = store.get('@synclink/pin_salt');
       expect(saltAfter).toBe(saltBefore);
     });
 

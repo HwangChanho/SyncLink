@@ -169,6 +169,7 @@ export function EventBlock({
 
   return (
     <Animated.View
+      testID="event-block"
       {...responder.panHandlers}
       style={[
         styles.block,
@@ -187,7 +188,11 @@ export function EventBlock({
         },
       ]}
     >
-      <Text style={styles.title} numberOfLines={showSubtitle ? 2 : 1}>
+      <Text
+        style={styles.title}
+        numberOfLines={showSubtitle ? 2 : 1}
+        onPress={() => onPress(event)}
+      >
         {translatedTitle ?? event.title}
       </Text>
     </Animated.View>

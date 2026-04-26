@@ -148,10 +148,10 @@ describe('LoginScreen', () => {
       expect(getByText('Apple로 시작하기')).toBeTruthy();
     });
 
-    it('Android: Apple 로그인 버튼이 렌더링되지 않음', () => {
+    it('Android: Apple 로그인 버튼도 렌더링됨 (Sprint 17 — 모든 플랫폼에 노출)', () => {
       Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
-      const { queryByText } = render(<LoginScreen />);
-      expect(queryByText('Apple로 시작하기')).toBeNull();
+      const { getByText } = render(<LoginScreen />);
+      expect(getByText('Apple로 시작하기')).toBeTruthy();
     });
 
     it('초기 상태에서 에러 메시지가 없음', () => {
@@ -205,7 +205,7 @@ describe('LoginScreen', () => {
       fireEvent.press(getByText('Google로 시작하기'));
 
       await waitFor(() => {
-        expect(router.replace).toHaveBeenCalledWith('/auth/onboarding');
+        expect(router.replace).toHaveBeenCalledWith('/(tabs)');
       });
     });
 
@@ -340,17 +340,17 @@ describe('LoginScreen', () => {
       fireEvent.press(getByText('Apple로 시작하기'));
 
       await waitFor(() => {
-        expect(router.replace).toHaveBeenCalledWith('/auth/onboarding');
+        expect(router.replace).toHaveBeenCalledWith('/(tabs)');
       });
     });
 
-    it('Android: Apple 버튼이 없으므로 signInWithApple 호출 불가', () => {
+    it('Android: Apple 버튼 렌더링됨 (Sprint 17 — 모든 플랫폼 노출)', () => {
       Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
 
-      const { queryByText } = render(<LoginScreen />);
+      const { getByText } = render(<LoginScreen />);
 
-      // 버튼 자체가 없음
-      expect(queryByText('Apple로 시작하기')).toBeNull();
+      // Sprint 17 변경: Android에서도 Apple 버튼 표시
+      expect(getByText('Apple로 시작하기')).toBeTruthy();
       expect(signInWithApple).not.toHaveBeenCalled();
     });
 
