@@ -1,49 +1,44 @@
 # 03_event_create — 이벤트 생성 골든 패스
 #
-# 홈 → 캘린더 탭 → FAB(+) 탭 → 제목 입력 → 저장
+# 캘린더 탭 → FAB(새 일정 만들기) → 제목 입력 → 저장
 # 생성된 이벤트가 캘린더에 표시되는지 확인한다.
 #
-# 선행 조건: 로그인 완료 상태
+# 선행 조건: 10_golden_path_login.yaml 실행 후 로그인 상태 유지
+# 이벤트 생성 모달: autoFocus 있어 typeText 직접 사용 가능
+#
+# FAB accessibilityLabel: "새 일정 만들기" (calendar.tsx:533)
+# 저장 버튼: t('common.save') = "저장" (헤더 우측 Text)
 
 appId: io.synclink.app
 ---
+# 앱 재시작 (clearState 없이) — 세션 + ONBOARDING_STORAGE_KEY 유지하면서
+# 라우팅 버그 없이 /(tabs)에 안정적으로 진입.
+# 10_golden_path_login.yaml 이후 실행 시 세션과 온보딩 완료 상태가 유지됨.
+- launchApp
+- extendedWaitUntil:
+    visible:
+      text: "오늘 일정"
+    timeout: 20000
+
 # 캘린더 탭으로 이동
-- tapOn: "캘린더"
+- tapOn:
+    label: "캘린더, tab, 2 of 4"
 - waitForAnimationToEnd
 - takeScreenshot: screenshots/03_calendar_before_create
 
-# FAB(+) 버튼 탭 — accessibilityLabel 또는 텍스트 기반
+# FAB(+) 버튼 탭 — accessibilityLabel: "새 일정 만들기"
 - tapOn:
-    id: "fab-create-event"
-    optional: true
-- runFlow:
-    when:
-      notVisible: "새 일정"
-    commands:
-      # FAB accessibilityLabel로 시도
-      - tapOn:
-          label: "새 일정 만들기"
-
+    label: "새 일정 만들기"
 - waitForAnimationToEnd
 - takeScreenshot: screenshots/03_event_create_form
 
-# 제목 입력
-- tapOn:
-    text: "제목"
-- typeText: "E2E 테스트 이벤트"
-
+# 제목 입력 — autoFocus이므로 별도 tapOn 없이 typeText 직접 사용
+- inputText: "E2E 테스트 이벤트"
 - takeScreenshot: screenshots/03_event_title_entered
 
-# 저장
+# 저장 — 헤더 오른쪽 "저장" Text 버튼
+# 저장 버튼은 Pressable이라 text 속성이 비어있음 → label 사용
 - tapOn:
     label: "저장"
-    optional: true
-- runFlow:
-    when:
-      notVisible: "캘린더"
-    commands:
-      - tapOn:
-          text: "저장"
-
 - waitForAnimationToEnd
 - takeScreenshot: screenshots/03_event_created

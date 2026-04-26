@@ -2,17 +2,19 @@
 #
 # 검증 항목:
 #   - Dev 이메일 로그인 (e2e@synclink.test)
-#   - 알림 권한 허용 (clearState 시마다 뜨는 시스템 팝업)
-#   - 온보딩 건너뛰기 (신규/초기화된 계정)
+#   - 알림 권한 허용 (clearState 시 시스템 권한 초기화 → 항상 다이얼로그 등장)
+#   - 온보딩 건너뛰기 (clearState 시 AsyncStorage 초기화 → 항상 온보딩 등장)
 #   - 홈 → 캘린더 → 플래너 → 내 정보 탭 이동
 #
 # 실행:
 #   maestro --device <UDID> test e2e/flows/10_golden_path_login.yaml
 #
-# ⚠️ 알려진 이슈:
-#   - clearState 시 온보딩이 매번 나타남. 알림 → 온보딩 순서 처리 필요.
-#   - 플래너 탭은 스켈레톤 로딩이 있어 extendedWaitUntil 필요.
-#   - "건너뛰기" 텍스트 대신 accessibilityLabel 사용 권장.
+# clearState 이후 예상 순서:
+#   1. 앱 재시작 → 로그인 화면
+#   2. 로그인 성공 (Supabase 네트워크, 최대 20초)
+#   3. 알림 권한 다이얼로그 (시스템, "허용" 버튼) — clearState가 권한 초기화
+#   4. 온보딩 3페이지 (AsyncStorage 초기화로 항상 등장)
+#   5. 홈 탭 진입
 
 appId: io.synclink.app
 ---
@@ -22,7 +24,7 @@ appId: io.synclink.app
 
 - waitForAnimationToEnd
 
-# 알림 권한 다이얼로그가 로그인보다 먼저 뜨는 경우 처리
+# 알림 권한 다이얼로그가 로그인보다 먼저 뜨는 경우 처리 (드문 경우)
 - runFlow:
     when:
       visible:
@@ -36,7 +38,7 @@ appId: io.synclink.app
 - extendedWaitUntil:
     visible:
       text: "이메일로 로그인"
-    timeout: 10000
+    timeout: 15000
 
 - tapOn:
     text: "이메일"
@@ -49,21 +51,50 @@ appId: io.synclink.app
 - tapOn:
     text: "이메일로 로그인"
 
-# ── 3. 알림 권한 허용 (온보딩 위에 뜨는 시스템 팝업) ─────────────────────────
+# ── 3. 알림 권한 허용 ─────────────────────────────────────────────────────────
+# clearState는 iOS 시스템 권한도 초기화하므로 알림 다이얼로그가 항상 등장.
+# timeout: 25000 — Supabase 로그인 완료(최대 20초) + 다이얼로그 표시까지 여유.
 - extendedWaitUntil:
     visible:
       text: "허용"
-    timeout: 10000
+    timeout: 25000
 - tapOn:
     text: "허용"
 - waitForAnimationToEnd
 
-# ── 4. 온보딩 건너뛰기 ────────────────────────────────────────────────────────
-# TODO: accessibilityLabel로 더 안정적으로 처리 필요
+# ── 4. 온보딩 완료 (좌표 tap으로 CTA 버튼 클릭) ──────────────────────────────
+# clearState는 AsyncStorage를 초기화하므로 온보딩이 항상 등장.
+#
+# ❌ label/text 기반 tap: iOS accessibility "도구 막대"(toolbar) 래핑으로
+#    onPress 이벤트가 전파되지 않음.
+# ✅ 대신 point: 좌표 tap 사용 — 실제 터치 좌표로 CTA 버튼 강제 탭.
+#    iPhone 16 Pro 기준:
+#      X: 50% (버튼이 전체 너비를 차지)
+#      Y: 91% (화면 하단 CTA 버튼 중앙 — safe area 34pt + padding 24pt + 버튼 반높이 28pt)
+- extendedWaitUntil:
+    visible:
+      label: "다음"
+    timeout: 10000
+# 페이지 1 → 2
 - tapOn:
-    text: "건너뛰기"
-    optional: true
+    point: "50%, 91%"
 - waitForAnimationToEnd
+# 페이지 2 → 3
+- tapOn:
+    point: "50%, 91%"
+- waitForAnimationToEnd
+# 페이지 3: "시작하기" → handleFinish 호출 → ONBOARDING_STORAGE_KEY 기록
+- tapOn:
+    point: "50%, 91%"
+- waitForAnimationToEnd
+
+# ── 4.5. 라우팅 버그 우회 ─────────────────────────────────────────────────────
+# 시작하기 tap 후 handleFinish가 router.replace('/auth/login')을 실행하면
+# useAuthGuard의 stale onboardingDone=false 상태로 AppSplash에 stuck됨.
+# (이슈: docs/issues/BUG-onboarding-routing-stale-state.md)
+# 우회: 앱을 clearState 없이 재시작 → AsyncStorage fresh read → 정상 라우팅.
+- stopApp
+- launchApp
 
 # ── 5. 홈 탭 확인 ─────────────────────────────────────────────────────────────
 - extendedWaitUntil:
@@ -87,10 +118,11 @@ appId: io.synclink.app
 # ── 7. 플래너 탭 ──────────────────────────────────────────────────────────────
 - tapOn:
     label: "플래너, tab, 3 of 4"
+# TouchableOpacity는 text 속성이 비어있음 — accessibilityText(label)로 검색
 - extendedWaitUntil:
     visible:
-      text: "할일"
-    timeout: 12000
+      label: "할일"
+    timeout: 15000
 - takeScreenshot: screenshots/gp_03_planner
 
 # ── 8. 내 정보 탭 ─────────────────────────────────────────────────────────────

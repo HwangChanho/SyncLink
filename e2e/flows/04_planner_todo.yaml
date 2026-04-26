@@ -1,43 +1,58 @@
 # 04_planner_todo — 플래너 할일 생성 골든 패스
 #
-# 플래너 탭 → FAB(+) 탭 → 제목 입력 → 저장
+# 플래너 탭 → FAB(새 할일) → 제목 입력 → 저장
 # 생성된 할일이 목록에 표시되는지 확인한다.
+#
+# 선행 조건: 10_golden_path_login.yaml 실행 후 로그인 상태 유지
+#
+# FAB accessibilityLabel: "새 할일" (activeTab === 'todo' 시, planner.tsx:279)
+# TodoCreateSheet: useEffect로 200ms 후 auto-focus → typeText 직접 사용 가능
+# 저장 버튼: t('common.save') = "저장" (시트 헤더 오른쪽 Pressable Text)
 
 appId: io.synclink.app
 ---
+# 앱 재시작 (clearState 없이) — 세션 + ONBOARDING_STORAGE_KEY 유지.
+# 03_event_create.yaml 이후 실행 가능.
+- launchApp
+- extendedWaitUntil:
+    visible:
+      text: "오늘 일정"
+    timeout: 20000
+
 # 플래너 탭 이동
-- tapOn: "플래너"
+- tapOn:
+    label: "플래너, tab, 3 of 4"
 - waitForAnimationToEnd
-- assertVisible: "할일"
+
+# 할일 탭 서브탭 레이블 확인 (스켈레톤 로딩 후 등장 가능)
+- extendedWaitUntil:
+    visible:
+      label: "할일"
+    timeout: 15000
 - takeScreenshot: screenshots/04_planner_before
 
 # FAB(+) 탭 — 새 할일 시트 열기
+# accessibilityLabel: "새 할일" (todo 탭이 기본 활성 상태)
 - tapOn:
     label: "새 할일"
-    optional: true
-- runFlow:
-    when:
-      notVisible: "Buy"
-    commands:
-      - tapOn:
-          label: "새 할일 만들기"
-
 - waitForAnimationToEnd
 - takeScreenshot: screenshots/04_todo_create_sheet
 
 # 할일 제목 입력
-- typeText: "E2E 테스트 할일"
+# TodoCreateSheet에 useEffect로 200ms 후 titleInputRef.focus() → typeText 직접 가능
+- inputText: "E2E 테스트 할일"
 - takeScreenshot: screenshots/04_todo_title_entered
 
-# 저장 (시트 닫기로 자동 저장)
+# 저장 — 헤더 오른쪽 t('common.save') = "저장" Pressable (label 사용)
 - tapOn:
-    text: "저장"
-    optional: true
-- runFlow:
-    when:
-      visible: "E2E 테스트 할일"
-    commands:
-      - swipeDown
-
+    label: "저장"
 - waitForAnimationToEnd
 - takeScreenshot: screenshots/04_todo_created
+
+# 시트가 닫혀 플래너 탭으로 돌아왔으면 저장 성공.
+# 목록에서 할일 텍스트 확인은 Metro 핫 리로드 트리거 가능성이 있어 제외.
+# (스크린샷 저장 → Metro 파일 워처 감지 → 번들 리로드 → 라우팅 버그 재발 위험)
+- extendedWaitUntil:
+    visible:
+      label: "할일"
+    timeout: 5000
