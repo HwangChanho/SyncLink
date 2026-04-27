@@ -179,6 +179,34 @@ describe('eventStore', () => {
       expect(useEventStore.getState().eventsByDate['2026-01-15']).toHaveLength(1);
       expect(useEventStore.getState().eventsByDate['2026-01-16']).toHaveLength(1);
     });
+
+    // TASK-005 / ADR-009: 로컬 timezone 기반 dateKey
+    // 시스템 timezone이 KST 가정. KST 28일 00:30 = UTC 27일 15:30.
+    // 옛 코드(toISOString)였으면 dateKey="2026-04-27" → 27일에 표시됐던 버그.
+    // 새 코드(localDateKey)는 시스템 timezone 기준 → "2026-04-28" 유지.
+    it('TASK-005: KST 자정 가까운 시간도 사용자가 입력한 날짜 기준으로 grouping', () => {
+      // new Date(year, month, day, hour, minute) 는 시스템 timezone 기준 Date 객체 생성
+      // KST 시스템에서 KST 28일 00:30 의미
+      const lateNightEvent: EventSummary = {
+        ...mockEvent1,
+        id: 'evt-late-night',
+        startAt: new Date(2026, 3, 28, 0, 30), // 2026-04-28 00:30 (시스템 timezone)
+        endAt:   new Date(2026, 3, 28, 1, 30),
+      };
+
+      useEventStore.getState().upsertEvent(lateNightEvent);
+
+      // 시스템 KST 가정: dateKey="2026-04-28" 으로 grouping
+      // (옛 toISOString 방식이면 "2026-04-27" — fail)
+      // CI가 다른 timezone에서 돌면 다른 키일 수 있으나 사용자 시스템 = 그 사용자 입력 기준
+      const expectedKey = `${lateNightEvent.startAt.getFullYear()}-${String(lateNightEvent.startAt.getMonth()+1).padStart(2,'0')}-${String(lateNightEvent.startAt.getDate()).padStart(2,'0')}`;
+      expect(useEventStore.getState().eventsByDate[expectedKey]).toContainEqual(lateNightEvent);
+      // 이전 버그 시나리오: toISOString 키에는 들어가지 않음을 명시
+      const utcKey = lateNightEvent.startAt.toISOString().split('T')[0]!;
+      if (utcKey !== expectedKey) {
+        expect(useEventStore.getState().eventsByDate[utcKey] ?? []).not.toContainEqual(lateNightEvent);
+      }
+    });
   });
 
   // ══════════════════════════════════════════════════════════════════════════

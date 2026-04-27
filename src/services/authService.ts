@@ -392,6 +392,55 @@ export async function signInWithApple(): Promise<SignInResult> {
 }
 
 /**
+ * Link an additional OAuth identity (Google/Kakao/Apple) to the current user.
+ *
+ * ADR-010 / ISSUE-014: Multi-provider account linking.
+ * The current user must be signed in. After successful link, signing in with
+ * the linked provider in the future will resolve to the same Supabase user
+ * (no duplicate account).
+ *
+ * Throws on:
+ *  - No active session (call signIn* first)
+ *  - Provider already linked to another user (Supabase rejects)
+ *  - User cancels OAuth flow
+ *
+ * @param provider 'google' | 'kakao' | 'apple'
+ */
+export async function linkProvider(provider: 'google' | 'kakao' | 'apple'): Promise<void> {
+  const session = await getSession();
+  if (!session) {
+    throw new Error('linkProvider: 먼저 로그인해야 합니다');
+  }
+  // Note: 'kakao' is configured as a custom OAuth provider in Supabase; the
+  // string passed here matches the Supabase Auth provider key.
+  const { error } = await supabase.auth.linkIdentity({ provider: provider as 'google' | 'apple' | 'kakao' });
+  if (error) throw error;
+}
+
+/**
+ * List the OAuth identities currently linked to the user (for the My-tab UI).
+ * Returns provider keys like ['google', 'kakao'].
+ */
+export async function getLinkedProviders(): Promise<string[]> {
+  const { data, error } = await supabase.auth.getUserIdentities();
+  if (error) throw error;
+  return (data?.identities ?? []).map((i) => i.provider);
+}
+
+/**
+ * Unlink a previously linked OAuth identity. Cannot unlink the last identity
+ * (Supabase enforces — would orphan the account).
+ */
+export async function unlinkProvider(provider: 'google' | 'kakao' | 'apple'): Promise<void> {
+  const { data, error } = await supabase.auth.getUserIdentities();
+  if (error) throw error;
+  const target = data?.identities?.find((i) => i.provider === provider);
+  if (!target) throw new Error(`unlinkProvider: ${provider} 가 연결되지 않았습니다`);
+  const { error: unlinkError } = await supabase.auth.unlinkIdentity(target);
+  if (unlinkError) throw unlinkError;
+}
+
+/**
  * Sign out the current user.
  * Clears both the Google cached credential and the Supabase session.
  */
