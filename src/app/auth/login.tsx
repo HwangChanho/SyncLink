@@ -106,6 +106,7 @@ export default function LoginScreen() {
 
           {/* Google — iOS & Android */}
           <TouchableOpacity
+            testID="login-button-google"
             style={[styles.button, styles.googleButton, isLoading && styles.disabled]}
             onPress={() => handleSignIn('google')}
             disabled={isLoading}
@@ -148,6 +149,7 @@ export default function LoginScreen() {
             style={[styles.button, styles.kakaoButton, isLoading && styles.disabled]}
             onPress={() => handleSignIn('kakao')}
             disabled={isLoading}
+            testID="login-button-kakao"
             accessibilityLabel="카카오로 로그인"
           >
             {loading === 'kakao'
@@ -178,6 +180,7 @@ export default function LoginScreen() {
             style={[styles.button, styles.appleButton, isLoading && styles.disabled]}
             onPress={() => handleSignIn('apple')}
             disabled={isLoading}
+            testID="login-button-apple"
             accessibilityLabel="Apple로 로그인"
           >
             {loading === 'apple'
@@ -200,9 +203,10 @@ export default function LoginScreen() {
 
         {/* Dev-only email/password login — hidden in preview/production builds */}
         {IS_DEV_BUILD && (
-          <View style={styles.devSection}>
+          <View testID="login-dev-section" style={styles.devSection}>
             <Text style={styles.devLabel}>{t('auth.login.dev_section')}</Text>
             <TextInput
+              testID="login-dev-email"
               style={styles.devInput}
               placeholder={t('auth.login.email_placeholder')}
               placeholderTextColor={colors.textTertiary}
@@ -213,6 +217,7 @@ export default function LoginScreen() {
               editable={!isLoading}
             />
             <TextInput
+              testID="login-dev-password"
               style={styles.devInput}
               placeholder={t('auth.login.password_placeholder')}
               placeholderTextColor={colors.textTertiary}
@@ -222,6 +227,7 @@ export default function LoginScreen() {
               editable={!isLoading}
             />
             <TouchableOpacity
+              testID="login-dev-submit"
               style={[styles.button, styles.devButton, isLoading && styles.disabled]}
               onPress={() => handleSignIn('dev')}
               disabled={isLoading || !devEmail || !devPassword}

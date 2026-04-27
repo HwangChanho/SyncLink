@@ -230,7 +230,11 @@ export function DayView({
           */}
           <ScrollView
             horizontal
-            showsHorizontalScrollIndicator={timedEvents.length > 0}
+            // TASK-003 fix: 4 컬럼 이하일 때는 horizontal scroll 비활성 — 그래야
+            // ScrollView가 inner EventBlock의 onPress를 swipe 제스처로 오인식
+            // 하지 않음. 일정 적을 땐 단일 화면에 모두 fit하므로 스크롤 불필요.
+            scrollEnabled={maxOverlapColumns >= 4}
+            showsHorizontalScrollIndicator={timedEvents.length > 0 && maxOverlapColumns >= 4}
             style={styles.eventsAreaScroll}
             contentContainerStyle={{ minWidth: '100%' }}
           >
