@@ -318,8 +318,138 @@ try {
   logoutExists ? pass('로그아웃 버튼 존재') : fail('로그아웃 버튼 존재', '로그아웃 버튼 없음');
 } catch(e) { fail('로그아웃 버튼 존재', e.message.slice(0, 80)); }
 
-// ── 11. 콘솔/페이지 에러 ────────────────────────────────────────────────────
-console.log('\n=== 11. 콘솔/페이지 에러 ===');
+// ── 11. 다국어 토글 (Sprint 25 R2) ──────────────────────────────────────────
+// My 탭 → 설정 → 언어 → 4 locale 표시 + English 선택 시 헤더 텍스트 즉시 전환
+console.log('\n=== 11. 다국어 토글 ===');
+try {
+  // My 탭으로 이동 (이전 단계가 paywall에서 goBack 후 상태가 모호하므로 명시적으로 클릭)
+  await clickText(page, '내 정보', 'My');
+  await page.waitForTimeout(1500);
+
+  // SettingsSection의 '언어' 메뉴 버튼 클릭 — testID="settings-button-language"
+  // Web 환경에서 testID는 data-testid 속성으로 변환됨 (RN Web 동작)
+  const langMenu = page.locator('[data-testid="settings-button-language"]');
+  const langMenuCount = await langMenu.count();
+  if (langMenuCount > 0) {
+    await langMenu.first().click({ timeout: 5000 });
+    await page.waitForTimeout(1500);
+    pass('언어 설정 메뉴 진입 (testID)');
+  } else {
+    // testID로 못 찾으면 텍스트 기반 폴백 (현재 locale에 따라)
+    await Promise.any([
+      page.click('text=언어', { timeout: 5000 }),
+      page.click('text=Language', { timeout: 5000 }),
+    ]);
+    await page.waitForTimeout(1500);
+    pass('언어 설정 메뉴 진입 (text fallback)');
+  }
+} catch(e) { fail('언어 설정 메뉴 진입', e.message.slice(0, 80)); }
+
+try {
+  // 4개 locale 행 표시 확인 — testID="settings-language-row-{ko|en|zh|ja}"
+  const rows = await page.locator(
+    '[data-testid="settings-language-row-ko"], ' +
+    '[data-testid="settings-language-row-en"], ' +
+    '[data-testid="settings-language-row-zh"], ' +
+    '[data-testid="settings-language-row-ja"]'
+  ).count();
+  if (rows >= 4) {
+    pass('4개 locale 행 렌더링 (ko/en/zh/ja)');
+  } else {
+    // 폴백: native label 텍스트 4개 확인 (한국어/English/中文/日本語)
+    const nativeLabels = await Promise.all([
+      page.locator('text=한국어').count(),
+      page.locator('text=English').count(),
+      page.locator('text=中文').count(),
+      page.locator('text=日本語').count(),
+    ]);
+    const found = nativeLabels.filter(c => c > 0).length;
+    found >= 4
+      ? pass('4개 locale 행 렌더링 (native label fallback)')
+      : fail('4개 locale 행 렌더링', `찾은 locale 수=${found}/4 (testID도 미감지)`);
+  }
+} catch(e) { fail('4개 locale 행 렌더링', e.message.slice(0, 80)); }
+
+try {
+  // English 행 클릭 → 즉시 i18next 전환 → 헤더 'Language' 텍스트 등장 확인
+  const enRow = page.locator('[data-testid="settings-language-row-en"]');
+  const enRowCount = await enRow.count();
+  if (enRowCount > 0) {
+    await enRow.first().click({ timeout: 5000 });
+  } else {
+    // 폴백: native label "English" 클릭 (LanguageOption.nativeLabel)
+    await page.click('text=English', { timeout: 5000 });
+  }
+  await page.waitForTimeout(1500);
+
+  // 전환 검증 — 헤더 타이틀이 'Language'로 변경됨 (en.ts settings.language)
+  const headerSwitched = await Promise.any([
+    page.waitForSelector('text=Language', { timeout: 5000 }).then(() => true),
+    page.waitForSelector(
+      'text=The entire app updates instantly when you choose a language.',
+      { timeout: 5000 }
+    ).then(() => true),
+  ]).catch(() => false);
+  headerSwitched
+    ? pass('English 선택 후 헤더 즉시 전환')
+    : fail('English 선택 후 헤더 즉시 전환', '영어 텍스트 미감지');
+} catch(e) { fail('English 선택 후 헤더 즉시 전환', e.message.slice(0, 80)); }
+
+try {
+  // 다음 시나리오를 위해 한국어로 복귀 (testID 사용)
+  const koRow = page.locator('[data-testid="settings-language-row-ko"]');
+  if ((await koRow.count()) > 0) {
+    await koRow.first().click({ timeout: 5000 });
+    await page.waitForTimeout(1000);
+    pass('한국어 복귀 (테스트 격리)');
+  } else {
+    await page.click('text=한국어', { timeout: 5000 });
+    await page.waitForTimeout(1000);
+    pass('한국어 복귀 (텍스트 폴백)');
+  }
+} catch(e) { skip('한국어 복귀', e.message.slice(0, 80)); }
+
+// ── 12. WeeklyReviewCard (Sprint 25 R3) ─────────────────────────────────────
+// Home 진입 시 "이번 주 리뷰" 카드가 표시되는지 확인.
+// aiService.getWeeklyReview는 캐시 미스 시 Edge Function 호출하지만 실패해도
+// 컴포넌트는 빈 상태("이번 주 리뷰가 없습니다.")로 렌더 — 카드 자체는 항상 보임.
+console.log('\n=== 12. WeeklyReviewCard ===');
+try {
+  // Home으로 명시적으로 이동
+  await page.goto(BASE, { waitUntil: 'networkidle', timeout: 15000 });
+  await page.waitForTimeout(2000);
+
+  // "이번 주 리뷰" 타이틀은 WeeklyReviewCard.tsx:134 하드코딩 (한국어 고정).
+  // 헤더 텍스트는 i18n과 무관 — 한국어 복귀 후라도 동일.
+  const cardVisible = await page.waitForSelector('text=이번 주 리뷰', { timeout: 10000 })
+    .then(() => true)
+    .catch(() => false);
+  cardVisible
+    ? pass('WeeklyReviewCard 헤더 표시')
+    : fail('WeeklyReviewCard 헤더 표시', 'Home 상단 카드 없음');
+} catch(e) { fail('WeeklyReviewCard 헤더 표시', e.message.slice(0, 80)); }
+
+try {
+  // 카드 본문 — 다음 중 하나가 보여야 함:
+  //   (a) 정상 review 텍스트 (실 응답 또는 캐시)
+  //   (b) skeleton lines (loading 중)
+  //   (c) "이번 주 리뷰가 없습니다." (빈 상태 — Edge Function 실패 시)
+  // 새로고침 버튼 accessibilityLabel="주간 리뷰 새로고침" 또는 빈 상태 텍스트로 검증
+  const ready = await Promise.any([
+    page.waitForSelector('[aria-label="주간 리뷰 새로고침"]', { timeout: 8000 }).then(() => 'refresh'),
+    page.waitForSelector('text=이번 주 리뷰가 없습니다.', { timeout: 8000 }).then(() => 'empty'),
+  ]).catch(() => null);
+  if (ready === 'refresh') {
+    pass('WeeklyReviewCard 로드 완료 (refresh 버튼 노출)');
+  } else if (ready === 'empty') {
+    pass('WeeklyReviewCard 로드 완료 (빈 상태 — Edge Function 미응답 허용)');
+  } else {
+    fail('WeeklyReviewCard 로드 완료', 'refresh 버튼/빈 상태 모두 미감지 (스켈레톤이 8s 이상 지속)');
+  }
+} catch(e) { fail('WeeklyReviewCard 로드 완료', e.message.slice(0, 80)); }
+
+// ── 13. 콘솔/페이지 에러 ────────────────────────────────────────────────────
+console.log('\n=== 13. 콘솔/페이지 에러 ===');
 if (failedRequests.length > 0) {
   console.log('  실패한 요청:');
   failedRequests.forEach(r => console.log('    ' + r));
