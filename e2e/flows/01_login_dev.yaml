@@ -10,17 +10,20 @@ env:
   TEST_EMAIL: ${TEST_EMAIL}
   TEST_PASSWORD: ${TEST_PASSWORD}
 ---
+# Sprint 24 R2: clearState 제거 + 더 긴 splash 대기.
+# clearState true는 dev client cache 도 reset해서 Metro reconnect 시간 큼.
+# 이미 install된 dev APK + Metro fresh 번들이면 stopApp 후 launchApp만으로 충분.
+- stopApp
 - launchApp:
-    clearState: true
     permissions:
       all: allow
 
 - extendedWaitUntil:
     visible:
       text: "SyncLink"
-    timeout: 20000
+    timeout: 30000
 
-# 위치/알림 권한 다이얼로그가 떠 있으면 dismiss (iOS clearState 후)
+# 위치/알림 권한 다이얼로그가 떠 있으면 dismiss (시뮬 fresh install 시)
 - runFlow:
     when:
       visible:
@@ -28,6 +31,13 @@ env:
     commands:
       - tapOn:
           text: "허용 안 함"
+- runFlow:
+    when:
+      visible:
+        text: "Don't allow"
+    commands:
+      - tapOn:
+          text: "Don't allow"
 
 # Dev 전용 입력 필드 (testID 사용 — locale 무관, ADR-011)
 - extendedWaitUntil:
