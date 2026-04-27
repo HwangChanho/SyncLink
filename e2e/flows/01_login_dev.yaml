@@ -12,11 +12,22 @@ env:
 ---
 - launchApp:
     clearState: true
+    permissions:
+      all: allow
 
 - extendedWaitUntil:
     visible:
       text: "SyncLink"
-    timeout: 10000
+    timeout: 20000
+
+# 위치/알림 권한 다이얼로그가 떠 있으면 dismiss (iOS clearState 후)
+- runFlow:
+    when:
+      visible:
+        text: "허용 안 함"
+    commands:
+      - tapOn:
+          text: "허용 안 함"
 
 # Dev 전용 이메일 입력 필드가 보일 때까지 대기 (한국어 locale 시뮬 가정)
 # 영어 locale은 별도 flow 또는 Maestro regex (다음 라운드)
