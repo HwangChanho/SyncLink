@@ -19,7 +19,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 import { parseLocally } from '@/lib/nlParser';
 import { FREE_AI_DAILY_LIMIT, EDGE_FUNCTIONS } from '@/constants/config';
+import { getRuleBaseline } from '@/lib/activitySuggestions';
+import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import type { NLParseResult, AiUsageRecord, AiParseResponse } from '@/types';
+import type { FreeSlot } from '@/types/freeTime';
+import type { SupportedLocale } from '@/lib/activitySuggestions';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -335,6 +339,7 @@ export async function generateWeeklyReview(_weekStartDate: Date): Promise<string
  * @param slotStart - Start of the free time window
  * @param slotEnd - End of the free time window
  * @returns Array of activity recommendation strings
+ * @deprecated Use getFreeTimeRecommendations() (PRD 4.2 Tier 3 옵션 C 구현)
  */
 export async function getActivityRecommendations(
   _spaceId: string,
@@ -343,6 +348,153 @@ export async function getActivityRecommendations(
 ): Promise<string[]> {
   // Pro-tier feature — not yet implemented
   return [];
+}
+
+// ─── PRD 4.2 Tier 3: Free Time AI Recommendations ────────────────────────────
+
+/**
+ * 단일 활동 아이템 (Edge Function + 룰 모두에서 사용).
+ *  - name:      활동 이름 (locale 언어)
+ *  - reason:    추천 이유 (AI 응답 시만 포함)
+ *  - fitScore:  슬롯 적합도 0-1 (AI 응답 시만 포함)
+ */
+export interface ActivityItem {
+  name: string;
+  reason?: string;
+  fitScore?: number;
+}
+
+/**
+ * 단일 슬롯에 대한 활동 추천 결과.
+ */
+export interface SlotRecommendation {
+  /** 추천 대상 빈 슬롯 */
+  slot: FreeSlot;
+  /** 추천 활동 목록 (최대 3개) */
+  activities: ActivityItem[];
+  /** 'rule': 룰 baseline, 'ai': Claude 응답 */
+  source: 'rule' | 'ai';
+  /** Edge Function 응답이 캐시에서 왔으면 true */
+  fromCache: boolean;
+}
+
+/**
+ * getFreeTimeRecommendations 반환 타입.
+ */
+export interface FreeTimeRecommendationsResult {
+  recommendations: SlotRecommendation[];
+  /** 전체 응답 source ('rule' 또는 'ai') */
+  source: 'rule' | 'ai';
+}
+
+/**
+ * Edge Function으로부터 받은 응답 형태 (내부 타입).
+ */
+interface EdgeRecommendResponse {
+  recommendations: Array<{
+    slot: { start: string; end: string; durationMinutes: number };
+    activities: ActivityItem[];
+  }>;
+  fromCache: boolean;
+  source: 'rule' | 'ai';
+}
+
+/**
+ * PRD 4.2 Tier 3 — AI 활동 추천 (옵션 C 하이브리드).
+ *
+ * 전략:
+ *  1. 룰 baseline 즉시 계산 (0ms, 비용 0) — 항상 수행.
+ *  2. subscriptionStore.canUseFreeTimeRec() 확인:
+ *     - 한도 초과 → 룰 결과만 반환 (graceful degradation).
+ *     - 한도 내   → forceAI=true 로 Edge Function 호출 (AI 결과로 교체).
+ *  3. Edge Function 호출 성공 시 → consumeFreeTimeRec() 기록 후 AI 결과 반환.
+ *  4. Edge Function 실패 / 응답 없음 → 룰 결과 반환 (앱 크래시 없음).
+ *
+ * 캐싱 (Day 3에 추가 예정):
+ *  현재는 캐시 없음. Day 3에 AsyncStorage 24h 캐시 레이어 추가.
+ *  캐시 hit 시 Edge Function 호출 없이 즉시 반환 + consumeFreeTimeRec() 생략.
+ *
+ * @param slots       - 추천 대상 FreeSlot 배열 (Tier 1 결과)
+ * @param locale      - 응답 언어 ('ko' | 'en' | 'zh' | 'ja')
+ * @param forceAI     - true 이면 쿼터 허용 시 AI 호출 강제 (기본: true)
+ * @param preferences - 사용자 관심 카테고리 (없으면 시간대 기반 룰만 사용)
+ * @returns FreeTimeRecommendationsResult
+ */
+export async function getFreeTimeRecommendations(
+  slots: FreeSlot[],
+  locale: SupportedLocale | string = 'ko',
+  forceAI = true,
+  preferences?: string[],
+): Promise<FreeTimeRecommendationsResult> {
+  if (slots.length === 0) {
+    return { recommendations: [], source: 'rule' };
+  }
+
+  // Step 1: 룰 baseline 즉시 계산 (항상 수행)
+  const ruleResults: SlotRecommendation[] = slots.map((slot) => {
+    const rule = getRuleBaseline(slot, locale);
+    return {
+      slot,
+      activities: rule.activities.map((name) => ({ name })),
+      source:     'rule' as const,
+      fromCache:  false,
+    };
+  });
+
+  // Step 2: AI 쿼터 확인
+  const store = useSubscriptionStore.getState();
+  if (!forceAI || !store.canUseFreeTimeRec()) {
+    // 한도 초과 또는 AI 불필요 → 룰 결과 반환
+    return { recommendations: ruleResults, source: 'rule' };
+  }
+
+  // Step 3: Edge Function 호출 (AI 추천)
+  try {
+    // freeSlots를 JSON 직렬화 가능한 형태로 변환
+    const freeSlotInputs = slots.map((s) => ({
+      start:           s.start.toISOString(),
+      end:             s.end.toISOString(),
+      durationMinutes: s.durationMinutes,
+    }));
+
+    const { data, error } = await supabase.functions.invoke<EdgeRecommendResponse>(
+      EDGE_FUNCTIONS.RECOMMEND_FREE_TIME,
+      {
+        body: {
+          freeSlots:        freeSlotInputs,
+          userPreferences:  preferences && preferences.length > 0
+            ? { categories: preferences }
+            : undefined,
+          locale,
+          forceAI: true,
+        },
+      },
+    );
+
+    if (error || !data) {
+      // Edge Function 실패 → 룰 결과로 graceful degradation
+      return { recommendations: ruleResults, source: 'rule' };
+    }
+
+    // Step 4: 성공 → 쿼터 소비 기록
+    store.consumeFreeTimeRec();
+
+    // Edge 응답을 SlotRecommendation 형태로 변환
+    // (슬롯 순서는 요청 순서와 동일하다고 가정)
+    // slots[0]은 앞에서 length === 0 체크로 보장됨 (non-null assertion 안전)
+    const aiResults: SlotRecommendation[] = data.recommendations.map((rec, idx) => ({
+      slot:       slots[idx] ?? slots[0]!,  // 인덱스 안전 처리
+      activities: rec.activities,
+      source:     'ai' as const,
+      fromCache:  data.fromCache,
+    }));
+
+    return { recommendations: aiResults, source: 'ai' };
+
+  } catch {
+    // 네트워크 오류 등 → 룰 결과로 graceful degradation
+    return { recommendations: ruleResults, source: 'rule' };
+  }
 }
 
 // ─── Date suggestion ──────────────────────────────────────────────────────────

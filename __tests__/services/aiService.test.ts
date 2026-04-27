@@ -36,6 +36,28 @@ jest.mock('@/lib/supabase', () => ({
   getCurrentUserId: jest.fn().mockResolvedValue('user-123'),
 }));
 
+// PRD 4.2 Tier 3: activitySuggestions mock
+jest.mock('@/lib/activitySuggestions', () => ({
+  getRuleBaseline: jest.fn((_slot: unknown, _locale: string) => ({
+    timeOfDay:   'afternoon',
+    slotLength:  'medium',
+    activities:  ['영화', '보드게임', '미팅'] as [string, string, string],
+  })),
+}));
+
+// PRD 4.2 Tier 3: subscriptionStore mock
+const mockCanUseFreeTimeRec  = jest.fn(() => true);
+const mockConsumeFreeTimeRec = jest.fn();
+
+jest.mock('@/stores/subscriptionStore', () => ({
+  useSubscriptionStore: {
+    getState: () => ({
+      canUseFreeTimeRec:  mockCanUseFreeTimeRec,
+      consumeFreeTimeRec: mockConsumeFreeTimeRec,
+    }),
+  },
+}));
+
 // ─── Imports ──────────────────────────────────────────────────────────────────
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -46,8 +68,10 @@ import {
   getDailyUsage,
   getTodayUsage,
   hasRemainingDailyLimit,
+  getFreeTimeRecommendations,
 } from '@/services/aiService';
 import type { NLParseResult, AiUsageRecord } from '@/types';
+import type { FreeSlot } from '@/types/freeTime';
 
 // ─── 상수 ─────────────────────────────────────────────────────────────────────
 
@@ -303,5 +327,159 @@ describe('hasRemainingDailyLimit', () => {
   test('어제 5회 사용 → true (오늘 새 한도로 리셋)', async () => {
     await setUsageRecord({ date: yesterday(), callCount: 5, tokensUsed: 250 });
     await expect(hasRemainingDailyLimit()).resolves.toBe(true);
+  });
+});
+
+// ─── getFreeTimeRecommendations (PRD 4.2 Tier 3) ─────────────────────────────
+
+/**
+ * 테스트용 FreeSlot 픽스처.
+ * 오후 2시 ~ 4시 (120분) 슬롯.
+ */
+function makeSlot(overrides: Partial<FreeSlot> = {}): FreeSlot {
+  const start = new Date('2026-04-28T14:00:00+09:00'); // 오후 2시
+  const end   = new Date('2026-04-28T16:00:00+09:00'); // 오후 4시
+  return {
+    start,
+    end,
+    durationMinutes: 120,
+    ...overrides,
+  };
+}
+
+/**
+ * Edge Function AI 성공 응답 mock 생성.
+ */
+function makeEdgeRecResponse(slotCount = 1) {
+  return {
+    data: {
+      recommendations: Array.from({ length: slotCount }, (_, i) => ({
+        slot: {
+          start:           new Date('2026-04-28T14:00:00+09:00').toISOString(),
+          end:             new Date('2026-04-28T16:00:00+09:00').toISOString(),
+          durationMinutes: 120,
+        },
+        activities: [
+          { name: `AI 활동 ${i + 1}-1`, reason: '추천 이유', fitScore: 0.9 },
+          { name: `AI 활동 ${i + 1}-2`, reason: '추천 이유', fitScore: 0.8 },
+          { name: `AI 활동 ${i + 1}-3`, reason: '추천 이유', fitScore: 0.7 },
+        ],
+      })),
+      fromCache: false,
+      source: 'ai',
+    },
+    error: null,
+  };
+}
+
+describe('getFreeTimeRecommendations', () => {
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    await AsyncStorage.clear();
+    // 기본: 쿼터 허용 상태
+    mockCanUseFreeTimeRec.mockReturnValue(true);
+  });
+
+  // ── 케이스 1: 룰 baseline ──────────────────────────────────────────────────
+
+  test('forceAI=false → Edge Function 호출 없이 룰 baseline 반환', async () => {
+    const slot = makeSlot();
+    const result = await getFreeTimeRecommendations([slot], 'ko', false);
+
+    // Edge Function(invoke) 호출 없음
+    expect(mockFunctionsInvoke).not.toHaveBeenCalled();
+
+    // 룰 source
+    expect(result.source).toBe('rule');
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.recommendations[0].source).toBe('rule');
+
+    // 룰 사전 mock 활동 포함 확인
+    expect(result.recommendations[0].activities[0].name).toBe('영화');
+  });
+
+  test('canUseFreeTimeRec()=false → AI 호출 없이 룰 baseline 반환', async () => {
+    mockCanUseFreeTimeRec.mockReturnValue(false);
+
+    const slot = makeSlot();
+    const result = await getFreeTimeRecommendations([slot], 'ko', true);
+
+    expect(mockFunctionsInvoke).not.toHaveBeenCalled();
+    expect(result.source).toBe('rule');
+    // consumeFreeTimeRec 호출 없음 (쿼터 소모 안 됨)
+    expect(mockConsumeFreeTimeRec).not.toHaveBeenCalled();
+  });
+
+  // ── 케이스 2: AI 호출 성공 ────────────────────────────────────────────────
+
+  test('forceAI=true + 쿼터 허용 → Edge Function 호출 후 AI 결과 반환', async () => {
+    const slot = makeSlot();
+    mockFunctionsInvoke.mockResolvedValue(makeEdgeRecResponse(1));
+
+    const result = await getFreeTimeRecommendations([slot], 'ko', true);
+
+    // Edge Function 호출됨
+    expect(mockFunctionsInvoke).toHaveBeenCalledTimes(1);
+    expect(mockFunctionsInvoke).toHaveBeenCalledWith(
+      'recommend-free-time',
+      expect.objectContaining({
+        body: expect.objectContaining({ forceAI: true }),
+      }),
+    );
+
+    // AI source 반환
+    expect(result.source).toBe('ai');
+    expect(result.recommendations[0].source).toBe('ai');
+    expect(result.recommendations[0].activities[0].name).toContain('AI 활동');
+
+    // consumeFreeTimeRec 1회 호출 (쿼터 기록)
+    expect(mockConsumeFreeTimeRec).toHaveBeenCalledTimes(1);
+  });
+
+  // ── 케이스 3: 캐시 hit (Edge Fn fromCache=true) ───────────────────────────
+
+  test('Edge Function fromCache=true → 쿼터 기록 & 결과에 fromCache=true 전파', async () => {
+    const slot = makeSlot();
+    // Edge Function이 캐시에서 응답했다고 시뮬레이션
+    const cachedResponse = {
+      data: {
+        ...makeEdgeRecResponse(1).data,
+        fromCache: true,
+      },
+      error: null,
+    };
+    mockFunctionsInvoke.mockResolvedValue(cachedResponse);
+
+    const result = await getFreeTimeRecommendations([slot], 'ko', true);
+
+    // 캐시 응답도 AI source로 처리됨 (Edge Fn에서 이미 결과를 반환)
+    expect(result.source).toBe('ai');
+    expect(result.recommendations[0].fromCache).toBe(true);
+
+    // 캐시라도 성공 응답이면 consumeFreeTimeRec 기록 (서버가 허용한 것)
+    expect(mockConsumeFreeTimeRec).toHaveBeenCalledTimes(1);
+  });
+
+  // ── 추가: 빈 슬롯 배열 입력 ──────────────────────────────────────────────
+
+  test('빈 슬롯 배열 → 빈 결과 즉시 반환 (Edge Fn 호출 없음)', async () => {
+    const result = await getFreeTimeRecommendations([], 'ko', true);
+
+    expect(mockFunctionsInvoke).not.toHaveBeenCalled();
+    expect(result.recommendations).toHaveLength(0);
+    expect(result.source).toBe('rule');
+  });
+
+  test('Edge Function 오류 → 룰 baseline으로 graceful degradation (크래시 없음)', async () => {
+    const slot = makeSlot();
+    mockFunctionsInvoke.mockResolvedValue({ data: null, error: new Error('Network error') });
+
+    const result = await getFreeTimeRecommendations([slot], 'ko', true);
+
+    // 오류 시 룰 결과로 fallback
+    expect(result.source).toBe('rule');
+    expect(result.recommendations[0].source).toBe('rule');
+    // consumeFreeTimeRec 호출 안 됨 (실패 시 쿼터 소모 안 함)
+    expect(mockConsumeFreeTimeRec).not.toHaveBeenCalled();
   });
 });

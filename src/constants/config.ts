@@ -70,9 +70,28 @@ export const INVITE_CODE_CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 /** Edge Function names (called via supabase.functions.invoke()). */
 export const EDGE_FUNCTIONS = {
-  PARSE_EVENT:     'parse-event',
-  SMART_REMINDER:  'smart-reminder',
-  WEEKLY_REVIEW:   'weekly-review',
-  DATE_RECOMMEND:  'date-recommend',
-  SUGGEST_DATE:    'suggest-date',
+  PARSE_EVENT:          'parse-event',
+  SMART_REMINDER:       'smart-reminder',
+  WEEKLY_REVIEW:        'weekly-review',
+  DATE_RECOMMEND:       'date-recommend',
+  SUGGEST_DATE:         'suggest-date',
+  RECOMMEND_FREE_TIME:  'recommend-free-time',
 } as const;
+
+// ─── Free Time Recommendations (PRD 4.2 Tier 3) ──────────────────────────────
+
+/**
+ * Free 플랜: 월간 AI 추천 허용 횟수.
+ * 클라이언트 subscriptionStore에서 월별 누적 추적.
+ * 서버 quota(quota.ts)는 일별로 별도 강제.
+ */
+export const FREE_REC_MONTHLY_LIMIT = 5;
+
+/**
+ * Pro 플랜: 주간 AI 추천 허용 횟수.
+ * 매주 월요일 초기화. 실질적으로 무제한에 가까운 넉넉한 값.
+ */
+export const PRO_REC_WEEKLY_LIMIT = 50;
+
+/** AsyncStorage 키: 추천 횟수 추적 */
+export const REC_QUOTA_STORAGE_KEY = 'synclink:rec_quota';

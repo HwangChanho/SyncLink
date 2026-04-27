@@ -48,10 +48,14 @@ export interface QuotaResult {
  *         loop can only burn ~ N × hourly × 24 calls per day.
  */
 const LIMITS: Record<string, { freeDaily: number; proHourly: number; proRequiresPaid?: boolean }> = {
-  'parse-event':     { freeDaily: 5,  proHourly: 60 },
-  'suggest-date':    { freeDaily: 3,  proHourly: 30 },
-  'weekly-review':   { freeDaily: 1,  proHourly: 5  },
-  'translate-event': { freeDaily: 0,  proHourly: 60, proRequiresPaid: true },
+  'parse-event':          { freeDaily: 5,  proHourly: 60 },
+  'suggest-date':         { freeDaily: 3,  proHourly: 30 },
+  'weekly-review':        { freeDaily: 1,  proHourly: 5  },
+  'translate-event':      { freeDaily: 0,  proHourly: 60, proRequiresPaid: true },
+  // PRD 4.2 Tier 3: Free 월 5회 (일 단위 환산 — 일별 1회 한도로 관리,
+  // 월 5회 누적은 클라이언트 subscriptionStore에서 추가로 추적).
+  // Pro: 시간당 20회 (주간 페이스).
+  'recommend-free-time':  { freeDaily: 1,  proHourly: 20 },
 };
 
 /**

@@ -41,6 +41,8 @@ import {
   useSubscriptionStore,
   FREE_AI_DAILY_LIMIT,
   FREE_WEEKLY_REVIEW_MONTHLY_LIMIT,
+  FREE_REC_MONTHLY_LIMIT,
+  PRO_REC_WEEKLY_LIMIT,
 } from '@/stores/subscriptionStore';
 
 // ─── 헬퍼: 날짜 문자열 ────────────────────────────────────────────────────────
@@ -59,6 +61,20 @@ function localDateString(d: Date = new Date()): string {
  */
 function localMonthString(d: Date = new Date()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/**
+ * 현재 ISO 주차 문자열 반환 (YYYY-Www).
+ * subscriptionStore.ts의 currentISOWeekString()과 동일.
+ */
+function currentISOWeekString(): string {
+  const d    = new Date();
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
+  const year      = date.getUTCFullYear();
+  const dayOfYear = Math.floor((date.getTime() - Date.UTC(year, 0, 1)) / 86_400_000) + 1;
+  const week      = Math.ceil(dayOfYear / 7);
+  return `${year}-W${String(week).padStart(2, '0')}`;
 }
 
 /** 어제 날짜 문자열 */
@@ -81,6 +97,12 @@ function lastMonth(): string {
  * 스토어를 깨끗한 기본 상태로 리셋.
  * 각 테스트 전에 호출하여 테스트 간 상태 격리.
  */
+/**
+ * 스토어를 깨끗한 기본 상태로 리셋.
+ * 각 테스트 전에 호출하여 테스트 간 상태 격리.
+ *
+ * PRD 4.2 Tier 3 추천 쿼터 필드 포함.
+ */
 function resetStore() {
   useSubscriptionStore.setState({
     plan:                        'free',
@@ -88,6 +110,12 @@ function resetStore() {
     lastResetDate:               localDateString(),   // 오늘
     weeklyReviewUsedThisMonth:   0,
     lastReviewResetMonth:        localMonthString(),  // 이번 달
+    adCredits:                   0,
+    // PRD 4.2 Tier 3 추천 쿼터 초기화
+    recUsedThisMonth:            0,
+    lastRecResetMonth:           localMonthString(),
+    recUsedThisWeek:             0,
+    lastRecResetWeek:            currentISOWeekString(), // 현재 주차로 초기화 (리셋 안 일어남)
   });
 }
 
@@ -451,6 +479,101 @@ describe('useSubscriptionStore', () => {
       // 다음 날 canUseAI 호출 → 리셋 → true
       expect(useSubscriptionStore.getState().canUseAI().allowed).toBe(true);
       expect(useSubscriptionStore.getState().aiUsageToday).toBe(0);
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PRD 4.2 Tier 3: canUseFreeTimeRec / consumeFreeTimeRec
+  // ── 케이스 1: Free 한도 ────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+
+  describe('canUseFreeTimeRec — Free 플랜 한도 (월 5회)', () => {
+    it(`초기 상태 → true (0 / ${FREE_REC_MONTHLY_LIMIT}회)`, () => {
+      expect(useSubscriptionStore.getState().canUseFreeTimeRec()).toBe(true);
+    });
+
+    it(`${FREE_REC_MONTHLY_LIMIT - 1}회 사용 → true (한도 미달)`, () => {
+      useSubscriptionStore.setState({ recUsedThisMonth: FREE_REC_MONTHLY_LIMIT - 1 });
+      expect(useSubscriptionStore.getState().canUseFreeTimeRec()).toBe(true);
+    });
+
+    it(`${FREE_REC_MONTHLY_LIMIT}회 사용 → false (한도 도달)`, () => {
+      useSubscriptionStore.setState({ recUsedThisMonth: FREE_REC_MONTHLY_LIMIT });
+      expect(useSubscriptionStore.getState().canUseFreeTimeRec()).toBe(false);
+    });
+
+    it('한도 초과(6회)에서도 false', () => {
+      useSubscriptionStore.setState({ recUsedThisMonth: FREE_REC_MONTHLY_LIMIT + 1 });
+      expect(useSubscriptionStore.getState().canUseFreeTimeRec()).toBe(false);
+    });
+
+    it('지난 달 기록으로 설정 시 → 리셋 후 true 반환', () => {
+      useSubscriptionStore.setState({
+        recUsedThisMonth:  FREE_REC_MONTHLY_LIMIT,
+        lastRecResetMonth: lastMonth(),
+      });
+      expect(useSubscriptionStore.getState().canUseFreeTimeRec()).toBe(true);
+    });
+
+    it('consumeFreeTimeRec 호출 시 recUsedThisMonth 1 증가', () => {
+      useSubscriptionStore.getState().consumeFreeTimeRec();
+      expect(useSubscriptionStore.getState().recUsedThisMonth).toBe(1);
+    });
+
+    it(`Free: ${FREE_REC_MONTHLY_LIMIT}회 연속 호출 → 한도 도달 후 canUseFreeTimeRec false`, () => {
+      for (let i = 0; i < FREE_REC_MONTHLY_LIMIT; i++) {
+        useSubscriptionStore.getState().consumeFreeTimeRec();
+      }
+      expect(useSubscriptionStore.getState().canUseFreeTimeRec()).toBe(false);
+    });
+
+    it('한도 초과 상태에서 consumeFreeTimeRec → 카운터 증가 안 됨 (no-op)', () => {
+      useSubscriptionStore.setState({ recUsedThisMonth: FREE_REC_MONTHLY_LIMIT });
+      useSubscriptionStore.getState().consumeFreeTimeRec();
+      // 한도 초과 상태에서 consume 해도 더 늘지 않음
+      expect(useSubscriptionStore.getState().recUsedThisMonth).toBe(FREE_REC_MONTHLY_LIMIT);
+    });
+  });
+
+  // ── 케이스 2: Pro 무제한 ──────────────────────────────────────────────────
+
+  describe('canUseFreeTimeRec — Pro 플랜 (주 50회, 사실상 무제한)', () => {
+    beforeEach(() => {
+      useSubscriptionStore.setState({ plan: 'pro' });
+    });
+
+    it('Pro + 0회 → true', () => {
+      expect(useSubscriptionStore.getState().canUseFreeTimeRec()).toBe(true);
+    });
+
+    it(`Pro + 주간 ${PRO_REC_WEEKLY_LIMIT}회 미만 → true`, () => {
+      useSubscriptionStore.setState({ recUsedThisWeek: PRO_REC_WEEKLY_LIMIT - 1 });
+      expect(useSubscriptionStore.getState().canUseFreeTimeRec()).toBe(true);
+    });
+
+    it(`Pro + 주간 ${PRO_REC_WEEKLY_LIMIT}회 도달 → false (주간 한도 도달)`, () => {
+      useSubscriptionStore.setState({ recUsedThisWeek: PRO_REC_WEEKLY_LIMIT });
+      expect(useSubscriptionStore.getState().canUseFreeTimeRec()).toBe(false);
+    });
+
+    it('consumeFreeTimeRec 호출 시 recUsedThisWeek 1 증가 (Pro)', () => {
+      useSubscriptionStore.getState().consumeFreeTimeRec();
+      expect(useSubscriptionStore.getState().recUsedThisWeek).toBe(1);
+    });
+
+    it('Pro: 한도 초과 상태에서 consumeFreeTimeRec → no-op', () => {
+      useSubscriptionStore.setState({ recUsedThisWeek: PRO_REC_WEEKLY_LIMIT });
+      useSubscriptionStore.getState().consumeFreeTimeRec();
+      expect(useSubscriptionStore.getState().recUsedThisWeek).toBe(PRO_REC_WEEKLY_LIMIT);
+    });
+
+    it('Pro: 주간 리셋 시 canUseFreeTimeRec → true', () => {
+      // 지난 주차로 설정 (임의 이전 주차 문자열)
+      useSubscriptionStore.setState({
+        recUsedThisWeek:  PRO_REC_WEEKLY_LIMIT,
+        lastRecResetWeek: '2020-W01',  // 분명히 이전 주차
+      });
+      expect(useSubscriptionStore.getState().canUseFreeTimeRec()).toBe(true);
     });
   });
 });

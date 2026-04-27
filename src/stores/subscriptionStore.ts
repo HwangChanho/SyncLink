@@ -27,6 +27,11 @@ import {
   consumeAdCreditRemote,
   fetchAdCreditBalance,
 } from '@/services/creditService';
+import {
+  FREE_REC_MONTHLY_LIMIT,
+  PRO_REC_WEEKLY_LIMIT,
+  REC_QUOTA_STORAGE_KEY,
+} from '@/constants/config';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -38,6 +43,9 @@ export const FREE_AI_DAILY_LIMIT = 5;
 
 /** Free plan: max weekly review generations per month. */
 export const FREE_WEEKLY_REVIEW_MONTHLY_LIMIT = 1;
+
+// Free Time Recommendation 한도 상수를 config에서 재-export (편의)
+export { FREE_REC_MONTHLY_LIMIT, PRO_REC_WEEKLY_LIMIT };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -93,6 +101,32 @@ interface SubscriptionState {
    * Sprint 14 TASK-1403.
    */
   adCredits: number;
+
+  // ── Free Time Recommendation 쿼터 (PRD 4.2 Tier 3) ────────────────────────
+
+  /**
+   * Free 플랜: 이번 달 AI 추천 사용 횟수.
+   * 매월 1일 자동 리셋. Pro 플랜에서는 이 값을 추적하지 않음(무제한).
+   */
+  recUsedThisMonth: number;
+
+  /**
+   * 월 리셋 기준 문자열 (YYYY-MM).
+   * recUsedThisMonth 리셋 여부 판단에 사용.
+   */
+  lastRecResetMonth: string;
+
+  /**
+   * Pro 플랜: 이번 주 AI 추천 사용 횟수.
+   * 매주 월요일 자동 리셋.
+   */
+  recUsedThisWeek: number;
+
+  /**
+   * 주간 리셋 기준 문자열 (YYYY-Www, ISO 주차).
+   * recUsedThisWeek 리셋 여부 판단에 사용.
+   */
+  lastRecResetWeek: string;
 
   // ── Actions ─────────────────────────────────────────────────────────────────
 
@@ -151,6 +185,28 @@ interface SubscriptionState {
    */
   setPlan: (plan: SubscriptionPlan) => void;
 
+  // ── Free Time Recommendation 쿼터 액션 (PRD 4.2 Tier 3) ──────────────────
+
+  /**
+   * AI 활동 추천 기능을 현재 사용할 수 있는지 확인.
+   *
+   * - Free:  이번 달 recUsedThisMonth < FREE_REC_MONTHLY_LIMIT (5회)
+   * - Pro:   이번 주 recUsedThisWeek  < PRO_REC_WEEKLY_LIMIT   (50회)
+   *
+   * 한도 초과 시 false 반환 — UI는 룰 baseline만 표시하거나 업그레이드 CTA.
+   * 자동 리셋(월/주) 포함.
+   *
+   * @returns true if AI recommendation is allowed right now
+   */
+  canUseFreeTimeRec: () => boolean;
+
+  /**
+   * AI 활동 추천 1회 사용 기록.
+   * canUseFreeTimeRec() 확인 후 호출 권장.
+   * 한도 초과 상태에서 호출해도 무한 증가하지 않음 (no-op).
+   */
+  consumeFreeTimeRec: () => void;
+
   /**
    * Load persisted state from AsyncStorage (called once at app startup).
    * Merges saved state with any midnight/month resets needed.
@@ -179,6 +235,46 @@ function persist(state: Partial<SubscriptionState>): void {
   });
 }
 
+/**
+ * ISO 주차 문자열 반환 (YYYY-Www).
+ * 월요일 기준 주차 계산 (ISO 8601).
+ * 매주 월요일에 리셋되는 Pro 추천 쿼터 추적에 사용.
+ */
+function currentISOWeekString(): string {
+  const d    = new Date();
+  // ISO 주차: 목요일이 포함된 주를 기준 (ISO 8601)
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  // 이번 주 목요일로 이동해서 연도 결정
+  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
+  const year     = date.getUTCFullYear();
+  const dayOfYear = Math.floor((date.getTime() - Date.UTC(year, 0, 1)) / 86_400_000) + 1;
+  const week      = Math.ceil(dayOfYear / 7);
+  return `${year}-W${String(week).padStart(2, '0')}`;
+}
+
+/**
+ * 추천 쿼터를 REC_QUOTA_STORAGE_KEY 에 별도 저장 (fire-and-forget).
+ * subscription 상태와 분리 저장하여 다른 필드 hydration에 영향 없음.
+ *
+ * @param recUsedThisMonth  - Free 플랜 이번 달 사용 횟수
+ * @param lastRecResetMonth - 마지막 리셋 월 (YYYY-MM)
+ * @param recUsedThisWeek   - Pro 플랜 이번 주 사용 횟수
+ * @param lastRecResetWeek  - 마지막 리셋 주차 (YYYY-Www)
+ */
+function persistRecQuota(
+  recUsedThisMonth: number,
+  lastRecResetMonth: string,
+  recUsedThisWeek: number,
+  lastRecResetWeek: string,
+): void {
+  AsyncStorage.setItem(REC_QUOTA_STORAGE_KEY, JSON.stringify({
+    recUsedThisMonth,
+    lastRecResetMonth,
+    recUsedThisWeek,
+    lastRecResetWeek,
+  })).catch(() => { /* non-critical */ });
+}
+
 // (mirrorPlanToServer removed — server-authoritative plan now comes from
 //  the RevenueCat webhook + LEAD admin tooling. Migration 016's trigger
 //  rejects client-side writes to subscription_plan / is_admin /
@@ -193,6 +289,11 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
   weeklyReviewUsedThisMonth: 0,
   lastReviewResetMonth: currentMonthString(),
   adCredits: 0,
+  // PRD 4.2 Tier 3 추천 쿼터 초기값
+  recUsedThisMonth:  0,
+  lastRecResetMonth: currentMonthString(),
+  recUsedThisWeek:   0,
+  lastRecResetWeek:  currentISOWeekString(),
 
   canUseAI: (): CanUseAIResult => {
     const state = get();
@@ -314,6 +415,56 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
     // reconciles authoritative state.
   },
 
+  // ── Free Time Recommendation 쿼터 구현 (PRD 4.2 Tier 3) ─────────────────
+
+  canUseFreeTimeRec: (): boolean => {
+    const state = get();
+
+    if (state.plan === 'pro') {
+      // Pro 플랜: 주간 한도 확인 + 자동 리셋
+      const currentWeek = currentISOWeekString();
+      if (state.lastRecResetWeek !== currentWeek) {
+        // 주가 바뀌었으면 카운터 리셋
+        set({ recUsedThisWeek: 0, lastRecResetWeek: currentWeek });
+        persistRecQuota(state.recUsedThisMonth, state.lastRecResetMonth, 0, currentWeek);
+        return true;
+      }
+      return state.recUsedThisWeek < PRO_REC_WEEKLY_LIMIT;
+    }
+
+    // Free 플랜: 월간 한도 확인 + 자동 리셋
+    const month = currentMonthString();
+    if (state.lastRecResetMonth !== month) {
+      set({ recUsedThisMonth: 0, lastRecResetMonth: month });
+      persistRecQuota(0, month, state.recUsedThisWeek, state.lastRecResetWeek);
+      return true;
+    }
+    return state.recUsedThisMonth < FREE_REC_MONTHLY_LIMIT;
+  },
+
+  consumeFreeTimeRec: (): void => {
+    const state = get();
+    const month = currentMonthString();
+    const week  = currentISOWeekString();
+
+    if (state.plan === 'pro') {
+      // Pro: 주간 카운터 증가 (한도 초과 시 no-op)
+      const currentWeek = state.lastRecResetWeek === week ? state.recUsedThisWeek : 0;
+      if (currentWeek >= PRO_REC_WEEKLY_LIMIT) return;
+      const next = { recUsedThisWeek: currentWeek + 1, lastRecResetWeek: week };
+      set(next);
+      persistRecQuota(state.recUsedThisMonth, state.lastRecResetMonth, next.recUsedThisWeek, week);
+      return;
+    }
+
+    // Free: 월간 카운터 증가 (한도 초과 시 no-op)
+    const currentMonth = state.lastRecResetMonth === month ? state.recUsedThisMonth : 0;
+    if (currentMonth >= FREE_REC_MONTHLY_LIMIT) return;
+    const next = { recUsedThisMonth: currentMonth + 1, lastRecResetMonth: month };
+    set(next);
+    persistRecQuota(next.recUsedThisMonth, month, state.recUsedThisWeek, state.lastRecResetWeek);
+  },
+
   hydrate: async () => {
     try {
       const raw = await AsyncStorage.getItem(SUBSCRIPTION_STORAGE_KEY);
@@ -344,6 +495,38 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
       });
     } catch {
       // Corrupted storage — use defaults (already set at store creation)
+    }
+
+    // 추천 쿼터 별도 복원 (REC_QUOTA_STORAGE_KEY)
+    try {
+      const recRaw = await AsyncStorage.getItem(REC_QUOTA_STORAGE_KEY);
+      if (!recRaw) return;
+
+      const recSaved: {
+        recUsedThisMonth:  number;
+        lastRecResetMonth: string;
+        recUsedThisWeek:   number;
+        lastRecResetWeek:  string;
+      } = JSON.parse(recRaw);
+
+      const month = currentMonthString();
+      const week  = currentISOWeekString();
+
+      // 월 리셋
+      const recUsedThisMonth  = recSaved.lastRecResetMonth === month
+        ? (recSaved.recUsedThisMonth ?? 0) : 0;
+      // 주 리셋
+      const recUsedThisWeek   = recSaved.lastRecResetWeek === week
+        ? (recSaved.recUsedThisWeek ?? 0) : 0;
+
+      set({
+        recUsedThisMonth,
+        lastRecResetMonth: month,
+        recUsedThisWeek,
+        lastRecResetWeek:  week,
+      });
+    } catch {
+      // 쿼터 복원 실패 시 초기값 유지 (0회 = 사용 가능 상태로 시작, 안전 방향)
     }
   },
 }));
