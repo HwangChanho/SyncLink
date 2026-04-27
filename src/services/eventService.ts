@@ -21,7 +21,7 @@
 
 import { supabase, getCurrentUserId } from '@/lib/supabase';
 import { logError } from '@/lib/errorLogger';
-import { memberEventColors } from '@/constants/colors';
+import { getMemberColor } from '@/constants/colors';
 import { shareEventToSpace, unshareEventFromSpace } from '@/services/eventShareService';
 import { cancelEventReminders } from '@/services/notificationService';
 import type {
@@ -91,9 +91,9 @@ function toEvent(
  *  3. Fetch event_shares for those spaces, then fetch the actual events.
  *  4. Merge own + shared, sort by startAt.
  *
- * Color assignment:
- *  - Own events: event.color or memberEventColors[0] (violet)
- *  - Shared events: event owner's space_members.color, fallback memberEventColors[1] (rose)
+ * Color assignment (ADR-014 / IDEA-012):
+ *  - Own events: event.color or getMemberColor(0) (golden-angle hue 0)
+ *  - Shared events: event owner's space_members.color, fallback getMemberColor(1)
  *
  * @param range - Inclusive start and end dates
  * @returns EventSummary[] sorted by startAt
@@ -117,7 +117,7 @@ export async function getEventsInRange(range: DateRange): Promise<EventSummary[]
   if (ownError) throw ownError;
 
   const ownSummaries: EventSummary[] = (ownRows ?? []).map(row =>
-    toEventSummary(row, true, memberEventColors[0]),
+    toEventSummary(row, true, getMemberColor(0)),
   );
   const ownEventIds = new Set(ownSummaries.map(e => e.id));
 
@@ -189,7 +189,7 @@ export async function getEventsInRange(range: DateRange): Promise<EventSummary[]
     toEventSummary(
       row,
       false,
-      ownerColorMap.get(row.user_id) ?? memberEventColors[1],
+      ownerColorMap.get(row.user_id) ?? getMemberColor(1),
     ),
   );
 

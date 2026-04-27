@@ -134,9 +134,11 @@ export const dark: { [K in keyof typeof light]: string } = {
 // ─── Calendar — member event colors ──────────────────────────────────────────
 
 /**
- * Pre-defined color options for space members' events.
- * Index 0 = owner's default color, subsequent = members.
- * DEV: when creating a space member, assign colors[memberIndex % colors.length]
+ * Legacy palette kept for tests/back-compat — DO NOT use for new assignments.
+ * Use `getMemberColor(memberIndex)` instead, which scales to N members
+ * without modulo collisions (Sprint 27 / IDEA-012 / ADR-014).
+ *
+ * @deprecated since Sprint 27. Use `getMemberColor` for any new code.
  */
 export const memberEventColors = [
   '#6C63FF', // violet  (owner)
@@ -148,6 +150,80 @@ export const memberEventColors = [
   '#EF5350', // red
   '#26C6DA', // cyan
 ] as const;
+
+/**
+ * Golden-ratio conjugate expressed in degrees (0.61803398875 × 360).
+ *
+ * Why this constant?
+ *   Repeatedly adding the golden angle (≈137.508°) to a starting hue produces
+ *   a sequence that maximally spreads around the colour wheel for arbitrary N.
+ *   Unlike `(memberIndex / N) * 360`, we don't need to know N up front; unlike
+ *   `memberIndex * 360 / 7`, we never collide for N ≤ ~hundreds because the
+ *   irrational ratio guarantees the sequence never lands on a previous hue.
+ *
+ *   Reference: https://en.wikipedia.org/wiki/Golden_angle (Vogel's model).
+ */
+const GOLDEN_ANGLE_DEG = 137.508;
+
+/** HSL saturation locked to 65% — vivid but not garish, AA-friendly. */
+const MEMBER_COLOR_SATURATION = 65;
+
+/** Lightness in light mode — slightly darker for white-bg contrast. */
+const MEMBER_COLOR_LIGHTNESS_LIGHT = 50;
+
+/** Lightness in dark mode — slightly brighter for dark-bg contrast. */
+const MEMBER_COLOR_LIGHTNESS_DARK = 60;
+
+/**
+ * Options accepted by `getMemberColor`.
+ *
+ * @property dark - When true, returns a brighter HSL lightness suited for
+ *   dark backgrounds. Defaults to false (light theme).
+ */
+export interface GetMemberColorOptions {
+  dark?: boolean;
+}
+
+/**
+ * Deterministic per-member colour derived via golden-angle hue rotation.
+ *
+ * Algorithm (ADR-014):
+ *   hue       = (memberIndex × 137.508°) mod 360
+ *   sat       = 65 %
+ *   lightness = 50 % (light) | 60 % (dark)
+ *
+ * Properties:
+ *   - Stable: same `memberIndex` always returns the same colour string.
+ *   - Collision-resistant for any practical group size (golden ratio is
+ *     irrational, so no two indices map to the same hue within hundreds
+ *     of members — versus the old `% 7` which collided at member #8).
+ *   - Cheap: pure arithmetic, no allocation, no hash.
+ *
+ * The returned string is a valid CSS / React Native colour:
+ *   `"hsl(137.508, 65%, 50%)"`.
+ *
+ * @param memberIndex - 0-based join order within the Space. Owner is 0.
+ * @param opts        - Optional overrides ({ dark } toggles dark-mode lightness).
+ * @returns CSS HSL colour string consumable by RN style props and DB columns.
+ */
+export function getMemberColor(
+  memberIndex: number,
+  opts: GetMemberColorOptions = {},
+): string {
+  // Normalise: clamp to non-negative integer so callers can pass raw counts.
+  const safeIndex = Number.isFinite(memberIndex) && memberIndex >= 0
+    ? Math.floor(memberIndex)
+    : 0;
+
+  // Compute hue. `% 360` handles wraparound; result is in [0, 360).
+  const hue = (safeIndex * GOLDEN_ANGLE_DEG) % 360;
+
+  const lightness = opts.dark
+    ? MEMBER_COLOR_LIGHTNESS_DARK
+    : MEMBER_COLOR_LIGHTNESS_LIGHT;
+
+  return `hsl(${hue}, ${MEMBER_COLOR_SATURATION}%, ${lightness}%)`;
+}
 
 // ─── Category colors ──────────────────────────────────────────────────────────
 

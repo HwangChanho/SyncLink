@@ -14,7 +14,7 @@
 
 import { AppState } from 'react-native';
 import { supabase, getCurrentUserId } from '@/lib/supabase';
-import { memberEventColors } from '@/constants/colors';
+import { getMemberColor } from '@/constants/colors';
 import { getEventById } from '@/services/eventService';
 import type { EventSummary } from '@/types';
 
@@ -130,7 +130,7 @@ export function subscribeToSharedEvents(
                 startAt: event.startAt,
                 endAt:   event.endAt,
                 allDay:  event.allDay,
-                color:   event.color ?? memberEventColors[1],
+                color:   event.color ?? getMemberColor(1),
                 isOwn:   event.isOwn,
               });
             } catch {
@@ -151,7 +151,7 @@ export function subscribeToSharedEvents(
                 startAt: event.startAt,
                 endAt:   event.endAt,
                 allDay:  event.allDay,
-                color:   event.color ?? memberEventColors[1],
+                color:   event.color ?? getMemberColor(1),
                 isOwn:   event.isOwn,
               });
             } catch {
