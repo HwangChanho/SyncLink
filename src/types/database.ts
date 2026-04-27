@@ -51,6 +51,13 @@ export interface SpaceRow {
   created_by: string;       // uuid, references users(id)
   created_at: string;
   updated_at: string;
+  // IDEA-016: invite code lifecycle columns (022_invite_code_lifecycle.sql)
+  /** Expiry timestamp for the invite code. NULL = never expires. */
+  invite_code_expires_at: string | null;
+  /** Maximum number of redemptions allowed. NULL = unlimited. */
+  invite_code_max_uses: number | null;
+  /** Number of successful redemptions of the current invite code. */
+  invite_code_uses_count: number;
 }
 
 export type SpaceInsert = Omit<SpaceRow, 'id' | 'created_at' | 'updated_at'>;

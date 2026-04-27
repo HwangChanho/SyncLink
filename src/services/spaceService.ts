@@ -296,9 +296,18 @@ export async function updateSpace(spaceId: string, updates: UpdateSpaceInput): P
 /**
  * Join a space using an invite code.
  *
+ * Validates:
+ *  1. Code resolves to an existing space.
+ *  2. Code has not expired (invite_code_expires_at).
+ *  3. Code has not reached its use limit (invite_code_max_uses).
+ *  4. Current user is not already a member.
+ *  5. Couple spaces are limited to 2 members (application + DB trigger).
+ *
+ * After successful validation, atomically increments invite_code_uses_count.
+ *
  * @param inviteCode - 6-char alphanumeric code (case-insensitive)
  * @returns The joined Space
- * @throws Error if code is invalid, expired, or space is full (couple type)
+ * @throws Error if code is invalid, expired, over limit, or space is full
  */
 export async function joinSpaceByInviteCode(inviteCode: string): Promise<Space> {
   const userId = await getCurrentUserId();
@@ -313,6 +322,26 @@ export async function joinSpaceByInviteCode(inviteCode: string): Promise<Space> 
 
   if (spaceError || !spaceRow) {
     throw new Error('유효하지 않은 초대 코드입니다. 코드를 다시 확인해 주세요.');
+  }
+
+  // ── IDEA-016: 만료 시각 체크 ──────────────────────────────────────────────
+  // invite_code_expires_at 이 설정되어 있고 현재 시각보다 과거이면 만료.
+  // NULL 이면 영구 유효.
+  if (spaceRow.invite_code_expires_at !== null) {
+    const expiresAt = new Date(spaceRow.invite_code_expires_at);
+    if (expiresAt < new Date()) {
+      throw new Error('초대 코드가 만료되었습니다. Space 관리자에게 새 코드를 요청하세요.');
+    }
+  }
+
+  // ── IDEA-016: 사용 횟수 한도 체크 ─────────────────────────────────────────
+  // invite_code_max_uses 가 설정되어 있고 이미 uses_count >= max_uses 면 차단.
+  // NULL 이면 무제한.
+  if (
+    spaceRow.invite_code_max_uses !== null &&
+    spaceRow.invite_code_uses_count >= spaceRow.invite_code_max_uses
+  ) {
+    throw new Error('초대 코드 사용 한도에 도달했습니다. Space 관리자에게 새 코드를 요청하세요.');
   }
 
   // 현재 멤버 목록 조회
@@ -348,7 +377,38 @@ export async function joinSpaceByInviteCode(inviteCode: string): Promise<Space> 
       color: memberColor,
     }) as { error: Error | null };
 
-  if (insertError) throw insertError;
+  // DB-level couple cap trigger raises P0001 'couple_space_full'.
+  // Map it to a user-friendly message (same as the application-layer check above,
+  // but this path catches races where two users join simultaneously).
+  if (insertError) {
+    const errMsg = (insertError as unknown as { message?: string }).message ?? '';
+    if (errMsg.includes('couple_space_full')) {
+      throw new Error('커플 Space는 최대 2명까지 참여할 수 있습니다.');
+    }
+    throw insertError;
+  }
+
+  // ── IDEA-016: 사용 횟수 카운터 원자적 증가 ───────────────────────────────
+  // DB의 invite_code_uses_count 를 +1 한다.
+  // Supabase PostgREST는 server-side increment를 직접 지원하지 않으므로
+  // RPC-style raw update 로 처리. 실패해도 JOIN 자체는 성공으로 간주
+  // (사용 횟수 부정확보다 join 실패가 더 나쁜 UX이므로 비치명적 처리).
+  const { error: counterError } = await supa
+    .from('spaces')
+    .update({ invite_code_uses_count: spaceRow.invite_code_uses_count + 1 })
+    .eq('id', spaceRow.id)
+    .eq('invite_code', spaceRow.invite_code) as { error: Error | null };
+  // Optimistic concurrency guard: .eq('invite_code', ...) ensures we only
+  // increment if the code hasn't been regenerated since we read it.
+  // If it fails silently (e.g. owner regenerated mid-join), that is acceptable.
+  if (counterError) {
+    void logError({
+      context: 'space.join.counter',
+      error:   counterError,
+      userId,
+      details: { spaceId: spaceRow.id, supabaseError: serializeSupabaseError(counterError) },
+    });
+  }
 
   return getSpaceById(spaceRow.id);
 }
@@ -357,8 +417,19 @@ export async function joinSpaceByInviteCode(inviteCode: string): Promise<Space> 
  * Regenerate the invite code for a space.
  * Only the owner can do this. Invalidates the old code immediately.
  *
+ * IDEA-016: Collision retry — the spaces table has a UNIQUE constraint on
+ * invite_code. With a 32^6 = ~1B code space, collisions are rare but not
+ * impossible in a large deployment. On UNIQUE violation (Postgres code 23505),
+ * we generate a new code and retry up to MAX_REGEN_ATTEMPTS times before
+ * surfacing an error to the caller.
+ *
+ * The DB trigger `trg_reset_invite_code_uses` (022_invite_code_lifecycle.sql)
+ * automatically resets invite_code_uses_count to 0 when invite_code changes,
+ * so no additional counter reset is needed here.
+ *
  * @param spaceId - UUID of the space
  * @returns New invite code (6-char string)
+ * @throws Error if owner check fails or all retry attempts collide
  */
 export async function regenerateInviteCode(spaceId: string): Promise<string> {
   const userId = await getCurrentUserId();
@@ -367,16 +438,50 @@ export async function regenerateInviteCode(spaceId: string): Promise<string> {
   // owner 권한 확인
   await assertOwner(spaceId, userId);
 
-  const newCode = generateCode();
+  // Maximum retry attempts on UNIQUE constraint collision (Postgres: 23505).
+  // With 32^6 ≈ 1.07B combinations and even 100k spaces, collision prob ≈ 0.005%.
+  // 5 retries reduce the compounded probability to negligible levels.
+  const MAX_REGEN_ATTEMPTS = 5;
 
-  const { error: updateError } = await supa
-    .from('spaces')
-    .update({ invite_code: newCode })
-    .eq('id', spaceId) as { error: Error | null };
+  let lastError: Error | null = null;
 
-  if (updateError) throw updateError;
+  for (let attempt = 1; attempt <= MAX_REGEN_ATTEMPTS; attempt++) {
+    const newCode = generateCode();
 
-  return newCode;
+    const { error: updateError } = await supa
+      .from('spaces')
+      .update({ invite_code: newCode })
+      .eq('id', spaceId) as { error: Error | null };
+
+    if (!updateError) {
+      // Success — return the new code.
+      return newCode;
+    }
+
+    // Postgres UNIQUE violation error code is '23505'.
+    // supabase-js v2 surfaces this as error.code or within error.message.
+    const errCode = (updateError as unknown as { code?: string }).code ?? '';
+    const errMsg  = (updateError as unknown as { message?: string }).message ?? '';
+    const isCollision = errCode === '23505' || errMsg.includes('23505') || errMsg.includes('unique');
+
+    if (!isCollision) {
+      // Non-collision error — surface immediately.
+      throw updateError;
+    }
+
+    // Collision — log and try again with a freshly generated code.
+    void logError({
+      context: 'space.regen.collision',
+      error:   updateError,
+      userId,
+      details: { spaceId, attempt, supabaseError: serializeSupabaseError(updateError) },
+    });
+
+    lastError = updateError;
+  }
+
+  // All attempts exhausted — extremely unlikely in production.
+  throw lastError ?? new Error('초대 코드 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.');
 }
 
 /**

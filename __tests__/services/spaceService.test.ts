@@ -92,6 +92,10 @@ const mockSpaceRow: SpaceRow = {
   created_by: 'user-123',
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
+  // IDEA-016: invite code lifecycle columns (default = no expiry, no limit)
+  invite_code_expires_at: null,
+  invite_code_max_uses: null,
+  invite_code_uses_count: 0,
 };
 
 const mockCoupleSpaceRow: SpaceRow = {
@@ -260,14 +264,15 @@ describe('spaceService', () => {
 
   describe('joinSpaceByInviteCode', () => {
     /**
-     * joinSpaceByInviteCode 정상 흐름에서의 from() 호출 순서:
+     * joinSpaceByInviteCode 정상 흐름에서의 from() 호출 순서 (IDEA-016):
      * 1. from('spaces')...single()             → spaceRow (초대 코드 조회)
      * 2. from('space_members')...              → [] (현재 멤버 목록)
      * 3. from('space_members').insert()        → { error: null } (멤버 추가)
+     * 4. from('spaces').update(uses_count+1)   → { error: null } (카운터 증가 — IDEA-016)
      *    ── 내부에서 getSpaceById 호출 ──
-     * 4. from('spaces')...single()             → spaceRow
-     * 5. from('space_members')...order()       → [ownerMemberRow]
-     * 6. from('users')...in()                  → [userRow]
+     * 5. from('spaces')...single()             → spaceRow
+     * 6. from('space_members')...order()       → [ownerMemberRow]
+     * 7. from('users')...in()                  → [userRow]
      */
     function setupJoinSuccessMocks() {
       (supabase.from as jest.Mock)
@@ -277,11 +282,13 @@ describe('spaceService', () => {
         .mockReturnValueOnce(makeChain({ data: [], error: null }))
         // 3. 멤버 추가 INSERT
         .mockReturnValueOnce(makeChain({ data: null, error: null }))
-        // 4. getSpaceById - space 정보
+        // 4. IDEA-016: uses_count 카운터 증가 UPDATE
+        .mockReturnValueOnce(makeChain({ data: null, error: null }))
+        // 5. getSpaceById - space 정보
         .mockReturnValueOnce(makeChain({ data: mockSpaceRow, error: null }))
-        // 5. getSpaceById - 멤버 목록
+        // 6. getSpaceById - 멤버 목록
         .mockReturnValueOnce(makeChain({ data: [mockOwnerMemberRow], error: null }))
-        // 6. getSpaceById - 유저 프로필
+        // 7. getSpaceById - 유저 프로필
         .mockReturnValueOnce(makeChain({ data: [mockUserRow], error: null }));
     }
 
@@ -290,8 +297,8 @@ describe('spaceService', () => {
 
       const result = await joinSpaceByInviteCode('ABC123');
 
-      // 초대 코드 대문자 변환 후 조회 확인
-      expect(supabase.from).toHaveBeenCalledTimes(6);
+      // 7번: 코드조회 + 멤버목록 + 멤버추가 + 카운터증가 + getSpaceById 3개
+      expect(supabase.from).toHaveBeenCalledTimes(7);
       expect(result.id).toBe('space-abc');
       expect(result.name).toBe('Test Space');
     });
@@ -351,6 +358,8 @@ describe('spaceService', () => {
         // 현재 1명 (existingOwner)
         .mockReturnValueOnce(makeChain({ data: [existingOwner], error: null }))
         // INSERT 성공 (user-123이 가입)
+        .mockReturnValueOnce(makeChain({ data: null, error: null }))
+        // IDEA-016: uses_count 카운터 증가 UPDATE
         .mockReturnValueOnce(makeChain({ data: null, error: null }))
         // getSpaceById - space 조회
         .mockReturnValueOnce(makeChain({ data: mockCoupleSpaceRow, error: null }))
@@ -532,6 +541,157 @@ describe('spaceService', () => {
 
       await expect(regenerateInviteCode('space-abc')).rejects.toThrow(
         'Space 관리자만 이 작업을 수행할 수 있습니다.',
+      );
+    });
+
+    it('IDEA-016 충돌 재시도: UNIQUE 위반 시 최대 5회 재시도 후 성공', async () => {
+      // 처음 2번은 UNIQUE 위반 에러, 3번째는 성공
+      const uniqueError = Object.assign(new Error('duplicate key value violates unique constraint'), { code: '23505' });
+
+      (supabase.from as jest.Mock)
+        // assertOwner: owner 확인 (1번만 호출됨 — 재시도 전에 완료)
+        .mockReturnValueOnce(makeChain({ data: { role: 'owner' }, error: null }))
+        // 1번째 UPDATE: UNIQUE 충돌
+        .mockReturnValueOnce(makeChain({ data: null, error: uniqueError }))
+        // 2번째 UPDATE: UNIQUE 충돌
+        .mockReturnValueOnce(makeChain({ data: null, error: uniqueError }))
+        // 3번째 UPDATE: 성공
+        .mockReturnValueOnce(makeChain({ data: null, error: null }));
+
+      const newCode = await regenerateInviteCode('space-abc');
+
+      // 성공적으로 코드 반환됨
+      expect(newCode).toHaveLength(6);
+      // assertOwner 1번 + UPDATE 3번 = 4번 from() 호출
+      expect(supabase.from).toHaveBeenCalledTimes(4);
+    });
+
+    it('IDEA-016 충돌 재시도: 5회 모두 UNIQUE 위반 시 에러 throw', async () => {
+      // 모든 시도가 UNIQUE 위반
+      const uniqueError = Object.assign(new Error('duplicate key value violates unique constraint'), { code: '23505' });
+
+      // assertOwner(space_members) 1번 + spaces UPDATE 5번 = 6개 mockReturnValueOnce.
+      // mock 소진 후 추가 호출 시 UNIQUE 에러를 반환하도록 기본값 설정.
+      (supabase.from as jest.Mock)
+        // assertOwner: space_members → owner
+        .mockReturnValueOnce(makeChain({ data: { role: 'owner' }, error: null }))
+        // 5번 모두 UNIQUE 충돌 (spaces UPDATE)
+        .mockReturnValueOnce(makeChain({ data: null, error: uniqueError }))
+        .mockReturnValueOnce(makeChain({ data: null, error: uniqueError }))
+        .mockReturnValueOnce(makeChain({ data: null, error: uniqueError }))
+        .mockReturnValueOnce(makeChain({ data: null, error: uniqueError }))
+        .mockReturnValueOnce(makeChain({ data: null, error: uniqueError }))
+        // 기본값: mock 소진 후 추가 호출 시에도 UNIQUE 에러 (방어적 처리)
+        .mockReturnValue(makeChain({ data: null, error: uniqueError }));
+
+      // 5회 재시도 후 마지막 UNIQUE 에러를 throw해야 함
+      await expect(regenerateInviteCode('space-abc')).rejects.toThrow();
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // IDEA-016: invite code lifecycle — 만료/한도 체크
+  // ══════════════════════════════════════════════════════════════════════════
+
+  describe('joinSpaceByInviteCode — IDEA-016 lifecycle checks', () => {
+    it('만료된 초대 코드: "초대 코드가 만료되었습니다." 에러 throw', async () => {
+      // expires_at이 과거 시각으로 설정된 space row
+      const expiredSpaceRow: SpaceRow = {
+        ...mockSpaceRow,
+        invite_code_expires_at: new Date(Date.now() - 3600_000).toISOString(), // 1시간 전 만료
+      };
+
+      (supabase.from as jest.Mock).mockReturnValueOnce(
+        makeChain({ data: expiredSpaceRow, error: null }),
+      );
+
+      await expect(joinSpaceByInviteCode('ABC123')).rejects.toThrow(
+        '초대 코드가 만료되었습니다. Space 관리자에게 새 코드를 요청하세요.',
+      );
+      // 만료 체크 후 즉시 throw — from()은 1번만 호출 (멤버 조회 없음)
+      expect(supabase.from).toHaveBeenCalledTimes(1);
+    });
+
+    it('미래 만료 코드: 아직 유효하면 정상 참여', async () => {
+      // expires_at이 미래로 설정된 space row
+      const validSpaceRow: SpaceRow = {
+        ...mockSpaceRow,
+        invite_code_expires_at: new Date(Date.now() + 3600_000).toISOString(), // 1시간 후 만료
+      };
+
+      (supabase.from as jest.Mock)
+        .mockReturnValueOnce(makeChain({ data: validSpaceRow, error: null }))
+        .mockReturnValueOnce(makeChain({ data: [], error: null }))         // 멤버 목록
+        .mockReturnValueOnce(makeChain({ data: null, error: null }))       // INSERT
+        .mockReturnValueOnce(makeChain({ data: null, error: null }))       // uses_count 증가
+        .mockReturnValueOnce(makeChain({ data: validSpaceRow, error: null })) // getSpaceById
+        .mockReturnValueOnce(makeChain({ data: [mockOwnerMemberRow], error: null }))
+        .mockReturnValueOnce(makeChain({ data: [mockUserRow], error: null }));
+
+      const result = await joinSpaceByInviteCode('ABC123');
+      expect(result.id).toBe('space-abc');
+    });
+
+    it('사용 한도 초과: "초대 코드 사용 한도에 도달했습니다." 에러 throw', async () => {
+      // max_uses=5, uses_count=5 (한도 초과)
+      const maxedSpaceRow: SpaceRow = {
+        ...mockSpaceRow,
+        invite_code_max_uses: 5,
+        invite_code_uses_count: 5,
+      };
+
+      (supabase.from as jest.Mock).mockReturnValueOnce(
+        makeChain({ data: maxedSpaceRow, error: null }),
+      );
+
+      await expect(joinSpaceByInviteCode('ABC123')).rejects.toThrow(
+        '초대 코드 사용 한도에 도달했습니다. Space 관리자에게 새 코드를 요청하세요.',
+      );
+      // 한도 체크 후 즉시 throw — from()은 1번만 호출
+      expect(supabase.from).toHaveBeenCalledTimes(1);
+    });
+
+    it('한도 미달: max_uses=5, uses_count=4이면 정상 참여', async () => {
+      // max_uses=5, uses_count=4 (1회 남음)
+      const almostMaxedSpaceRow: SpaceRow = {
+        ...mockSpaceRow,
+        invite_code_max_uses: 5,
+        invite_code_uses_count: 4,
+      };
+
+      (supabase.from as jest.Mock)
+        .mockReturnValueOnce(makeChain({ data: almostMaxedSpaceRow, error: null }))
+        .mockReturnValueOnce(makeChain({ data: [], error: null }))
+        .mockReturnValueOnce(makeChain({ data: null, error: null }))
+        .mockReturnValueOnce(makeChain({ data: null, error: null }))       // uses_count 증가
+        .mockReturnValueOnce(makeChain({ data: almostMaxedSpaceRow, error: null }))
+        .mockReturnValueOnce(makeChain({ data: [mockOwnerMemberRow], error: null }))
+        .mockReturnValueOnce(makeChain({ data: [mockUserRow], error: null }));
+
+      const result = await joinSpaceByInviteCode('ABC123');
+      expect(result.id).toBe('space-abc');
+    });
+
+    it('DB-level couple cap (P0001): "커플 Space는 최대 2명까지" 에러 throw', async () => {
+      // couple_space_full DB 트리거 에러 시뮬레이션.
+      // 시나리오: 두 사용자가 동시에 가입 시도 → app layer는 1명으로 읽었지만,
+      // DB에 INSERT 시 trigger가 이미 2명을 확인하고 P0001 couple_space_full을 발생시킴.
+      const triggerError = new Error('couple_space_full') as Error & { message: string };
+
+      // 주의: 멤버 목록의 user_id는 현재 유저('user-123')와 달라야 함.
+      // 같으면 "이미 참여 중인 Space" 에러가 먼저 발생함.
+      const otherOwner: SpaceMemberRow = { ...mockOwnerMemberRow, user_id: 'user-xyz' };
+
+      (supabase.from as jest.Mock)
+        // 코드 조회 — couple space
+        .mockReturnValueOnce(makeChain({ data: mockCoupleSpaceRow, error: null }))
+        // 멤버 목록 (1명, 다른 유저) — app layer는 정원 미달로 통과 판단
+        .mockReturnValueOnce(makeChain({ data: [otherOwner], error: null }))
+        // INSERT — DB 트리거가 P0001 발생 (동시 가입 경합으로 실제는 2명)
+        .mockReturnValueOnce(makeChain({ data: null, error: triggerError }));
+
+      await expect(joinSpaceByInviteCode('CPL456')).rejects.toThrow(
+        '커플 Space는 최대 2명까지 참여할 수 있습니다.',
       );
     });
   });
