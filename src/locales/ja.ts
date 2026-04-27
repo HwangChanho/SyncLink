@@ -144,6 +144,23 @@ const ja = {
     conflict_warning_title: '予定が重なっています',
     conflict_warning_body: '以下の予定と時間が重なります：\n{{list}}\nそれでも保存しますか？',
     conflict_save_anyway: 'このまま保存',
+    // IDEA-018 — 共有イベントのフォーク
+    fork_to_my_calendar: 'マイカレンダーにコピー',
+    fork_success: 'カレンダーにコピーしました。',
+    fork_failed: 'コピーに失敗しました。もう一度お試しください。',
+    // IDEA-015 — event create/edit form field labels i18n
+    form: {
+      all_day: '終日',
+      start: '開始',
+      end: '終了',
+      repeat: '繰り返し',
+      category: 'カテゴリ',
+      location: '場所',
+      memo: 'メモ',
+      share_section: 'Space に共有',
+      current_location: '現在地を使用',
+    },
+    edit_back: '戻る',
   },
 
   todo: {
@@ -236,6 +253,68 @@ const ja = {
     invite_expired: '招待コードが期限切れです。Space の管理者に新しいコードを依頼してください。',
     invite_max_uses_reached: '招待コードの使用上限に達しました。Space の管理者に新しいコードを依頼してください。',
     couple_full: 'カップル Space には最大 2 名まで参加できます。',
+    // IDEA-015 — hardcoded Korean → i18n
+    create_title: '新しい Space を作成',
+    name_label: 'Space 名',
+    type_label: 'Space タイプ',
+    create_button: 'Space を作成',
+    join_title: 'Space に参加',
+    join_description: '招待された Space のコードを入力してください。',
+    join_description_sub: 'コードは英数字6文字です。',
+    join_button: '参加',
+    invite_title: 'Space への招待',
+    invite_code_section: '招待コード',
+    invite_share_button: '共有',
+    code_regen_button: 'コードを再生成',
+    capacity_hint: '{{current}}/2 名参加中',
+    capacity_full_suffix: ' · 定員満了',
+    member_section: 'メンバー（{{count}}名）',
+    member_invite_button: '+ メンバーを招待',
+    anniversary_section: '記念日',
+    add_button: '+ 追加',
+    free_time_section: '空き時間を探す',
+    free_time_start_date: '開始日',
+    free_time_end_date: '終了日',
+    free_time_min_duration: '最短時間',
+    free_time_search_button: '空き時間を探す',
+    free_time_no_results: 'この期間に全員が空いている時間はありません。',
+    edit_title: 'Space を編集',
+    cover_change: 'カバーを変更',
+    name_field_label: '名前',
+    need_name_message: 'Space 名を入力してください。',
+    save_failed_message: '保存に失敗しました。',
+    photo_permission_title: '権限が必要です',
+    photo_permission: 'カバー画像を変更するには写真ライブラリへのアクセス権が必要です。',
+    member_count: '{{count}} 名',
+    kick_confirm: '{{nickname}} さんをこの Space から削除しますか？',
+    anniversary_delete_confirm: '「{{title}}」を削除しますか？',
+    share_invite_copied_title: 'コピー完了',
+    share_invite_copied_body: '招待メッセージをクリップボードにコピーしました。どこにでも貼り付けて送信できます。',
+    share_invite_title: '招待メッセージ',
+    join_preview_description: 'この Space に参加しますか？',
+    share_message: 'SyncLink Space "{{name}}" に招待します！\n招待コード：{{code}}\n参加リンク：{{link}}',
+    email_body: 'SyncDay Space "{{name}}" に招待します！\n\n招待コード：{{code}}\n参加リンク：{{link}}\n\n上のリンクをクリックするか、SyncDay アプリでコードを入力して参加してください。',
+    edit_accessibility: 'Space を編集',
+  },
+
+  // IDEA-015 — contact picker modal i18n
+  contact: {
+    title: '連絡先から招待',
+    unsupported: 'このブラウザは連絡先へのアクセスをサポートしていません。招待コードを直接共有してください。',
+    denied: '連絡先へのアクセスがブロックされています。\n設定 → SyncLink → 連絡先 → 許可 に変更すると友達を検索して招待できます。',
+    search_placeholder: '名前・電話番号・メールで検索',
+    empty_contacts: '電話番号またはメールアドレスのある連絡先がありません。',
+    no_results: '検索結果がありません。',
+    copied_title: 'コピー完了',
+    copied_body: '{{name}} さんへの招待メッセージをクリップボードにコピーしました。',
+    share_title: '招待メッセージ',
+  },
+
+  // IDEA-015 — member row i18n
+  member: {
+    me_tag: '（自分）',
+    owner_badge: '管理者',
+    remove_button: '削除',
   },
 
   category: {
@@ -289,6 +368,10 @@ const ja = {
     date_not_exist: '存在しない日付です。確認してください。',
     date_example: '正しい日付を入力してください。（例：年 2024、月 03、日 15）',
     input_error: '入力エラー',
+    // IDEA-015 — anniversary row i18n
+    date_label: '日付',
+    repeat_yearly: ' · 毎年繰り返す',
+    delete_button: '削除',
   },
 
   comment: {

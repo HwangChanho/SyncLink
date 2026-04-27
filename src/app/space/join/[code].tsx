@@ -133,7 +133,7 @@ export default function SpaceJoinPreviewScreen() {
         <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
           <Ionicons name="close" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Space 초대</Text>
+        <Text style={styles.headerTitle}>{t('space.invite_title')}</Text>
         <View style={styles.closeBtn} />
       </View>
 
@@ -158,7 +158,7 @@ export default function SpaceJoinPreviewScreen() {
           </View>
           <View style={styles.metaChip}>
             <Ionicons name="person" size={12} color={colors.textSecondary} />
-            <Text style={styles.metaText}>{space.memberCount}명</Text>
+            <Text style={styles.metaText}>{t('space.member_count', { count: space.memberCount })}</Text>
           </View>
         </View>
       </View>
@@ -179,7 +179,7 @@ export default function SpaceJoinPreviewScreen() {
           {isJoining ? (
             <ActivityIndicator color={colors.textInverse} />
           ) : (
-            <Text style={styles.joinBtnText}>참여하기</Text>
+            <Text style={styles.joinBtnText}>{t('space.join_button')}</Text>
           )}
         </TouchableOpacity>
 
@@ -188,7 +188,7 @@ export default function SpaceJoinPreviewScreen() {
           onPress={() => router.back()}
           disabled={isJoining}
         >
-          <Text style={styles.cancelBtnText}>취소</Text>
+          <Text style={styles.cancelBtnText}>{t('common.cancel')}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

@@ -127,7 +127,7 @@ export default function CreateSpaceScreen() {
           >
             <Text style={styles.cancelText}>{t('common.cancel')}</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>새 Space 만들기</Text>
+          <Text style={styles.headerTitle}>{t('space.create_title')}</Text>
           {/* Spacer to center title */}
           <View style={styles.cancelButton} />
         </View>
@@ -138,7 +138,7 @@ export default function CreateSpaceScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {/* Space name */}
-          <Text style={styles.label}>Space 이름</Text>
+          <Text style={styles.label}>{t('space.name_label')}</Text>
           <TextInput
             style={styles.input}
             placeholder={t('space.name_placeholder')}
@@ -153,7 +153,7 @@ export default function CreateSpaceScreen() {
           <Text style={styles.charCount}>{name.length}/30</Text>
 
           {/* Space type */}
-          <Text style={[styles.label, styles.typeLabel]}>Space 유형</Text>
+          <Text style={[styles.label, styles.typeLabel]}>{t('space.type_label')}</Text>
           <View style={styles.typeContainer}>
             {SPACE_TYPE_OPTIONS.map((option) => {
               const isSelected = selectedType === option.type;
@@ -201,7 +201,7 @@ export default function CreateSpaceScreen() {
             {isLoading ? (
               <ActivityIndicator color={colors.textInverse} />
             ) : (
-              <Text style={styles.createButtonText}>Space {t('category.new')}</Text>
+              <Text style={styles.createButtonText}>{t('space.create_button')}</Text>
             )}
           </TouchableOpacity>
         </ScrollView>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Image } from 'expo-image';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import type { SpaceMember } from '@/types';
 import type { SpaceDetailStyles } from './spaceDetailStyles';
@@ -23,6 +24,7 @@ export function MemberRow({
   colors: _colors,
   styles,
 }: MemberRowProps) {
+  const { t } = useTranslation();
   return (
     <View style={styles.memberRow}>
       {/* Color dot + avatar */}
@@ -40,11 +42,11 @@ export function MemberRow({
       <View style={styles.memberInfo}>
         <Text style={styles.memberName}>
           {member.nickname}
-          {isCurrentUser && <Text style={styles.meTag}> (나)</Text>}
+          {isCurrentUser && <Text style={styles.meTag}>{t('member.me_tag')}</Text>}
         </Text>
         {member.role === 'owner' && (
           <View style={styles.ownerBadge}>
-            <Text style={styles.ownerBadgeText}>관리자</Text>
+            <Text style={styles.ownerBadgeText}>{t('member.owner_badge')}</Text>
           </View>
         )}
       </View>
@@ -55,7 +57,7 @@ export function MemberRow({
           onPress={onRemove}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={styles.removeMemberText}>내보내기</Text>
+          <Text style={styles.removeMemberText}>{t('member.remove_button')}</Text>
         </TouchableOpacity>
       )}
     </View>

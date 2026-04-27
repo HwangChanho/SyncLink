@@ -103,7 +103,7 @@ export function AnniversaryAddModal({
 
           {/* Date input — 3 fields in a row */}
           <View style={styles.modalField}>
-            <Text style={styles.modalFieldLabel}>날짜</Text>
+            <Text style={styles.modalFieldLabel}>{t('anniversary.date_label')}</Text>
             <View style={styles.dateRow}>
               <TextInput
                 style={[styles.modalInput, styles.dateInputYear]}

@@ -18,10 +18,10 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { showAlert } from '@/lib/webAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -62,7 +62,8 @@ export default function JoinSpaceScreen() {
 
   const handleJoin = async () => {
     if (code.length !== CODE_LENGTH) {
-      Alert.alert(t('space.code_error'), `초대 코드는 ${CODE_LENGTH}자리입니다.`);
+      // IDEA-015: replace Alert.alert with showAlert adapter for web compatibility
+      showAlert(t('space.code_error'), t('space.join_description_sub'));
       return;
     }
 
@@ -80,7 +81,7 @@ export default function JoinSpaceScreen() {
     } catch (err) {
       const message =
         err instanceof Error ? err.message : t('space.join_failed');
-      Alert.alert(t('space.join_fail_title'), message);
+      showAlert(t('space.join_fail_title'), message);
     } finally {
       setIsLoading(false);
     }
@@ -103,17 +104,17 @@ export default function JoinSpaceScreen() {
           >
             <Text style={styles.backText}>{t('common.cancel')}</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Space 참여하기</Text>
+          <Text style={styles.headerTitle}>{t('space.join_title')}</Text>
           <View style={styles.backButton} />
         </View>
 
         <View style={styles.content}>
           {/* Description */}
           <Text style={styles.description}>
-            초대받은 Space의 코드를 입력하세요.
+            {t('space.join_description')}
           </Text>
           <Text style={styles.descriptionSub}>
-            코드는 영문 대소문자와 숫자 6자리입니다.
+            {t('space.join_description_sub')}
           </Text>
 
           {/* Code input */}
@@ -151,7 +152,7 @@ export default function JoinSpaceScreen() {
             {isLoading ? (
               <ActivityIndicator color={colors.textInverse} />
             ) : (
-              <Text style={styles.joinButtonText}>{t('space.join_button') || '참여하기'}</Text>
+              <Text style={styles.joinButtonText}>{t('space.join_button')}</Text>
             )}
           </TouchableOpacity>
         </View>

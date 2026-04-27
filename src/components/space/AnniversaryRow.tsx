@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import type { Anniversary } from '@/types';
 import type { SpaceDetailStyles } from './spaceDetailStyles';
@@ -30,6 +31,7 @@ export function AnniversaryRow({
   colors: _colors,
   styles,
 }: AnniversaryRowProps) {
+  const { t } = useTranslation();
   const dLabel = formatDday(anniversary.daysFromToday);
 
   return (
@@ -42,7 +44,7 @@ export function AnniversaryRow({
             month: 'long',
             day: 'numeric',
           })}
-          {anniversary.repeatYearly && ' · 매년 반복'}
+          {anniversary.repeatYearly && t('anniversary.repeat_yearly')}
         </Text>
       </View>
       <View style={styles.anniversaryRight}>
@@ -52,7 +54,7 @@ export function AnniversaryRow({
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           style={styles.deleteButton}
         >
-          <Text style={styles.deleteText}>삭제</Text>
+          <Text style={styles.deleteText}>{t('anniversary.delete_button')}</Text>
         </TouchableOpacity>
       </View>
     </View>

@@ -144,6 +144,23 @@ const en = {
     conflict_warning_title: 'Schedule Conflict',
     conflict_warning_body: 'This conflicts with the following event(s):\n{{list}}\nSave anyway?',
     conflict_save_anyway: 'Save Anyway',
+    // IDEA-018 — shared event fork
+    fork_to_my_calendar: 'Copy to My Calendar',
+    fork_success: 'Copied to your calendar.',
+    fork_failed: 'Copy failed. Please try again.',
+    // IDEA-015 — event create/edit form field labels i18n
+    form: {
+      all_day: 'All Day',
+      start: 'Start',
+      end: 'End',
+      repeat: 'Repeat',
+      category: 'Category',
+      location: 'Location',
+      memo: 'Memo',
+      share_section: 'Share to Space',
+      current_location: 'Use current location',
+    },
+    edit_back: 'Back',
   },
 
   todo: {
@@ -236,6 +253,68 @@ const en = {
     invite_expired: 'The invite code has expired. Ask the Space owner for a new code.',
     invite_max_uses_reached: 'This invite code has reached its usage limit. Ask the Space owner for a new code.',
     couple_full: 'Couple Spaces are limited to 2 members.',
+    // IDEA-015 — hardcoded Korean → i18n
+    create_title: 'Create New Space',
+    name_label: 'Space Name',
+    type_label: 'Space Type',
+    create_button: 'Create Space',
+    join_title: 'Join Space',
+    join_description: 'Enter the code for the Space you were invited to.',
+    join_description_sub: 'The code is 6 alphanumeric characters.',
+    join_button: 'Join',
+    invite_title: 'Space Invite',
+    invite_code_section: 'Invite Code',
+    invite_share_button: 'Share',
+    code_regen_button: 'Regenerate Code',
+    capacity_hint: '{{current}}/2 members',
+    capacity_full_suffix: ' · Full',
+    member_section: 'Members ({{count}})',
+    member_invite_button: '+ Invite Member',
+    anniversary_section: 'Anniversaries',
+    add_button: '+ Add',
+    free_time_section: 'Find Free Time',
+    free_time_start_date: 'Start Date',
+    free_time_end_date: 'End Date',
+    free_time_min_duration: 'Min Duration',
+    free_time_search_button: 'Find Free Time',
+    free_time_no_results: 'No common free time in this period.',
+    edit_title: 'Edit Space',
+    cover_change: 'Change Cover',
+    name_field_label: 'Name',
+    need_name_message: 'Please enter a Space name.',
+    save_failed_message: 'Failed to save.',
+    photo_permission_title: 'Permission Required',
+    photo_permission: 'Photo library access is required to change the cover image.',
+    member_count: '{{count}} members',
+    kick_confirm: 'Remove {{nickname}} from this Space?',
+    anniversary_delete_confirm: 'Delete "{{title}}"?',
+    share_invite_copied_title: 'Copied',
+    share_invite_copied_body: 'Invite message copied. Paste it anywhere — KakaoTalk, Slack, email, etc.',
+    share_invite_title: 'Invite Message',
+    join_preview_description: 'Would you like to join this Space?',
+    share_message: 'You are invited to SyncLink Space "{{name}}"!\nInvite code: {{code}}\nJoin link: {{link}}',
+    email_body: 'You are invited to SyncDay Space "{{name}}"!\n\nInvite code: {{code}}\nJoin link: {{link}}\n\nClick the link above or enter the code in the SyncDay app to join.',
+    edit_accessibility: 'Edit Space',
+  },
+
+  // IDEA-015 — contact picker modal i18n
+  contact: {
+    title: 'Invite from Contacts',
+    unsupported: 'This browser does not support contact access. Please share the invite code directly.',
+    denied: 'Contact access is blocked.\nGo to Settings → SyncLink → Contacts → Allow to search and invite friends.',
+    search_placeholder: 'Search by name, phone, or email',
+    empty_contacts: 'No contacts with a phone number or email.',
+    no_results: 'No results found.',
+    copied_title: 'Copied',
+    copied_body: 'Invite message for {{name}} copied to clipboard.',
+    share_title: 'Invite Message',
+  },
+
+  // IDEA-015 — member row i18n
+  member: {
+    me_tag: ' (me)',
+    owner_badge: 'Admin',
+    remove_button: 'Remove',
   },
 
   category: {
@@ -289,6 +368,10 @@ const en = {
     date_not_exist: 'This date does not exist. Please check again.',
     date_example: 'Enter a valid date. (e.g. year 2024, month 03, day 15)',
     input_error: 'Input Error',
+    // IDEA-015 — anniversary row i18n
+    date_label: 'Date',
+    repeat_yearly: ' · Repeats yearly',
+    delete_button: 'Delete',
   },
 
   comment: {

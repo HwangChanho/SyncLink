@@ -157,8 +157,12 @@ export default function SpaceDetailScreen() {
    */
   const handleShareInviteCode = async () => {
     if (!space) return;
-    const message = `SyncLink Space "${space.name}"에 초대합니다!\n초대 코드: ${space.inviteCode}\n참여 링크: synclink://space/join/${space.inviteCode}`;
-    const title   = `${space.name} 초대`;
+    const message = t('space.share_message', {
+      name: space.name,
+      code: space.inviteCode,
+      link: `synclink://space/join/${space.inviteCode}`,
+    });
+    const title   = `${space.name} ${t('space.invite_title')}`;
 
     if (Platform.OS === 'web') {
       // Modern browsers (Chrome Android, Safari iOS) expose navigator.share
@@ -174,13 +178,13 @@ export default function SpaceDetailScreen() {
       if (nav?.clipboard?.writeText) {
         try {
           await nav.clipboard.writeText(message);
-          showAlert('복사됨', '초대 메시지가 클립보드에 복사되었습니다. 카카오톡/Slack/이메일 등 원하는 곳에 붙여넣으세요.');
+          showAlert(t('space.share_invite_copied_title'), t('space.share_invite_copied_body'));
         } catch {
-          showAlert('초대 메시지', message);
+          showAlert(t('space.share_invite_title'), message);
         }
         return;
       }
-      showAlert('초대 메시지', message);
+      showAlert(t('space.share_invite_title'), message);
       return;
     }
 
@@ -246,12 +250,13 @@ export default function SpaceDetailScreen() {
   const handleEmailInvite = useCallback(() => {
     if (!space) return;
     const url     = buildInviteUrl();
-    const subject = encodeURIComponent(`SyncDay Space "${space.name}" 초대`);
+    const subject = encodeURIComponent(`SyncDay Space "${space.name}" ${t('space.invite_title')}`);
     const body    = encodeURIComponent(
-      `SyncDay Space "${space.name}"에 초대합니다!\n\n` +
-      `초대 코드: ${space.inviteCode}\n` +
-      `참여 링크: ${url}\n\n` +
-      '위 링크를 클릭하거나, SyncDay 앱에서 위 코드를 입력해 참여하세요.',
+      t('space.email_body', {
+        name: space.name,
+        code: space.inviteCode,
+        link: url,
+      }),
     );
     const mailtoHref = `mailto:?subject=${subject}&body=${body}`;
 
@@ -306,7 +311,7 @@ export default function SpaceDetailScreen() {
   const handleRemoveMember = (member: SpaceMember) => {
     showAlert(
       t('space.kick'),
-      `${member.nickname}님을 Space에서 내보낼까요?`,
+      t('space.kick_confirm', { nickname: member.nickname }),
       [
         { text: t('common.cancel'), style: 'cancel' },
         {
@@ -491,7 +496,7 @@ export default function SpaceDetailScreen() {
   const handleDeleteAnniversary = (anniversary: Anniversary) => {
     showAlert(
       t('anniversary.delete'),
-      `"${anniversary.title}"을(를) 삭제할까요?`,
+      t('space.anniversary_delete_confirm', { title: anniversary.title }),
       [
         { text: t('common.cancel'), style: 'cancel' },
         {
@@ -623,7 +628,7 @@ export default function SpaceDetailScreen() {
               <TouchableOpacity
                 onPress={() => setIsEditModalVisible(true)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityLabel="Space 편집"
+                accessibilityLabel={t('space.edit_accessibility')}
               >
                 <Ionicons name="create-outline" size={18} color={colors.textSecondary} />
               </TouchableOpacity>
@@ -635,7 +640,7 @@ export default function SpaceDetailScreen() {
         </View>
 
         {/* Invite code section */}
-        <SectionCard title="초대 코드" colors={colors} styles={styles}>
+        <SectionCard title={t('space.invite_code_section')} colors={colors} styles={styles}>
           <View style={styles.inviteCodeRow}>
             <Text style={styles.inviteCode}>{space.inviteCode}</Text>
             <View style={styles.inviteActions}>
@@ -644,14 +649,14 @@ export default function SpaceDetailScreen() {
                 onPress={handleShareInviteCode}
                 activeOpacity={0.7}
               >
-                <Text style={styles.shareButtonText}>공유</Text>
+                <Text style={styles.shareButtonText}>{t('space.invite_share_button')}</Text>
               </TouchableOpacity>
               {Platform.OS !== 'web' && (
                 <TouchableOpacity
                   style={styles.contactButton}
                   onPress={() => setIsContactPickerVisible(true)}
                   activeOpacity={0.7}
-                  accessibilityLabel="연락처에서 초대"
+                  accessibilityLabel={t('contact.title')}
                 >
                   <Ionicons name="people" size={16} color={colors.primary} />
                 </TouchableOpacity>
@@ -731,20 +736,20 @@ export default function SpaceDetailScreen() {
               onPress={handleRegenerateCode}
               activeOpacity={0.7}
             >
-              <Text style={styles.regenerateText}>코드 재생성</Text>
+              <Text style={styles.regenerateText}>{t('space.code_regen_button')}</Text>
             </TouchableOpacity>
           )}
           {/* Couple Space capacity indicator */}
           {space.type === 'couple' && (
             <Text style={styles.capacityHint}>
-              {space.members.length}/2명 참여 중
-              {space.members.length >= 2 ? ' · 정원 마감' : ''}
+              {t('space.capacity_hint', { current: space.members.length })}
+              {space.members.length >= 2 ? t('space.capacity_full_suffix') : ''}
             </Text>
           )}
         </SectionCard>
 
         {/* Member list */}
-        <SectionCard title={`멤버 (${space.members.length}명)`} colors={colors} styles={styles}>
+        <SectionCard title={t('space.member_section', { count: space.members.length })} colors={colors} styles={styles}>
           {space.members.map(member => (
             <MemberRow
               key={member.userId}
@@ -763,19 +768,19 @@ export default function SpaceDetailScreen() {
               onPress={handleShareInviteCode}
               activeOpacity={0.7}
             >
-              <Text style={styles.inviteMemberText}>+ 멤버 초대</Text>
+              <Text style={styles.inviteMemberText}>{t('space.member_invite_button')}</Text>
             </TouchableOpacity>
           )}
         </SectionCard>
 
         {/* Anniversary / D-day section */}
         <SectionCard
-          title="기념일"
+          title={t('space.anniversary_section')}
           colors={colors}
           styles={styles}
           action={
             <TouchableOpacity onPress={handleOpenAnniversaryModal}>
-              <Text style={styles.sectionActionText}>+ 추가</Text>
+              <Text style={styles.sectionActionText}>{t('space.add_button')}</Text>
             </TouchableOpacity>
           }
         >
@@ -795,11 +800,11 @@ export default function SpaceDetailScreen() {
         </SectionCard>
 
         {/* Free time finder (TASK-203) */}
-        <SectionCard title="빈 시간 찾기" colors={colors} styles={styles}>
+        <SectionCard title={t('space.free_time_section')} colors={colors} styles={styles}>
           {/* Date range inputs */}
           <View style={styles.ftDateRow}>
             <View style={styles.ftDateField}>
-              <Text style={styles.ftDateLabel}>시작일</Text>
+              <Text style={styles.ftDateLabel}>{t('space.free_time_start_date')}</Text>
               <TextInput
                 style={styles.ftDateInput}
                 value={ftStartDate}
@@ -812,7 +817,7 @@ export default function SpaceDetailScreen() {
             </View>
             <Text style={styles.ftDateSep}>~</Text>
             <View style={styles.ftDateField}>
-              <Text style={styles.ftDateLabel}>종료일</Text>
+              <Text style={styles.ftDateLabel}>{t('space.free_time_end_date')}</Text>
               <TextInput
                 style={styles.ftDateInput}
                 value={ftEndDate}
@@ -827,7 +832,7 @@ export default function SpaceDetailScreen() {
 
           {/* Min duration chips */}
           <View style={styles.ftChipRow}>
-            <Text style={styles.ftChipLabel}>최소 시간</Text>
+            <Text style={styles.ftChipLabel}>{t('space.free_time_min_duration')}</Text>
             {([30, 60, 120] as const).map((min) => (
               <TouchableOpacity
                 key={min}
@@ -835,7 +840,9 @@ export default function SpaceDetailScreen() {
                 onPress={() => setFtMinDuration(min)}
               >
                 <Text style={[styles.ftChipText, ftMinDuration === min && styles.ftChipTextSelected]}>
-                  {min < 60 ? `${min}분` : `${min / 60}시간`}
+                  {min < 60
+                    ? t('reminder.minutes_before', { count: min })
+                    : t('reminder.hours_before', { count: min / 60 })}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -851,7 +858,7 @@ export default function SpaceDetailScreen() {
             {ftIsSearching ? (
               <ActivityIndicator size="small" color={colors.textInverse} />
             ) : (
-              <Text style={styles.ftSearchButtonText}>빈 시간 찾기</Text>
+              <Text style={styles.ftSearchButtonText}>{t('space.free_time_search_button')}</Text>
             )}
           </TouchableOpacity>
 
@@ -864,7 +871,7 @@ export default function SpaceDetailScreen() {
           {ftResults !== null && (
             ftResults.length === 0 ? (
               <Text style={styles.emptyText}>
-                해당 기간에 모두가 비어 있는 시간이 없습니다.
+                {t('space.free_time_no_results')}
               </Text>
             ) : (
               ftResults.map((slot, idx) => (

@@ -78,7 +78,7 @@ export function EditSpaceModal({ visible, space, onClose, onSaved }: EditSpaceMo
     // Library permission only — Camera flow can be added in a follow-up.
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      showAlert('권한 필요', '커버 이미지를 변경하려면 사진 라이브러리 접근 권한이 필요합니다.');
+      showAlert(t('space.photo_permission_title'), t('space.photo_permission'));
       return;
     }
     const res = await ImagePicker.launchImageLibraryAsync({
@@ -102,7 +102,7 @@ export function EditSpaceModal({ visible, space, onClose, onSaved }: EditSpaceMo
   const handleSave = async () => {
     if (!dirty) { onClose(); return; }
     if (name.trim().length === 0) {
-      showAlert(t('common.error'), 'Space 이름을 입력해 주세요.');
+      showAlert(t('common.error'), t('space.need_name_message'));
       return;
     }
     setSaving(true);
@@ -120,7 +120,7 @@ export function EditSpaceModal({ visible, space, onClose, onSaved }: EditSpaceMo
     } catch (err) {
       showAlert(
         t('common.error'),
-        err instanceof Error ? err.message : '저장에 실패했습니다.',
+        err instanceof Error ? err.message : t('space.save_failed_message'),
       );
     } finally {
       setSaving(false);
@@ -145,7 +145,7 @@ export function EditSpaceModal({ visible, space, onClose, onSaved }: EditSpaceMo
               {t('common.cancel')}
             </Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Space 편집</Text>
+          <Text style={styles.headerTitle}>{t('space.edit_title')}</Text>
           <TouchableOpacity onPress={handleSave} hitSlop={12} disabled={saving || !dirty}>
             {saving ? (
               <ActivityIndicator size="small" color={colors.primary} />
@@ -176,18 +176,18 @@ export function EditSpaceModal({ visible, space, onClose, onSaved }: EditSpaceMo
           )}
           <View style={styles.coverBadge}>
             <Ionicons name="camera" size={18} color={colors.textInverse} />
-            <Text style={[styles.coverBadgeText, { color: colors.textInverse }]}>커버 변경</Text>
+            <Text style={[styles.coverBadgeText, { color: colors.textInverse }]}>{t('space.cover_change')}</Text>
           </View>
         </TouchableOpacity>
 
         {/* ─── Name ─── */}
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>이름</Text>
+          <Text style={styles.fieldLabel}>{t('space.name_field_label')}</Text>
           <TextInput
             style={styles.nameInput}
             value={name}
             onChangeText={setName}
-            placeholder="Space 이름"
+            placeholder={t('space.name_placeholder')}
             placeholderTextColor={colors.textPlaceholder}
             maxLength={30}
             editable={!saving}

@@ -153,6 +153,23 @@ const ko = {
      */
     conflict_warning_body: '다음 일정과 시간이 겹칩니다:\n{{list}}\n그래도 저장하시겠습니까?',
     conflict_save_anyway: '계속 저장',
+    // IDEA-018 — 공유 일정 fork
+    fork_to_my_calendar: '내 일정으로 복사',
+    fork_success: '내 일정에 복사되었습니다.',
+    fork_failed: '복사에 실패했습니다. 다시 시도해주세요.',
+    // IDEA-015 — event create/edit form 필드 레이블 i18n
+    form: {
+      all_day: '종일',
+      start: '시작',
+      end: '종료',
+      repeat: '반복',
+      category: '카테고리',
+      location: '위치',
+      memo: '메모',
+      share_section: '공유할 Space',
+      current_location: '현재 위치 사용',
+    },
+    edit_back: '돌아가기',
   },
 
   todo: {
@@ -245,6 +262,68 @@ const ko = {
     invite_expired: '초대 코드가 만료되었습니다. Space 관리자에게 새 코드를 요청하세요.',
     invite_max_uses_reached: '초대 코드 사용 한도에 도달했습니다. Space 관리자에게 새 코드를 요청하세요.',
     couple_full: '커플 Space는 최대 2명까지 참여할 수 있습니다.',
+    // IDEA-015 — 하드코딩 한국어 i18n 정비
+    create_title: '새 Space 만들기',
+    name_label: 'Space 이름',
+    type_label: 'Space 유형',
+    create_button: 'Space 만들기',
+    join_title: 'Space 참여하기',
+    join_description: '초대받은 Space의 코드를 입력하세요.',
+    join_description_sub: '코드는 영문 대소문자와 숫자 6자리입니다.',
+    join_button: '참여하기',
+    invite_title: 'Space 초대',
+    invite_code_section: '초대 코드',
+    invite_share_button: '공유',
+    code_regen_button: '코드 재생성',
+    capacity_hint: '{{current}}/2명 참여 중',
+    capacity_full_suffix: ' · 정원 마감',
+    member_section: '멤버 ({{count}}명)',
+    member_invite_button: '+ 멤버 초대',
+    anniversary_section: '기념일',
+    add_button: '+ 추가',
+    free_time_section: '빈 시간 찾기',
+    free_time_start_date: '시작일',
+    free_time_end_date: '종료일',
+    free_time_min_duration: '최소 시간',
+    free_time_search_button: '빈 시간 찾기',
+    free_time_no_results: '해당 기간에 모두가 비어 있는 시간이 없습니다.',
+    edit_title: 'Space 편집',
+    cover_change: '커버 변경',
+    name_field_label: '이름',
+    need_name_message: 'Space 이름을 입력해 주세요.',
+    save_failed_message: '저장에 실패했습니다.',
+    photo_permission_title: '권한 필요',
+    photo_permission: '커버 이미지를 변경하려면 사진 라이브러리 접근 권한이 필요합니다.',
+    member_count: '{{count}}명',
+    kick_confirm: '{{nickname}}님을 Space에서 내보낼까요?',
+    anniversary_delete_confirm: '"{{title}}"을(를) 삭제할까요?',
+    share_invite_copied_title: '복사됨',
+    share_invite_copied_body: '초대 메시지가 클립보드에 복사되었습니다. 카카오톡/Slack/이메일 등 원하는 곳에 붙여넣으세요.',
+    share_invite_title: '초대 메시지',
+    join_preview_description: '이 Space에 참여하시겠습니까?',
+    share_message: 'SyncLink Space "{{name}}"에 초대합니다!\n초대 코드: {{code}}\n참여 링크: {{link}}',
+    email_body: 'SyncDay Space "{{name}}"에 초대합니다!\n\n초대 코드: {{code}}\n참여 링크: {{link}}\n\n위 링크를 클릭하거나, SyncDay 앱에서 위 코드를 입력해 참여하세요.',
+    edit_accessibility: 'Space 편집',
+  },
+
+  // IDEA-015 — 연락처 초대 모달 i18n
+  contact: {
+    title: '연락처에서 초대',
+    unsupported: '이 브라우저는 연락처 접근을 지원하지 않습니다. 초대 코드를 직접 공유해 주세요.',
+    denied: '연락처 접근이 차단되어 있습니다.\n설정 → SyncLink → 연락처 → 허용으로 변경하면 친구를 검색해 초대할 수 있어요.',
+    search_placeholder: '이름, 전화번호, 이메일로 검색',
+    empty_contacts: '연락처에 전화번호나 이메일이 있는 항목이 없어요.',
+    no_results: '검색 결과가 없습니다.',
+    copied_title: '복사됨',
+    copied_body: '{{name}}님에게 보낼 초대 메시지가 클립보드에 복사되었습니다.',
+    share_title: '초대 메시지',
+  },
+
+  // IDEA-015 — 멤버 행 i18n
+  member: {
+    me_tag: ' (나)',
+    owner_badge: '관리자',
+    remove_button: '내보내기',
   },
 
   category: {
@@ -298,6 +377,10 @@ const ko = {
     date_not_exist: '존재하지 않는 날짜입니다. 다시 확인해 주세요.',
     date_example: '올바른 날짜를 입력해 주세요. (예: 연도 2024, 월 03, 일 15)',
     input_error: '입력 오류',
+    // IDEA-015 — 기념일 행 i18n
+    date_label: '날짜',
+    repeat_yearly: ' · 매년 반복',
+    delete_button: '삭제',
   },
 
   comment: {

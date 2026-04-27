@@ -445,7 +445,7 @@ export default function EventEditScreen() {
       <SafeAreaView style={styles.centered}>
         <Text style={styles.errorText}>{loadError}</Text>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backText}>돌아가기</Text>
+          <Text style={styles.backText}>{t('event.edit_back')}</Text>
         </Pressable>
       </SafeAreaView>
     );
@@ -499,7 +499,7 @@ export default function EventEditScreen() {
 
         <View style={styles.form}>
           {/* All-day */}
-          <FormRow label="종일" rowStyle={rowStyle}>
+          <FormRow label={t('event.form.all_day')} rowStyle={rowStyle}>
             <Switch
               value={allDay}
               onValueChange={setAllDay}
@@ -509,7 +509,7 @@ export default function EventEditScreen() {
           </FormRow>
 
           {/* Start — tap to open DateTimeModal (±30 min shortcuts retained) */}
-          <FormRow label="시작" rowStyle={rowStyle}>
+          <FormRow label={t('event.form.start')} rowStyle={rowStyle}>
             <View style={styles.timeRow}>
               <Pressable style={styles.timeChip} onPress={() => shiftTime('start', -30)}>
                 <Ionicons name="remove" size={16} color={colors.textSecondary} />
@@ -527,7 +527,7 @@ export default function EventEditScreen() {
 
           {/* End */}
           {!allDay && (
-            <FormRow label="종료" rowStyle={rowStyle}>
+            <FormRow label={t('event.form.end')} rowStyle={rowStyle}>
               <View style={styles.timeRow}>
                 <Pressable style={styles.timeChip} onPress={() => shiftTime('end', -30)}>
                   <Ionicons name="remove" size={16} color={colors.textSecondary} />
@@ -560,7 +560,7 @@ export default function EventEditScreen() {
           )}
 
           {/* Repeat */}
-          <FormRow label="반복" rowStyle={rowStyle}>
+          <FormRow label={t('event.form.repeat')} rowStyle={rowStyle}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.chipRow}>
                 {REPEAT_OPTIONS.map((opt) => (
@@ -585,7 +585,7 @@ export default function EventEditScreen() {
           </FormRow>
 
           {/* Location — Google Places Autocomplete (TASK-901) */}
-          <FormRow label="위치" rowStyle={rowStyle}>
+          <FormRow label={t('event.form.location')} rowStyle={rowStyle}>
             <PlaceSearchInput
               value={location}
               onPlaceSelect={setLocation}
@@ -594,7 +594,7 @@ export default function EventEditScreen() {
           </FormRow>
 
           {/* Description */}
-          <FormRow label="메모" rowStyle={rowStyle}>
+          <FormRow label={t('event.form.memo')} rowStyle={rowStyle}>
             <TextInput
               style={[styles.inlineInput, styles.multilineInput]}
               placeholder={t('nl.placeholder')}
@@ -621,7 +621,7 @@ export default function EventEditScreen() {
           {/* Space sharing */}
           {spaces.length > 0 && (
             <View style={styles.sharingSection}>
-              <Text style={styles.sharingLabel}>공유할 Space</Text>
+              <Text style={styles.sharingLabel}>{t('event.form.share_section')}</Text>
               {spaces.map((space) => {
                 const selected = shareSpaceIds.includes(space.id);
                 return (

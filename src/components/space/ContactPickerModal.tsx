@@ -105,12 +105,12 @@ export function ContactPickerModal({ visible, spaceName, inviteCode, onClose }: 
           try { await nav.share({ text: message }); } catch { /* cancelled */ }
         } else if (nav?.clipboard?.writeText) {
           await nav.clipboard.writeText(message);
-          showAlert('복사됨', `${c.name}님에게 보낼 초대 메시지가 클립보드에 복사되었습니다.`);
+          showAlert(t('contact.copied_title'), t('contact.copied_body', { name: c.name }));
         } else {
-          showAlert('초대 메시지', message);
+          showAlert(t('contact.share_title'), message);
         }
       } else {
-        await Share.share({ message, title: `${spaceName} 초대` });
+        await Share.share({ message, title: `${spaceName} ${t('space.invite_title')}` });
       }
     } finally {
       setBusyId(null);
@@ -132,7 +132,7 @@ export function ContactPickerModal({ visible, spaceName, inviteCode, onClose }: 
               {t('common.close')}
             </Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>연락처에서 초대</Text>
+          <Text style={styles.headerTitle}>{t('contact.title')}</Text>
           <View style={{ width: 40 }} />
         </View>
 
@@ -145,17 +145,14 @@ export function ContactPickerModal({ visible, spaceName, inviteCode, onClose }: 
 
         {perm === 'unsupported' && (
           <View style={styles.center}>
-            <Text style={styles.helpText}>이 브라우저는 연락처 접근을 지원하지 않습니다. 초대 코드를 직접 공유해 주세요.</Text>
+            <Text style={styles.helpText}>{t('contact.unsupported')}</Text>
           </View>
         )}
 
         {(perm === 'denied' || perm === 'restricted') && (
           <View style={styles.center}>
             <Ionicons name="lock-closed" size={32} color={colors.textTertiary} />
-            <Text style={styles.helpText}>
-              연락처 접근이 차단되어 있습니다.{'\n'}
-              설정 → SyncLink → 연락처 → 허용으로 변경하면 친구를 검색해 초대할 수 있어요.
-            </Text>
+            <Text style={styles.helpText}>{t('contact.denied')}</Text>
           </View>
         )}
 
@@ -173,7 +170,7 @@ export function ContactPickerModal({ visible, spaceName, inviteCode, onClose }: 
                 style={styles.searchInput}
                 value={query}
                 onChangeText={setQuery}
-                placeholder="이름, 전화번호, 이메일로 검색"
+                placeholder={t('contact.search_placeholder')}
                 placeholderTextColor={colors.textPlaceholder}
                 autoCorrect={false}
                 autoCapitalize="none"
@@ -184,8 +181,8 @@ export function ContactPickerModal({ visible, spaceName, inviteCode, onClose }: 
               <View style={styles.center}>
                 <Text style={styles.helpText}>
                   {contacts.length === 0
-                    ? '연락처에 전화번호나 이메일이 있는 항목이 없어요.'
-                    : '검색 결과가 없습니다.'}
+                    ? t('contact.empty_contacts')
+                    : t('contact.no_results')}
                 </Text>
               </View>
             ) : (

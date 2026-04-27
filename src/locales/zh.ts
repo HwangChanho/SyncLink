@@ -144,6 +144,23 @@ const zh = {
     conflict_warning_title: '日程冲突',
     conflict_warning_body: '与以下日程时间冲突：\n{{list}}\n仍要保存吗？',
     conflict_save_anyway: '继续保存',
+    // IDEA-018 — 共享日程 fork
+    fork_to_my_calendar: '复制到我的日历',
+    fork_success: '已复制到您的日历。',
+    fork_failed: '复制失败，请重试。',
+    // IDEA-015 — event create/edit form field labels i18n
+    form: {
+      all_day: '全天',
+      start: '开始',
+      end: '结束',
+      repeat: '重复',
+      category: '分类',
+      location: '位置',
+      memo: '备注',
+      share_section: '共享到 Space',
+      current_location: '使用当前位置',
+    },
+    edit_back: '返回',
   },
 
   todo: {
@@ -236,6 +253,68 @@ const zh = {
     invite_expired: '邀请码已过期，请向 Space 管理员申请新的邀请码。',
     invite_max_uses_reached: '邀请码已达到使用上限，请向 Space 管理员申请新的邀请码。',
     couple_full: '情侣 Space 最多只能有 2 名成员。',
+    // IDEA-015 — hardcoded Korean → i18n
+    create_title: '创建新 Space',
+    name_label: 'Space 名称',
+    type_label: 'Space 类型',
+    create_button: '创建 Space',
+    join_title: '加入 Space',
+    join_description: '请输入您收到邀请的 Space 代码。',
+    join_description_sub: '代码由6位英文字母和数字组成。',
+    join_button: '加入',
+    invite_title: 'Space 邀请',
+    invite_code_section: '邀请码',
+    invite_share_button: '分享',
+    code_regen_button: '重新生成代码',
+    capacity_hint: '{{current}}/2 名成员',
+    capacity_full_suffix: ' · 已满',
+    member_section: '成员（{{count}}人）',
+    member_invite_button: '+ 邀请成员',
+    anniversary_section: '纪念日',
+    add_button: '+ 添加',
+    free_time_section: '查找空闲时间',
+    free_time_start_date: '开始日期',
+    free_time_end_date: '结束日期',
+    free_time_min_duration: '最短时长',
+    free_time_search_button: '查找空闲时间',
+    free_time_no_results: '该时段内没有所有人都空闲的时间。',
+    edit_title: '编辑 Space',
+    cover_change: '更换封面',
+    name_field_label: '名称',
+    need_name_message: '请输入 Space 名称。',
+    save_failed_message: '保存失败。',
+    photo_permission_title: '需要权限',
+    photo_permission: '更改封面图片需要访问照片库的权限。',
+    member_count: '{{count}} 人',
+    kick_confirm: '将 {{nickname}} 从此 Space 中移除吗？',
+    anniversary_delete_confirm: '删除"{{title}}"吗？',
+    share_invite_copied_title: '已复制',
+    share_invite_copied_body: '邀请消息已复制到剪贴板，可粘贴到任意地方发送。',
+    share_invite_title: '邀请消息',
+    join_preview_description: '是否要加入此 Space？',
+    share_message: '邀请您加入 SyncLink Space "{{name}}"！\n邀请码：{{code}}\n加入链接：{{link}}',
+    email_body: '邀请您加入 SyncDay Space "{{name}}"！\n\n邀请码：{{code}}\n加入链接：{{link}}\n\n点击上方链接，或在 SyncDay 应用中输入邀请码加入。',
+    edit_accessibility: '编辑 Space',
+  },
+
+  // IDEA-015 — contact picker modal i18n
+  contact: {
+    title: '从联系人中邀请',
+    unsupported: '此浏览器不支持访问联系人。请直接分享邀请码。',
+    denied: '联系人访问被阻止。\n请前往设置 → SyncLink → 联系人 → 允许，以搜索并邀请朋友。',
+    search_placeholder: '按姓名、电话或邮箱搜索',
+    empty_contacts: '联系人中没有包含电话号码或邮箱的记录。',
+    no_results: '未找到结果。',
+    copied_title: '已复制',
+    copied_body: '{{name}} 的邀请消息已复制到剪贴板。',
+    share_title: '邀请消息',
+  },
+
+  // IDEA-015 — member row i18n
+  member: {
+    me_tag: '（我）',
+    owner_badge: '管理员',
+    remove_button: '移除',
   },
 
   category: {
@@ -289,6 +368,10 @@ const zh = {
     date_not_exist: '该日期不存在，请重新确认。',
     date_example: '请输入有效日期。（例：年 2024，月 03，日 15）',
     input_error: '输入错误',
+    // IDEA-015 — anniversary row i18n
+    date_label: '日期',
+    repeat_yearly: ' · 每年重复',
+    delete_button: '删除',
   },
 
   comment: {
