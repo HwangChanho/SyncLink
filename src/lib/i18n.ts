@@ -20,7 +20,7 @@
 
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import { NativeModules, Platform } from 'react-native';
+import * as Localization from 'expo-localization';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ko from '@/locales/ko';
 import en from '@/locales/en';
@@ -40,15 +40,13 @@ export type SupportedLocale = 'ko' | 'en' | 'zh' | 'ja';
  * @returns One of 'ko' | 'zh' | 'ja' | 'en'
  */
 function detectLocale(): SupportedLocale {
+  // Use expo-localization (sync, cross-platform). Resolves ISSUE-013:
+  // NativeModules.I18nManager.localeIdentifier returned an empty string on
+  // some Android devices, leaving i18next without a usable lng.
   try {
-    let tag = 'en';
-    if (Platform.OS === 'ios') {
-      tag = NativeModules.SettingsManager?.settings?.AppleLocale
-        ?? NativeModules.SettingsManager?.settings?.AppleLanguages?.[0]
-        ?? 'en';
-    } else if (Platform.OS === 'android') {
-      tag = NativeModules.I18nManager?.localeIdentifier ?? 'en';
-    }
+    const locales = Localization.getLocales();
+    const code = locales?.[0]?.languageCode ?? '';
+    const tag = (code || locales?.[0]?.languageTag || '').toLowerCase();
     if (tag.startsWith('ko')) return 'ko';
     if (tag.startsWith('zh')) return 'zh';
     if (tag.startsWith('ja')) return 'ja';

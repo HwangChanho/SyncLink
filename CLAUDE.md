@@ -98,6 +98,39 @@ docs/
 
 **5개 회귀 sub-agent**: `.claude/agents/qa-{ios-sim,android-sim,web,ios-device,android-device}.md`. dispatcher: `.claude/commands/qa.md`. 결과: `docs/handoffs/sprint-N/qa/{env}-latest.md`. **새 세션 시작 시**: 이 시스템은 자동 로드됨 (파일 기반). `/qa status`로 마지막 5개 환경 상태 즉시 확인 가능.
 
+## 멀티 에이전트 자율 팀 (Phase 1 ~) ← 사용자 부재에도 굴러가는 시스템
+
+**기존 + 신규 11개 에이전트**:
+- LEAD (사용자 = 1) | ORCHESTRATOR (Claude 현재 세션 = 1)
+- DEV, QA(코드) — 기존 (`.claude/agents/{dev,qa}.md`)
+- qa-{ios-sim, android-sim, web, ios-device, android-device} — 5개 환경 회귀
+- **PM, DEVOPS, ARCHITECT, TRIAGE — 신규 4개** (`.claude/agents/{pm,devops,architect,triage}.md`)
+
+**자율 동작 메커니즘**:
+- `docs/queue/{todo,in_progress,done,escalated,blocked}/` — 작업 큐 (md 1개 = 1 작업, frontmatter 포함)
+- `docs/conversations/{YYYY-MM-DD}-{topic}.md` — 에이전트 간 의사결정 로그
+- 사용자 부재 시 Level 1-2 자율 진행, Level 4는 escalated/ 큐에 누적
+- 사용자 복귀 시 ORCHESTRATOR가 RESUME.md에 "부재 동안 진행 사항 + 승인 대기" 자동 sync
+
+**상세 plan**: `docs/plans/2026-04-27-multi-agent-autonomous-team.md` (Phase 1-4)
+
+**OpenClaw 통합 (Phase 4 예정)**: 메시징 플랫폼 (Telegram/Discord) 인터페이스로 사용자가 폰에서 에이전트 트리거. 로컬 OpenClaw 인스턴스 ↔ Claude Code 세션 연동.
+
+## 플랜모드 + plan md 저장 규칙 (LEAD 지시) ← 최우선 준수
+
+**모든 큰 작업 (멀티-스텝, 환경 셋업 변경, 회귀 시작, 빌드/배포, docs 구조 변경)은 다음 순서로 진행**:
+
+1. **작업 전 plan 문서 작성**: `docs/plans/{YYYY-MM-DD}-{kebab-topic}.md`
+   - 작업 목적, 단계별 행동, 예상 시간, 영향 범위, 롤백 계획
+   - 큰 결정점은 옵션 + 추천 명시
+2. **사용자 승인 대기**: plan 파일 경로를 사용자에게 보여주고 검토 요청
+3. **승인 후 실행**: plan 문서대로 진행, 결과는 plan 파일 하단에 "실행 결과" 섹션 추가
+4. **plan 완료 후**: `docs/REBOOT_CHECKLIST.md` 영향 있으면 즉시 갱신
+
+**작은 작업 (단일 파일 수정, 명령 실행, 정보 조회)는 plan 생략 OK** — 자율 Level 1.
+
+**`docs/REBOOT_CHECKLIST.md` 갱신 의무**: 새 도구 설치, 새 셋업 단계, 환경변수 변경 등 재부팅 후 영향 있는 변경 발생 시 **즉시** 갱신 (별도 task 안 만듦, 변경한 그 응답에 같이 처리).
+
 **Claude 단독 결정 상한: Level 2 (동료 승인)**  
 Level 3 이상은 반드시 NOTIFY 파일 → 사용자 확인 대기.
 

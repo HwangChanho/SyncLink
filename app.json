@@ -145,7 +145,8 @@
         }
       ],
       "@bacons/apple-targets",
-      "./plugins/withAppGroupBridge"
+      "./plugins/withAppGroupBridge",
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true
