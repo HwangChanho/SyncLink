@@ -82,10 +82,13 @@ const TodoRow = memo(function TodoRow({
       renderLeftActions={renderLeftActions}
       onSwipeableOpen={(direction, swipeable) => {
         swipeable.close();
+        // TASK-006: react-native-gesture-handler에서 direction은 노출된 actions
+        // 영역의 위치를 의미. 왼쪽 swipe → renderRightActions 노출 → direction='right'.
+        // 우리 의도: 왼쪽 swipe = 삭제 (renderRightActions 내용 = trash 아이콘).
         if (direction === 'right') {
-          onChangeCategory(todo);
-        } else {
           onDelete(todo.id);
+        } else {
+          onChangeCategory(todo);
         }
       }}
       overshootLeft={false}

@@ -173,7 +173,10 @@ export function CategoryPickerSheet({
          */}
         <Pressable style={styles.sheetWrapper} onPress={(e) => e.stopPropagation()}>
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            // TASK-004: 카테고리 추가 시 키보드가 TextInput + 색상 palette 가렸음.
+            // iOS는 padding + offset, Android는 height behavior로 sheet 자체 압축.
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
             style={styles.sheet}
           >
             {/* Header */}
