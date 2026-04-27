@@ -30,7 +30,9 @@ import * as Location from 'expo-location';
 import type { RepeatType } from '@/types';
 import {
   createEvent,
+  findConflictingEvents,
   searchEventsByTitle,
+  type ConflictingEvent,
   type EventAutocompleteSuggestion,
 } from '@/services/eventService';
 import { updateReminders } from '@/services/reminderService';
@@ -384,45 +386,40 @@ export default function EventCreateScreen() {
   }, [t]);
 
   /**
-   * Validate and submit the form.
-   *
-   * Uses showAlert (webAlert) so alerts appear on both web (window.alert)
-   * and native (Alert.alert). Adds console.error around the createEvent
-   * call so iOS failures surface in Metro logs (previously silent).
+   * Format a list of conflicting events into a multi-line bullet string for
+   * the warning Alert body. Kept inline because it's only used by handleSave
+   * and is trivial enough that extracting it elsewhere would obscure the flow.
    */
-  const handleSave = useCallback(async () => {
-    if (!title.trim()) {
-      showAlert(t('common.error'), t('event.title_placeholder'));
-      return;
-    }
-    if (!allDay && endAt <= startAt) {
-      showAlert(t('common.error'), t('event.end_after_start'));
-      return;
-    }
+  const formatConflictList = useCallback((conflicts: ConflictingEvent[]): string => {
+    return conflicts
+      .map(c => `• ${c.ownerNickname} — ${c.title}`)
+      .join('\n');
+  }, []);
 
-    setIsSaving(true);
+  /**
+   * Run the actual createEvent + side-effects (reminders, store update, navigation).
+   * Extracted from handleSave so the conflict-warning "save anyway" path can
+   * call it after user confirmation without duplicating the save logic.
+   *
+   * @param effectiveEndAt - The end date that was committed (allDay-adjusted)
+   */
+  const performSave = useCallback(async (effectiveEndAt: Date) => {
     try {
       // exactOptionalPropertyTypes: only spread optional fields when they have a value
       const newEvent = await createEvent({
         title: title.trim(),
         allDay,
         startAt,
-        endAt: allDay ? new Date(startAt.getFullYear(), startAt.getMonth(), startAt.getDate(), 23, 59, 59) : endAt,
+        endAt: effectiveEndAt,
         repeatType,
         ...(location.trim()     ? { location:    location.trim() }     : {}),
         ...(description.trim()  ? { description: description.trim() }  : {}),
-        // Carry over a category chosen by a title-autocomplete pick so
-        // the reused event keeps the same bucket/color.
         ...(categoryId          ? { categoryId }                       : {}),
         shareToSpaceIds: shareSpaceIds,
       });
 
-      // Persist reminders for the newly created event (fire-and-forget;
-      // failure must not block navigation — user can edit reminders later).
-      // The `.catch` is important: without it an unhandled promise rejection
-      // from updateReminders (e.g. expo-notifications permission revoked on
-      // iOS) would bubble up to React Native's default handler and could be
-      // mistaken for a "save failed" bug. Log and swallow instead.
+      // Persist reminders for the newly created event (fire-and-forget; see
+      // long-form rationale above the original implementation).
       if (reminderMinutes.length > 0) {
         updateReminders(newEvent.id, reminderMinutes, newEvent.title, newEvent.startAt)
           .catch((remindErr) => {
@@ -443,18 +440,98 @@ export default function EventCreateScreen() {
 
       router.back();
     } catch (err) {
-      // Always log the full error object to Metro and to error_logs so
-      // production sessions surface silent-save bugs (LEAD report: iOS
-      // sometimes showed blank message + no trace).
       void logError({ context: 'event.create.ui', error: err });
       console.error('[EventCreate] handleSave failed:', err);
       showAlert(t('common.error'), err instanceof Error ? err.message : t('event.save_error'));
       setIsSaving(false);
     }
   }, [
-    title, allDay, startAt, endAt, repeatType,
-    location, description, shareSpaceIds, reminderMinutes,
-    upsertEvent, router, colors.primary, t, categoryId,
+    title, allDay, startAt, repeatType, location, description, categoryId,
+    shareSpaceIds, reminderMinutes, upsertEvent, router, colors.primary, t,
+  ]);
+
+  /**
+   * Validate and submit the form.
+   *
+   * Sprint 26 R3 — Before saving, if the event is being shared to one or more
+   * Spaces, run a conflict pre-check against each Space's existing events.
+   * If any conflict is found, show a warning Alert; the user can confirm to
+   * proceed or cancel to keep editing.
+   *
+   * Uses showAlert (webAlert) so alerts appear on both web (window.confirm)
+   * and native (Alert.alert).
+   */
+  const handleSave = useCallback(async () => {
+    if (!title.trim()) {
+      showAlert(t('common.error'), t('event.title_placeholder'));
+      return;
+    }
+    if (!allDay && endAt <= startAt) {
+      showAlert(t('common.error'), t('event.end_after_start'));
+      return;
+    }
+
+    setIsSaving(true);
+
+    // Compute the canonical end date once — allDay snaps to 23:59:59 of
+    // startAt's day. Reused below for both the conflict check and the
+    // actual createEvent call so the two cannot diverge.
+    const effectiveEndAt = allDay
+      ? new Date(startAt.getFullYear(), startAt.getMonth(), startAt.getDate(), 23, 59, 59)
+      : endAt;
+
+    // ── Conflict pre-check (only when sharing to at least one Space) ─────
+    if (shareSpaceIds.length > 0) {
+      // Run all space checks in parallel, then de-duplicate the union by id
+      // (an event shared to multiple of the user's spaces would otherwise
+      // appear once per space).
+      const lists = await Promise.all(
+        shareSpaceIds.map(sid =>
+          findConflictingEvents(sid, startAt, effectiveEndAt),
+        ),
+      );
+      const seen = new Set<string>();
+      const merged: ConflictingEvent[] = [];
+      for (const list of lists) {
+        for (const c of list) {
+          if (!seen.has(c.id)) {
+            seen.add(c.id);
+            merged.push(c);
+          }
+        }
+      }
+
+      if (merged.length > 0) {
+        // Defer the actual save to the user's response on the warning Alert.
+        // showAlert fires the chosen button's onPress; if the user cancels
+        // we reset isSaving so the header save button re-enables.
+        showAlert(
+          t('event.conflict_warning_title'),
+          t('event.conflict_warning_body', { list: formatConflictList(merged) }),
+          [
+            {
+              text: t('common.cancel'),
+              style: 'cancel',
+              onPress: () => setIsSaving(false),
+            },
+            {
+              text: t('event.conflict_save_anyway'),
+              style: 'destructive',
+              onPress: () => {
+                void performSave(effectiveEndAt);
+              },
+            },
+          ],
+        );
+        return;
+      }
+    }
+
+    // No conflict (or no sharing) — proceed with save immediately.
+    void performSave(effectiveEndAt);
+  }, [
+    title, allDay, startAt, endAt, shareSpaceIds,
+    formatConflictList, performSave, t,
   ]);
 
   // ── Render ─────────────────────────────────────────────────────────────────

@@ -144,6 +144,15 @@ const ko = {
     today_list_title: '오늘 일정',
     reminder: '일정 리마인더',
     reminder_desc: '일정 30분 전에 알림을 받습니다.',
+    // Sprint 26 R3 — Space 멤버 일정 충돌 경고
+    conflict_warning_title: '일정이 겹쳐요',
+    /**
+     * `{{list}}` placeholder receives a pre-formatted multi-line string of the
+     * conflicting events (e.g. "• 홍길동 — 팀 미팅"). Built at the call site so
+     * the translator only has to wrap it in a sentence.
+     */
+    conflict_warning_body: '다음 일정과 시간이 겹칩니다:\n{{list}}\n그래도 저장하시겠습니까?',
+    conflict_save_anyway: '계속 저장',
   },
 
   todo: {

@@ -140,6 +140,10 @@ const en = {
     today_list_title: "Today's Events",
     reminder: 'Event Reminder',
     reminder_desc: 'Receive a notification 30 minutes before the event.',
+    // Sprint 26 R3 — Space member schedule conflict warning
+    conflict_warning_title: 'Schedule Conflict',
+    conflict_warning_body: 'This conflicts with the following event(s):\n{{list}}\nSave anyway?',
+    conflict_save_anyway: 'Save Anyway',
   },
 
   todo: {

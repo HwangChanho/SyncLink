@@ -42,6 +42,7 @@ import {
   createEvent,
   updateEvent,
   deleteEvent,
+  findConflictingEvents,
 } from '@/services/eventService';
 import {
   shareEventToSpace,
@@ -71,6 +72,8 @@ function makeChain(resolvedValue: { data: unknown; error: unknown }) {
     eq:     jest.fn().mockReturnThis(),
     neq:    jest.fn().mockReturnThis(),
     in:     jest.fn().mockReturnThis(),
+    lt:     jest.fn().mockReturnThis(),
+    gt:     jest.fn().mockReturnThis(),
     lte:    jest.fn().mockReturnThis(),
     gte:    jest.fn().mockReturnThis(),
     order:  jest.fn().mockReturnThis(),
@@ -481,6 +484,89 @@ describe('eventService', () => {
 
       await expect(deleteEvent('event-001')).rejects.toThrow('로그인이 필요합니다.');
       expect(supabase.from).not.toHaveBeenCalled();
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // findConflictingEvents (Sprint 26 R3 — Critical fix)
+  // ══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * findConflictingEvents from() 호출 순서 (충돌 후보가 있는 정상 흐름):
+   * 1. from('event_shares') → space_id의 event_id 목록
+   * 2. from('events')        → 시간 겹침 + id 필터된 이벤트 행
+   * 3. from('users')         → 충돌 이벤트 owner 닉네임 일괄 조회
+   *
+   * 충돌 후보가 없거나 결과가 비어있으면 1~2단계에서 조기 반환.
+   */
+  describe('findConflictingEvents', () => {
+    const proposedStart = new Date('2026-04-20T09:00:00Z');
+    const proposedEnd   = new Date('2026-04-20T10:00:00Z');
+
+    it('충돌 없음: events 결과 빈 배열 → 빈 배열 반환', async () => {
+      (supabase.from as jest.Mock)
+        // 1. event_shares: 후보 1건
+        .mockReturnValueOnce(makeChain({ data: [{ event_id: 'event-other' }], error: null }))
+        // 2. events: 시간 겹침 결과 없음
+        .mockReturnValueOnce(makeChain({ data: [], error: null }));
+
+      const result = await findConflictingEvents('space-abc', proposedStart, proposedEnd);
+
+      expect(result).toEqual([]);
+      // users 조회는 스킵
+      expect(supabase.from).toHaveBeenCalledTimes(2);
+    });
+
+    it('1개 충돌: ConflictingEvent 1개 반환 (owner nickname 포함)', async () => {
+      (supabase.from as jest.Mock)
+        // 1. event_shares: 후보 1건
+        .mockReturnValueOnce(makeChain({ data: [{ event_id: 'event-other' }], error: null }))
+        // 2. events: 1건 겹침
+        .mockReturnValueOnce(makeChain({
+          data: [{
+            id:       'event-other',
+            user_id:  'user-456',
+            title:    '디자인 리뷰',
+            start_at: '2026-04-20T09:30:00Z',
+            end_at:   '2026-04-20T10:30:00Z',
+          }],
+          error: null,
+        }))
+        // 3. users: owner 닉네임
+        .mockReturnValueOnce(makeChain({
+          data: [{ id: 'user-456', nickname: '김디자이너' }],
+          error: null,
+        }));
+
+      const result = await findConflictingEvents('space-abc', proposedStart, proposedEnd);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]?.id).toBe('event-other');
+      expect(result[0]?.title).toBe('디자인 리뷰');
+      expect(result[0]?.ownerNickname).toBe('김디자이너');
+      expect(result[0]?.startAt).toBeInstanceOf(Date);
+      expect(result[0]?.endAt).toBeInstanceOf(Date);
+    });
+
+    it('excludeEventId: 자기 자신 일정은 후보에서 제외 → 빈 배열', async () => {
+      // event_shares가 자기 일정만 반환하면, 필터링 후 후보가 0개가 되어
+      // events 호출 자체가 스킵되어야 한다.
+      (supabase.from as jest.Mock)
+        .mockReturnValueOnce(makeChain({
+          data: [{ event_id: 'event-self' }],
+          error: null,
+        }));
+
+      const result = await findConflictingEvents(
+        'space-abc',
+        proposedStart,
+        proposedEnd,
+        'event-self',
+      );
+
+      expect(result).toEqual([]);
+      // 후보가 0개라 events/users 호출 모두 스킵
+      expect(supabase.from).toHaveBeenCalledTimes(1);
     });
   });
 });

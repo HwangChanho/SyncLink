@@ -140,6 +140,10 @@ const ja = {
     today_list_title: '今日のイベント',
     reminder: 'イベントリマインダー',
     reminder_desc: 'イベントの30分前に通知を受け取ります。',
+    // Sprint 26 R3 — Space メンバーの予定重複警告
+    conflict_warning_title: '予定が重なっています',
+    conflict_warning_body: '以下の予定と時間が重なります：\n{{list}}\nそれでも保存しますか？',
+    conflict_save_anyway: 'このまま保存',
   },
 
   todo: {

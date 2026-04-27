@@ -22,7 +22,13 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import type { Event, RepeatType } from '@/types';
-import { getEventById, updateEvent, deleteEvent } from '@/services/eventService';
+import {
+  getEventById,
+  updateEvent,
+  deleteEvent,
+  findConflictingEvents,
+  type ConflictingEvent,
+} from '@/services/eventService';
 import { getReminders, updateReminders } from '@/services/reminderService';
 import { shareEventToSpace, unshareEventFromSpace } from '@/services/eventShareService';
 import { logError } from '@/lib/errorLogger';
@@ -245,30 +251,32 @@ export default function EventEditScreen() {
     setPickerTarget(null);
   }, []);
 
-  /** Compute sharing diff and persist. */
-  const handleSave = useCallback(async () => {
+  /**
+   * Format a list of conflicting events into a multi-line bullet string for
+   * the warning Alert body (Sprint 26 R3).
+   */
+  const formatConflictList = useCallback((conflicts: ConflictingEvent[]): string => {
+    return conflicts
+      .map((c) => `• ${c.ownerNickname} — ${c.title}`)
+      .join('\n');
+  }, []);
+
+  /**
+   * Run the actual updateEvent + side-effects (shares diff, reminders, store, nav).
+   * Extracted so the conflict-warning "save anyway" path can call it after
+   * user confirmation without duplicating logic.
+   *
+   * @param effectiveEndAt - The end date that was committed (allDay-adjusted)
+   */
+  const performSave = useCallback(async (effectiveEndAt: Date) => {
     if (!id || !originalEvent) return;
-
-    if (!title.trim()) {
-      showAlert(t('common.error'), t('event.title_placeholder'));
-      return;
-    }
-    if (!allDay && endAt <= startAt) {
-      showAlert(t('common.error'), t('event.end_after_start'));
-      return;
-    }
-
-    setIsSaving(true);
     try {
       // 1. Update event fields
-      // exactOptionalPropertyTypes: only spread optional fields when they have a value
       const updated = await updateEvent(id, {
         title: title.trim(),
         allDay,
         startAt,
-        endAt: allDay
-          ? new Date(startAt.getFullYear(), startAt.getMonth(), startAt.getDate(), 23, 59, 59)
-          : endAt,
+        endAt: effectiveEndAt,
         repeatType,
         ...(location.trim()    ? { location:    location.trim() }    : {}),
         ...(description.trim() ? { description: description.trim() } : {}),
@@ -315,9 +323,83 @@ export default function EventEditScreen() {
       setIsSaving(false);
     }
   }, [
-    id, originalEvent, title, allDay, startAt, endAt,
-    repeatType, location, description, shareSpaceIds, reminderMinutes,
-    upsertEvent, router, colors.primary, t,
+    id, originalEvent, title, allDay, startAt, repeatType, location, description,
+    shareSpaceIds, reminderMinutes, upsertEvent, router, colors.primary, t,
+  ]);
+
+  /**
+   * Compute sharing diff and persist.
+   *
+   * Sprint 26 R3 — Before saving, when the event is shared to one or more
+   * Spaces, run a conflict pre-check excluding the event's own id (so a
+   * no-op edit doesn't self-conflict). On conflict, prompt the user; on
+   * confirmation proceed with performSave().
+   */
+  const handleSave = useCallback(async () => {
+    if (!id || !originalEvent) return;
+
+    if (!title.trim()) {
+      showAlert(t('common.error'), t('event.title_placeholder'));
+      return;
+    }
+    if (!allDay && endAt <= startAt) {
+      showAlert(t('common.error'), t('event.end_after_start'));
+      return;
+    }
+
+    setIsSaving(true);
+
+    // Canonical end date — allDay snaps to 23:59:59 of startAt's day.
+    const effectiveEndAt = allDay
+      ? new Date(startAt.getFullYear(), startAt.getMonth(), startAt.getDate(), 23, 59, 59)
+      : endAt;
+
+    // ── Conflict pre-check (only when sharing to at least one Space) ─────
+    if (shareSpaceIds.length > 0) {
+      const lists = await Promise.all(
+        shareSpaceIds.map((sid) =>
+          findConflictingEvents(sid, startAt, effectiveEndAt, id),
+        ),
+      );
+      const seen = new Set<string>();
+      const merged: ConflictingEvent[] = [];
+      for (const list of lists) {
+        for (const c of list) {
+          if (!seen.has(c.id)) {
+            seen.add(c.id);
+            merged.push(c);
+          }
+        }
+      }
+
+      if (merged.length > 0) {
+        showAlert(
+          t('event.conflict_warning_title'),
+          t('event.conflict_warning_body', { list: formatConflictList(merged) }),
+          [
+            {
+              text: t('common.cancel'),
+              style: 'cancel',
+              onPress: () => setIsSaving(false),
+            },
+            {
+              text: t('event.conflict_save_anyway'),
+              style: 'destructive',
+              onPress: () => {
+                void performSave(effectiveEndAt);
+              },
+            },
+          ],
+        );
+        return;
+      }
+    }
+
+    // No conflict (or no sharing) — proceed with save immediately.
+    void performSave(effectiveEndAt);
+  }, [
+    id, originalEvent, title, allDay, startAt, endAt, shareSpaceIds,
+    formatConflictList, performSave, t,
   ]);
 
   const handleDelete = useCallback(() => {

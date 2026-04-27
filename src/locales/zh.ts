@@ -140,6 +140,10 @@ const zh = {
     today_list_title: '今日日程',
     reminder: '日程提醒',
     reminder_desc: '在日程开始前30分钟收到通知。',
+    // Sprint 26 R3 — Space 成员日程冲突警告
+    conflict_warning_title: '日程冲突',
+    conflict_warning_body: '与以下日程时间冲突：\n{{list}}\n仍要保存吗？',
+    conflict_save_anyway: '继续保存',
   },
 
   todo: {

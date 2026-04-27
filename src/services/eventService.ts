@@ -475,6 +475,141 @@ export async function updateEvent(eventId: string, updates: UpdateEventInput): P
 }
 
 /**
+ * Lightweight shape returned by `findConflictingEvents`. Only the fields
+ * needed to render the conflict warning Alert are included — no Date
+ * conversion is necessary at the call site beyond what's already provided.
+ */
+export interface ConflictingEvent {
+  /** UUID of the conflicting event. */
+  id: string;
+  /** Event title for display in the warning Alert. */
+  title: string;
+  /** Owner's nickname (falls back to `'알 수 없음'` if the lookup fails). */
+  ownerNickname: string;
+  /** Start of the conflicting event (UTC). */
+  startAt: Date;
+  /** End of the conflicting event (UTC). */
+  endAt: Date;
+}
+
+/**
+ * Find events in the given space whose time range overlaps with the proposed
+ * window. Used by the create/edit screens to warn the user before saving a
+ * shared event that collides with an existing space-mate's calendar.
+ *
+ * Overlap definition (half-open interval semantics):
+ *   existing.start_at < proposed.endAt
+ *   AND existing.end_at > proposed.startAt
+ *
+ * Scope:
+ *  - Returns conflicts only for events shared to `spaceId` (RLS makes other
+ *    spaces invisible to the current user anyway).
+ *  - Excludes the caller's own pending edit when `excludeEventId` is passed,
+ *    so re-saving an existing event without changes doesn't self-conflict.
+ *
+ * Failure mode:
+ *  - This function is best-effort: if the supplementary nickname lookup
+ *    fails the offending events still get returned with `'알 수 없음'`.
+ *  - On a fatal Supabase error (e.g. network) it returns an empty array
+ *    rather than throwing, because blocking the save flow on a conflict
+ *    check that itself failed would be a worse UX than silently skipping
+ *    the warning. The actual save call will surface any persistent error.
+ *
+ * @param spaceId         - Space the event is being shared to
+ * @param startAt         - Proposed event start
+ * @param endAt           - Proposed event end
+ * @param excludeEventId  - Optional: event to exclude (own edit case)
+ * @returns Array of conflicting events; empty when there are no conflicts.
+ */
+export async function findConflictingEvents(
+  spaceId: string,
+  startAt: Date,
+  endAt: Date,
+  excludeEventId?: string,
+): Promise<ConflictingEvent[]> {
+  if (!spaceId) return [];
+
+  try {
+    // ─── 1. event_ids shared to this space ────────────────────────────────
+    const { data: shareRefs, error: shareError } = await supa
+      .from('event_shares')
+      .select('event_id')
+      .eq('space_id', spaceId) as {
+        data: { event_id: string }[] | null;
+        error: Error | null;
+      };
+
+    if (shareError) throw shareError;
+
+    // De-duplicate (same event can be in multiple share rows, defensively),
+    // and remove the caller's own pending event id.
+    const candidateIds = [
+      ...new Set(
+        (shareRefs ?? [])
+          .map(r => r.event_id)
+          .filter(id => id !== excludeEventId),
+      ),
+    ];
+    if (candidateIds.length === 0) return [];
+
+    // ─── 2. Events in time range from the candidate set ───────────────────
+    // Half-open overlap: start_at < endAt AND end_at > startAt
+    const startIso = startAt.toISOString();
+    const endIso   = endAt.toISOString();
+
+    const { data: rows, error } = await supa
+      .from('events')
+      .select('id, user_id, title, start_at, end_at')
+      .in('id', candidateIds)
+      .lt('start_at', endIso)
+      .gt('end_at', startIso) as {
+        data: {
+          id: string;
+          user_id: string;
+          title: string;
+          start_at: string;
+          end_at: string;
+        }[] | null;
+        error: Error | null;
+      };
+
+    if (error) throw error;
+    if (!rows || rows.length === 0) return [];
+
+    // ─── 3. Resolve owner nicknames in one batch ──────────────────────────
+    const ownerIds = [...new Set(rows.map(r => r.user_id))];
+    const { data: ownerRows } = await supa
+      .from('users')
+      .select('id, nickname')
+      .in('id', ownerIds) as {
+        data: { id: string; nickname: string }[] | null;
+        error: Error | null;
+      };
+
+    const nicknameById = new Map<string, string>(
+      (ownerRows ?? []).map(o => [o.id, o.nickname ?? '알 수 없음']),
+    );
+
+    return rows.map(row => ({
+      id:            row.id,
+      title:         row.title,
+      ownerNickname: nicknameById.get(row.user_id) ?? '알 수 없음',
+      startAt:       new Date(row.start_at),
+      endAt:         new Date(row.end_at),
+    }));
+  } catch (err) {
+    // Soft-fail: log for diagnosability, but don't block the save flow on
+    // an advisory pre-check failure (see JSDoc above).
+    void logError({
+      context: 'event.findConflicts',
+      error:   err,
+      details: { spaceId, hasExcludeId: !!excludeEventId },
+    });
+    return [];
+  }
+}
+
+/**
  * Delete an event permanently (owner only — enforced by RLS).
  * Cascade-deletes all event_shares rows in the DB.
  *
