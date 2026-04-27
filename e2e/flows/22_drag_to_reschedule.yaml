@@ -1,0 +1,108 @@
+# 22_drag_to_reschedule — TASK-009 드래그 이동 스모크 테스트
+#
+# 목적:
+#   drag-to-reschedule(TASK-009) 기능의 최소 연기 검증.
+#   Maestro의 drag 지원 한계(긴 long-press 조합)로 인해
+#   실제 drag-drop 완료 검증은 어렵다 — plan §4 위험 참조.
+#   이 스크립트는 다음을 검증한다:
+#     1. 로그인 → 캘린더 탭 도달
+#     2. 주간 뷰에서 이벤트 블록 렌더링 확인 (testID: event-block-gh 또는 이벤트 텍스트)
+#     3. swipeFrom으로 이벤트 블록을 아래로 드래그 시도 (60px 수직 이동)
+#     4. 드래그 후 앱 크래시 없음 확인 (assertVisible로 화면 존재 확인)
+#
+# 한계 (Maestro 제약):
+#   - Maestro는 long-press + pan 조합을 네이티브 gesture-handler와 완벽하게
+#     맞추기 어렵다. 실 drag 완료(DB 변경)는 실기 수동 QA로 별도 확인.
+#   - DRAG_MODE_GH 플래그가 활성화된 dev 빌드에서만 event-block-gh testID 표시.
+#     production 빌드에서는 EventBlock(PanResponder)이 렌더링된다.
+#
+# 실행:
+#   TEST_EMAIL=test@example.com TEST_PASSWORD=secret \
+#   maestro test e2e/flows/22_drag_to_reschedule.yaml
+#
+# @task TASK-009 Day 5
+
+appId: io.synclink.app
+env:
+  TEST_EMAIL: ${TEST_EMAIL}
+  TEST_PASSWORD: ${TEST_PASSWORD}
+---
+# ── 1. 앱 실행 + 로그인 ───────────────────────────────────────────────────────
+- launchApp:
+    clearState: true
+- waitForAnimationToEnd
+- assertVisible: "SyncLink"
+- takeScreenshot: screenshots/drag_01_login
+
+- tapOn:
+    text: "이메일로 로그인"
+- waitForAnimationToEnd
+- tapOn:
+    id: "email-input"
+- inputText: ${TEST_EMAIL}
+- tapOn:
+    id: "password-input"
+- inputText: ${TEST_PASSWORD}
+- tapOn:
+    text: "로그인"
+- waitForAnimationToEnd
+
+# ── 2. 캘린더 탭 이동 ─────────────────────────────────────────────────────────
+# 온보딩이 있으면 건너뛴다 (골든 패스와 동일 패턴)
+- runFlow:
+    when:
+      visible: "시작하기"
+    commands:
+      - tapOn: "시작하기"
+      - waitForAnimationToEnd
+
+- tapOn:
+    id: "tab-calendar"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/drag_02_calendar_tab
+
+# ── 3. 주간 뷰 확인 ───────────────────────────────────────────────────────────
+# 캘린더가 주간 뷰(WeekView)에 있는지 요일 레이블로 검증
+- assertVisible: "일"
+- assertVisible: "월"
+- assertVisible: "화"
+- takeScreenshot: screenshots/drag_03_week_view
+
+# ── 4. 이벤트 블록 드래그 시도 ──────────────────────────────────────────────
+# DRAG_MODE_GH dev 빌드: event-block-gh testID를 갖는 블록 존재 시 drag 시도.
+# 블록이 없으면(이벤트 없는 날) skip.
+- runFlow:
+    when:
+      visible:
+        id: "event-block-gh"
+    commands:
+      # Maestro swipeFrom: 이벤트 블록에서 아래로 60px swipe
+      # long-press dead-zone(8px)을 초과하는 수직 이동으로 gesture 트리거 시도.
+      # duration은 충분히 길게 설정해 PAN_ACTIVATION_PX 통과를 유도.
+      - swipeFrom:
+          id: "event-block-gh"
+          direction: DOWN
+          duration: 1200
+      - waitForAnimationToEnd
+      - takeScreenshot: screenshots/drag_04_after_swipe
+      # 앱 크래시 없음 확인 — 화면이 여전히 캘린더 상태인지 요일 레이블로 검증
+      - assertVisible: "일"
+
+# ── 5. Undo toast 확인 (undo-toast testID로 체크) ─────────────────────────────
+# swipe가 실제 drop으로 완료되었다면 Undo toast가 5초간 표시된다.
+# 표시되지 않을 수 있으므로 optional 체크 (runFlow + when 패턴).
+- runFlow:
+    when:
+      visible:
+        id: "undo-toast"
+    commands:
+      - takeScreenshot: screenshots/drag_05_undo_toast
+      # "되돌리기" 버튼이 있으면 탭해서 rollback 검증
+      - tapOn:
+          id: "undo-toast-button"
+      - waitForAnimationToEnd
+      - takeScreenshot: screenshots/drag_06_after_undo
+
+# ── 6. 최종 상태 확인 ─────────────────────────────────────────────────────────
+- assertVisible: "일"
+- takeScreenshot: screenshots/drag_07_final

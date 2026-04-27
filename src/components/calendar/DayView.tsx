@@ -11,18 +11,46 @@
  *
  * Overlap handling mirrors WeekView — greedy column-assignment so
  * simultaneous events appear side by side within the single column.
+ *
+ * TASK-009 Day 5: EventBlockGestureHandler (GH PoC) applied behind the
+ * same DRAG_MODE_GH feature flag as WeekView. In DayView there is no
+ * horizontal column movement, so columnWidth=0 and viewMode='day'.
+ * UndoToast is rendered as an absolute overlay at the bottom of the view.
  */
 
-import { useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { EventSummary } from '@/types';
 import type { FreeSlot } from '@/types/freeTime';
 import { EventBlock } from './EventBlock';
+import {
+  EventBlockGestureHandler,
+  UndoToast,
+  useOptimisticReschedule,
+  useUndoToast,
+} from './EventBlockGestureHandler';
 import { useColors } from '@/hooks/useColors';
 import { useTranslatedTitles } from '@/hooks/useTranslatedTitles';
 import { spacing } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+
+// ─── Feature flag (mirrors WeekView) ──────────────────────────────────────────
+
+/**
+ * TASK-009 Day 5 feature flag for DayView.
+ * Mirrors WeekView's DRAG_MODE_GH — both views use the same devConfig toggle.
+ * When true, EventBlockGestureHandler replaces EventBlock in the time grid.
+ */
+const DRAG_MODE_GH = __DEV__ && (() => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const cfg = require('@/constants/devConfig') as { dragMode?: string };
+    return cfg.dragMode === 'gh';
+  } catch {
+    return false;
+  }
+})();
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
 
@@ -191,6 +219,42 @@ export function DayView({
   const visibleEventIds = useMemo(() => events.map((e) => e.id), [events]);
   const translatedTitles = useTranslatedTitles(visibleEventIds);
 
+  // ── TASK-009 Day 5: GH PoC drag support ─────────────────────────────────
+
+  /**
+   * Drop-target hover slot state for DayView.
+   * In DayView there is only one column (no horizontal movement),
+   * so dayIndex is always ignored. We track minuteOfDay for the vertical
+   * hover highlight band.
+   */
+  const [hoverSlot, setHoverSlot] = useState<{ minuteOfDay: number } | null>(null);
+
+  /**
+   * Stable onHoverSlot callback for EventBlockGestureHandler.
+   * DayView ignores dayIndex — it's always a single-column view.
+   */
+  const handleHoverSlot = useCallback(
+    (minuteOfDay: number | null, _dayIndex: number | null) => {
+      if (minuteOfDay === null) {
+        setHoverSlot(null);
+      } else {
+        setHoverSlot({ minuteOfDay });
+      }
+    },
+    [],
+  );
+
+  /**
+   * TASK-009 Day 4+5: Undo toast hook and stable drop handler.
+   * showUndo is passed so a 5-second "되돌리기" toast appears after each
+   * successful drag move.
+   */
+  const { toast: undoToast, showUndo } = useUndoToast();
+  const handleDropped = useOptimisticReschedule({ onMoved: showUndo });
+
+  /** Height of the drop-target hover highlight band (30-min slot at 1px/min). */
+  const HOVER_SLOT_HEIGHT = HOUR_HEIGHT / 2;
+
   return (
     <View style={styles.container}>
       {/* All-day events banner (shown when there are all-day events or
@@ -308,9 +372,48 @@ export function DayView({
                 />
               ))}
 
-              {/* Timed event blocks */}
+              {/*
+                TASK-009 Day 5 — drop-target hover highlight for DayView.
+                Shown when the GH feature flag is active and the user is
+                dragging an event vertically (DayView has no column axis).
+              */}
+              {DRAG_MODE_GH && hoverSlot !== null && (
+                <View
+                  pointerEvents="none"
+                  testID="day-drop-target"
+                  style={[
+                    styles.dropTargetHighlight,
+                    {
+                      top:    hoverSlot.minuteOfDay * 1, // 1 px/min
+                      height: HOVER_SLOT_HEIGHT,
+                    },
+                  ]}
+                />
+              )}
+
+              {/* Timed event blocks — A/B: GH PoC vs production EventBlock */}
               {timedEvents.map((lay) => {
                 const tt = translatedTitles.get(lay.event.id);
+
+                // TASK-009 Day 5 — feature flag: render GH handler in dev mode
+                if (DRAG_MODE_GH) {
+                  return (
+                    <EventBlockGestureHandler
+                      key={lay.event.id}
+                      event={lay.event}
+                      topOffset={lay.topOffset}
+                      height={lay.height}
+                      widthFraction={lay.widthFraction}
+                      leftFraction={lay.leftFraction}
+                      onPress={onEventPress}
+                      columnWidth={0}
+                      viewMode="day"
+                      onHoverSlot={handleHoverSlot}
+                      onDropped={handleDropped}
+                    />
+                  );
+                }
+
                 return (
                   <EventBlock
                     key={lay.event.id}
@@ -335,6 +438,13 @@ export function DayView({
           </View>
         )}
       </ScrollView>
+
+      {/*
+        TASK-009 Day 5 — Undo toast overlay for DayView.
+        Positioned at the bottom of the view; only rendered after a
+        successful drag-to-reschedule while the 5-second window is open.
+      */}
+      {DRAG_MODE_GH && undoToast && <UndoToast toast={undoToast} />}
     </View>
   );
 }
@@ -454,6 +564,22 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     backgroundColor: colors.primary + '22',
     borderLeftWidth: 2,
     borderLeftColor: colors.primary + '88',
+    borderRadius: 4,
+  },
+  /**
+   * TASK-009 Day 5 — drop-target snap highlight for DayView.
+   * Shown at the snapped hover slot while the user is dragging an event.
+   * Uses a more saturated primary accent than the free-time overlay so the
+   * user clearly sees "where I'm about to drop" vs. existing free-time bands.
+   * Mirrors WeekView's dropTargetHighlight styling.
+   */
+  dropTargetHighlight: {
+    position: 'absolute',
+    left: 2,
+    right: 2,
+    backgroundColor: colors.primary + '44',
+    borderWidth: 1.5,
+    borderColor: colors.primary,
     borderRadius: 4,
   },
   });

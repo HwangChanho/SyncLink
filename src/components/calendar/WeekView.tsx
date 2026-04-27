@@ -34,7 +34,9 @@ import type { FreeSlot } from '@/types/freeTime';
 import { EventBlock } from './EventBlock';
 import {
   EventBlockGestureHandler,
+  UndoToast,
   useOptimisticReschedule,
+  useUndoToast,
 } from './EventBlockGestureHandler';
 import { useColors } from '@/hooks/useColors';
 import { useTranslatedTitles } from '@/hooks/useTranslatedTitles';
@@ -289,10 +291,16 @@ export function WeekView({
   );
 
   /**
-   * TASK-009 Day 3: stable drop handler via useOptimisticReschedule.
-   * The hook encapsulates store upsert + eventService call + rollback Alert.
+   * TASK-009 Day 4: Undo toast hook — shows a 5-second banner after a
+   * successful drag-to-reschedule so the user can revert immediately.
    */
-  const handleDropped = useOptimisticReschedule();
+  const { toast: undoToast, showUndo } = useUndoToast();
+
+  /**
+   * TASK-009 Day 3+4: stable drop handler via useOptimisticReschedule.
+   * Day 4 addition: passes showUndo so a toast appears after each move.
+   */
+  const handleDropped = useOptimisticReschedule({ onMoved: showUndo });
 
   // Scroll to 8 AM on mount so mornings are visible by default
   const handleLayout = () => {
@@ -618,6 +626,7 @@ export function WeekView({
                           leftFraction={lay.leftFraction}
                           onPress={onEventPress}
                           columnWidth={columnWidth}
+                          viewMode="week"
                           onHoverSlot={handleHoverSlot}
                           onDropped={handleDropped}
                         />
@@ -645,6 +654,15 @@ export function WeekView({
           </View>
         </View>
       </ScrollView>
+
+      {/*
+        TASK-009 Day 4 — Undo toast overlay.
+        Rendered when a drag-to-reschedule was just completed and the user
+        hasn't yet tapped "되돌리기" or waited 5 seconds.
+        Positioned at the bottom of the calendar view; does not intercept
+        touches on the calendar grid (only the toast itself is touchable).
+      */}
+      {DRAG_MODE_GH && undoToast && <UndoToast toast={undoToast} />}
     </View>
   );
 }

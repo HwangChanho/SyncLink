@@ -1,7 +1,7 @@
 /**
- * EventBlockGestureHandler — TASK-009 Drag-to-Reschedule PoC (Days 1-3).
+ * EventBlockGestureHandler — TASK-009 Drag-to-Reschedule PoC (Days 1-5).
  *
- * ## What this file does (current state after Day 3)
+ * ## What this file does (final state after Day 5)
  *
  * Day 1 — Gesture infra + visual feedback
  *   - GestureDetector (Pan) with PAN_ACTIVATION_PX dead-zone.
@@ -9,12 +9,11 @@
  *   - Scale lift + opacity dim while dragging.
  *
  * Day 2 — calendarGeometry integration + drop-target highlight
- *   - Accepts `columnWidth` and `slotHeight` (px/min) from WeekView via props.
+ *   - Accepts `columnWidth` and `pxPerMinute` (px/min) from WeekView via props.
  *   - Calls `computeRescheduleDelta` on every gesture update to derive a
  *     snapped hover time, which is forwarded to the parent via `onHoverSlot`.
  *   - Parent (WeekView) renders a translucent highlight at the hover slot.
  *   - On drag end the snapped (dayDelta, minuteDelta) is reported via `onDropped`.
- *     `console.log` markers from Day 1 are removed from hot paths.
  *
  * Day 3 — Optimistic update + eventService rollback
  *   - `onDropped` triggers the store upsert (optimistic), then the network call.
@@ -22,20 +21,26 @@
  *   - This component itself is stateless w.r.t. the store — the callback
  *     pattern keeps it decoupled from Zustand and usable in tests.
  *
- * ## What this file is NOT (yet)
- *   - Day 4: conflict detection (overlapping events in same space).
- *   - Day 5: month/agenda view integration + Maestro e2e.
+ * Day 4 — Conflict detection + Undo toast
+ *   - useOptimisticReschedule now calls findConflictingEvents before saving.
+ *   - Conflict found → Alert "다음 일정과 겹칩니다… 이동할까요?" (취소 = rollback).
+ *   - After successful drop: 5-second Undo toast via useUndoToast hook.
+ *   - spaceId resolved from useSpaceStore.activeSpaceId (EventSummary has no spaceId).
+ *
+ * Day 5 — DayView integration
+ *   - DayView now uses EventBlockGestureHandler behind the same DRAG_MODE_GH flag.
+ *   - MonthView: drag skip — cell too small. Long-press → modal (carry to R3).
+ *   - Maestro e2e smoke script: e2e/flows/22_drag_to_reschedule.yaml (written only).
  *
  * ## Feature flag
- *   Only rendered by WeekView when `__DEV__ && config.dragMode === 'gh'`.
- *   The production EventBlock (PanResponder) keeps shipping unchanged until
- *   Day 5 promotes this component to production.
+ *   Only rendered by WeekView/DayView when `__DEV__ && config.dragMode === 'gh'`.
+ *   The production EventBlock (PanResponder) keeps shipping unchanged.
  *
  * @task TASK-009
  */
 
-import { useCallback, useMemo, useRef } from 'react';
-import { Alert, StyleSheet, Text } from 'react-native';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -53,7 +58,8 @@ import {
   DEFAULT_SNAP_MINUTES,
 } from '@/lib/calendarGeometry';
 import { useEventStore } from '@/stores/eventStore';
-import { updateEvent } from '@/services/eventService';
+import { useSpaceStore } from '@/stores/spaceStore';
+import { findConflictingEvents, updateEvent } from '@/services/eventService';
 import type { EventSummary } from '@/types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -66,6 +72,12 @@ const MIN_HEIGHT = 22;
  * 8 px is the same threshold react-navigation uses for swipe-back.
  */
 const PAN_ACTIVATION_PX = 8;
+
+/**
+ * Duration of the Undo toast in milliseconds.
+ * User has 5 seconds to revert a drag-to-reschedule action.
+ */
+const UNDO_TOAST_DURATION_MS = 5_000;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -84,8 +96,8 @@ export interface DroppedPayload {
 /**
  * Props for EventBlockGestureHandler.
  *
- * Surface area is deliberately kept close to EventBlock so WeekView can
- * swap them behind a feature flag without structural changes.
+ * Surface area is deliberately kept close to EventBlock so WeekView/DayView
+ * can swap them behind a feature flag without structural changes.
  */
 interface EventBlockGestureHandlerProps {
   event:          EventSummary;
@@ -112,6 +124,13 @@ interface EventBlockGestureHandlerProps {
    * matching WeekView/DayView's HOUR_HEIGHT = 60).
    */
   pxPerMinute?: number;
+
+  /**
+   * View mode — controls whether horizontal drag produces dayDelta.
+   * 'day' mode: dayDelta is always 0 (single-column).
+   * 'week' mode: dayDelta computed from dx / columnWidth.
+   */
+  viewMode?: 'week' | 'day';
 
   /**
    * Called on every snapped position change during drag.
@@ -142,11 +161,11 @@ interface EventBlockGestureHandlerProps {
 /**
  * GestureHandler-powered event card for WeekView/DayView time grids.
  *
- * Rendered behind a feature flag in WeekView:
+ * Rendered behind a feature flag in WeekView/DayView:
  *   `__DEV__ && config.dragMode === 'gh'`
  *
  * Completely isolated from production code paths — EventBlock still ships
- * with PanResponder for all production users until Day 5.
+ * with PanResponder for all production users.
  */
 export function EventBlockGestureHandler({
   event,
@@ -157,6 +176,7 @@ export function EventBlockGestureHandler({
   onPress,
   columnWidth   = 0,
   pxPerMinute   = DEFAULT_PX_PER_MINUTE,
+  viewMode      = 'week',
   onHoverSlot,
   onDropped,
 }: EventBlockGestureHandlerProps) {
@@ -204,6 +224,7 @@ export function EventBlockGestureHandler({
         columnWidth,
         pxPerMinute,
         snapMinutes: DEFAULT_SNAP_MINUTES,
+        viewMode,
       });
 
       // Compute absolute minute-of-day for the hover slot
@@ -221,7 +242,7 @@ export function EventBlockGestureHandler({
 
       onHoverSlot(hoverMinuteOfDay, hoverDayIndex);
     },
-    [onHoverSlot, columnWidth, pxPerMinute],
+    [onHoverSlot, columnWidth, pxPerMinute, viewMode],
   );
 
   /**
@@ -247,6 +268,7 @@ export function EventBlockGestureHandler({
         columnWidth,
         pxPerMinute,
         snapMinutes: DEFAULT_SNAP_MINUTES,
+        viewMode,
       });
 
       // No-op drop — don't call onDropped
@@ -267,7 +289,7 @@ export function EventBlockGestureHandler({
         newEndAt,
       });
     },
-    [onDropped, columnWidth, pxPerMinute],
+    [onDropped, columnWidth, pxPerMinute, viewMode],
   );
 
   // ── Gesture definition ────────────────────────────────────────────────────
@@ -320,7 +342,7 @@ export function EventBlockGestureHandler({
     // notifyHover/clearHover/handleDrop are stable useCallback refs captured
     // via the runOnJS bridge so we don't need them in the deps array.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [event.id, columnWidth, pxPerMinute],
+    [event.id, columnWidth, pxPerMinute, viewMode],
   );
 
   // ── Animated style (UI thread) ────────────────────────────────────────────
@@ -340,8 +362,6 @@ export function EventBlockGestureHandler({
       ],
       // Slight dimming so the block reads as "in-flight"
       opacity: 1 - lift * 0.15,
-      // zIndex boost needs to come from the JS layer; handled via elevation
-      // on Android and a wrapper View on iOS in future Day 5 refinement.
     };
   });
 
@@ -394,34 +414,170 @@ const styles = StyleSheet.create({
   },
 });
 
-// ─── Optimistic-update hook (Day 3 logic, separated for testability) ──────────
+// ─── Undo toast hook ──────────────────────────────────────────────────────────
+
+/**
+ * Undo toast state returned by useUndoToast.
+ * Parent renders the toast UI when `visible` is true.
+ */
+export interface UndoToastState {
+  /** Whether the toast is currently visible. */
+  visible: boolean;
+  /** Label describing the undo action (e.g. event title). */
+  label: string;
+  /** Call this to immediately undo the last drag-to-reschedule. */
+  onUndo: () => void;
+}
+
+/**
+ * useUndoToast — manages a 5-second "undo" toast for drag-to-reschedule.
+ *
+ * After a successful reschedule, call `showUndo(label, undoCallback)`.
+ * The toast auto-dismisses after UNDO_TOAST_DURATION_MS.
+ * If the user taps "되돌리기", `undoCallback` is invoked immediately.
+ *
+ * @returns `{ toast, showUndo }` — toast state + trigger function.
+ */
+export function useUndoToast(): {
+  toast: UndoToastState | null;
+  showUndo: (label: string, undoFn: () => void) => void;
+} {
+  const [toast, setToast] = useState<UndoToastState | null>(null);
+  // Holds the auto-dismiss timer so we can clear it on early undo.
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showUndo = useCallback((label: string, undoFn: () => void) => {
+    // Clear any existing timer before starting a new one.
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current);
+    }
+
+    const onUndo = () => {
+      if (timerRef.current !== null) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      setToast(null);
+      undoFn();
+    };
+
+    setToast({ visible: true, label, onUndo });
+
+    timerRef.current = setTimeout(() => {
+      setToast(null);
+      timerRef.current = null;
+    }, UNDO_TOAST_DURATION_MS);
+  }, []);
+
+  return { toast, showUndo };
+}
+
+// ─── Undo toast UI component ──────────────────────────────────────────────────
+
+/**
+ * UndoToast — lightweight toast banner rendered at the bottom of the calendar
+ * while a reschedule undo is available (5 seconds).
+ *
+ * Caller is responsible for positioning this over the calendar view.
+ * Typically rendered as an absolute-positioned overlay inside WeekView/DayView.
+ *
+ * @example
+ * ```tsx
+ * const { toast, showUndo } = useUndoToast();
+ * // …
+ * {toast && <UndoToast toast={toast} />}
+ * ```
+ */
+export function UndoToast({ toast }: { toast: UndoToastState }) {
+  return (
+    <View style={toastStyles.container} testID="undo-toast">
+      <Text style={toastStyles.label} numberOfLines={1}>
+        "{toast.label}" 이동됨
+      </Text>
+      <TouchableOpacity
+        onPress={toast.onUndo}
+        activeOpacity={0.7}
+        testID="undo-toast-button"
+      >
+        <Text style={toastStyles.undoButton}>되돌리기</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const toastStyles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    bottom: 16,
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#1F2937',
+    borderRadius: radius.md,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    elevation: 8,
+    // iOS shadow
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  label: {
+    ...textStyles.labelSm,
+    color: '#F9FAFB',
+    flex: 1,
+    marginRight: 12,
+  },
+  undoButton: {
+    ...textStyles.labelSm,
+    color: '#60A5FA',
+    fontWeight: '700',
+  },
+});
+
+// ─── Optimistic-update hook (Day 3 + Day 4 conflict detection) ────────────────
 
 /**
  * useOptimisticReschedule — encapsulates the optimistic-update + rollback
  * logic for drag-to-reschedule so EventBlockGestureHandler stays pure.
  *
- * Usage (in WeekView or a parent screen):
+ * **Day 4 additions:**
+ *  - Before saving: calls `findConflictingEvents(spaceId, newStartAt, newEndAt, eventId)`.
+ *  - Conflict found: Alert "다음 일정과 겹칩니다… 이동할까요?" with Confirm/Cancel.
+ *  - Cancel → rollback (no network call). Confirm → proceed with update.
+ *  - No conflict → update immediately (no extra round-trip).
+ *  - After successful update: calls `onMoved(label, rollbackFn)` so the
+ *    parent can show a 5-second Undo toast.
  *
+ * spaceId resolution:
+ *  EventSummary does not carry a spaceId field. We resolve it from
+ *  `useSpaceStore.getState().activeSpaceId`. If no active space is set (e.g.
+ *  personal events only), conflict check is skipped.
+ *
+ * Usage:
  * ```tsx
- * const handleDrop = useOptimisticReschedule();
+ * const { toast, showUndo } = useUndoToast();
+ * const handleDrop = useOptimisticReschedule({ onMoved: showUndo });
  *
- * <EventBlockGestureHandler
- *   ...
- *   onDropped={handleDrop}
- * />
+ * <EventBlockGestureHandler onDropped={handleDrop} … />
+ * {toast && <UndoToast toast={toast} />}
  * ```
  *
- * Internals:
- *  1. Optimistically upsert the moved event into the Zustand store.
- *  2. Call eventService.updateEvent to persist.
- *  3. On failure: upsert original back + show Alert.
- *
- * The hook is declared in this file to keep the Day 3 logic co-located with
- * the component it serves. Move to a hooks/ file if it grows beyond ~60 lines.
+ * @param opts.onMoved - Called after a successful move with (label, undoFn).
+ *                       Connect to useUndoToast.showUndo.
  *
  * @returns A stable `onDropped` callback ref for use as the component prop.
  */
-export function useOptimisticReschedule(): (payload: DroppedPayload) => void {
+export function useOptimisticReschedule(opts?: {
+  onMoved?: (label: string, undoFn: () => void) => void;
+}): (payload: DroppedPayload) => void {
+  // Keep opts stable so the callback dep array stays clean.
+  const optsRef = useRef(opts);
+  optsRef.current = opts;
+
   return useCallback(async (payload: DroppedPayload) => {
     const store = useEventStore.getState();
     const originalEvent = payload.event;
@@ -433,17 +589,81 @@ export function useOptimisticReschedule(): (payload: DroppedPayload) => void {
       endAt:   payload.newEndAt,
     };
 
-    // 1. Optimistic upsert — UI responds immediately before network round-trip
+    // ─── Day 4: Conflict detection ──────────────────────────────────────────
+
+    // Resolve spaceId from the active space store (EventSummary has no spaceId).
+    const spaceId = useSpaceStore.getState().activeSpaceId;
+
+    if (spaceId) {
+      // Best-effort: findConflictingEvents returns [] on network error so we
+      // never block the move due to a failed conflict check.
+      const conflicts = await findConflictingEvents(
+        spaceId,
+        payload.newStartAt,
+        payload.newEndAt,
+        originalEvent.id, // exclude the event being moved from its own conflict
+      );
+
+      if (conflicts.length > 0) {
+        // Format a concise conflict summary for the alert body.
+        const conflictList = conflicts
+          .slice(0, 3) // cap at 3 to keep alert readable
+          .map((c) => `• ${c.title}`)
+          .join('\n');
+        const suffix = conflicts.length > 3
+          ? `\n외 ${conflicts.length - 3}개`
+          : '';
+
+        // Show conflict alert and let the user decide.
+        // React Native's Alert is callback-based so we wrap it in a Promise.
+        const confirmed = await new Promise<boolean>((resolve) => {
+          Alert.alert(
+            '일정 겹침',
+            `다음 일정과 겹칩니다:\n${conflictList}${suffix}\n\n그래도 이동할까요?`,
+            [
+              { text: '취소', style: 'cancel', onPress: () => resolve(false) },
+              { text: '이동', style: 'default', onPress: () => resolve(true) },
+            ],
+            { cancelable: false },
+          );
+        });
+
+        if (!confirmed) {
+          // User cancelled — no optimistic update was made yet, so nothing to rollback.
+          return;
+        }
+      }
+    }
+
+    // ─── Optimistic upsert (after conflict gate passed) ─────────────────────
+
+    // 1. Optimistic upsert — UI responds immediately before network round-trip.
     store.upsertEvent(optimisticEvent);
 
     try {
-      // 2. Persist to Supabase via event service
+      // 2. Persist to Supabase via event service.
       await updateEvent(originalEvent.id, {
         startAt: payload.newStartAt,
         endAt:   payload.newEndAt,
       });
+
+      // 3. Notify parent to show Undo toast (Day 4).
+      //    The undo closure reverts the store to the original event and
+      //    calls updateEvent with the original times.
+      optsRef.current?.onMoved?.(originalEvent.title, async () => {
+        store.upsertEvent(originalEvent);
+        try {
+          await updateEvent(originalEvent.id, {
+            startAt: originalEvent.startAt,
+            endAt:   originalEvent.endAt,
+          });
+        } catch {
+          // Undo network failure — rollback already happened in store,
+          // so silently ignore (next sync will re-fetch truth from server).
+        }
+      });
     } catch {
-      // 3. Network failure — rollback to original and notify user
+      // Network failure on initial save — rollback to original and notify user.
       store.upsertEvent(originalEvent);
       Alert.alert(
         '이동 실패',
@@ -452,7 +672,8 @@ export function useOptimisticReschedule(): (payload: DroppedPayload) => void {
       );
     }
   // useCallback with no deps — store.getState() always returns latest state,
-  // and updateEvent is a stable module-level function.
+  // spaceStore.getState() same, and updateEvent/findConflictingEvents are
+  // stable module-level functions.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) as (payload: DroppedPayload) => void;
 }
