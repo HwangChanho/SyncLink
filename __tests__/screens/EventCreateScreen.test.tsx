@@ -134,7 +134,7 @@ describe('EventCreateScreen', () => {
     (useEventStore as jest.Mock).mockReturnValue({ upsertEvent: mockUpsertEvent });
 
     // spaces 없는 기본 상태 (공유 섹션 숨김)
-    (useSpaceStore as jest.Mock).mockReturnValue({ spaces: [] });
+    (useSpaceStore as jest.Mock).mockReturnValue({ spaces: [], fetchMySpaces: jest.fn().mockResolvedValue(undefined) });
 
     // Alert.alert spy — 실제 Alert UI 표시 없이 호출 여부만 검증
     alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
@@ -205,7 +205,7 @@ describe('EventCreateScreen', () => {
     });
 
     it('spaces가 있으면 Space 이름과 "공유할 Space" 레이블이 렌더링됨', () => {
-      (useSpaceStore as jest.Mock).mockReturnValue({ spaces: [mockSpace] });
+      (useSpaceStore as jest.Mock).mockReturnValue({ spaces: [mockSpace], fetchMySpaces: jest.fn().mockResolvedValue(undefined) });
       const { getByText } = render(<EventCreateScreen />);
       expect(getByText('공유할 Space')).toBeTruthy();
       expect(getByText('우리 팀')).toBeTruthy();

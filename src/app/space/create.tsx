@@ -85,8 +85,19 @@ export default function CreateSpaceScreen() {
       // 스토어 캐시 업데이트
       setSpaceDetail(space);
       setActiveSpaceId(space.id);
-      // 목록 새로고침 (비동기, 완료 대기 불필요)
-      fetchMySpaces().catch(() => undefined);
+
+      // Sprint 27 R1 — IDEA-013 race fix:
+      // 이전엔 fetchMySpaces() 를 await 없이 fire-and-forget 했더니, 사용자가
+      // 곧바로 event/create 로 이동했을 때 useSpaceStore().spaces 가 아직 갱신
+      // 전이라 신규 Space 가 "공유할 Space" 섹션에 안 떠 보이는 결함(F1)이
+      // 발생했다. 갱신 완료를 기다린 후 navigate 하면 다음 화면이 항상 최신
+      // spaces 를 본다. 네트워크 실패 시에도 캐시(setSpaceDetail) 가 있으므로
+      // 사용자 경험은 보장됨 → catch 후 silently 진행.
+      try {
+        await fetchMySpaces();
+      } catch {
+        // Non-fatal — 다음 화면에서 재시도되거나 다음 mount 에서 자연스럽게 동기화됨.
+      }
 
       // 생성된 Space 상세 화면으로 이동
       router.replace(`/space/${space.id}`);

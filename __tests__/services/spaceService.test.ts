@@ -377,23 +377,38 @@ describe('spaceService', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('leaveSpace', () => {
+    /**
+     * Sprint 27 R1 — IDEA-011 Phase A 적용 후 leaveSpace 호출 순서:
+     *   1) from('space_members') SELECT — 멤버 조회
+     *   2) from('events')        SELECT — 본인 events.id 목록
+     *   3) from('event_shares')  DELETE — (본인 일정 ≥ 1개일 때만)
+     *   4) from('space_members') UPDATE — (owner 탈퇴 시만) 소유권 이전
+     *   5) from('space_members') DELETE — 본인 멤버십 제거
+     *   6) from('spaces')        DELETE — (마지막 멤버였을 때만)
+     *
+     * 아래 테스트들은 본인 events 가 0개인 경로(=event_shares DELETE 생략)
+     * 만 다룸 — IDEA-011-A 한정 케이스는 spaceService.leave.test.ts 참조.
+     */
     it('일반 탈퇴: space_members DELETE 호출', async () => {
       // 현재 유저가 일반 member, 다른 owner가 존재
       const meAsMember: SpaceMemberRow = { ...mockMemberRow, user_id: 'user-123' };
       const otherOwner: SpaceMemberRow = { ...mockOwnerMemberRow, user_id: 'user-xyz' };
 
       (supabase.from as jest.Mock)
-        // 전체 멤버 조회 (joined_at ASC)
+        // 1) 전체 멤버 조회 (joined_at ASC)
         .mockReturnValueOnce(makeChain({ data: [otherOwner, meAsMember], error: null }))
-        // 내 membership DELETE
+        // 2) 본인 events 조회 (빈 배열 → event_shares DELETE 생략)
+        .mockReturnValueOnce(makeChain({ data: [], error: null }))
+        // 3) 내 membership DELETE
         .mockReturnValueOnce(makeChain({ data: null, error: null }));
 
       await leaveSpace('space-abc');
 
-      // from('space_members') 2번: 조회 + 삭제
-      expect(supabase.from).toHaveBeenCalledTimes(2);
+      // from() 3번: space_members(select) + events(select) + space_members(delete)
+      expect(supabase.from).toHaveBeenCalledTimes(3);
       expect(supabase.from).toHaveBeenNthCalledWith(1, 'space_members');
-      expect(supabase.from).toHaveBeenNthCalledWith(2, 'space_members');
+      expect(supabase.from).toHaveBeenNthCalledWith(2, 'events');
+      expect(supabase.from).toHaveBeenNthCalledWith(3, 'space_members');
     });
 
     it('마지막 멤버 탈퇴: space_members DELETE 후 spaces DELETE도 호출', async () => {
@@ -401,18 +416,20 @@ describe('spaceService', () => {
       const onlyMe: SpaceMemberRow = { ...mockOwnerMemberRow, user_id: 'user-123' };
 
       (supabase.from as jest.Mock)
-        // 전체 멤버 조회 → 나만 있음
+        // 1) 전체 멤버 조회 → 나만 있음
         .mockReturnValueOnce(makeChain({ data: [onlyMe], error: null }))
-        // space_members DELETE
+        // 2) 본인 events 조회 (빈 배열)
+        .mockReturnValueOnce(makeChain({ data: [], error: null }))
+        // 3) space_members DELETE
         .mockReturnValueOnce(makeChain({ data: null, error: null }))
-        // spaces DELETE (마지막 멤버이므로 Space도 삭제)
+        // 4) spaces DELETE (마지막 멤버이므로 Space도 삭제)
         .mockReturnValueOnce(makeChain({ data: null, error: null }));
 
       await leaveSpace('space-abc');
 
-      // space_members, space_members(delete), spaces(delete) 순서
-      expect(supabase.from).toHaveBeenCalledTimes(3);
-      expect(supabase.from).toHaveBeenNthCalledWith(3, 'spaces');
+      // 4 단계: members(select) + events(select) + space_members(delete) + spaces(delete)
+      expect(supabase.from).toHaveBeenCalledTimes(4);
+      expect(supabase.from).toHaveBeenNthCalledWith(4, 'spaces');
     });
 
     it('owner 탈퇴(다른 멤버 있음): 소유권 이전 후 탈퇴', async () => {
@@ -431,17 +448,19 @@ describe('spaceService', () => {
       };
 
       (supabase.from as jest.Mock)
-        // 전체 멤버 조회 (joined_at ASC → meAsOwner, otherMember 순)
+        // 1) 전체 멤버 조회 (joined_at ASC → meAsOwner, otherMember 순)
         .mockReturnValueOnce(makeChain({ data: [meAsOwner, otherMember], error: null }))
-        // 소유권 이전: space_members UPDATE (otherMember → owner)
+        // 2) 본인 events 조회 (빈 배열 → event_shares DELETE 생략)
+        .mockReturnValueOnce(makeChain({ data: [], error: null }))
+        // 3) 소유권 이전: space_members UPDATE (otherMember → owner)
         .mockReturnValueOnce(makeChain({ data: null, error: null }))
-        // 내 membership DELETE
+        // 4) 내 membership DELETE
         .mockReturnValueOnce(makeChain({ data: null, error: null }));
 
       await leaveSpace('space-abc');
 
-      // 소유권 이전 UPDATE 호출 확인
-      expect(supabase.from).toHaveBeenCalledTimes(3);
+      // 4 단계: members(select) + events(select) + UPDATE + DELETE
+      expect(supabase.from).toHaveBeenCalledTimes(4);
     });
 
     it('Space 멤버가 아닌 경우: "해당 Space의 멤버가 아닙니다." 에러 throw', async () => {

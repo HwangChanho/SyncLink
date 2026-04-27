@@ -163,7 +163,20 @@ export default function EventCreateScreen() {
   const { date: dateParam } = useLocalSearchParams<{ date?: string }>();
   const router = useRouter();
   const { upsertEvent } = useEventStore();
-  const { spaces } = useSpaceStore();
+  const { spaces, fetchMySpaces } = useSpaceStore();
+
+  // Sprint 27 R1 — IDEA-013 defensive sync:
+  // space/create 에서 await fetchMySpaces() 후 navigate 하므로 정상 흐름엔 race 가
+  // 없지만, 콜드 스타트나 외부 invite 링크로 곧바로 event/create 에 진입하는
+  // 경로(예: deep-link)가 생기면 spaces 가 비어 "공유할 Space" 섹션이 안 뜬다.
+  // mount 시 한 번만 동기화해 store 가 stale 한 경우를 보호한다. 이미 채워져
+  // 있으면 zustand 가 set 으로 동일 reference 를 만들지 않도록 service 레벨에서
+  // 처리되므로 추가 re-render 부담은 미미하다.
+  useEffect(() => {
+    void fetchMySpaces().catch(() => undefined);
+    // 의도적으로 mount 1회만 — fetchMySpaces 는 store action 으로 stable identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Form state ─────────────────────────────────────────────────────────────
 

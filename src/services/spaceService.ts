@@ -19,7 +19,7 @@
 import { supabase, getCurrentUserId } from '@/lib/supabase';
 import { readImageBinary } from './authService';
 import { logError } from '@/lib/errorLogger';
-import { memberEventColors } from '@/constants/colors';
+import { getMemberColor } from '@/constants/colors';
 import type {
   Space, SpaceSummary, SpaceMember,
   CreateSpaceInput, UpdateSpaceInput,
@@ -166,8 +166,8 @@ export async function createSpace(input: CreateSpaceInput): Promise<Space> {
     throw spaceError ?? new Error('Space 생성에 실패했습니다.');
   }
 
-  // 2. owner 멤버 추가
-  const ownerColor = memberEventColors[0] as string;
+  // 2. owner 멤버 추가 — owner is member index 0 in the golden-angle sequence.
+  const ownerColor = getMemberColor(0);
   const { data: memberRow, error: memberError } = await supa
     .from('space_members')
     .insert({
@@ -335,9 +335,9 @@ export async function joinSpaceByInviteCode(inviteCode: string): Promise<Space> 
     throw new Error('커플 Space는 최대 2명까지 참여할 수 있습니다.');
   }
 
-  // 기존 멤버 수 기반으로 색상 할당
-  const colorIndex = memberList.length % memberEventColors.length;
-  const memberColor = memberEventColors[colorIndex] as string;
+  // 기존 멤버 수 기반으로 색상 할당.
+  // ADR-014: golden-angle 회전으로 N에 무관하게 충돌 없는 색을 발급.
+  const memberColor = getMemberColor(memberList.length);
 
   const { error: insertError } = await supa
     .from('space_members')
@@ -434,9 +434,8 @@ export async function joinSpace(spaceId: string): Promise<void> {
   // Already a member — idempotent: do nothing
   if (memberList.some(m => m.user_id === userId)) return;
 
-  // Assign a color based on existing member count
-  const colorIndex = memberList.length % memberEventColors.length;
-  const memberColor = memberEventColors[colorIndex] as string;
+  // Assign a color based on existing member count (ADR-014 golden-angle).
+  const memberColor = getMemberColor(memberList.length);
 
   // ON CONFLICT DO NOTHING: safe to call multiple times
   const { error: insertError } = await supa
@@ -456,9 +455,26 @@ export async function joinSpace(spaceId: string): Promise<void> {
 
 /**
  * Leave a space (removes the current user from space_members).
- * If the user is the owner and there are other members, ownership is transferred
- * to the next oldest member (earliest joined_at).
- * If the user is the last member, the space is deleted.
+ *
+ * Side effects (Sprint 27 R1 — IDEA-011 Phase A):
+ *  1. **본인이 그 Space에 공유한 일정의 event_shares 행 일괄 삭제** —
+ *     탈퇴자의 일정이 다른 멤버 캘린더에 영구 잔존하는 부조리("나간 사람
+ *     일정이 계속 보임")를 방지한다. 본인 events 자체는 삭제하지 않으며,
+ *     해당 Space에 대한 share 연결만 해제한다 (다른 Space에 같은 일정이
+ *     공유되어 있다면 그 공유는 유지).
+ *  2. owner 탈퇴 + 다른 멤버 존재 시 소유권을 가장 오래된 멤버
+ *     (joined_at ASC 첫 번째)에게 자동 이전. (Phase B에서 명시적 양도
+ *     UX로 대체될 예정 — IDEA-011-B.)
+ *  3. 마지막 멤버 탈퇴 시 spaces 행도 삭제 (빈 Space 방지).
+ *
+ * 호출 순서 (트랜잭션 보장은 RLS + 클라이언트 순차 처리에 의존,
+ * Phase B에서 RPC로 묶을 가능성 검토):
+ *   (a) space_members SELECT (가입 순)
+ *   (b) events SELECT — 본인 일정 id 목록
+ *   (c) event_shares DELETE — 본인 일정의 이 Space 공유 해제 (id 목록 비면 생략)
+ *   (d) space_members UPDATE — 필요 시 소유권 이전
+ *   (e) space_members DELETE — 본인 멤버십 제거
+ *   (f) spaces DELETE — 마지막 멤버였을 때만
  *
  * @param spaceId - UUID of the space
  */
@@ -466,7 +482,7 @@ export async function leaveSpace(spaceId: string): Promise<void> {
   const userId = await getCurrentUserId();
   if (!userId) throw new Error('로그인이 필요합니다.');
 
-  // 현재 멤버 전체 조회 (가입 순 정렬 → 소유권 이전 시 활용)
+  // (a) 현재 멤버 전체 조회 (가입 순 정렬 → 소유권 이전 시 활용)
   const { data: allMembers, error: fetchError } = await supa
     .from('space_members')
     .select('*')
@@ -480,7 +496,37 @@ export async function leaveSpace(spaceId: string): Promise<void> {
 
   const otherMembers = (allMembers ?? []).filter(m => m.user_id !== userId);
 
-  // owner이고 다른 멤버가 있으면 소유권을 가장 오래된 멤버에게 이전
+  // (b)+(c) IDEA-011-A — 본인이 만든 일정의 이 Space 공유를 명시적으로 정리.
+  //
+  // event_shares 행은 (event_id, space_id) 복합 키이므로 본인 events.id를
+  // 먼저 조회한 뒤 .in() 으로 좁혀서 삭제한다. PostgREST가 .in() 안에
+  // sub-query string을 지원하지 않아 두 단계로 나눈다:
+  //   1) events 테이블에서 user_id=me 인 event_id 목록 조회
+  //   2) event_shares 에서 space_id=X AND event_id IN (위 목록) DELETE
+  //
+  // 본인 일정이 0개면 빈 IN 절을 만들지 않도록 호출 자체를 생략한다.
+  // 멤버십 삭제 *전에* 정리해야 함 — 멤버십이 사라지면 RLS 정책상 본인
+  // events 조회/event_shares 삭제 권한도 함께 잃을 수 있어, 잔존 공유가
+  // 영구적으로 남는 부조리(탈퇴 후 다른 멤버 캘린더에 계속 표시)를 유발한다.
+  const { data: myEventRows, error: myEventsError } = await supa
+    .from('events')
+    .select('id')
+    .eq('user_id', userId) as { data: { id: string }[] | null; error: Error | null };
+
+  if (myEventsError) throw myEventsError;
+
+  const myEventIds = (myEventRows ?? []).map(r => r.id);
+  if (myEventIds.length > 0) {
+    const { error: sharesDeleteError } = await supa
+      .from('event_shares')
+      .delete()
+      .eq('space_id', spaceId)
+      .in('event_id', myEventIds) as { error: Error | null };
+
+    if (sharesDeleteError) throw sharesDeleteError;
+  }
+
+  // (d) owner이고 다른 멤버가 있으면 소유권을 가장 오래된 멤버에게 이전
   if (myMembership.role === 'owner' && otherMembers.length > 0) {
     // joined_at ASC 정렬의 첫 번째 = 가장 오래된 멤버
     const nextOwner = otherMembers[0];
@@ -494,7 +540,7 @@ export async function leaveSpace(spaceId: string): Promise<void> {
     }
   }
 
-  // 내 멤버십 삭제
+  // (e) 내 멤버십 삭제
   const { error: deleteError } = await supa
     .from('space_members')
     .delete()
@@ -502,7 +548,7 @@ export async function leaveSpace(spaceId: string): Promise<void> {
 
   if (deleteError) throw deleteError;
 
-  // 마지막 멤버였으면 Space 삭제 (빈 Space 방지)
+  // (f) 마지막 멤버였으면 Space 삭제 (빈 Space 방지)
   if (otherMembers.length === 0) {
     const { error: spaceDeleteError } = await supa
       .from('spaces')
