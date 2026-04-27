@@ -93,7 +93,10 @@ docs/
 | **LEAD (사용자)** | 스프린트 테마 결정, 아키텍처/BM 승인, 출시 수동 작업, 예산 가드레일 집행 | `docs/handoffs/sprint-N/LEAD.md` 1차 소유자 |
 | **Claude (오케스트레이터)** | DEV·QA 에이전트 spawn, 진행 취합, 리스크/비용 리포트 | LEAD.md draft 보조, 스프린트 리포트 |
 | DEV | 기능 구현, 서비스 로직 작성 | `src/` 전체 (LEAD가 만든 타입 준수) |
-| QA | 테스트 작성, 코드 리뷰, 이슈 리포트 | `__tests__/`, `docs/issues/`, `docs/review/` |
+| QA (코드/이슈) | 테스트 작성, 코드 리뷰, 이슈 리포트 | `__tests__/`, `docs/issues/`, `docs/review/` |
+| **QA (회귀, 5개 환경)** | 시뮬 iOS/Android/Web + 실기 iOS/Android 회귀 — `/qa <env>` 또는 `/qa all` | `docs/handoffs/sprint-N/qa/{env}-latest.md` 환경별 1파일 (D3 정책: 환경별 최신만, 이력은 git) |
+
+**5개 회귀 sub-agent**: `.claude/agents/qa-{ios-sim,android-sim,web,ios-device,android-device}.md`. dispatcher: `.claude/commands/qa.md`. 결과: `docs/handoffs/sprint-N/qa/{env}-latest.md`. **새 세션 시작 시**: 이 시스템은 자동 로드됨 (파일 기반). `/qa status`로 마지막 5개 환경 상태 즉시 확인 가능.
 
 **Claude 단독 결정 상한: Level 2 (동료 승인)**  
 Level 3 이상은 반드시 NOTIFY 파일 → 사용자 확인 대기.

@@ -91,6 +91,82 @@ platform :ios do
     end
   end
 
+  # ── Apple Distribution cert 재발급 + 프로파일 재발급 (revoke/머신 변경 복구) ─
+  lane :reissue_signing do
+    api_key = app_store_connect_api_key(
+      key_id:       API_KEY_ID,
+      issuer_id:    API_ISSUER,
+      key_filepath: API_KEY_PATH,
+      in_house:     false,
+    )
+
+    # 1. 새 Apple Distribution cert 발급 + keychain import
+    get_certificates(
+      api_key:              api_key,
+      generate_apple_certs: true,
+      output_path:          "#{PROJECT_ROOT}/credentials/cert-tmp",
+    )
+
+    # 2. 새 cert 기반 프로파일 force 재발급
+    ["io.synclink.app", "io.synclink.app.SyncLinkWidget"].each do |id|
+      get_provisioning_profile(
+        api_key:        api_key,
+        app_identifier: id,
+        skip_install:   false,
+        force:          true,
+      )
+    end
+  end
+
+  # ── ASC 인증서 상태 조회 (디버깅용 — 만료/revoke 의심 시) ────────────────
+  lane :check_certs do
+    require 'spaceship'
+    Spaceship::ConnectAPI.token = Spaceship::ConnectAPI::Token.create(
+      key_id: API_KEY_ID, issuer_id: API_ISSUER, filepath: API_KEY_PATH,
+    )
+    certs = Spaceship::ConnectAPI::Certificate.all
+    certs.each do |c|
+      UI.message "Cert SHA1=#{c.serial_number} type=#{c.certificate_type} name=#{c.name} expiration=#{c.expiration_date} platform=#{c.platform}"
+    end
+  end
+
+  # ── ASC 빌드 상태 조회 (업로드 후 PROCESSING/VALID/INVALID 확인) ──────────
+  lane :check_builds do
+    require 'spaceship'
+    Spaceship::ConnectAPI.token = Spaceship::ConnectAPI::Token.create(
+      key_id: API_KEY_ID, issuer_id: API_ISSUER, filepath: API_KEY_PATH,
+    )
+    app = Spaceship::ConnectAPI::App.find("io.synclink.app")
+    builds = Spaceship::ConnectAPI::Build.all(
+      app_id: app.id, sort: "-uploadedDate", limit: 50,
+      includes: "preReleaseVersion,buildBetaDetail",
+    )
+    builds.each do |b|
+      pre = b.pre_release_version
+      bbd = b.build_beta_detail
+      UI.message "Build #{pre&.version} (build=#{b.version}) processing=#{b.processing_state} int=#{bbd&.internal_build_state} ext=#{bbd&.external_build_state} expired=#{b.expired} uploaded=#{b.uploaded_date}"
+    end
+
+    UI.message "─── 빌드 번호로 직접 조회 (33, 34, 35) ───"
+    [33, 34, 35].each do |bn|
+      hits = Spaceship::ConnectAPI::Build.all(
+        app_id: app.id, build_number: bn.to_s,
+        processing_states: "PROCESSING,FAILED,INVALID,VALID",
+        includes: "preReleaseVersion,buildBetaDetail",
+        limit: 5,
+      )
+      if hits.empty?
+        UI.message "build=#{bn}: ASC API에 결과 없음"
+      else
+        hits.each do |b|
+          pre = b.pre_release_version
+          bbd = b.build_beta_detail
+          UI.message "build=#{bn} HIT: version=#{pre&.version} processing=#{b.processing_state} int=#{bbd&.internal_build_state} ext=#{bbd&.external_build_state} expired=#{b.expired} uploaded=#{b.uploaded_date}"
+        end
+      end
+    end
+  end
+
   # ── 기존 IPA만 재업로드 ────────────────────────────────────────────────────
   lane :upload_only do
     api_key = app_store_connect_api_key(
