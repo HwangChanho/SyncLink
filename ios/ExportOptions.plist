@@ -13,9 +13,9 @@
     <key>provisioningProfiles</key>
     <dict>
         <key>io.synclink.app</key>
-        <string>3e817635-c274-4f3f-ab8f-53ce36db00e7</string>
+        <string>32a746d5-d8b9-4cd6-8ac5-75bbeda03b73</string>
         <key>io.synclink.app.SyncLinkWidget</key>
-        <string>fbdd01ac-cf90-424b-b87c-9e04f5cfe365</string>
+        <string>0baf3157-3d36-41b9-ac88-00410374e9f6</string>
     </dict>
     <key>stripSwiftSymbols</key>
     <true/>

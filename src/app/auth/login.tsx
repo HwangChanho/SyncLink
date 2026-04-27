@@ -33,8 +33,9 @@ type Provider = 'google' | 'kakao' | 'apple' | 'dev';
 // production web bundle is normally previewed. Without the second check
 // the dev login appears on the live web preview — not what we want.
 // To re-enable it locally, set `EXPO_PUBLIC_APP_ENV=development` in `.env`.
-// E2E 테스트: __DEV__ 빌드이면 항상 Dev 섹션 표시 (APP_ENV 무관)
-const IS_DEV_BUILD = __DEV__;
+// Production 빌드에서는 Dev 섹션 숨김.
+// E2E 로컬 테스트: EXPO_PUBLIC_APP_ENV=development (in .env) 로 설정하면 표시됨.
+const IS_DEV_BUILD = __DEV__ && process.env.EXPO_PUBLIC_APP_ENV !== 'production';
 
 export default function LoginScreen() {
   const { t } = useTranslation();
