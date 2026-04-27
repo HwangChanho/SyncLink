@@ -346,6 +346,13 @@ const ja = {
     weekday: {
       sun: '日', mon: '月', tue: '火', wed: '水', thu: '木', fri: '金', sat: '土',
     },
+    // PRD 4.2 Tier 2 — Free time finder UI strings
+    free_time_show:      '空き時間を表示',
+    free_time_hide:      '空き時間を非表示',
+    free_time_no_space:  '空き時間を見るにはSpaceに参加してください。',
+    free_time_select:    'Spaceを選択',
+    free_time_empty:     '選択した期間に共通の空き時間はありません。',
+    free_time_month_hint:'週/日ビューで空き時間が表示されます。',
   },
 
   date_suggest: {

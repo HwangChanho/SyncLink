@@ -357,6 +357,13 @@ const en = {
     weekday: {
       sun: 'Sun', mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat',
     },
+    // PRD 4.2 Tier 2 — Free time finder UI strings
+    free_time_show:      'Show free time',
+    free_time_hide:      'Hide free time',
+    free_time_no_space:  'Join a Space to see free time.',
+    free_time_select:    'Select Space',
+    free_time_empty:     'No common free time in the selected period.',
+    free_time_month_hint:'Free time appears in week/day view.',
   },
 
   reminder: {

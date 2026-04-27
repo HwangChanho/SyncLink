@@ -30,6 +30,7 @@ import {
   PanResponder,
 } from 'react-native';
 import type { EventSummary } from '@/types';
+import type { FreeSlot } from '@/types/freeTime';
 import { EventBlock } from './EventBlock';
 import { useColors } from '@/hooks/useColors';
 import { useTranslatedTitles } from '@/hooks/useTranslatedTitles';
@@ -83,6 +84,13 @@ interface WeekViewProps {
    * sees both events and due tasks on the same timeline.
    */
   todosByDate?: Record<string, { id: string; title: string; color: string }[]>;
+  /**
+   * PRD 4.2 Tier 2 — optional free-time slots to overlay on the time grid.
+   * Each slot is rendered as a translucent shaded band positioned by start
+   * and end clock times, clamped per day column. When undefined or empty,
+   * no overlay is drawn (toggle is off).
+   */
+  freeSlots?: FreeSlot[];
 }
 
 // ─── Date utilities ────────────────────────────────────────────────────────
@@ -207,6 +215,7 @@ export function WeekView({
   onDateSelect,
   onReschedule,
   todosByDate,
+  freeSlots,
 }: WeekViewProps) {
   // Resolve active theme colors for dark mode support (TASK-700)
   const colors = useColors();
@@ -283,6 +292,41 @@ export function WeekView({
     return ids;
   }, [weekDays, eventsByDate]);
   const translatedTitles = useTranslatedTitles(visibleEventIds);
+
+  /**
+   * PRD 4.2 Tier 2 — split provided freeSlots per visible day column.
+   * Each slot is clamped to the day's [00:00, 24:00) window and converted
+   * into pixel offset+height pairs the overlay layer renders. A slot that
+   * straddles midnight produces two entries (one per day). Memoised so the
+   * overlay only recomputes when the slots or the visible week change.
+   */
+  const freeSlotsByDayKey = useMemo(() => {
+    const map: Record<string, { topOffset: number; height: number }[]> = {};
+    if (!freeSlots || freeSlots.length === 0) return map;
+
+    for (const day of weekDays) {
+      const dayStart = new Date(day);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEndMs = dayStart.getTime() + 24 * 60 * 60_000;
+      const buckets: { topOffset: number; height: number }[] = [];
+
+      for (const slot of freeSlots) {
+        const startMs = Math.max(slot.start.getTime(), dayStart.getTime());
+        const endMs   = Math.min(slot.end.getTime(),   dayEndMs);
+        if (endMs <= startMs) continue;
+        // Convert to hour-of-day relative to the day's midnight
+        const topHours    = (startMs - dayStart.getTime()) / 3_600_000;
+        const heightHours = (endMs   - startMs)            / 3_600_000;
+        if (heightHours <= 0) continue;
+        buckets.push({
+          topOffset: topHours    * HOUR_HEIGHT,
+          height:    heightHours * HOUR_HEIGHT,
+        });
+      }
+      if (buckets.length > 0) map[toDateKey(day)] = buckets;
+    }
+    return map;
+  }, [freeSlots, weekDays]);
 
   // Determine if any day this week has all-day events OR planner todos
   // (the strip now hosts both so the user sees every day-scoped item in
@@ -435,6 +479,7 @@ export function WeekView({
               const timedEvents = dayEvents.filter((e) => !e.allDay);
               const layouts = computeLayout(timedEvents);
 
+              const slotsForDay = freeSlotsByDayKey[dateKey] ?? [];
               return (
                 <View
                   key={dateKey}
@@ -447,6 +492,22 @@ export function WeekView({
                     },
                   ]}
                 >
+                  {/*
+                    PRD 4.2 Tier 2 — free-time overlay: rendered before
+                    EventBlocks so events sit on top. testID lets the QA
+                    smoke test assert visibility per day.
+                  */}
+                  {slotsForDay.map((s, i) => (
+                    <View
+                      key={`free-${i}`}
+                      pointerEvents="none"
+                      testID={`week-free-slot-${dateKey}`}
+                      style={[
+                        styles.freeSlotOverlay,
+                        { top: s.topOffset, height: s.height },
+                      ]}
+                    />
+                  ))}
                   {layouts.map((lay) => {
                     const tt = translatedTitles.get(lay.event.id);
                     return (
@@ -615,6 +676,21 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     ...textStyles.caption,
     color: '#FFFFFF',
     fontWeight: '600',
+  },
+  /**
+   * PRD 4.2 Tier 2 — translucent shaded band marking a common free
+   * window. Uses theme primary at low alpha so it is visible in both
+   * light and dark mode without clashing with any event color. Sits
+   * underneath events because it is rendered first in the day column.
+   */
+  freeSlotOverlay: {
+    position: 'absolute',
+    left: 1,
+    right: 1,
+    backgroundColor: colors.primary + '22',
+    borderLeftWidth: 2,
+    borderLeftColor: colors.primary + '88',
+    borderRadius: radius.sm,
   },
   });
 }

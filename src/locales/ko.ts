@@ -366,6 +366,13 @@ const ko = {
     weekday: {
       sun: '일', mon: '월', tue: '화', wed: '수', thu: '목', fri: '금', sat: '토',
     },
+    // PRD 4.2 Tier 2 — Free time finder UI strings
+    free_time_show:      '빈 시간 보기',
+    free_time_hide:      '빈 시간 숨기기',
+    free_time_no_space:  '빈 시간을 보려면 Space에 참여하세요.',
+    free_time_select:    'Space 선택',
+    free_time_empty:     '선택한 기간에 모두 비어있는 시간이 없습니다.',
+    free_time_month_hint:'주/일 보기에서 빈 시간이 표시됩니다.',
   },
 
   reminder: {

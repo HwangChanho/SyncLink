@@ -369,4 +369,54 @@ describe('WeekView', () => {
       expect(blocks[0]!.props.event.id).toBe('evt-09');
     });
   });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PRD 4.2 Tier 2 — Free time overlay
+  // ══════════════════════════════════════════════════════════════════════════
+
+  describe('Free time overlay (PRD 4.2 Tier 2)', () => {
+    /**
+     * freeSlots prop 미전달 → overlay 미렌더링.
+     * testID 'week-free-slot-*' 가 전혀 존재하지 않아야 한다.
+     */
+    it('freeSlots prop 없으면 음영 overlay 미렌더링', () => {
+      const { queryAllByTestId } = render(<WeekView {...defaultProps} />);
+      expect(queryAllByTestId(/week-free-slot-/)).toHaveLength(0);
+    });
+
+    /**
+     * 단일 슬롯 (Mon 14:00 ~ 16:00) → 해당 날짜 column 에만 overlay 1개.
+     */
+    it('단일 freeSlot → 해당 날짜 column 에 음영 overlay 1개', () => {
+      const slots = [
+        {
+          start: new Date(2026, 0, 12, 14, 0),
+          end:   new Date(2026, 0, 12, 16, 0),
+          durationMinutes: 120,
+        },
+      ];
+      const { getAllByTestId } = render(
+        <WeekView {...defaultProps} freeSlots={slots} />,
+      );
+      const monKey = localDateKey(2026, 1, 12);
+      const overlays = getAllByTestId(`week-free-slot-${monKey}`);
+      expect(overlays).toHaveLength(1);
+      // 14:00 → topOffset = 14 * 60 = 840
+      expect(overlays[0]!.props.style).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ top: 14 * 60, height: 2 * 60 }),
+        ]),
+      );
+    });
+
+    /**
+     * 빈 배열 → overlay 미렌더링 (에러 없이 처리).
+     */
+    it('빈 freeSlots 배열 → overlay 미렌더링', () => {
+      const { queryAllByTestId } = render(
+        <WeekView {...defaultProps} freeSlots={[]} />,
+      );
+      expect(queryAllByTestId(/week-free-slot-/)).toHaveLength(0);
+    });
+  });
 });

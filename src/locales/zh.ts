@@ -346,6 +346,13 @@ const zh = {
     weekday: {
       sun: '日', mon: '一', tue: '二', wed: '三', thu: '四', fri: '五', sat: '六',
     },
+    // PRD 4.2 Tier 2 — Free time finder UI strings
+    free_time_show:      '查看空闲时间',
+    free_time_hide:      '隐藏空闲时间',
+    free_time_no_space:  '加入 Space 以查看空闲时间。',
+    free_time_select:    '选择 Space',
+    free_time_empty:     '所选时间段内无共同空闲时间。',
+    free_time_month_hint:'空闲时间将在周/日视图中显示。',
   },
 
   date_suggest: {

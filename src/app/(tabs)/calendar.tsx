@@ -40,9 +40,14 @@ import { subscribeToSharedEvents } from '@/services/eventRealtimeService';
 import { updateEvent } from '@/services/eventService';
 import { useTodoStore } from '@/stores/todoStore';
 import type { MonthViewItem } from '@/components/calendar/MonthView';
-import type { EventSummary, Category } from '@/types';
+import type { EventSummary, Category, SpaceSummary } from '@/types';
 import { useColors } from '@/hooks/useColors';
 import { getCategories } from '@/services/categoryService';
+// PRD 4.2 Tier 2 — Free time finder UI integration.
+import { useTranslation } from 'react-i18next';
+import { findFreeSlots } from '@/services/freeTimeService';
+import { getMySpaces } from '@/services/spaceService';
+import type { FreeSlot } from '@/types/freeTime';
 
 // ─── Swipe detection thresholds ───────────────────────────────────────────────
 
@@ -128,6 +133,8 @@ export default function CalendarScreen() {
   const colors = useColors();
   const styles = makeStyles(colors);
   const router = useRouter();
+  // PRD 4.2 Tier 2 — i18n for free-time UI strings.
+  const { t } = useTranslation();
   const { eventsByDate, fetchEvents, upsertEvent, removeEvent } = useEventStore();
   // Todos with a due date should surface on the calendar alongside events.
   const { todos, fetchTodos } = useTodoStore();
@@ -168,6 +175,112 @@ export default function CalendarScreen() {
 
   /** Density mode: detailed bars with titles, or compact colour dots. */
   const [monthDensity, setMonthDensity] = useState<'detailed' | 'compact'>('detailed');
+
+  // ── Free time finder (PRD 4.2 Tier 2) ─────────────────────────────────────
+  // State is declared first so the effects below can reference it without
+  // hitting the temporal dead zone.
+  /**
+   * Whether the "Show free time" overlay is enabled. When true we fetch
+   * common-free slots for the selected space(s) and the current view's
+   * date range, then pass them to WeekView/DayView for shaded rendering.
+   * Default OFF — opt-in feature.
+   */
+  const [freeTimeOn, setFreeTimeOn] = useState(false);
+  /** Cached list of spaces the current user belongs to. */
+  const [mySpaces, setMySpaces] = useState<SpaceSummary[]>([]);
+  /**
+   * IDs of spaces selected for the intersection. Default = all spaces
+   * (the most common "find time when everyone I share with is free"
+   * intent). Empty set means none selected → no slots fetched.
+   */
+  const [selectedSpaceIds, setSelectedSpaceIds] = useState<Set<string>>(new Set());
+  /** Free-time slots returned by the service for the current range. */
+  const [freeSlots, setFreeSlots] = useState<FreeSlot[]>([]);
+  /** Modal visibility for the Space chip-selector. */
+  const [spacePickerVisible, setSpacePickerVisible] = useState(false);
+  /**
+   * Loaded flag — used to distinguish "no slots yet because we haven't
+   * fetched" from "fetched and got zero". Drives the empty-state hint.
+   */
+  const [freeSlotsLoaded, setFreeSlotsLoaded] = useState(false);
+
+  /**
+   * Load the user's spaces once on mount so the chip selector and the
+   * free-time fetcher both have the list. Failures are non-fatal (the UI
+   * just stays in the "no space" empty state).
+   */
+  useEffect(() => {
+    let cancelled = false;
+    getMySpaces().then((spaces) => {
+      if (cancelled) return;
+      setMySpaces(spaces);
+      // Default-select every space the first time we load — otherwise
+      // the toggle wouldn't show anything because selectedSpaceIds is
+      // empty.
+      setSelectedSpaceIds((prev) => prev.size === 0
+        ? new Set(spaces.map((s) => s.id))
+        : prev);
+    }).catch(() => {/* non-fatal */});
+    return () => { cancelled = true; };
+  }, []);
+
+  /**
+   * Fetch free-time slots whenever the toggle is on AND the visible
+   * range or selected spaces change. We run the finder per space and
+   * concatenate — multiple-space deduplication is a Tier 3 concern.
+   *
+   * When the toggle flips off we clear the loaded flag; the views ignore
+   * the cached slots because we pass `undefined` to them.
+   */
+  useEffect(() => {
+    if (!freeTimeOn) {
+      setFreeSlotsLoaded(false);
+      return;
+    }
+    if (selectedSpaceIds.size === 0) {
+      setFreeSlots([]);
+      setFreeSlotsLoaded(true);
+      return;
+    }
+    let cancelled = false;
+    const range = getViewRange(selectedDate, viewMode);
+    const ids = Array.from(selectedSpaceIds);
+    Promise.all(ids.map((spaceId) =>
+      findFreeSlots(spaceId, range, { minSlotMinutes: 30 }).catch(() => [] as FreeSlot[]),
+    ))
+      .then((perSpace) => {
+        if (cancelled) return;
+        setFreeSlots(perSpace.flat());
+        setFreeSlotsLoaded(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setFreeSlots([]);
+        setFreeSlotsLoaded(true);
+      });
+    return () => { cancelled = true; };
+  }, [freeTimeOn, selectedSpaceIds, selectedDate, viewMode]);
+
+  /**
+   * Toggle the free-time overlay. Side effects (fetching) are handled by
+   * the effect above so this stays a pure UI toggle.
+   */
+  const toggleFreeTime = useCallback(() => {
+    setFreeTimeOn((prev) => !prev);
+  }, []);
+
+  /**
+   * Add or remove a space from the chip selector. The free-time fetcher
+   * effect re-runs automatically once selectedSpaceIds changes.
+   */
+  const toggleSpaceSelection = useCallback((spaceId: string) => {
+    setSelectedSpaceIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(spaceId)) next.delete(spaceId);
+      else next.add(spaceId);
+      return next;
+    });
+  }, []);
 
   /**
    * Group todos by due-date key. Only todos with a due date and not yet
@@ -433,6 +546,29 @@ export default function CalendarScreen() {
         </TouchableOpacity>
 
         {/*
+          PRD 4.2 Tier 2 — Free time toggle button. Sits to the right of
+          the density toggle, mirrored from the category filter on the
+          left so the header's two-corner balance is preserved. testID is
+          consumed by the QA smoke test and Tier-2 unit test.
+        */}
+        <TouchableOpacity
+          style={styles.freeTimeBtn}
+          testID="calendar-button-free-time"
+          onPress={toggleFreeTime}
+          onLongPress={() => setSpacePickerVisible(true)}
+          accessibilityLabel={freeTimeOn ? t('calendar.free_time_hide') : t('calendar.free_time_show')}
+        >
+          <Ionicons
+            name={freeTimeOn ? 'time' : 'time-outline'}
+            size={18}
+            color={freeTimeOn ? colors.primary : colors.textSecondary}
+          />
+          {freeTimeOn && (
+            <View style={[styles.catFilterBadge, { backgroundColor: colors.primary }]} />
+          )}
+        </TouchableOpacity>
+
+        {/*
           Month view only: toggle between detailed (title bars) and
           compact (colour dots) density. Right-side companion to the
           category filter button.
@@ -499,6 +635,7 @@ export default function CalendarScreen() {
               }}
               onReschedule={handleReschedule}
               todosByDate={todosByDate}
+              {...(freeTimeOn ? { freeSlots } : {})}
             />
           )}
 
@@ -508,7 +645,28 @@ export default function CalendarScreen() {
               events={todayEvents}
               onEventPress={handleEventPress}
               todos={todayTodos}
+              {...(freeTimeOn ? { freeSlots } : {})}
             />
+          )}
+
+          {/*
+            PRD 4.2 Tier 2 — contextual hint shown only when the toggle
+            is on. Helps the user understand why nothing changed if the
+            view/space combination yields no slots. Rendered as a small
+            banner above the body so it doesn't shift the calendar grid.
+          */}
+          {freeTimeOn && (
+            <View pointerEvents="none" style={styles.freeTimeHint} testID="free-time-hint">
+              <Text style={styles.freeTimeHintText}>
+                {viewMode === 'month'
+                  ? t('calendar.free_time_month_hint')
+                  : mySpaces.length === 0
+                    ? t('calendar.free_time_no_space')
+                    : freeSlotsLoaded && freeSlots.length === 0
+                      ? t('calendar.free_time_empty')
+                      : ''}
+              </Text>
+            </View>
           )}
         </Animated.View>
 
@@ -589,6 +747,62 @@ export default function CalendarScreen() {
             </Pressable>
           </Pressable>
         </Modal>
+
+        {/*
+          PRD 4.2 Tier 2 — Space chip selector. Long-press on the
+          free-time button opens this so users can narrow the
+          intersection to a subset of their spaces. Empty state guides
+          users to create / join a space first.
+        */}
+        <Modal
+          visible={spacePickerVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSpacePickerVisible(false)}
+        >
+          <Pressable
+            style={styles.catModalBackdrop}
+            onPress={() => setSpacePickerVisible(false)}
+          >
+            <Pressable
+              style={styles.catModalSheet}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <Text style={styles.catModalTitle}>{t('calendar.free_time_select')}</Text>
+              {mySpaces.length === 0 ? (
+                <Text style={styles.catModalHint}>
+                  {t('calendar.free_time_no_space')}
+                </Text>
+              ) : (
+                mySpaces.map((sp) => {
+                  const active = selectedSpaceIds.has(sp.id);
+                  return (
+                    <TouchableOpacity
+                      key={sp.id}
+                      style={styles.catModalRow}
+                      onPress={() => toggleSpaceSelection(sp.id)}
+                      activeOpacity={0.7}
+                      testID={`free-time-space-${sp.id}`}
+                    >
+                      <View style={[styles.catModalDot, { backgroundColor: colors.primary }]} />
+                      <Text
+                        style={[styles.catModalName, !active && { opacity: 0.45 }]}
+                        numberOfLines={1}
+                      >
+                        {sp.name}
+                      </Text>
+                      <Ionicons
+                        name={active ? 'checkmark-circle' : 'ellipse-outline'}
+                        size={22}
+                        color={active ? colors.primary : colors.border}
+                      />
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </Pressable>
+          </Pressable>
+        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -645,6 +859,44 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 5,
+    },
+    /**
+     * PRD 4.2 Tier 2 — free-time toggle button. Top-right pair to the
+     * top-left category filter so the header has visual symmetry.
+     * Long-press opens the Space picker modal.
+     */
+    freeTimeBtn: {
+      position: 'absolute',
+      top: 12,
+      right: 12,
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 5,
+    },
+    /**
+     * PRD 4.2 Tier 2 — small banner above the calendar body shown only
+     * while the toggle is on. Renders contextual hints
+     * (no-space / month-only / empty-result).
+     */
+    freeTimeHint: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      top: 0,
+      paddingVertical: 4,
+      paddingHorizontal: 12,
+      backgroundColor: colors.surface,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      zIndex: 4,
+      alignItems: 'center',
+    },
+    freeTimeHintText: {
+      fontSize: 12,
+      color: colors.textSecondary,
     },
     catModalBackdrop: {
       flex: 1,

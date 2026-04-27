@@ -17,6 +17,7 @@ import { useMemo, useRef } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { EventSummary } from '@/types';
+import type { FreeSlot } from '@/types/freeTime';
 import { EventBlock } from './EventBlock';
 import { useColors } from '@/hooks/useColors';
 import { useTranslatedTitles } from '@/hooks/useTranslatedTitles';
@@ -114,6 +115,11 @@ interface DayViewProps {
    * items alongside all-day events.
    */
   todos?: { id: string; title: string; color: string }[];
+  /**
+   * PRD 4.2 Tier 2 — optional free-time slots to overlay on the time
+   * grid. Slots outside the displayed day are clipped automatically.
+   */
+  freeSlots?: FreeSlot[];
 }
 
 /**
@@ -121,10 +127,11 @@ interface DayViewProps {
  * Scrolls vertically to cover the full 24 hours.
  */
 export function DayView({
-  selectedDate: _selectedDate,
+  selectedDate,
   events,
   onEventPress,
   todos,
+  freeSlots,
 }: DayViewProps) {
   // Resolve active theme colors for dark mode support (TASK-700)
   const { t } = useTranslation();
@@ -150,6 +157,35 @@ export function DayView({
   // All-day events (endAt === startAt or allDay flag)
   const allDayEvents = events.filter((e) => e.allDay);
   const timedEvents = layouts.filter((l) => !l.event.allDay);
+
+  /**
+   * PRD 4.2 Tier 2 — clip provided freeSlots to the visible day's
+   * [00:00, 24:00) window and convert to pixel offset+height pairs.
+   * Memoised so the overlay only recomputes when slots or selectedDate
+   * change.
+   */
+  const freeSlotBands = useMemo(() => {
+    if (!freeSlots || freeSlots.length === 0) return [];
+    const dayStart = new Date(selectedDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayStartMs = dayStart.getTime();
+    const dayEndMs   = dayStartMs + 24 * 60 * 60_000;
+
+    const out: { topOffset: number; height: number }[] = [];
+    for (const slot of freeSlots) {
+      const startMs = Math.max(slot.start.getTime(), dayStartMs);
+      const endMs   = Math.min(slot.end.getTime(),   dayEndMs);
+      if (endMs <= startMs) continue;
+      const topHours    = (startMs - dayStartMs) / 3_600_000;
+      const heightHours = (endMs   - startMs)    / 3_600_000;
+      if (heightHours <= 0) continue;
+      out.push({
+        topOffset: topHours    * HOUR_HEIGHT,
+        height:    heightHours * HOUR_HEIGHT,
+      });
+    }
+    return out;
+  }, [freeSlots, selectedDate]);
 
   // Sprint 19 TASK-1907 — cache-only translated titles for the day's events.
   const visibleEventIds = useMemo(() => events.map((e) => e.id), [events]);
@@ -252,6 +288,22 @@ export function DayView({
                     styles.hourLine,
                     { top: h * HOUR_HEIGHT },
                     h % 6 === 0 && styles.majorHourLine,
+                  ]}
+                />
+              ))}
+
+              {/*
+                PRD 4.2 Tier 2 — free-time overlay bands. Rendered
+                before EventBlocks so events stack on top.
+              */}
+              {freeSlotBands.map((s, i) => (
+                <View
+                  key={`free-${i}`}
+                  pointerEvents="none"
+                  testID="day-free-slot"
+                  style={[
+                    styles.freeSlotOverlay,
+                    { top: s.topOffset, height: s.height },
                   ]}
                 />
               ))}
@@ -389,6 +441,20 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   emptyText: {
     ...textStyles.bodySm,
     color: colors.textTertiary,
+  },
+  /**
+   * PRD 4.2 Tier 2 — translucent shaded band marking a common free
+   * window in the day grid. Same visual language as WeekView for
+   * consistency.
+   */
+  freeSlotOverlay: {
+    position: 'absolute',
+    left: spacing[1],
+    right: spacing[1],
+    backgroundColor: colors.primary + '22',
+    borderLeftWidth: 2,
+    borderLeftColor: colors.primary + '88',
+    borderRadius: 4,
   },
   });
 }
