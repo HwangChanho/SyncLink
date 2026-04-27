@@ -15,84 +15,23 @@
  * should pass `onYearMonthPress` instead.
  */
 
-import { Animated, View, Text, TouchableOpacity, StyleSheet, Easing } from 'react-native';
-import { useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles, fontWeight } from '@/constants/typography';
 
 /**
- * Subtle "more content this way" swipe hint rendered on either side of the
- * period title.
- *
- * Design note — previous iteration used bouncing chevrons which felt
- * cartoonish. This replacement renders three small dots whose opacity
- * cascades outward in a soft wave (inner dot → outer dot). The cadence is
- * slow (~1.6 s) so it reads as ambient rather than demanding. The only
- * visual motion is opacity; no translation, no bounce.
+ * NOTE — ISSUE-017 (2026-04-28):
+ * The previous `SwipeHint` component rendered three pulsing dots on either
+ * side of the title. Even after dimming the opacity twice, LEAD reported
+ * that the dots still read like punctuation ("일.") next to the day-mode
+ * tab and the Sunday DOW label. Since the swipe gesture is already
+ * discoverable (every horizontal drag on the calendar surface navigates
+ * the period), the visual hint adds noise without information. Removed
+ * entirely. Re-introduce only if usability testing shows users miss the
+ * gesture.
  */
-function SwipeHint({ direction }: { direction: 'left' | 'right' }) {
-  const colors = useColors();
-  const dotCount = 3;
-  // Keep one Animated.Value per dot so each can phase independently.
-  const values = useRef(
-    Array.from({ length: dotCount }, () => new Animated.Value(0.08)),
-  ).current;
-
-  useEffect(() => {
-    // Dimmed further per LEAD feedback — earlier values made the dots
-    // read like punctuation next to the month-mode tabs ("일.").
-    const MIN = 0.04;
-    const MAX = 0.14;
-    const STEP_MS = 520;
-    // Kick off each dot with a staggered delay so the wave walks outward.
-    // For the left-hand hint the wave runs right → left (closer dot first
-    // for "come this way" feel); right hand mirrors.
-    const stagger = direction === 'left' ? [0, 1, 2] : [2, 1, 0];
-    const loops = values.map((v, i) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(stagger[i]! * (STEP_MS / 2)),
-          Animated.timing(v, {
-            toValue: MAX,
-            duration: STEP_MS,
-            easing: Easing.inOut(Easing.quad),
-            useNativeDriver: true,
-          }),
-          Animated.timing(v, {
-            toValue: MIN,
-            duration: STEP_MS,
-            easing: Easing.inOut(Easing.quad),
-            useNativeDriver: true,
-          }),
-        ]),
-      ),
-    );
-    loops.forEach((l) => l.start());
-    return () => loops.forEach((l) => l.stop());
-  }, [direction, values]);
-
-  // Outer-to-inner order so the rendered row visually walks toward the title.
-  const ordered = direction === 'left' ? [...values].reverse() : values;
-
-  return (
-    <View style={{ flexDirection: 'row', gap: 3 }} pointerEvents="none">
-      {ordered.map((v, i) => (
-        <Animated.View
-          key={i}
-          style={{
-            width: 4,
-            height: 4,
-            borderRadius: 2,
-            backgroundColor: colors.textSecondary,
-            opacity: v,
-          }}
-        />
-      ))}
-    </View>
-  );
-}
 
 /** The three calendar display modes. */
 export type ViewMode = 'month' | 'week' | 'day';
@@ -138,8 +77,13 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
  * All three modes show year/month/day (the bug was: "월. " — only the
  * month escaped from a half-localised format).
  *
+ * ISSUE-016 (2026-04-28): Month mode now also receives the selected day
+ * so the header reads "2026년 4월 28일" instead of "2026년 4월". This
+ * makes it obvious which date the user has tapped — previously only
+ * day mode surfaced the day number.
+ *
  * Translation contract (calendar.title.*):
- *   - month: "{{year}} / {{month}}"
+ *   - month: "{{year}} / {{month}} / {{day}}"
  *   - week:  "{{year}} / {{startMonth}}-{{startDay}} ~ {{endMonth}}-{{endDay}}"
  *   - day:   "{{year}} / {{month}} / {{day}} ({{dow}})"
  */
@@ -153,9 +97,11 @@ function buildTitle(
 ): string {
   const y = date.getFullYear();
   const m = date.getMonth() + 1;
+  const d = date.getDate();
 
   if (mode === 'month') {
-    return String(t('calendar.title.month', { year: y, month: m }));
+    // Pass `day` so the i18n key can render "{{year}}년 {{month}}월 {{day}}일".
+    return String(t('calendar.title.month', { year: y, month: m, day: d }));
   }
 
   if (mode === 'week') {
@@ -172,7 +118,7 @@ function buildTitle(
     }));
   }
 
-  const d = date.getDate();
+  // Day mode reuses the same `d` declared above.
   const dowKey = DOW_KEYS[date.getDay()] ?? 'sun';
   const dow = String(t(`calendar.weekday.${dowKey}`));
   return String(t('calendar.title.day', { year: y, month: m, day: d, dow }));
@@ -217,14 +163,15 @@ export function CalendarHeader({
       {/* ─── Period navigation row ─── */}
       {/*
         Arrows were removed in favour of horizontal swipe gestures (already
-        wired via PanResponder on the calendar screen).  The title now
-        centres itself and still opens the YearMonthPicker when tapped.
-        A subtle bouncing-chevron animation on either side hints that the
-        whole surface is swipeable.
+        wired via PanResponder on the calendar screen). The title centres
+        itself and opens the YearMonthPicker when tapped.
+
+        ISSUE-017 (2026-04-28): The flanking SwipeHint dots were removed
+        because LEAD reported they read like punctuation next to the
+        "일"/"Sun" labels even after dimming. The swipe gesture is
+        self-discoverable, so the hint added noise without value.
       */}
       <View style={styles.navRow}>
-        <SwipeHint direction="left" />
-
         <TouchableOpacity
           onPress={onYearMonthPress ?? onToday}
           hitSlop={HIT_SLOP}
@@ -237,8 +184,6 @@ export function CalendarHeader({
             <Text style={styles.titleChevron}>▾</Text>
           </View>
         </TouchableOpacity>
-
-        <SwipeHint direction="right" />
       </View>
 
       {/* ─── View mode tabs ─── */}

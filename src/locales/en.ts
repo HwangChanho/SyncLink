@@ -346,7 +346,7 @@ const en = {
 
   calendar: {
     title: {
-      month: '{{month}}/{{year}}',
+      month: '{{month}}/{{day}}/{{year}}',
       week:  '{{startMonth}}/{{startDay}} – {{endMonth}}/{{endDay}}, {{year}}',
       day:   '{{month}}/{{day}}/{{year}} ({{dow}})',
     },

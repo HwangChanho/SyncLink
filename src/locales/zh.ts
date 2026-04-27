@@ -335,7 +335,7 @@ const zh = {
 
   calendar: {
     title: {
-      month: '{{year}}年{{month}}月',
+      month: '{{year}}年{{month}}月{{day}}日',
       week:  '{{year}}年 {{startMonth}}月{{startDay}}日 ~ {{endMonth}}月{{endDay}}日',
       day:   '{{year}}年{{month}}月{{day}}日 ({{dow}})',
     },

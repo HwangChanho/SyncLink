@@ -350,7 +350,7 @@ const ko = {
 
   calendar: {
     title: {
-      month: '{{year}}년 {{month}}월',
+      month: '{{year}}년 {{month}}월 {{day}}일',
       week:  '{{year}}년 {{startMonth}}월 {{startDay}}일 ~ {{endMonth}}월 {{endDay}}일',
       day:   '{{year}}년 {{month}}월 {{day}}일 ({{dow}})',
     },
