@@ -37,6 +37,7 @@ import { showAlert } from '@/lib/webAlert';
 import { logError } from '@/lib/errorLogger';
 import type { SpaceSummary } from '@/types';
 import { SettingsSection } from '@/components/my/SettingsSection';
+import { LinkedAccountsSection } from '@/components/my/LinkedAccountsSection';
 import { ServiceInfoSection } from '@/components/my/ServiceInfoSection';
 import { AccountSection } from '@/components/my/AccountSection';
 import { DevDashboard } from '@/components/DevDashboard';
@@ -486,6 +487,9 @@ export default function MyScreen() {
             </TouchableOpacity>
           </View>
         )}
+
+        {/* ── Linked accounts (TASK-002 / ADR-010) ─────────────────── */}
+        <LinkedAccountsSection />
 
         <SettingsSection />
 
