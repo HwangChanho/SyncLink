@@ -18,52 +18,45 @@ env:
       text: "SyncLink"
     timeout: 10000
 
-# Dev 전용 이메일 입력 필드가 보일 때까지 대기
+# Dev 전용 이메일 입력 필드가 보일 때까지 대기 (한/영 bilingual — TASK-007 / ADR-011)
 - extendedWaitUntil:
     visible:
-      text: "이메일로 로그인"
+      id: "login-dev-submit"
     timeout: 5000
 
-# 이메일 입력
+# 이메일 입력 (testID 우선)
 - tapOn:
-    label: "이메일 주소 입력"
-    optional: true
-- runFlow:
-    when:
-      notVisible:
-        label: "이메일 주소 입력"
-    commands:
-      - tapOn:
-          index: 0
-          below:
-            text: "개발자 로그인"
+    id: "login-dev-email"
 - eraseText
 - inputText: ${TEST_EMAIL}
 
 # 비밀번호 입력
 - tapOn:
-    label: "비밀번호 입력"
-    optional: true
+    id: "login-dev-password"
 - eraseText
 - inputText: ${TEST_PASSWORD}
 
 # 로그인 버튼 탭
 - tapOn:
-    text: "이메일로 로그인"
+    id: "login-dev-submit"
 
 - waitForAnimationToEnd
 
 - takeScreenshot: screenshots/01_after_login
 
-# 홈 탭 도달 확인
+# 홈 탭 도달 확인 (한/영 bilingual)
 - extendedWaitUntil:
     visible:
-      text: "홈"
+      text: "홈|Home"
     timeout: 15000
 
-- assertVisible: "홈"
-- assertVisible: "캘린더"
-- assertVisible: "플래너"
-- assertVisible: "내 정보"
+- assertVisible:
+    text: "홈|Home"
+- assertVisible:
+    text: "캘린더|Calendar"
+- assertVisible:
+    text: "플래너|Planner"
+- assertVisible:
+    text: "내 정보|My"
 
 - takeScreenshot: screenshots/01_home_tab

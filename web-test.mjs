@@ -250,9 +250,10 @@ try {
 } catch(e) { fail('다크모드 설정 접근', e.message.slice(0, 80)); }
 
 try {
-  // 알림: t('notification.event_reminder') = '일정 알림'(ko) / 'Event Reminder'(en)
+  // 알림: t('notification.event_reminder') = '일정 리마인더'(ko) / 'Event Reminder'(en)
+  // — '일정 알림' 옛 텍스트, 현재 ko는 '일정 리마인더'로 통일됨 (Sprint 22 R3 수정)
   await Promise.any([
-    page.click('text=일정 알림', { timeout: 5000 }),
+    page.click('text=일정 리마인더', { timeout: 5000 }),
     page.click('text=Event Reminder', { timeout: 5000 }),
   ]);
   await page.waitForTimeout(1500);
