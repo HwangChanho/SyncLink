@@ -27,7 +27,7 @@ jest.mock('@/lib/supabase', () => ({
 // ─── Imports ──────────────────────────────────────────────────────────────────
 
 import { supabase } from '@/lib/supabase';
-import { findFreeTimeSlots } from '@/services/freeTimeService';
+import { findFreeTimeSlots, findFreeSlots } from '@/services/freeTimeService';
 import type { DateRange } from '@/types';
 
 // ─── 헬퍼 ────────────────────────────────────────────────────────────────────
@@ -432,5 +432,147 @@ describe('findFreeTimeSlots', () => {
 
       expect(result[0].participantIds).toEqual(['user-a', 'user-b']);
     });
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// findFreeSlots (PRD 4.2 Tier 1) — 신규 API 단위 테스트
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * findFreeSlots는 옵션 객체 시그니처와 `start`/`end` 필드 (PRD 사양) 사용.
+ * - 기본 minSlotMinutes: 30 (findFreeTimeSlots의 60과 다름)
+ * - participantUserIds 옵션 시 space_members 쿼리 생략
+ *
+ * 5개 미션 요구 케이스를 모두 커버:
+ *  1. 일정 없음 → 전체 range
+ *  2. 일정 1개 → 앞/뒤 2 슬롯
+ *  3. 일정 2개 겹침 → 정확한 빈 슬롯
+ *  4. minSlotMinutes 필터 적용
+ *  5. 다중 참가자 (participantUserIds 명시) 일정 교집합
+ */
+describe('findFreeSlots (PRD 4.2 Tier 1)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  // ── 1. 일정 없음 → 전체 range 반환 ──────────────────────────────────────
+  it('일정 없음 → 전체 range 반환 (기본 minSlotMinutes=30)', async () => {
+    const memberChain = makeChain({ data: memberData, error: null });
+    const eventChain  = makeChain({ data: [], error: null });
+    (supabase.from as jest.Mock)
+      .mockReturnValueOnce(memberChain)
+      .mockReturnValueOnce(eventChain);
+
+    const result = await findFreeSlots('space-1', workDayRange);
+
+    expect(result).toHaveLength(1);
+    // PRD 스펙: start/end 필드 (startAt/endAt 아님)
+    expect(result[0].start).toEqual(workDayRange.start);
+    expect(result[0].end).toEqual(workDayRange.end);
+    expect(result[0].durationMinutes).toBe(480);
+  });
+
+  // ── 2. 일정 1개 → 앞/뒤 2 슬롯 ─────────────────────────────────────────
+  it('일정 1개 → 앞/뒤 2 슬롯 반환', async () => {
+    // 11:00~12:00 이벤트 (workDayRange: 09:00~17:00)
+    const event = {
+      user_id:  'user-a',
+      start_at: '2026-04-20T11:00:00.000Z',
+      end_at:   '2026-04-20T12:00:00.000Z',
+      all_day:  false,
+    };
+    const memberChain = makeChain({ data: memberData, error: null });
+    const eventChain  = makeChain({ data: [event], error: null });
+    (supabase.from as jest.Mock)
+      .mockReturnValueOnce(memberChain)
+      .mockReturnValueOnce(eventChain);
+
+    const result = await findFreeSlots('space-1', workDayRange);
+
+    expect(result).toHaveLength(2);
+    // 첫 슬롯: 09:00~11:00 (120분)
+    expect(result[0].start).toEqual(new Date('2026-04-20T09:00:00.000Z'));
+    expect(result[0].end).toEqual(new Date('2026-04-20T11:00:00.000Z'));
+    expect(result[0].durationMinutes).toBe(120);
+    // 둘째 슬롯: 12:00~17:00 (300분)
+    expect(result[1].start).toEqual(new Date('2026-04-20T12:00:00.000Z'));
+    expect(result[1].end).toEqual(new Date('2026-04-20T17:00:00.000Z'));
+    expect(result[1].durationMinutes).toBe(300);
+  });
+
+  // ── 3. 일정 2개 겹침 → 정확한 빈 슬롯 ──────────────────────────────────
+  it('일정 2개 겹침 → 머지 후 정확한 빈 슬롯 반환', async () => {
+    // 이벤트 A: 10:00~12:00 (user-a), 이벤트 B: 11:00~14:00 (user-b)
+    // 머지 결과: 10:00~14:00 → free: 09:00~10:00, 14:00~17:00
+    const events = [
+      { user_id: 'user-a', start_at: '2026-04-20T10:00:00.000Z', end_at: '2026-04-20T12:00:00.000Z', all_day: false },
+      { user_id: 'user-b', start_at: '2026-04-20T11:00:00.000Z', end_at: '2026-04-20T14:00:00.000Z', all_day: false },
+    ];
+    const memberChain = makeChain({ data: memberData, error: null });
+    const eventChain  = makeChain({ data: events, error: null });
+    (supabase.from as jest.Mock)
+      .mockReturnValueOnce(memberChain)
+      .mockReturnValueOnce(eventChain);
+
+    const result = await findFreeSlots('space-1', workDayRange);
+
+    expect(result).toHaveLength(2);
+    expect(result[0].durationMinutes).toBe(60);  // 09:00~10:00
+    expect(result[0].end).toEqual(new Date('2026-04-20T10:00:00.000Z'));
+    expect(result[1].start).toEqual(new Date('2026-04-20T14:00:00.000Z'));
+    expect(result[1].durationMinutes).toBe(180); // 14:00~17:00
+  });
+
+  // ── 4. minSlotMinutes 필터 적용 ────────────────────────────────────────
+  it('minSlotMinutes 옵션이 짧은 gap을 필터', async () => {
+    // 09:30~16:30 이벤트 → 앞 30분, 뒤 30분 gap
+    const event = {
+      user_id:  'user-a',
+      start_at: '2026-04-20T09:30:00.000Z',
+      end_at:   '2026-04-20T16:30:00.000Z',
+      all_day:  false,
+    };
+    const memberChain = makeChain({ data: memberData, error: null });
+    const eventChain  = makeChain({ data: [event], error: null });
+    (supabase.from as jest.Mock)
+      .mockReturnValueOnce(memberChain)
+      .mockReturnValueOnce(eventChain);
+
+    // minSlotMinutes=60 → 30분 gap 둘 다 제외
+    const result = await findFreeSlots('space-1', workDayRange, { minSlotMinutes: 60 });
+
+    expect(result).toEqual([]);
+  });
+
+  // ── 5. 다중 참가자 (participantUserIds) 일정 교집합 ────────────────────
+  it('participantUserIds 옵션 시 space_members 쿼리 생략하고 지정한 user들의 교집합 계산', async () => {
+    // user-c와 user-d만 명시 → space_members 쿼리는 호출되지 않음
+    // 이벤트: user-c가 10:00~11:00, user-d가 14:00~15:00 → free: 3 슬롯
+    const events = [
+      { user_id: 'user-c', start_at: '2026-04-20T10:00:00.000Z', end_at: '2026-04-20T11:00:00.000Z', all_day: false },
+      { user_id: 'user-d', start_at: '2026-04-20T14:00:00.000Z', end_at: '2026-04-20T15:00:00.000Z', all_day: false },
+    ];
+    const eventChain = makeChain({ data: events, error: null });
+    // 첫 from() 호출이 events여야 함 (space_members 호출 없음)
+    (supabase.from as jest.Mock).mockReturnValueOnce(eventChain);
+
+    const result = await findFreeSlots(
+      'space-1',
+      workDayRange,
+      { participantUserIds: ['user-c', 'user-d'], minSlotMinutes: 30 },
+    );
+
+    // space_members 호출 없이 events만 1회 호출
+    expect(supabase.from).toHaveBeenCalledTimes(1);
+    expect(supabase.from).toHaveBeenCalledWith('events');
+    // 지정된 user IDs로 in() 쿼리
+    expect(eventChain.in).toHaveBeenCalledWith('user_id', ['user-c', 'user-d']);
+
+    // free 슬롯: 09:00~10:00 (60분), 11:00~14:00 (180분), 15:00~17:00 (120분)
+    expect(result).toHaveLength(3);
+    expect(result[0].durationMinutes).toBe(60);
+    expect(result[1].durationMinutes).toBe(180);
+    expect(result[2].durationMinutes).toBe(120);
   });
 });
