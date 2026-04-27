@@ -74,6 +74,10 @@ jest.mock('@/lib/supabase', () => ({
       onAuthStateChange: jest.fn(),
       signOut: jest.fn(),
       getUser: jest.fn(),
+      // TASK-002 / ADR-010: multi-provider linkIdentity
+      linkIdentity: jest.fn(),
+      unlinkIdentity: jest.fn(),
+      getUserIdentities: jest.fn(),
     },
     from: jest.fn(),
     // Edge Functions client — used by deleteAccount
@@ -108,6 +112,9 @@ import {
   getUserProfile,
   updateProfile,
   deleteAccount,
+  linkProvider,
+  unlinkProvider,
+  getLinkedProviders,
 } from '@/services/authService';
 import type { UserRow } from '@/types';
 
@@ -1013,6 +1020,80 @@ describe('authService', () => {
       await expect(deleteAccount()).rejects.toThrow();
       // signOut should NOT be called when deletion fails
       expect(supabase.auth.signOut).not.toHaveBeenCalled();
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // TASK-002 / ADR-010: linkProvider / unlinkProvider / getLinkedProviders
+  // ════════════════════════════════════════════════════════════════════════════
+
+  describe('linkProvider (ISSUE-014 / ADR-010)', () => {
+    it('세션 없을 때 throw', async () => {
+      (supabase.auth.getSession as jest.Mock).mockResolvedValue({
+        data: { session: null },
+        error: null,
+      });
+      await expect(linkProvider('google')).rejects.toThrow('먼저 로그인');
+    });
+
+    it('세션 있고 linkIdentity 성공', async () => {
+      (supabase.auth.getSession as jest.Mock).mockResolvedValue({
+        data: { session: { access_token: 't', refresh_token: 'r', expires_at: 0, user: { id: 'u' } } },
+        error: null,
+      });
+      (supabase.auth.linkIdentity as jest.Mock).mockResolvedValue({ error: null });
+      await expect(linkProvider('kakao')).resolves.toBeUndefined();
+      expect(supabase.auth.linkIdentity).toHaveBeenCalledWith({ provider: 'kakao' });
+    });
+
+    it('linkIdentity 에러 throw', async () => {
+      (supabase.auth.getSession as jest.Mock).mockResolvedValue({
+        data: { session: { access_token: 't', refresh_token: 'r', expires_at: 0, user: { id: 'u' } } },
+        error: null,
+      });
+      (supabase.auth.linkIdentity as jest.Mock).mockResolvedValue({
+        error: new Error('Identity already linked'),
+      });
+      await expect(linkProvider('apple')).rejects.toThrow('Identity already linked');
+    });
+  });
+
+  describe('getLinkedProviders', () => {
+    it('연결된 provider 배열 반환', async () => {
+      (supabase.auth.getUserIdentities as jest.Mock).mockResolvedValue({
+        data: { identities: [{ provider: 'google' }, { provider: 'kakao' }] },
+        error: null,
+      });
+      await expect(getLinkedProviders()).resolves.toEqual(['google', 'kakao']);
+    });
+
+    it('identities 없으면 빈 배열', async () => {
+      (supabase.auth.getUserIdentities as jest.Mock).mockResolvedValue({
+        data: { identities: [] },
+        error: null,
+      });
+      await expect(getLinkedProviders()).resolves.toEqual([]);
+    });
+  });
+
+  describe('unlinkProvider', () => {
+    it('해당 provider identity 찾아 unlink', async () => {
+      const target = { provider: 'kakao', id: 'iden-123' };
+      (supabase.auth.getUserIdentities as jest.Mock).mockResolvedValue({
+        data: { identities: [{ provider: 'google', id: 'g' }, target] },
+        error: null,
+      });
+      (supabase.auth.unlinkIdentity as jest.Mock).mockResolvedValue({ error: null });
+      await expect(unlinkProvider('kakao')).resolves.toBeUndefined();
+      expect(supabase.auth.unlinkIdentity).toHaveBeenCalledWith(target);
+    });
+
+    it('연결 안 된 provider 해제 시 throw', async () => {
+      (supabase.auth.getUserIdentities as jest.Mock).mockResolvedValue({
+        data: { identities: [{ provider: 'google', id: 'g' }] },
+        error: null,
+      });
+      await expect(unlinkProvider('apple')).rejects.toThrow('연결되지 않았습니다');
     });
   });
 });
