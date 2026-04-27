@@ -29,43 +29,45 @@ env:
       - tapOn:
           text: "허용 안 함"
 
-# Dev 전용 이메일 입력 필드가 보일 때까지 대기 (한국어 locale 시뮬 가정)
-# 영어 locale은 별도 flow 또는 Maestro regex (다음 라운드)
+# Dev 전용 입력 필드 (testID 사용 — locale 무관, ADR-011)
 - extendedWaitUntil:
     visible:
-      text: "이메일로 로그인"
-    timeout: 5000
+      id: "login-dev-submit"
+    timeout: 10000
 
 # 이메일 입력
 - tapOn:
-    text: "이메일"
-    index: 0
+    id: "login-dev-email"
 - eraseText
 - inputText: ${TEST_EMAIL}
 
 # 비밀번호 입력
 - tapOn:
-    text: "비밀번호"
+    id: "login-dev-password"
 - eraseText
 - inputText: ${TEST_PASSWORD}
 
 # 로그인 버튼 탭
 - tapOn:
-    text: "이메일로 로그인"
+    id: "login-dev-submit"
 
 - waitForAnimationToEnd
 
 - takeScreenshot: screenshots/01_after_login
 
-# 홈 탭 도달 확인 (한국어 가정)
+# 홈 탭 도달 확인 (testID 사용 — locale 무관)
 - extendedWaitUntil:
     visible:
-      text: "홈"
+      id: "tab-button-home"
     timeout: 15000
 
-- assertVisible: "홈"
-- assertVisible: "캘린더"
-- assertVisible: "플래너"
-- assertVisible: "내 정보"
+- assertVisible:
+    id: "tab-button-home"
+- assertVisible:
+    id: "tab-button-calendar"
+- assertVisible:
+    id: "tab-button-planner"
+- assertVisible:
+    id: "tab-button-my"
 
 - takeScreenshot: screenshots/01_home_tab
