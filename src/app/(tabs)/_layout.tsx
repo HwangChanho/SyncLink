@@ -10,7 +10,7 @@
  */
 
 import { Tabs } from 'expo-router';
-import { Platform } from 'react-native';
+import { Platform, Pressable } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
@@ -86,6 +86,8 @@ export default function TabLayout() {
         name="index"
         options={{
           title: t('tabs.home'),
+          // TASK-008 / ADR-011: testID via tabBarButton (Tabs.Screen 자체에 tabBarTestID 미지원)
+          tabBarButton: (props) => <Pressable {...(props as object)} testID="tab-button-home" />,
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? 'home' : 'home-outline'}
@@ -99,6 +101,7 @@ export default function TabLayout() {
         name="calendar"
         options={{
           title: t('tabs.calendar'),
+          tabBarButton: (props) => <Pressable {...(props as object)} testID="tab-button-calendar" />,
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? 'calendar' : 'calendar-outline'}
@@ -112,6 +115,7 @@ export default function TabLayout() {
         name="planner"
         options={{
           title: t('tabs.planner'),
+          tabBarButton: (props) => <Pressable {...(props as object)} testID="tab-button-planner" />,
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? 'checkbox' : 'checkbox-outline'}
@@ -125,6 +129,7 @@ export default function TabLayout() {
         name="my"
         options={{
           title: t('tabs.my'),
+          tabBarButton: (props) => <Pressable {...(props as object)} testID="tab-button-my" />,
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? 'person-circle' : 'person-circle-outline'}
