@@ -22,10 +22,10 @@ env:
 # ── 2. Dev 로그인 ─────────────────────────────────────────────────────────────
 - tapOn:
     text: "이메일"
-- typeText: ${TEST_EMAIL}
+- inputText: ${TEST_EMAIL}
 - tapOn:
     text: "비밀번호"
-- typeText: ${TEST_PASSWORD}
+- inputText: ${TEST_PASSWORD}
 - tapOn:
     text: "이메일로 로그인"
 - waitForAnimationToEnd
@@ -55,7 +55,7 @@ env:
 - tapOn:
     label: "새 일정 만들기"
 - waitForAnimationToEnd
-- typeText: "E2E 골든패스 이벤트"
+- inputText: "E2E 골든패스 이벤트"
 - takeScreenshot: screenshots/gp_06_event_form
 - tapOn:
     text: "저장"
@@ -76,7 +76,7 @@ env:
       - tapOn:
           label: "새 할일 만들기"
 - waitForAnimationToEnd
-- typeText: "E2E 골든패스 할일"
+- inputText: "E2E 골든패스 할일"
 - tapOn:
     text: "저장"
     optional: true

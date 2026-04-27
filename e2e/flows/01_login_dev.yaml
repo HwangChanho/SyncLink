@@ -37,15 +37,15 @@ env:
           index: 0
           below:
             text: "개발자 로그인"
-- clearText
-- typeText: ${TEST_EMAIL}
+- eraseText
+- inputText: ${TEST_EMAIL}
 
 # 비밀번호 입력
 - tapOn:
     label: "비밀번호 입력"
     optional: true
-- clearText
-- typeText: ${TEST_PASSWORD}
+- eraseText
+- inputText: ${TEST_PASSWORD}
 
 # 로그인 버튼 탭
 - tapOn:
