@@ -609,6 +609,76 @@ export async function findConflictingEvents(
   }
 }
 
+// ─── Fork (IDEA-018) ──────────────────────────────────────────────────────────
+
+/**
+ * Fork a shared event into the current user's personal calendar.
+ *
+ * Creates a brand-new events row owned by the caller (current user_id),
+ * copying all metadata fields from the original event. The new row has:
+ *  - space_id: null  — not linked to any Space (private copy)
+ *  - No event_shares — the fork is fully independent from the original
+ *
+ * This function throws if:
+ *  - The caller is not authenticated
+ *  - The original event cannot be read (not shared to any of the user's spaces)
+ *  - The caller already owns the original event (would be a no-op / confusing)
+ *
+ * RLS note: The INSERT is on the caller's own user_id, so standard RLS applies.
+ * The SELECT on the source event succeeds if the event is shared to a space the
+ * caller belongs to (existing RLS SELECT policy).
+ *
+ * @param eventId - UUID of the shared event to fork
+ * @returns The newly created fork as a full Event domain object
+ */
+export async function forkSharedEvent(eventId: string): Promise<Event> {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error('로그인이 필요합니다.');
+
+  // ─── 1. Read the source event ─────────────────────────────────────────────
+  // getEventById uses existing RLS — succeeds if the event is readable by this user.
+  const source = await getEventById(eventId);
+
+  // Guard: caller must not be the owner of the source event
+  if (source.isOwn) {
+    throw new Error('자신의 일정은 복사할 수 없습니다.');
+  }
+
+  // ─── 2. INSERT the forked event row for the current user ─────────────────
+  const { data: newRow, error } = await supa
+    .from('events')
+    .insert({
+      user_id:      userId,
+      title:        source.title,
+      description:  source.description ?? null,
+      location:     source.location ?? null,
+      start_at:     source.startAt.toISOString(),
+      end_at:       source.endAt.toISOString(),
+      all_day:      source.allDay,
+      repeat_type:  source.repeatType,
+      repeat_until: source.repeatUntil?.toISOString() ?? null,
+      category_id:  source.categoryId ?? null,
+      color:        source.color ?? null,
+      // space_id: null → not shared to any Space; fully private copy
+    })
+    .select()
+    .single() as { data: EventRow | null; error: Error | null };
+
+  if (error || !newRow) {
+    await logError({
+      context: 'event.fork',
+      error:   error ?? new Error('fork INSERT returned null'),
+      userId,
+      details: { sourceEventId: eventId },
+    });
+    throw error ?? new Error('일정 복사에 실패했습니다.');
+  }
+
+  // ─── 3. Return the full domain object (consistent return type) ────────────
+  // The forked event has no shares, owned by the caller.
+  return toEvent(newRow, [], '나', true);
+}
+
 /**
  * Delete an event permanently (owner only — enforced by RLS).
  * Cascade-deletes all event_shares rows in the DB.

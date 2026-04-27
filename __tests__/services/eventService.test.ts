@@ -43,6 +43,7 @@ import {
   updateEvent,
   deleteEvent,
   findConflictingEvents,
+  forkSharedEvent,
 } from '@/services/eventService';
 import {
   shareEventToSpace,
@@ -484,6 +485,87 @@ describe('eventService', () => {
 
       await expect(deleteEvent('event-001')).rejects.toThrow('로그인이 필요합니다.');
       expect(supabase.from).not.toHaveBeenCalled();
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // forkSharedEvent (IDEA-018)
+  // ══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * forkSharedEvent from() 호출 순서:
+   * ── getEventById 내부 (source 읽기) ──
+   * 1. from('events')       → 원본 event row (user_id = 'user-456' ≠ 현재 유저)
+   * 2. from('event_shares') → 공유된 space_id 목록
+   * 3. from('users')        → owner nickname
+   * ── forkSharedEvent 직접 ──
+   * 4. from('events').insert().select().single() → 새 forked event row
+   */
+  describe('forkSharedEvent', () => {
+    /** source event: user-456 소유, 공유된 상태 (현재 유저=user-123은 비소유자) */
+    const sharedEventRow: EventRow = {
+      ...mockEventRow,
+      id:      'event-shared-001',
+      user_id: 'user-456',
+      title:   '공유 일정 fork 대상',
+    };
+
+    /** 새로 생성될 fork event row: user-123 소유 */
+    const forkedEventRow: EventRow = {
+      ...sharedEventRow,
+      id:      'event-fork-001',
+      user_id: 'user-123',
+    };
+
+    function setupForkSuccessMocks() {
+      (supabase.from as jest.Mock)
+        // getEventById(1): source event
+        .mockReturnValueOnce(makeChain({ data: sharedEventRow, error: null }))
+        // getEventById(2): event_shares (공유된 space 있음)
+        .mockReturnValueOnce(makeChain({ data: [{ space_id: 'space-abc' }], error: null }))
+        // getEventById(3): owner nickname
+        .mockReturnValueOnce(makeChain({ data: { nickname: '파트너' }, error: null }))
+        // INSERT forked row
+        .mockReturnValueOnce(makeChain({ data: forkedEventRow, error: null }));
+    }
+
+    it('성공: 비소유자가 fork → INSERT 된 새 event, isOwn=true, sharedSpaceIds 빈 배열', async () => {
+      setupForkSuccessMocks();
+
+      const result = await forkSharedEvent('event-shared-001');
+
+      // INSERT 호출 확인: events 테이블 (4번째 from 호출)
+      expect(supabase.from).toHaveBeenNthCalledWith(4, 'events');
+      const insertChain = (supabase.from as jest.Mock).mock.results[3]?.value;
+      expect(insertChain.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          user_id: 'user-123', // 현재 유저
+          title:   '공유 일정 fork 대상',
+        }),
+      );
+
+      // 반환값 확인
+      expect(result.id).toBe('event-fork-001');
+      expect(result.isOwn).toBe(true);
+      expect(result.sharedSpaceIds).toEqual([]); // fork 는 Space 없음
+    });
+
+    it('자기 일정 fork 시도: "자신의 일정은 복사할 수 없습니다." 에러 throw', async () => {
+      // source 가 본인 일정 (user_id = user-123 = 현재 유저)
+      (supabase.from as jest.Mock)
+        // getEventById(1): 자기 event
+        .mockReturnValueOnce(makeChain({ data: mockEventRow, error: null }))
+        // getEventById(2): shares
+        .mockReturnValueOnce(makeChain({ data: [], error: null }))
+        // getEventById(3): user (자기 nickname)
+        .mockReturnValueOnce(makeChain({ data: { nickname: '나' }, error: null }));
+
+      await expect(forkSharedEvent('event-001')).rejects.toThrow(
+        '자신의 일정은 복사할 수 없습니다.',
+      );
+
+      // INSERT는 호출되지 않아야 함 (from 3번만 호출)
+      expect(supabase.from).toHaveBeenCalledTimes(3);
     });
   });
 

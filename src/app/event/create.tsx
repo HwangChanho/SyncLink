@@ -16,7 +16,7 @@
  * Route: /event/create?date=YYYY-MM-DD
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, TextInput, ScrollView, Switch, Pressable,
   ActivityIndicator, StyleSheet, Platform, KeyboardAvoidingView,
@@ -177,6 +177,31 @@ export default function EventCreateScreen() {
     // 의도적으로 mount 1회만 — fetchMySpaces 는 store action 으로 stable identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // IDEA-018 — Couple Space 기본 공유 ON:
+  // spaces 가 로드되면(또는 mount 시점에 이미 채워져 있으면) type='couple' 인
+  // Space ID 를 shareSpaceIds 초기값으로 설정한다.
+  // - 사용자가 직접 toggle 로 끄면 그 상태가 우선한다(한 번만 적용).
+  // - spaces 배열이 변경될 때마다 재실행되지 않도록 didAutoSelect ref 로 보호.
+  const didAutoSelectCouple = useRef(false);
+  useEffect(() => {
+    // 이미 자동 선택을 수행했거나 spaces 가 비어 있으면 skip
+    if (didAutoSelectCouple.current) return;
+    if (spaces.length === 0) return;
+
+    const coupleIds = spaces
+      .filter((s) => s.type === 'couple')
+      .map((s) => s.id);
+
+    if (coupleIds.length > 0) {
+      // 이미 사용자가 수동으로 선택한 것이 있으면 couple ID 를 merge 해서 추가
+      setShareSpaceIds((prev) => {
+        const merged = [...new Set([...prev, ...coupleIds])];
+        return merged;
+      });
+      didAutoSelectCouple.current = true;
+    }
+  }, [spaces]);
 
   // ── Form state ─────────────────────────────────────────────────────────────
 
@@ -646,7 +671,7 @@ export default function EventCreateScreen() {
           </FormRow>
 
           {/* Start time */}
-          <FormRow label="시작" rowStyle={rowStyle}>
+          <FormRow label={t('event.form.start')} rowStyle={rowStyle}>
             {Platform.OS === 'web' ? (
               // Web: use a native datetime-local input for best UX
               // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -668,7 +693,7 @@ export default function EventCreateScreen() {
 
           {/* End time */}
           {!allDay && (
-            <FormRow label="종료" rowStyle={rowStyle}>
+            <FormRow label={t('event.form.end')} rowStyle={rowStyle}>
               {Platform.OS === 'web' ? (
                 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
                 // @ts-ignore
@@ -707,7 +732,7 @@ export default function EventCreateScreen() {
           )}
 
           {/* Repeat */}
-          <FormRow label="반복" rowStyle={rowStyle}>
+          <FormRow label={t('event.form.repeat')} rowStyle={rowStyle}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.chipRow}>
                 {REPEAT_OPTIONS.map((opt) => (
@@ -738,7 +763,7 @@ export default function EventCreateScreen() {
             is chosen the chip inherits its colour so the event's accent is
             visible at a glance before saving.
           */}
-          <FormRow label="카테고리" rowStyle={rowStyle}>
+          <FormRow label={t('event.form.category')} rowStyle={rowStyle}>
             {(() => {
               const cat = categoryId ? categoryMap.get(categoryId) : null;
               return (
@@ -774,7 +799,7 @@ export default function EventCreateScreen() {
           </FormRow>
 
           {/* Location — GPS shortcut + Google Places Autocomplete (TASK-901 / TASK-1302) */}
-          <FormRow label="위치" rowStyle={rowStyle}>
+          <FormRow label={t('event.form.location')} rowStyle={rowStyle}>
             <View style={styles.locationRow}>
               {/*
                * GPS button: only shown on native (iOS/Android).
@@ -786,7 +811,7 @@ export default function EventCreateScreen() {
                   style={styles.gpsButton}
                   onPress={() => void handleGetGPSLocation()}
                   disabled={isGettingLocation}
-                  accessibilityLabel="현재 위치 사용"
+                  accessibilityLabel={t('event.form.current_location')}
                 >
                   {isGettingLocation ? (
                     <ActivityIndicator size="small" color={colors.primary} />
@@ -807,7 +832,7 @@ export default function EventCreateScreen() {
           </FormRow>
 
           {/* Description */}
-          <FormRow label="메모" rowStyle={rowStyle}>
+          <FormRow label={t('event.form.memo')} rowStyle={rowStyle}>
             <TextInput
               style={[styles.inlineInput, styles.multilineInput]}
               placeholder={t('nl.placeholder')}
@@ -835,7 +860,7 @@ export default function EventCreateScreen() {
           {/* Space sharing */}
           {spaces.length > 0 && (
             <View style={styles.sharingSection}>
-              <Text style={styles.sharingLabel}>공유할 Space</Text>
+              <Text style={styles.sharingLabel}>{t('event.form.share_section')}</Text>
               {spaces.map((space) => {
                 const selected = shareSpaceIds.includes(space.id);
                 return (

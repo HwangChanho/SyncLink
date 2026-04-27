@@ -22,7 +22,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import type { Event, EventComment, ReactionSummary } from '@/types';
-import { getEventById, deleteEvent } from '@/services/eventService';
+import { getEventById, deleteEvent, forkSharedEvent } from '@/services/eventService';
 import { shareEventToSpace, unshareEventFromSpace } from '@/services/eventShareService';
 import {
   getReactionSummaries,
@@ -91,6 +91,8 @@ export default function EventDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  /** True while the fork-to-my-calendar network call is in-flight. */
+  const [isForking, setIsForking] = useState(false);
   /**
    * When true the user has tapped "Show original" — we render the raw event
    * fields instead of the AI translation. Default is false so Pro users see
@@ -229,6 +231,38 @@ export default function EventDetailScreen() {
       ],
     );
   }, [t]);
+
+  // ── Fork to my calendar (IDEA-018) ────────────────────────────────────────
+
+  /**
+   * Fork the shared event into the current user's personal calendar.
+   *
+   * Conditions for rendering the button (checked in JSX):
+   *  - The event has at least one share (sharedSpaceIds.length > 0)
+   *  - The current user is NOT the owner (event.isOwn === false)
+   *
+   * On success: shows an Alert and navigates back (the forked event is
+   * independent — no need to update the detail view).
+   * On failure: shows an error Alert; isSaving is reset so the button
+   * re-enables.
+   */
+  const handleFork = useCallback(async () => {
+    if (!event || isForking) return;
+    setIsForking(true);
+    try {
+      await forkSharedEvent(event.id);
+      Alert.alert(t('common.ok'), t('event.fork_success'), [
+        { text: t('common.ok'), onPress: () => router.back() },
+      ]);
+    } catch (err) {
+      Alert.alert(
+        t('common.error'),
+        err instanceof Error ? err.message : t('event.fork_failed'),
+      );
+    } finally {
+      setIsForking(false);
+    }
+  }, [event, isForking, router, t]);
 
   // ── Delete ─────────────────────────────────────────────────────────────────
 
@@ -629,6 +663,29 @@ export default function EventDetailScreen() {
           </View>
         </View>
 
+        {/*
+          Fork button — shown only when the event is shared to at least one
+          Space AND the current user is NOT the owner. Allows the viewer to
+          copy the event into their own private calendar.
+          IDEA-018
+        */}
+        {!event.isOwn && event.sharedSpaceIds.length > 0 && (
+          <Pressable
+            style={[styles.forkButton, isForking && styles.forkButtonDisabled]}
+            onPress={() => void handleFork()}
+            disabled={isForking}
+          >
+            {isForking ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <>
+                <Ionicons name="copy-outline" size={16} color={colors.primary} />
+                <Text style={styles.forkText}>{t('event.fork_to_my_calendar')}</Text>
+              </>
+            )}
+          </Pressable>
+        )}
+
         {/* Delete button — owner only */}
         {event.isOwn && (
           <Pressable
@@ -808,6 +865,27 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     color: colors.textPrimary,
     flex: 1,
     marginRight: spacing[2],
+  },
+
+  // Fork button (IDEA-018) — non-owner action to copy shared event
+  forkButton: {
+    marginTop: spacing[6],
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    paddingVertical: spacing[3],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
+  },
+  forkButtonDisabled: {
+    opacity: 0.5,
+  },
+  forkText: {
+    ...textStyles.label,
+    color: colors.primary,
   },
 
   // Delete button
