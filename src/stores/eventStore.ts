@@ -19,6 +19,21 @@ import type { EventSummary, DateRange } from '@/types';
 import { getEventsInRange, getEventById } from '@/services/eventService';
 import { subscribeToEvents as realtimeSubscribeToEvents } from '@/services/eventRealtimeService';
 
+/**
+ * Local-timezone YYYY-MM-DD key.
+ *
+ * Fixes TASK-005 (Critical): `Date.toISOString()` returns UTC, so a KST
+ * 28일 00:30 event (UTC 27일 15:30) was bucketed under "2026-04-27" and
+ * displayed on the wrong day. Use the device-local Y/M/D instead so the
+ * calendar grouping matches what the user typed in.
+ */
+function localDateKey(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 interface EventState {
   /**
    * Events indexed by ISO date string (YYYY-MM-DD).
@@ -83,7 +98,7 @@ export const useEventStore = create<EventState>((set, _get) => ({
       // for simplicity; multi-day events can be expanded in a future sprint.
       const byDate: Record<string, EventSummary[]> = {};
       for (const event of events) {
-        const dateKey = event.startAt.toISOString().split('T')[0] ?? '';
+        const dateKey = localDateKey(event.startAt);
         const existing = byDate[dateKey];
         if (existing === undefined) {
           byDate[dateKey] = [event];
@@ -112,8 +127,8 @@ export const useEventStore = create<EventState>((set, _get) => ({
 
   upsertEvent: (event) =>
     set((state) => {
-      // Get the ISO date key for this event's start date
-      const dateKey = event.startAt.toISOString().split('T')[0] ?? '';
+      // Get the local date key for this event's start date (TASK-005)
+      const dateKey = localDateKey(event.startAt);
       const existing = state.eventsByDate[dateKey] ?? [];
       const index = existing.findIndex((e) => e.id === event.id);
 
@@ -148,7 +163,7 @@ export const useEventStore = create<EventState>((set, _get) => ({
         const event = await getEventById(eventId);
         // Convert full Event to EventSummary for the store
         set((state) => {
-          const dateKey = event.startAt.toISOString().split('T')[0] ?? '';
+          const dateKey = localDateKey(event.startAt);
           const existing = state.eventsByDate[dateKey] ?? [];
           const index = existing.findIndex((e) => e.id === event.id);
           const summary: EventSummary = {
