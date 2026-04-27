@@ -86,6 +86,18 @@ export function SettingsSection() {
         </TouchableOpacity>
         <View style={menu.menuDivider} />
 
+        {/* PRD 4.5 / Sprint 25: 다국어 명시적 토글 (헤더 LanguageButton 보강) */}
+        <TouchableOpacity
+          style={menu.menuItem}
+          onPress={() => router.push('/settings/language')}
+          activeOpacity={0.7}
+          testID="settings-button-language"
+        >
+          <Text style={menu.menuItemText}>{t('settings.language', { defaultValue: '언어' })}</Text>
+          <Text style={menu.menuItemChevron}>›</Text>
+        </TouchableOpacity>
+        <View style={menu.menuDivider} />
+
         {/* Inline theme segmented control. Changes apply immediately via
             appearanceStore so the next render reflects the chosen mode. */}
         <View style={local.menuItemTheme}>

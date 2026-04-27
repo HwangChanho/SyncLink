@@ -313,6 +313,8 @@ const zh = {
     app_lock: '应用锁',
     app_lock_desc: '使用 Face ID 或 Touch ID 锁定应用。从后台返回时需要验证。',
     authenticate: '验证',
+    language: '语言',
+    language_help: '选择后整个应用的文本会立即切换。',
   },
 
   places: {

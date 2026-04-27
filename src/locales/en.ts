@@ -317,6 +317,8 @@ const en = {
     app_lock: 'App Lock',
     app_lock_desc: 'Lock the app with Face ID or Touch ID. Authentication is required when returning from background.',
     authenticate: 'Authenticate',
+    language: 'Language',
+    language_help: 'The entire app updates instantly when you choose a language.',
   },
 
   places: {

@@ -313,6 +313,8 @@ const ja = {
     app_lock: 'アプリロック',
     app_lock_desc: 'Face ID または Touch ID でアプリをロックします。バックグラウンドから戻るときに認証が必要です。',
     authenticate: '認証する',
+    language: '言語',
+    language_help: '選択するとアプリ全体のテキストが即座に切り替わります。',
   },
 
   places: {

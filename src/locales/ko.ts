@@ -321,6 +321,8 @@ const ko = {
     app_lock: '앱 잠금',
     app_lock_desc: 'Face ID 또는 Touch ID로 앱을 잠급니다. 백그라운드에서 돌아올 때 인증이 필요합니다.',
     authenticate: '인증하기',
+    language: '언어',
+    language_help: '선택 즉시 앱 전체 텍스트가 전환됩니다.',
   },
 
   places: {
