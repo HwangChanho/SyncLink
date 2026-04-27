@@ -60,10 +60,10 @@ catch { fail('로그인 화면 렌더링', '이메일로 로그인 버튼 없음
 try { await page.waitForSelector('input', { timeout: 5000 }); pass('입력 필드 렌더링'); }
 catch { fail('입력 필드 렌더링', '입력 필드 없음'); }
 
-try { await waitForText(page, 'Google로 계속', 'Continue with Google', 5000); pass('Google 로그인 버튼'); }
+try { await waitForText(page, 'Google로 시작하기', 'Continue with Google', 5000); pass('Google 로그인 버튼'); }
 catch { fail('Google 로그인 버튼', 'Google 버튼 없음'); }
 
-try { await waitForText(page, 'Apple로 계속', 'Continue with Apple', 5000); pass('Apple 로그인 버튼'); }
+try { await waitForText(page, 'Apple로 시작하기', 'Continue with Apple', 5000); pass('Apple 로그인 버튼'); }
 catch { fail('Apple 로그인 버튼', 'Apple 버튼 없음'); }
 
 // ── 2. 이메일 로그인 ────────────────────────────────────────────────────────
