@@ -18,45 +18,43 @@ env:
       text: "SyncLink"
     timeout: 10000
 
-# Dev 전용 이메일 입력 필드가 보일 때까지 대기 (한/영 bilingual — TASK-007 / ADR-011)
+# Dev 전용 이메일 입력 필드가 보일 때까지 대기 (한국어 locale 시뮬 가정)
+# 영어 locale은 별도 flow 또는 Maestro regex (다음 라운드)
 - extendedWaitUntil:
     visible:
-      id: "login-dev-submit"
+      text: "이메일로 로그인"
     timeout: 5000
 
-# 이메일 입력 (testID 우선)
+# 이메일 입력
 - tapOn:
-    id: "login-dev-email"
+    text: "이메일"
+    index: 0
 - eraseText
 - inputText: ${TEST_EMAIL}
 
 # 비밀번호 입력
 - tapOn:
-    id: "login-dev-password"
+    text: "비밀번호"
 - eraseText
 - inputText: ${TEST_PASSWORD}
 
 # 로그인 버튼 탭
 - tapOn:
-    id: "login-dev-submit"
+    text: "이메일로 로그인"
 
 - waitForAnimationToEnd
 
 - takeScreenshot: screenshots/01_after_login
 
-# 홈 탭 도달 확인 (한/영 bilingual)
+# 홈 탭 도달 확인 (한국어 가정)
 - extendedWaitUntil:
     visible:
-      text: "홈|Home"
+      text: "홈"
     timeout: 15000
 
-- assertVisible:
-    text: "홈|Home"
-- assertVisible:
-    text: "캘린더|Calendar"
-- assertVisible:
-    text: "플래너|Planner"
-- assertVisible:
-    text: "내 정보|My"
+- assertVisible: "홈"
+- assertVisible: "캘린더"
+- assertVisible: "플래너"
+- assertVisible: "내 정보"
 
 - takeScreenshot: screenshots/01_home_tab
