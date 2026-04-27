@@ -225,7 +225,17 @@ const ja = {
     join_fail_desc: '参加に失敗しました',
     need_name: '名前が必要です',
     activity_notification: 'Space アクティビティ',
+    // IDEA-014 — Web 招待 UX 強化
+    invite_email: 'メールで招待を送る',
+    invite_qr: 'QR コードを表示',
+    invite_link_copy: '招待リンクをコピー',
+    invite_link_copied: '招待リンクをコピーしました。',
+    invite_link_copy_failed: 'コピーに失敗しました。リンクを手動で選択してください。',
     activity_notification_desc: 'Space メンバーが共有イベントを追加・変更したときに通知を受け取ります。',
+    // IDEA-016: invite code lifecycle error messages
+    invite_expired: '招待コードが期限切れです。Space の管理者に新しいコードを依頼してください。',
+    invite_max_uses_reached: '招待コードの使用上限に達しました。Space の管理者に新しいコードを依頼してください。',
+    couple_full: 'カップル Space には最大 2 名まで参加できます。',
   },
 
   category: {

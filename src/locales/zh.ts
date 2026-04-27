@@ -225,7 +225,17 @@ const zh = {
     join_fail_desc: '加入失败',
     need_name: '需要名称',
     activity_notification: 'Space 动态通知',
+    // IDEA-014 — Web 邀请 UX 增强
+    invite_email: '通过邮件邀请',
+    invite_qr: '显示二维码',
+    invite_link_copy: '复制邀请链接',
+    invite_link_copied: '邀请链接已复制！',
+    invite_link_copy_failed: '复制失败，请手动选择链接。',
     activity_notification_desc: '当 Space 成员添加或修改共享日程时收到通知。',
+    // IDEA-016: invite code lifecycle error messages
+    invite_expired: '邀请码已过期，请向 Space 管理员申请新的邀请码。',
+    invite_max_uses_reached: '邀请码已达到使用上限，请向 Space 管理员申请新的邀请码。',
+    couple_full: '情侣 Space 最多只能有 2 名成员。',
   },
 
   category: {

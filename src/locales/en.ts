@@ -225,7 +225,17 @@ const en = {
     join_fail_desc: 'Failed to join',
     need_name: 'Name Required',
     activity_notification: 'Space Activity',
+    // IDEA-014 — Web invite UX enhancement
+    invite_email: 'Send Email Invite',
+    invite_qr: 'Show QR Code',
+    invite_link_copy: 'Copy Invite Link',
+    invite_link_copied: 'Invite link copied!',
+    invite_link_copy_failed: 'Copy failed. Please select the link manually.',
     activity_notification_desc: 'Receive notifications when Space members add or modify shared events.',
+    // IDEA-016: invite code lifecycle error messages
+    invite_expired: 'The invite code has expired. Ask the Space owner for a new code.',
+    invite_max_uses_reached: 'This invite code has reached its usage limit. Ask the Space owner for a new code.',
+    couple_full: 'Couple Spaces are limited to 2 members.',
   },
 
   category: {

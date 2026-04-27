@@ -419,6 +419,59 @@ export function makeSpaceDetailStyles(colors: ReturnType<typeof useColors>) {
     color: colors.primary,
   },
 
+  // ── Web-only invite actions (IDEA-014) ────────────────────────────────────
+  /**
+   * Wrapper column that stacks the three web-exclusive invite buttons
+   * (email, link copy, QR) below the main share button row.
+   * Only rendered when Platform.OS === 'web'.
+   */
+  webInviteContainer: {
+    gap: spacing[2],
+    marginTop: spacing[2],
+  },
+  /**
+   * Base style for each web invite action button (outlined, full-width).
+   */
+  webInviteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[4],
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
+  },
+  webInviteButtonText: {
+    ...textStyles.label,
+    color: colors.primary,
+  },
+  /**
+   * Primary CTA variant — filled background for "Copy Invite Link" (the most
+   * common web action). Replaces the border-only style for emphasis.
+   */
+  webInviteButtonPrimary: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  webInviteButtonTextPrimary: {
+    ...textStyles.label,
+    color: colors.textInverse,
+  },
+  /** QR image displayed below the buttons when toggled visible. */
+  webQrWrapper: {
+    alignItems: 'center',
+    paddingVertical: spacing[3],
+    gap: spacing[2],
+  },
+  webQrHint: {
+    ...textStyles.caption,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+
   // ── Anniversary add modal ──────────────────────────────────────────────────
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,

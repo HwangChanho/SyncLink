@@ -85,6 +85,13 @@ export default function SpaceDetailScreen() {
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   // ─── Contact picker modal — invite from OS contacts ──────────────────────
   const [isContactPickerVisible, setIsContactPickerVisible] = useState(false);
+  // ─── Web-only invite state (IDEA-014) ─────────────────────────────────────
+  /**
+   * Controls QR panel visibility on web.
+   * Toggled by the "Show QR Code" button; hidden again on toggle-off or
+   * when the invite code changes (e.g. after regeneration).
+   */
+  const [isQrVisible, setIsQrVisible] = useState(false);
 
   // ─── Anniversary add modal state ─────────────────────────────────────────
   /** Whether the add-anniversary modal is visible */
@@ -183,6 +190,88 @@ export default function SpaceDetailScreen() {
       // User cancelled share — ignore
     }
   };
+
+  // ─── Web-only invite handlers (IDEA-014) ──────────────────────────────────
+
+  /**
+   * Builds the canonical invite URL used by both the "Copy Link" and
+   * "Email Invite" actions.
+   *
+   * Format: `synclink://space/join/{inviteCode}`
+   * On web a universal-link deep-link scheme is used so that clicking the
+   * link on mobile opens the app directly (see IDEA-017 for full universal
+   * link support).
+   */
+  const buildInviteUrl = useCallback((): string => {
+    if (!space) return '';
+    return `synclink://space/join/${space.inviteCode}`;
+  }, [space]);
+
+  /**
+   * "Copy Invite Link" — writes a richly formatted invite URL (not just
+   * the raw code) to the system clipboard and shows a toast on success.
+   *
+   * Uses the Clipboard API which is available in all modern browsers.
+   * Falls back to a prompt-style alert with the link pre-selected so the
+   * user can manually copy.
+   */
+  const handleCopyInviteLink = useCallback(async () => {
+    if (!space) return;
+    const url = buildInviteUrl();
+    const nav = (globalThis as typeof globalThis & {
+      navigator?: { clipboard?: { writeText: (s: string) => Promise<void> } };
+    }).navigator;
+
+    if (nav?.clipboard?.writeText) {
+      try {
+        await nav.clipboard.writeText(url);
+        showAlert(t('space.invite_link_copy'), t('space.invite_link_copied'));
+      } catch {
+        showAlert(t('space.invite_link_copy'), t('space.invite_link_copy_failed') + '\n\n' + url);
+      }
+    } else {
+      // Non-clipboard fallback — show the URL in an alert for manual copy
+      showAlert(t('space.invite_link_copy'), url);
+    }
+  }, [space, buildInviteUrl, t]);
+
+  /**
+   * "Email Invite" — opens the system mail client pre-populated with
+   * subject and body via a `mailto:` URI.  No backend call required
+   * (Phase 1 — see IDEA-014 Phase 2 for server-side sending via Edge
+   * Function).
+   *
+   * Subject and body are URI-encoded to comply with RFC 6068.
+   */
+  const handleEmailInvite = useCallback(() => {
+    if (!space) return;
+    const url     = buildInviteUrl();
+    const subject = encodeURIComponent(`SyncDay Space "${space.name}" 초대`);
+    const body    = encodeURIComponent(
+      `SyncDay Space "${space.name}"에 초대합니다!\n\n` +
+      `초대 코드: ${space.inviteCode}\n` +
+      `참여 링크: ${url}\n\n` +
+      '위 링크를 클릭하거나, SyncDay 앱에서 위 코드를 입력해 참여하세요.',
+    );
+    const mailtoHref = `mailto:?subject=${subject}&body=${body}`;
+
+    const win = (globalThis as typeof globalThis & { open?: (url: string, target: string) => void }).open;
+    if (win) {
+      win(mailtoHref, '_self');
+    } else {
+      // Fallback: show the mailto link in case window.open is blocked
+      showAlert(t('space.invite_email'), mailtoHref);
+    }
+  }, [space, buildInviteUrl, t]);
+
+  /**
+   * Toggle QR code panel.
+   * The QR image is rendered as an <img> using the free qrserver.com API
+   * — no native package required, web-only.
+   */
+  const handleToggleQr = useCallback(() => {
+    setIsQrVisible(prev => !prev);
+  }, []);
 
   /** Regenerate invite code (owner only). */
   const handleRegenerateCode = () => {
@@ -569,6 +658,73 @@ export default function SpaceDetailScreen() {
               )}
             </View>
           </View>
+          {/*
+           * ── Web-only invite actions (IDEA-014) ──────────────────────────
+           * ContactPickerModal is blocked on web (no OS contacts API).
+           * Instead we surface three web-native invite paths:
+           *   1. "Copy Invite Link"  — clipboard write (primary CTA)
+           *   2. "Send Email Invite" — opens mailto: in system mail client
+           *   3. "Show QR Code"      — toggles an <img> QR via qrserver.com
+           */}
+          {Platform.OS === 'web' && (
+            <View style={styles.webInviteContainer}>
+              {/* Primary CTA: copy the full invite URL to clipboard */}
+              <TouchableOpacity
+                testID="space-invite-link"
+                style={[styles.webInviteButton, styles.webInviteButtonPrimary]}
+                onPress={() => void handleCopyInviteLink()}
+                activeOpacity={0.8}
+                accessibilityLabel={t('space.invite_link_copy')}
+              >
+                <Ionicons name="link-outline" size={16} color={styles.webInviteButtonTextPrimary.color} />
+                <Text style={styles.webInviteButtonTextPrimary}>{t('space.invite_link_copy')}</Text>
+              </TouchableOpacity>
+
+              {/* Email invite: opens system mail client via mailto: */}
+              <TouchableOpacity
+                testID="space-invite-email"
+                style={styles.webInviteButton}
+                onPress={handleEmailInvite}
+                activeOpacity={0.8}
+                accessibilityLabel={t('space.invite_email')}
+              >
+                <Ionicons name="mail-outline" size={16} color={styles.webInviteButtonText.color} />
+                <Text style={styles.webInviteButtonText}>{t('space.invite_email')}</Text>
+              </TouchableOpacity>
+
+              {/* QR code toggle: renders QR image inline */}
+              <TouchableOpacity
+                testID="space-invite-qr"
+                style={styles.webInviteButton}
+                onPress={handleToggleQr}
+                activeOpacity={0.8}
+                accessibilityLabel={t('space.invite_qr')}
+              >
+                <Ionicons name={isQrVisible ? 'qr-code' : 'qr-code-outline'} size={16} color={styles.webInviteButtonText.color} />
+                <Text style={styles.webInviteButtonText}>{t('space.invite_qr')}</Text>
+              </TouchableOpacity>
+
+              {/*
+               * QR image panel — visible only after user taps "Show QR Code".
+               * Uses api.qrserver.com (free, no-auth) to generate a PNG on the fly.
+               * The invite URL is URI-encoded so special characters are safe.
+               * On web, React Native's <Image> renders as <img> under the hood,
+               * so this works without any extra native module.
+               */}
+              {isQrVisible && (
+                <View style={styles.webQrWrapper}>
+                  <Image
+                    source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(buildInviteUrl())}` }}
+                    style={{ width: 200, height: 200 }}
+                    contentFit="contain"
+                    accessibilityLabel="QR code for space invite"
+                  />
+                  <Text style={styles.webQrHint}>{buildInviteUrl()}</Text>
+                </View>
+              )}
+            </View>
+          )}
+
           {isOwner && (
             <TouchableOpacity
               style={styles.regenerateButton}

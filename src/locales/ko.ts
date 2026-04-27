@@ -235,6 +235,16 @@ const ko = {
     need_name: '이름 필요',
     activity_notification: 'Space 활동 알림',
     activity_notification_desc: 'Space 멤버가 공유 일정을 추가하거나 수정할 때 알림을 받습니다.',
+    // IDEA-014 — Web 초대 UX 보강
+    invite_email: '이메일로 초대 보내기',
+    invite_qr: 'QR 코드 보기',
+    invite_link_copy: '초대 링크 복사',
+    invite_link_copied: '초대 링크가 복사되었습니다.',
+    invite_link_copy_failed: '복사에 실패했습니다. 직접 링크를 선택해 주세요.',
+    // IDEA-016: invite code lifecycle error messages
+    invite_expired: '초대 코드가 만료되었습니다. Space 관리자에게 새 코드를 요청하세요.',
+    invite_max_uses_reached: '초대 코드 사용 한도에 도달했습니다. Space 관리자에게 새 코드를 요청하세요.',
+    couple_full: '커플 Space는 최대 2명까지 참여할 수 있습니다.',
   },
 
   category: {
