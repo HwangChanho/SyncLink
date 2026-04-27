@@ -20,7 +20,7 @@
  * the time grid, so they never occlude timed events.
  */
 
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -32,10 +32,40 @@ import {
 import type { EventSummary } from '@/types';
 import type { FreeSlot } from '@/types/freeTime';
 import { EventBlock } from './EventBlock';
+import {
+  EventBlockGestureHandler,
+  useOptimisticReschedule,
+} from './EventBlockGestureHandler';
 import { useColors } from '@/hooks/useColors';
 import { useTranslatedTitles } from '@/hooks/useTranslatedTitles';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+
+// ─── Feature flag ─────────────────────────────────────────────────────────────
+
+/**
+ * TASK-009 Day 2 feature flag.
+ *
+ * When true, WeekView renders EventBlockGestureHandler (Gesture Handler v2 +
+ * Reanimated 3 PoC) instead of the production EventBlock (PanResponder).
+ *
+ * Activation: set `dragMode` to 'gh' in your local dev config.
+ * Default: false — production users always see EventBlock until Day 5.
+ *
+ * @example
+ *   // enable in a dev build:
+ *   // src/constants/devConfig.ts → export const dragMode = 'gh';
+ */
+const DRAG_MODE_GH = __DEV__ && (() => {
+  try {
+    // Dynamic require so the constant is tree-shaken in production.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const cfg = require('@/constants/devConfig') as { dragMode?: string };
+    return cfg.dragMode === 'gh';
+  } catch {
+    return false;
+  }
+})();
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
 
@@ -228,6 +258,41 @@ export function WeekView({
   // column width passed to EventBlock for drag-to-reschedule snapping.
   const [gridWidth, setGridWidth] = useState(0);
   const columnWidth = gridWidth > 0 ? gridWidth / 7 : 0;
+
+  // ── TASK-009 Day 2: drop-target hover state ───────────────────────────────
+  // When the GH PoC component is active and the user is dragging, we receive
+  // the snapped hover slot via onHoverSlot. Render a highlight band in that
+  // day column at the hover time to give a visual "snap target" affordance.
+
+  /**
+   * Hover slot state updated by EventBlockGestureHandler via onHoverSlot.
+   * `null` when no drag is in progress.
+   */
+  const [hoverSlot, setHoverSlot] = useState<{
+    minuteOfDay: number;
+    dayIndex: number;
+  } | null>(null);
+
+  /**
+   * Stable callback for onHoverSlot prop — avoids recreating EventBlockGH
+   * on every render (gesture object rebuild is expensive).
+   */
+  const handleHoverSlot = useCallback(
+    (minuteOfDay: number | null, dayIndex: number | null) => {
+      if (minuteOfDay === null || dayIndex === null) {
+        setHoverSlot(null);
+      } else {
+        setHoverSlot({ minuteOfDay, dayIndex });
+      }
+    },
+    [],
+  );
+
+  /**
+   * TASK-009 Day 3: stable drop handler via useOptimisticReschedule.
+   * The hook encapsulates store upsert + eventService call + rollback Alert.
+   */
+  const handleDropped = useOptimisticReschedule();
 
   // Scroll to 8 AM on mount so mornings are visible by default
   const handleLayout = () => {
@@ -480,6 +545,15 @@ export function WeekView({
               const layouts = computeLayout(timedEvents);
 
               const slotsForDay = freeSlotsByDayKey[dateKey] ?? [];
+
+              // TASK-009 Day 2: check if this column has an active hover slot
+              const isHoverColumn =
+                DRAG_MODE_GH &&
+                hoverSlot !== null &&
+                hoverSlot.dayIndex === idx;
+              // Snap highlight height = 30-min slot in pixels (HOUR_HEIGHT / 2)
+              const HOVER_SLOT_HEIGHT = HOUR_HEIGHT / 2;
+
               return (
                 <View
                   key={dateKey}
@@ -508,8 +582,48 @@ export function WeekView({
                       ]}
                     />
                   ))}
+
+                  {/*
+                    TASK-009 Day 2 — drop-target highlight.
+                    Rendered when the GH feature flag is active and the user
+                    is hovering over this column. Sits between free-time
+                    overlays and EventBlocks in z-order.
+                  */}
+                  {isHoverColumn && hoverSlot !== null && (
+                    <View
+                      pointerEvents="none"
+                      testID={`week-drop-target-${dateKey}`}
+                      style={[
+                        styles.dropTargetHighlight,
+                        {
+                          top:    hoverSlot.minuteOfDay * 1, // 1 px/min
+                          height: HOVER_SLOT_HEIGHT,
+                        },
+                      ]}
+                    />
+                  )}
+
                   {layouts.map((lay) => {
                     const tt = translatedTitles.get(lay.event.id);
+
+                    // TASK-009 Day 2 — feature flag A/B: GH PoC vs EventBlock
+                    if (DRAG_MODE_GH) {
+                      return (
+                        <EventBlockGestureHandler
+                          key={lay.event.id}
+                          event={lay.event}
+                          topOffset={lay.topOffset}
+                          height={lay.height}
+                          widthFraction={lay.widthFraction}
+                          leftFraction={lay.leftFraction}
+                          onPress={onEventPress}
+                          columnWidth={columnWidth}
+                          onHoverSlot={handleHoverSlot}
+                          onDropped={handleDropped}
+                        />
+                      );
+                    }
+
                     return (
                       <EventBlock
                         key={lay.event.id}
@@ -690,6 +804,24 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     backgroundColor: colors.primary + '22',
     borderLeftWidth: 2,
     borderLeftColor: colors.primary + '88',
+    borderRadius: radius.sm,
+  },
+
+  /**
+   * TASK-009 Day 2 — drop-target snap highlight.
+   * Shown in the hovered day column at the snapped time slot while the user
+   * is dragging an event (GH feature flag active only).
+   * Uses a more saturated primary accent than the free-time overlay so the
+   * user can clearly distinguish "where I'm about to drop" from existing
+   * free-time bands.
+   */
+  dropTargetHighlight: {
+    position: 'absolute',
+    left: 2,
+    right: 2,
+    backgroundColor: colors.primary + '44',
+    borderWidth: 1.5,
+    borderColor: colors.primary,
     borderRadius: radius.sm,
   },
   });

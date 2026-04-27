@@ -1,41 +1,41 @@
 /**
- * EventBlockGestureHandler — Sprint 27 TASK-009 Day 1 PoC.
+ * EventBlockGestureHandler — TASK-009 Drag-to-Reschedule PoC (Days 1-3).
  *
- * Goal: Validate that we can replace the existing PanResponder-based
- * drag-to-reschedule gesture (see EventBlock.tsx) with the modern
- * react-native-gesture-handler v2 + react-native-reanimated v3 stack
- * recommended in `docs/plans/2026-04-28-task-009-drag-to-reschedule.md`
- * (Option A — accepted by LEAD on 2026-04-28).
+ * ## What this file does (current state after Day 3)
  *
- * Day 1 scope (deliberately narrow — 1/5 of TASK-009):
- *   1. Wrap an event card in `GestureDetector` + `Pan().minDistance(...)`.
- *   2. Provide visual feedback during drag via a Reanimated `useSharedValue`
- *      driving a `useAnimatedStyle` translateY (and translateX). No DB
- *      mutation, no slot snapping, no parent callback wiring yet.
- *   3. Emit `console.log` markers in onStart / onUpdate / onEnd so we can
- *      eyeball gesture detection in a dev build (and produce the short
- *      capture the plan asks for).
- *   4. Stay completely isolated from production code paths so the existing
- *      EventBlock + WeekView/DayView keep working unchanged. Day 2 wires
- *      this into the real grid via `calendarGeometry.ts`.
+ * Day 1 — Gesture infra + visual feedback
+ *   - GestureDetector (Pan) with PAN_ACTIVATION_PX dead-zone.
+ *   - Reanimated shared values (translateX/Y, isActive) drive 60fps animation.
+ *   - Scale lift + opacity dim while dragging.
  *
- * What this file is NOT (yet):
- *   - It does NOT call onReschedule, eventService, or any store.
- *   - It does NOT integrate with WeekView / DayView columnWidth math.
- *   - It does NOT replace EventBlock — the production component still ships
- *     with the existing PanResponder implementation until Day 3.
+ * Day 2 — calendarGeometry integration + drop-target highlight
+ *   - Accepts `columnWidth` and `slotHeight` (px/min) from WeekView via props.
+ *   - Calls `computeRescheduleDelta` on every gesture update to derive a
+ *     snapped hover time, which is forwarded to the parent via `onHoverSlot`.
+ *   - Parent (WeekView) renders a translucent highlight at the hover slot.
+ *   - On drag end the snapped (dayDelta, minuteDelta) is reported via `onDropped`.
+ *     `console.log` markers from Day 1 are removed from hot paths.
  *
- * Day 2 prerequisite (handed off to next session):
- *   - Build `src/lib/calendarGeometry.ts` to map screen-space (dx, dy) to
- *     (dayDelta, minuteDelta) given the parent grid's column width and
- *     pixels-per-minute. EventBlock currently computes this inline; pull
- *     it out so this PoC and the real block can share one source of truth.
- *   - Wire WeekView to render this PoC behind a feature flag for QA
- *     comparison vs PanResponder.
+ * Day 3 — Optimistic update + eventService rollback
+ *   - `onDropped` triggers the store upsert (optimistic), then the network call.
+ *   - On network failure: rollback via second upsert + Alert.alert to user.
+ *   - This component itself is stateless w.r.t. the store — the callback
+ *     pattern keeps it decoupled from Zustand and usable in tests.
+ *
+ * ## What this file is NOT (yet)
+ *   - Day 4: conflict detection (overlapping events in same space).
+ *   - Day 5: month/agenda view integration + Maestro e2e.
+ *
+ * ## Feature flag
+ *   Only rendered by WeekView when `__DEV__ && config.dragMode === 'gh'`.
+ *   The production EventBlock (PanResponder) keeps shipping unchanged until
+ *   Day 5 promotes this component to production.
+ *
+ * @task TASK-009
  */
 
-import { useMemo } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { useCallback, useMemo, useRef } from 'react';
+import { Alert, StyleSheet, Text } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -46,140 +46,288 @@ import Animated, {
 
 import { radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import {
+  applyDelta,
+  computeRescheduleDelta,
+  DEFAULT_PX_PER_MINUTE,
+  DEFAULT_SNAP_MINUTES,
+} from '@/lib/calendarGeometry';
+import { useEventStore } from '@/stores/eventStore';
+import { updateEvent } from '@/services/eventService';
 import type { EventSummary } from '@/types';
 
-/** Smallest height that still renders legibly (matches EventBlock). */
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+/** Smallest rendered height (matches EventBlock). */
 const MIN_HEIGHT = 22;
+
 /**
- * Pan activation distance in pixels. We want a small dead-zone so a tap
- * doesn't get hijacked as a pan; 8 px matches the convention used by
- * react-navigation's swipe-to-go-back gesture.
+ * Dead-zone before we steal touches from the surrounding ScrollView.
+ * 8 px is the same threshold react-navigation uses for swipe-back.
  */
 const PAN_ACTIVATION_PX = 8;
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 /**
- * Props mirror the subset of EventBlock we exercise during Day 1. Keeping
- * the surface area minimal makes the PoC easy to delete/replace in Day 2.
+ * Payload emitted by `onDropped` (Day 3 entry point for optimistic update).
+ * The parent (or a hook wrapping useEventStore + eventService) acts on this.
  */
-interface EventBlockGestureHandlerProps {
-  event: EventSummary;
-  topOffset: number;
-  height: number;
-  widthFraction?: number;
-  leftFraction?: number;
-  /**
-   * Tap handler. Day 1 still wires onPress so we can confirm taps and
-   * pans don't fight each other once we move to GestureDetector.
-   */
-  onPress?: (event: EventSummary) => void;
-  /**
-   * Optional hook so a host (e.g. a Storybook-style dev screen) can observe
-   * the lifecycle without us emitting console.log in production. Defaults
-   * to a no-op; PoC dev usage just relies on the console output below.
-   */
-  onGestureLog?: (
-    phase: 'start' | 'update' | 'end',
-    payload: { translationX: number; translationY: number },
-  ) => void;
+export interface DroppedPayload {
+  event:       EventSummary;
+  dayDelta:    number;
+  minuteDelta: number;
+  newStartAt:  Date;
+  newEndAt:    Date;
 }
 
 /**
- * PoC card. Uses the same colour treatment + layout primitives as
- * EventBlock so visual diffs in QA are trivial to spot.
+ * Props for EventBlockGestureHandler.
+ *
+ * Surface area is deliberately kept close to EventBlock so WeekView can
+ * swap them behind a feature flag without structural changes.
+ */
+interface EventBlockGestureHandlerProps {
+  event:          EventSummary;
+  topOffset:      number;
+  height:         number;
+  widthFraction?: number;
+  leftFraction?:  number;
+
+  /** Tap handler — fires when no pan gesture was detected. */
+  onPress?: (event: EventSummary) => void;
+
+  // ── Day 2 geometry inputs ────────────────────────────────────────────────
+
+  /**
+   * Pixel width of a single day column in the parent grid.
+   * Forwarded from WeekView's `onLayout` measurement.
+   * Pass 0 (or omit) for DayView where there are no horizontal columns.
+   */
+  columnWidth?: number;
+
+  /**
+   * Pixels per minute on the vertical time axis.
+   * Defaults to DEFAULT_PX_PER_MINUTE (1 px/min = 60 px/hour,
+   * matching WeekView/DayView's HOUR_HEIGHT = 60).
+   */
+  pxPerMinute?: number;
+
+  /**
+   * Called on every snapped position change during drag.
+   * Parent uses this to render a drop-target highlight at the hover slot.
+   * `null` means drag ended or was cancelled.
+   *
+   * @param minuteOfDay - Snapped minute-of-day (multiple of snapMinutes)
+   * @param dayIndex    - 0-based day column index (0 = Sunday in WeekView)
+   */
+  onHoverSlot?: (minuteOfDay: number | null, dayIndex: number | null) => void;
+
+  // ── Day 3 drop / update ──────────────────────────────────────────────────
+
+  /**
+   * Called on drop (pan end) with computed deltas + pre-computed new dates.
+   * If `(dayDelta, minuteDelta) = (0, 0)` this is NOT called (no-op drop).
+   *
+   * Implementor responsibilities (in the parent / a hook):
+   *  1. upsertEvent(optimistic snapshot) in the Zustand store.
+   *  2. eventService.updateEvent(event.id, { startAt, endAt }).
+   *  3. On failure: upsertEvent(original) to rollback + show Alert.
+   */
+  onDropped?: (payload: DroppedPayload) => void;
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+/**
+ * GestureHandler-powered event card for WeekView/DayView time grids.
+ *
+ * Rendered behind a feature flag in WeekView:
+ *   `__DEV__ && config.dragMode === 'gh'`
+ *
+ * Completely isolated from production code paths — EventBlock still ships
+ * with PanResponder for all production users until Day 5.
  */
 export function EventBlockGestureHandler({
   event,
   topOffset,
   height,
   widthFraction = 1,
-  leftFraction = 0,
+  leftFraction  = 0,
   onPress,
-  onGestureLog,
+  columnWidth   = 0,
+  pxPerMinute   = DEFAULT_PX_PER_MINUTE,
+  onHoverSlot,
+  onDropped,
 }: EventBlockGestureHandlerProps) {
   const blockHeight = Math.max(height, MIN_HEIGHT);
   const showSubtitle = blockHeight >= 38;
   const bgColor = `${event.color}CC`;
 
-  // Shared values run on the UI thread so the visual translation is
-  // produced at 60 fps without crossing the JS bridge per frame — this
-  // is the headline win over the existing PanResponder implementation.
+  // ── Reanimated shared values (UI thread, 60 fps) ─────────────────────────
+
+  /** Cumulative finger offset from drag start (pixels). */
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
+
+  /**
+   * 0 = idle, 1 = dragging. Drives the "picked up" visual effect.
+   * Spring-animated so the lift/drop feels physical.
+   */
   const isActive = useSharedValue(0);
 
-  /**
-   * Tiny JS-thread helpers. Worklets cannot call console.log on Hermes
-   * directly with formatted strings, so we hop back to JS via runOnJS.
-   * In real builds this is cheap because it only fires on start/end.
-   */
-  const logPhase = (
-    phase: 'start' | 'update' | 'end',
-    translationX: number,
-    translationY: number,
-  ) => {
-    // eslint-disable-next-line no-console
-    console.log(
-      `[EventBlockGestureHandler] ${phase} event=${event.id} ` +
-        `dx=${translationX.toFixed(1)} dy=${translationY.toFixed(1)}`,
-    );
-    onGestureLog?.(phase, { translationX, translationY });
-  };
+  // ── Stable refs for JS-thread callbacks ──────────────────────────────────
 
   /**
-   * Build the gesture once per event id. We deliberately do NOT depend on
-   * onPress/onGestureLog refs here — the closure is fine for the PoC and
-   * Day 2 will introduce a proper composed gesture (Tap + Long-press +
-   * Pan) once we know the final activation rules.
+   * Keep the latest base event reference accessible inside worklets without
+   * recreating the gesture object on every re-render.
+   */
+  const eventRef = useRef(event);
+  eventRef.current = event;
+
+  // ── JS-thread callbacks invoked via runOnJS ───────────────────────────────
+
+  /**
+   * Compute the snapped position and notify parent of the hover slot.
+   * Runs on the JS thread (called via runOnJS from the worklet).
+   *
+   * @param dx - Cumulative horizontal delta (px)
+   * @param dy - Cumulative vertical delta (px)
+   */
+  const notifyHover = useCallback(
+    (dx: number, dy: number) => {
+      if (!onHoverSlot) return;
+
+      const { dayDelta, minuteDelta } = computeRescheduleDelta({
+        dx,
+        dy,
+        columnWidth,
+        pxPerMinute,
+        snapMinutes: DEFAULT_SNAP_MINUTES,
+      });
+
+      // Compute absolute minute-of-day for the hover slot
+      const baseMinuteOfDay =
+        eventRef.current.startAt.getHours() * 60 +
+        eventRef.current.startAt.getMinutes();
+      const hoverMinuteOfDay = Math.max(
+        0,
+        Math.min(baseMinuteOfDay + minuteDelta, 24 * 60 - DEFAULT_SNAP_MINUTES),
+      );
+
+      // Base day index from the event's date (0 = Sunday)
+      const baseDayIndex = eventRef.current.startAt.getDay();
+      const hoverDayIndex = baseDayIndex + dayDelta;
+
+      onHoverSlot(hoverMinuteOfDay, hoverDayIndex);
+    },
+    [onHoverSlot, columnWidth, pxPerMinute],
+  );
+
+  /**
+   * Clear the hover highlight. Called on drag end / cancellation.
+   */
+  const clearHover = useCallback(() => {
+    onHoverSlot?.(null, null);
+  }, [onHoverSlot]);
+
+  /**
+   * Handle a successful drop.
+   * Computes final (dayDelta, minuteDelta) and new Date values, then calls
+   * `onDropped` if the event actually moved.
+   * Runs on JS thread (via runOnJS from worklet onEnd).
+   */
+  const handleDrop = useCallback(
+    (dx: number, dy: number) => {
+      if (!onDropped) return;
+
+      const { dayDelta, minuteDelta } = computeRescheduleDelta({
+        dx,
+        dy,
+        columnWidth,
+        pxPerMinute,
+        snapMinutes: DEFAULT_SNAP_MINUTES,
+      });
+
+      // No-op drop — don't call onDropped
+      if (dayDelta === 0 && minuteDelta === 0) return;
+
+      const { newStartAt, newEndAt } = applyDelta(
+        eventRef.current.startAt,
+        eventRef.current.endAt,
+        dayDelta,
+        minuteDelta,
+      );
+
+      onDropped({
+        event:      eventRef.current,
+        dayDelta,
+        minuteDelta,
+        newStartAt,
+        newEndAt,
+      });
+    },
+    [onDropped, columnWidth, pxPerMinute],
+  );
+
+  // ── Gesture definition ────────────────────────────────────────────────────
+
+  /**
+   * Build the pan gesture once per event identity.
+   * Worklet closures capture stable shared-value handles; JS callbacks go
+   * through runOnJS so they can access the React state and Zustand store.
    */
   const panGesture = useMemo(
     () =>
       Gesture.Pan()
-        // Require a small movement before we steal touches from the
-        // surrounding ScrollView (calendar grid). Without this, every
-        // attempt to scroll would trigger a drag.
+        // Small dead-zone prevents scroll from being hijacked by an
+        // accidental slight movement during a long-press.
         .minDistance(PAN_ACTIVATION_PX)
-        .onStart((evt) => {
+        .onStart(() => {
           'worklet';
+          // Lift the card — spring for physical feel
           isActive.value = withSpring(1);
-          runOnJS(logPhase)('start', evt.translationX, evt.translationY);
         })
         .onUpdate((evt) => {
           'worklet';
-          // Direct assignment — no spring — so the card tracks the finger
-          // 1:1. Spring is reserved for the active/inactive lift below.
+          // Track finger 1:1 — no spring here, spring only on lift/drop
           translateX.value = evt.translationX;
           translateY.value = evt.translationY;
+          // Notify JS thread about hover slot (runs asynchronously via bridge)
+          runOnJS(notifyHover)(evt.translationX, evt.translationY);
         })
         .onEnd((evt) => {
           'worklet';
-          // Day 1 has no drop target, so simply spring back to origin.
-          // Day 2 will replace this with snap-to-slot via calendarGeometry.
+          // Clear hover highlight, then spring back to origin.
+          // (The parent re-renders the event at its new position via store.)
+          runOnJS(clearHover)();
+          runOnJS(handleDrop)(evt.translationX, evt.translationY);
           translateX.value = withSpring(0);
           translateY.value = withSpring(0);
-          isActive.value = withSpring(0);
-          runOnJS(logPhase)('end', evt.translationX, evt.translationY);
+          isActive.value   = withSpring(0);
         })
         .onFinalize(() => {
           'worklet';
-          // Safety net: if the gesture is cancelled (e.g. another handler
-          // wins the race), make sure we still reset visual state.
+          // Safety net: gesture cancelled externally (e.g. another handler wins)
           if (isActive.value !== 0) {
-            isActive.value = withSpring(0);
+            runOnJS(clearHover)();
+            isActive.value   = withSpring(0);
             translateX.value = withSpring(0);
             translateY.value = withSpring(0);
           }
         }),
-    // Recreate only when the event identity changes; the worklet captures
-    // current shared-value handles which are stable for the component's
-    // lifetime.
+    // Recreate only when event identity or geometry props change.
+    // notifyHover/clearHover/handleDrop are stable useCallback refs captured
+    // via the runOnJS bridge so we don't need them in the deps array.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [event.id],
+    [event.id, columnWidth, pxPerMinute],
   );
 
+  // ── Animated style (UI thread) ────────────────────────────────────────────
+
   /**
-   * Animated style — runs entirely on the UI thread. Lifts the block
-   * (opacity + zIndex hint via scale) when the user is dragging so it
-   * floats above neighbouring events, mirroring native calendar UX.
+   * Drives transform + opacity from shared values. Runs entirely on the
+   * UI thread — no JS bridge crossing per frame.
    */
   const animatedStyle = useAnimatedStyle(() => {
     const lift = isActive.value;
@@ -187,13 +335,17 @@ export function EventBlockGestureHandler({
       transform: [
         { translateX: translateX.value },
         { translateY: translateY.value },
-        // 1.0 idle → 1.04 dragging gives a subtle "picked up" affordance
-        // without distorting the time-grid alignment too much.
+        // 1.0 → 1.04 scale-up gives a "picked up" affordance
         { scale: 1 + lift * 0.04 },
       ],
+      // Slight dimming so the block reads as "in-flight"
       opacity: 1 - lift * 0.15,
+      // zIndex boost needs to come from the JS layer; handled via elevation
+      // on Android and a wrapper View on iOS in future Day 5 refinement.
     };
   });
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <GestureDetector gesture={panGesture}>
@@ -204,9 +356,9 @@ export function EventBlockGestureHandler({
           {
             backgroundColor: bgColor,
             borderLeftColor: event.color,
-            top: topOffset,
+            top:   topOffset,
             height: blockHeight,
-            left: `${leftFraction * 100}%`,
+            left:  `${leftFraction * 100}%`,
             width: `${widthFraction * 100}%`,
           },
           animatedStyle,
@@ -224,6 +376,8 @@ export function EventBlockGestureHandler({
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   block: {
     position: 'absolute',
@@ -232,9 +386,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingVertical: 2,
     overflow: 'hidden',
-    // Slight elevation hint so even at rest the PoC card matches the
-    // EventBlock visual weight. Real elevation toggling during drag is
-    // handled by animatedStyle's scale + opacity above.
     elevation: 1,
   },
   title: {
@@ -242,3 +393,66 @@ const styles = StyleSheet.create({
     color: '#1F2937',
   },
 });
+
+// ─── Optimistic-update hook (Day 3 logic, separated for testability) ──────────
+
+/**
+ * useOptimisticReschedule — encapsulates the optimistic-update + rollback
+ * logic for drag-to-reschedule so EventBlockGestureHandler stays pure.
+ *
+ * Usage (in WeekView or a parent screen):
+ *
+ * ```tsx
+ * const handleDrop = useOptimisticReschedule();
+ *
+ * <EventBlockGestureHandler
+ *   ...
+ *   onDropped={handleDrop}
+ * />
+ * ```
+ *
+ * Internals:
+ *  1. Optimistically upsert the moved event into the Zustand store.
+ *  2. Call eventService.updateEvent to persist.
+ *  3. On failure: upsert original back + show Alert.
+ *
+ * The hook is declared in this file to keep the Day 3 logic co-located with
+ * the component it serves. Move to a hooks/ file if it grows beyond ~60 lines.
+ *
+ * @returns A stable `onDropped` callback ref for use as the component prop.
+ */
+export function useOptimisticReschedule(): (payload: DroppedPayload) => void {
+  return useCallback(async (payload: DroppedPayload) => {
+    const store = useEventStore.getState();
+    const originalEvent = payload.event;
+
+    // Build the optimistic version of the event with the new times
+    const optimisticEvent: EventSummary = {
+      ...originalEvent,
+      startAt: payload.newStartAt,
+      endAt:   payload.newEndAt,
+    };
+
+    // 1. Optimistic upsert — UI responds immediately before network round-trip
+    store.upsertEvent(optimisticEvent);
+
+    try {
+      // 2. Persist to Supabase via event service
+      await updateEvent(originalEvent.id, {
+        startAt: payload.newStartAt,
+        endAt:   payload.newEndAt,
+      });
+    } catch {
+      // 3. Network failure — rollback to original and notify user
+      store.upsertEvent(originalEvent);
+      Alert.alert(
+        '이동 실패',
+        '일정 시간을 변경하지 못했습니다. 다시 시도해 주세요.',
+        [{ text: '확인' }],
+      );
+    }
+  // useCallback with no deps — store.getState() always returns latest state,
+  // and updateEvent is a stable module-level function.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) as (payload: DroppedPayload) => void;
+}
