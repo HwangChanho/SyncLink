@@ -20,13 +20,20 @@
  */
 
 import { useMemo, useRef, useState } from 'react';
-import { Animated, PanResponder, StyleSheet, Text } from 'react-native';
+import { Animated, PanResponder, StyleSheet, Text, View } from 'react-native';
 import type { EventSummary } from '@/types';
 import { radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 
 /** Smallest height that still renders legibly (1-line title). */
 const MIN_HEIGHT = 22;
+
+/**
+ * Diameter of the owner-indicator dot rendered on Space events.
+ * Kept at 7px so it remains visible without overlapping the title text.
+ * Only shown for shared (Space) events where isOwn === false.
+ */
+const OWNER_DOT_SIZE = 7;
 /** How many pixels per minute the grid uses. 60 px/hour → 1 px/min. */
 const PX_PER_MINUTE = 1;
 /** Minute granularity for the time snap on drop. */
@@ -195,6 +202,23 @@ export function EventBlock({
       >
         {translatedTitle ?? event.title}
       </Text>
+
+      {/*
+       * Owner indicator dot — shown only for Space (shared) events.
+       * Uses event.color (already resolved to the owner's member color by
+       * eventService) so it blends with the chip's accent while remaining
+       * identifiable.  Self-owned events omit the dot to reduce noise.
+       * testID allows unit tests to assert presence/absence declaratively.
+       */}
+      {!event.isOwn && (
+        <View
+          testID="owner-dot"
+          style={[
+            styles.ownerDot,
+            { backgroundColor: event.color },
+          ]}
+        />
+      )}
     </Animated.View>
   );
 }
@@ -211,5 +235,21 @@ const styles = StyleSheet.create({
   title: {
     ...textStyles.labelSm,
     color: '#1F2937',
+  },
+  /**
+   * Small dot positioned at the top-right corner of the event chip.
+   * Indicates that this event belongs to another Space member.
+   * Size and position kept within 8px of the chip edge per IDEA-012 spec.
+   */
+  ownerDot: {
+    position: 'absolute',
+    top: 3,
+    right: 3,
+    width: OWNER_DOT_SIZE,
+    height: OWNER_DOT_SIZE,
+    borderRadius: OWNER_DOT_SIZE / 2,
+    // White border adds contrast against both light and dark chip backgrounds.
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.85)',
   },
 });

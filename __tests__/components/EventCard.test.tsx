@@ -206,6 +206,40 @@ describe('EventBlock', () => {
   });
 
   // ════════════════════════════════════════════════════════════════════════════
+  // IDEA-012 Phase B — owner indicator dot (Space 공유 일정)
+  // ════════════════════════════════════════════════════════════════════════════
+
+  describe('owner indicator dot (IDEA-012 Phase B)', () => {
+    it('isOwn=false (Space 공유 일정) → owner-dot 렌더링', () => {
+      // Shared event: owner is another Space member.
+      // eventService resolves event.color to the owner's member color before
+      // passing the EventSummary down, so color here is the owner's color.
+      const sharedEvent = makeEvent({ id: 'evt-shared', isOwn: false, color: '#3B82F6' });
+      const { getByTestId } = render(
+        <EventBlock event={sharedEvent} {...defaultLayout} onPress={jest.fn()} />,
+      );
+
+      // Dot must be present for Space events.
+      const dot = getByTestId('owner-dot');
+      expect(dot).toBeTruthy();
+      // Dot background matches the owner's member color (from event.color).
+      const flat = StyleSheet.flatten(dot.props.style);
+      expect(flat.backgroundColor).toBe('#3B82F6');
+    });
+
+    it('isOwn=true (자기 일정) → owner-dot 미렌더링 (노이즈 억제)', () => {
+      // Own event: no dot to avoid unnecessary visual noise.
+      const ownEvent = makeEvent({ id: 'evt-own', isOwn: true });
+      const { queryByTestId } = render(
+        <EventBlock event={ownEvent} {...defaultLayout} onPress={jest.fn()} />,
+      );
+
+      // Dot must NOT appear for personal events.
+      expect(queryByTestId('owner-dot')).toBeNull();
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════════════════
   // widthFraction / leftFraction — 겹치는 이벤트 레이아웃
   // ════════════════════════════════════════════════════════════════════════════
 
