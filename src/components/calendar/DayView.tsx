@@ -19,7 +19,7 @@
  */
 
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { EventSummary } from '@/types';
 import type { FreeSlot } from '@/types/freeTime';
@@ -148,6 +148,14 @@ interface DayViewProps {
    * grid. Slots outside the displayed day are clipped automatically.
    */
   freeSlots?: FreeSlot[];
+
+  /**
+   * PRD 4.2 Tier 3 — callback fired when the user taps a free-time overlay band.
+   * The parent screen uses this to open FreeTimeRecommendSheet with the tapped slot.
+   *
+   * @param slot - The FreeSlot the user tapped on
+   */
+  onFreeSlotPress?: (slot: FreeSlot) => void;
 }
 
 /**
@@ -160,6 +168,7 @@ export function DayView({
   onEventPress,
   todos,
   freeSlots,
+  onFreeSlotPress,
 }: DayViewProps) {
   // Resolve active theme colors for dark mode support (TASK-700)
   const { t } = useTranslation();
@@ -191,6 +200,9 @@ export function DayView({
    * [00:00, 24:00) window and convert to pixel offset+height pairs.
    * Memoised so the overlay only recomputes when slots or selectedDate
    * change.
+   *
+   * PRD 4.2 Tier 3 (Day 4): originalSlot 필드 추가.
+   * onFreeSlotPress 콜백에 원본 FreeSlot을 전달하기 위해 각 band에 저장.
    */
   const freeSlotBands = useMemo(() => {
     if (!freeSlots || freeSlots.length === 0) return [];
@@ -199,7 +211,7 @@ export function DayView({
     const dayStartMs = dayStart.getTime();
     const dayEndMs   = dayStartMs + 24 * 60 * 60_000;
 
-    const out: { topOffset: number; height: number }[] = [];
+    const out: { topOffset: number; height: number; originalSlot: FreeSlot }[] = [];
     for (const slot of freeSlots) {
       const startMs = Math.max(slot.start.getTime(), dayStartMs);
       const endMs   = Math.min(slot.end.getTime(),   dayEndMs);
@@ -208,8 +220,9 @@ export function DayView({
       const heightHours = (endMs   - startMs)    / 3_600_000;
       if (heightHours <= 0) continue;
       out.push({
-        topOffset: topHours    * HOUR_HEIGHT,
-        height:    heightHours * HOUR_HEIGHT,
+        topOffset:    topHours    * HOUR_HEIGHT,
+        height:       heightHours * HOUR_HEIGHT,
+        originalSlot: slot,  // Tier 3: 탭 시 onFreeSlotPress에 전달
       });
     }
     return out;
@@ -359,18 +372,36 @@ export function DayView({
               {/*
                 PRD 4.2 Tier 2 — free-time overlay bands. Rendered
                 before EventBlocks so events stack on top.
+
+                PRD 4.2 Tier 3 (Day 4): onFreeSlotPress가 제공될 때
+                TouchableOpacity로 감싸서 탭 이벤트 전달.
+                onFreeSlotPress 없으면 기존 pointerEvents="none" 유지.
               */}
-              {freeSlotBands.map((s, i) => (
-                <View
-                  key={`free-${i}`}
-                  pointerEvents="none"
-                  testID="day-free-slot"
-                  style={[
-                    styles.freeSlotOverlay,
-                    { top: s.topOffset, height: s.height },
-                  ]}
-                />
-              ))}
+              {freeSlotBands.map((s, i) =>
+                onFreeSlotPress ? (
+                  <TouchableOpacity
+                    key={`free-${i}`}
+                    activeOpacity={0.7}
+                    onPress={() => onFreeSlotPress(s.originalSlot)}
+                    testID="day-free-slot"
+                    accessibilityRole="button"
+                    style={[
+                      styles.freeSlotOverlay,
+                      { top: s.topOffset, height: s.height },
+                    ]}
+                  />
+                ) : (
+                  <View
+                    key={`free-${i}`}
+                    pointerEvents="none"
+                    testID="day-free-slot"
+                    style={[
+                      styles.freeSlotOverlay,
+                      { top: s.topOffset, height: s.height },
+                    ]}
+                  />
+                ),
+              )}
 
               {/*
                 TASK-009 Day 5 — drop-target hover highlight for DayView.

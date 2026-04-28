@@ -123,6 +123,14 @@ interface WeekViewProps {
    * no overlay is drawn (toggle is off).
    */
   freeSlots?: FreeSlot[];
+
+  /**
+   * PRD 4.2 Tier 3 — callback fired when the user taps a free-time overlay band.
+   * The parent screen uses this to open FreeTimeRecommendSheet with the tapped slot.
+   *
+   * @param slot - The FreeSlot the user tapped on
+   */
+  onFreeSlotPress?: (slot: FreeSlot) => void;
 }
 
 // ─── Date utilities ────────────────────────────────────────────────────────
@@ -248,6 +256,7 @@ export function WeekView({
   onReschedule,
   todosByDate,
   freeSlots,
+  onFreeSlotPress,
 }: WeekViewProps) {
   // Resolve active theme colors for dark mode support (TASK-700)
   const colors = useColors();
@@ -372,16 +381,19 @@ export function WeekView({
    * into pixel offset+height pairs the overlay layer renders. A slot that
    * straddles midnight produces two entries (one per day). Memoised so the
    * overlay only recomputes when the slots or the visible week change.
+   *
+   * PRD 4.2 Tier 3 (Day 4): originalSlot 필드 추가.
+   * onFreeSlotPress 콜백에 원본 FreeSlot을 전달하기 위해 각 bucket에 저장.
    */
   const freeSlotsByDayKey = useMemo(() => {
-    const map: Record<string, { topOffset: number; height: number }[]> = {};
+    const map: Record<string, { topOffset: number; height: number; originalSlot: FreeSlot }[]> = {};
     if (!freeSlots || freeSlots.length === 0) return map;
 
     for (const day of weekDays) {
       const dayStart = new Date(day);
       dayStart.setHours(0, 0, 0, 0);
       const dayEndMs = dayStart.getTime() + 24 * 60 * 60_000;
-      const buckets: { topOffset: number; height: number }[] = [];
+      const buckets: { topOffset: number; height: number; originalSlot: FreeSlot }[] = [];
 
       for (const slot of freeSlots) {
         const startMs = Math.max(slot.start.getTime(), dayStart.getTime());
@@ -392,8 +404,9 @@ export function WeekView({
         const heightHours = (endMs   - startMs)            / 3_600_000;
         if (heightHours <= 0) continue;
         buckets.push({
-          topOffset: topHours    * HOUR_HEIGHT,
-          height:    heightHours * HOUR_HEIGHT,
+          topOffset:    topHours    * HOUR_HEIGHT,
+          height:       heightHours * HOUR_HEIGHT,
+          originalSlot: slot,  // Tier 3: 탭 시 onFreeSlotPress에 전달
         });
       }
       if (buckets.length > 0) map[toDateKey(day)] = buckets;
@@ -578,18 +591,36 @@ export function WeekView({
                     PRD 4.2 Tier 2 — free-time overlay: rendered before
                     EventBlocks so events sit on top. testID lets the QA
                     smoke test assert visibility per day.
+
+                    PRD 4.2 Tier 3 (Day 4): onFreeSlotPress가 제공될 때
+                    TouchableOpacity로 감싸서 탭 이벤트 전달.
+                    onFreeSlotPress 없으면 기존 pointerEvents="none" 유지.
                   */}
-                  {slotsForDay.map((s, i) => (
-                    <View
-                      key={`free-${i}`}
-                      pointerEvents="none"
-                      testID={`week-free-slot-${dateKey}`}
-                      style={[
-                        styles.freeSlotOverlay,
-                        { top: s.topOffset, height: s.height },
-                      ]}
-                    />
-                  ))}
+                  {slotsForDay.map((s, i) =>
+                    onFreeSlotPress ? (
+                      <TouchableOpacity
+                        key={`free-${i}`}
+                        activeOpacity={0.7}
+                        onPress={() => onFreeSlotPress(s.originalSlot)}
+                        testID={`week-free-slot-${dateKey}`}
+                        accessibilityRole="button"
+                        style={[
+                          styles.freeSlotOverlay,
+                          { top: s.topOffset, height: s.height },
+                        ]}
+                      />
+                    ) : (
+                      <View
+                        key={`free-${i}`}
+                        pointerEvents="none"
+                        testID={`week-free-slot-${dateKey}`}
+                        style={[
+                          styles.freeSlotOverlay,
+                          { top: s.topOffset, height: s.height },
+                        ]}
+                      />
+                    ),
+                  )}
 
                   {/*
                     TASK-009 Day 2 — drop-target highlight.

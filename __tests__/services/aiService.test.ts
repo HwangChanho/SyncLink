@@ -69,6 +69,8 @@ import {
   getTodayUsage,
   hasRemainingDailyLimit,
   getFreeTimeRecommendations,
+  recommendationCacheKey,
+  invalidateRecommendationCache,
 } from '@/services/aiService';
 import type { NLParseResult, AiUsageRecord } from '@/types';
 import type { FreeSlot } from '@/types/freeTime';
@@ -481,5 +483,57 @@ describe('getFreeTimeRecommendations', () => {
     expect(result.recommendations[0].source).toBe('rule');
     // consumeFreeTimeRec 호출 안 됨 (실패 시 쿼터 소모 안 함)
     expect(mockConsumeFreeTimeRec).not.toHaveBeenCalled();
+  });
+
+  // ── Day 3: 클라이언트 AsyncStorage 24h TTL 캐시 ─────────────────────────────
+
+  test('캐시 hit — AI 결과 캐시 저장 후 재호출 시 Edge Function 미호출, fromCache=true 반환', async () => {
+    const slot = makeSlot();
+
+    // 1차 호출: Edge Function 성공 → 캐시 저장됨
+    mockFunctionsInvoke.mockResolvedValue(makeEdgeRecResponse(1));
+    const first = await getFreeTimeRecommendations([slot], 'ko', true);
+    expect(first.source).toBe('ai');
+    expect(mockFunctionsInvoke).toHaveBeenCalledTimes(1);
+
+    // mock 초기화: 2차 호출 시 invoke/consumeFreeTimeRec 횟수를 0부터 다시 측정
+    mockFunctionsInvoke.mockClear();
+    mockConsumeFreeTimeRec.mockClear();
+
+    // 2차 호출: 캐시 hit → Edge Function 호출 없음, fromCache=true
+    const second = await getFreeTimeRecommendations([slot], 'ko', true);
+    expect(mockFunctionsInvoke).not.toHaveBeenCalled();
+    expect(second.source).toBe('ai');
+    expect(second.recommendations[0].fromCache).toBe(true);
+    // 캐시 hit 시 consumeFreeTimeRec 미호출 (쿼터 소모 없음)
+    expect(mockConsumeFreeTimeRec).toHaveBeenCalledTimes(0);
+  });
+
+  test('TTL 만료 — 캐시 저장 후 25h 경과 시 miss 처리되어 Edge Function 재호출', async () => {
+    const slot = makeSlot();
+
+    // 1차 호출: 캐시 저장
+    mockFunctionsInvoke.mockResolvedValue(makeEdgeRecResponse(1));
+    await getFreeTimeRecommendations([slot], 'ko', true);
+    expect(mockFunctionsInvoke).toHaveBeenCalledTimes(1);
+    mockFunctionsInvoke.mockClear();
+    mockConsumeFreeTimeRec.mockClear();
+
+    // 캐시 키를 직접 읽어서 cachedAt을 25h 전으로 조작 (TTL 만료 시뮬레이션)
+    const cacheKey = recommendationCacheKey(slot.start, slot.durationMinutes, 'ko');
+    const raw = await AsyncStorage.getItem(cacheKey);
+    if (raw) {
+      const parsed = JSON.parse(raw) as { result: unknown; cachedAt: string };
+      const expiredAt = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
+      await AsyncStorage.setItem(cacheKey, JSON.stringify({ ...parsed, cachedAt: expiredAt }));
+    }
+
+    // 2차 호출: TTL 만료 → cache miss → Edge Function 재호출
+    mockFunctionsInvoke.mockResolvedValue(makeEdgeRecResponse(1));
+    const result = await getFreeTimeRecommendations([slot], 'ko', true);
+    expect(mockFunctionsInvoke).toHaveBeenCalledTimes(1);
+    expect(result.source).toBe('ai');
+    // TTL 만료 후 재호출이므로 쿼터 다시 소모
+    expect(mockConsumeFreeTimeRec).toHaveBeenCalledTimes(1);
   });
 });

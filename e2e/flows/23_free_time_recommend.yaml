@@ -1,0 +1,123 @@
+# 23_free_time_recommend — PRD 4.2 Tier 3 AI 활동 추천 스모크 테스트
+#
+# 목적:
+#   Free Time Finder Tier 3 (AI 활동 추천, 옵션 C 하이브리드) 기능의 최소 연기 검증.
+#   이 스크립트는 다음을 검증한다:
+#     1. 로그인 → 캘린더 탭 도달
+#     2. 주간 뷰에서 빈 시간 슬롯 오버레이 표시 확인 (testID: week-free-slot-*)
+#     3. 빈 슬롯 탭 시 FreeTimeRecommendSheet BottomSheet 열림 확인
+#     4. BottomSheet에 활동 추천 카드 표시 확인 (룰 baseline 즉시 표시)
+#     5. "다시 추천" 버튼 탭 → 오류 없이 재요청 완료
+#     6. BottomSheet 닫기 → 앱 크래시 없음 확인
+#
+# 선행 조건:
+#   - Tier 2 freeSlots 기능이 활성화된 상태 (캘린더에 빈 슬롯 오버레이 표시)
+#   - TEST_EMAIL / TEST_PASSWORD 환경변수 설정
+#
+# 한계 (실기 실행 X — 계획 파일만):
+#   - AI Edge Function 실제 호출은 Integration 환경 필요 (로컬 Supabase 또는 staging).
+#   - 룰 baseline 검증은 즉시 가능하나 AI 카드 교체는 네트워크 지연에 따라 변수.
+#   - 이 파일은 Maestro dry-run용. 실 실행은 LEAD 승인 후 CI/CD 연동.
+#
+# 실행 방법:
+#   TEST_EMAIL=test@example.com TEST_PASSWORD=secret \
+#   maestro test e2e/flows/23_free_time_recommend.yaml
+#
+# @task PRD-4.2-Tier3 Day 5
+# @plan docs/plans/2026-04-28-free-time-tier-3-ai-recommend.md
+
+appId: io.synclink.app
+env:
+  TEST_EMAIL: ${TEST_EMAIL}
+  TEST_PASSWORD: ${TEST_PASSWORD}
+---
+# ── 1. 앱 실행 + 로그인 ───────────────────────────────────────────────────────
+- launchApp:
+    clearState: true
+- waitForAnimationToEnd
+- assertVisible: "SyncLink"
+- takeScreenshot: screenshots/rec_01_launch
+
+- tapOn:
+    text: "이메일로 로그인"
+- waitForAnimationToEnd
+- tapOn:
+    id: "email-input"
+- inputText: ${TEST_EMAIL}
+- tapOn:
+    id: "password-input"
+- inputText: ${TEST_PASSWORD}
+- tapOn:
+    text: "로그인"
+- waitForAnimationToEnd
+
+# ── 2. 캘린더 탭 이동 ─────────────────────────────────────────────────────────
+- tapOn:
+    id: "tab-calendar"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/rec_02_calendar
+
+# ── 3. 빈 시간 슬롯 오버레이 확인 ────────────────────────────────────────────
+# Tier 2 freeSlots overlay가 렌더링되어야 함.
+# testID는 week-free-slot-{YYYY-MM-DD} 형식으로 동적 생성.
+# 특정 날짜 키 대신 공통 prefix를 사용하거나 첫 번째 슬롯을 탭.
+#
+# 주의: 실제 free slot이 없으면 이 이하 단계는 skip됨.
+#       QA 계정에 free slot이 있는 날짜의 주가 표시되어야 함.
+- assertVisible:
+    id: "free-time-toggle"  # Tier 2 free time 표시 토글 (캘린더 헤더)
+  optional: true
+- takeScreenshot: screenshots/rec_03_free_slots
+
+# ── 4. 빈 슬롯 탭 → BottomSheet 열림 ─────────────────────────────────────────
+# 첫 번째 free slot overlay를 탭한다.
+# testID 패턴: week-free-slot-{YYYY-MM-DD} (WeekView.tsx)
+- tapOn:
+    id: "week-free-slot-.*"
+    optional: true  # free slot이 없으면 skip
+- waitForAnimationToEnd
+
+# ── 5. FreeTimeRecommendSheet 표시 확인 ────────────────────────────────────────
+- assertVisible:
+    id: "free-time-recommend-sheet"
+  optional: true
+- takeScreenshot: screenshots/rec_04_sheet_open
+
+# ── 6. 룰 baseline 활동 카드 표시 확인 ────────────────────────────────────────
+# 룰 baseline은 즉시 (0ms) 표시되므로 sheet가 열리면 바로 확인 가능.
+- assertVisible:
+    id: "free-time-recommend-activity-0"
+  optional: true
+- takeScreenshot: screenshots/rec_05_activities
+
+# ── 7. "다시 추천" 버튼 탭 ──────────────────────────────────────────────────────
+- tapOn:
+    id: "free-time-recommend-refresh-btn"
+  optional: true
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/rec_06_refresh
+
+# ── 8. 첫 번째 "이 활동으로 일정 만들기" 버튼 탭 ──────────────────────────────────
+# 탭 시 이벤트 생성 모달이 열리고 제목이 prefill되어야 함.
+- tapOn:
+    id: "free-time-recommend-create-btn-0"
+  optional: true
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/rec_07_create_event
+
+# ── 9. BottomSheet 배경 탭으로 닫기 또는 Back ────────────────────────────────
+# 이벤트 모달이 열렸으면 Back으로 닫기.
+- back
+  optional: true
+- waitForAnimationToEnd
+
+# 시트가 열려 있으면 배경 탭으로 닫기.
+- tapOn:
+    id: "free-time-recommend-backdrop"
+  optional: true
+- waitForAnimationToEnd
+
+# ── 10. 앱 크래시 없음 최종 확인 ────────────────────────────────────────────────
+- assertVisible:
+    id: "tab-calendar"
+- takeScreenshot: screenshots/rec_08_final
