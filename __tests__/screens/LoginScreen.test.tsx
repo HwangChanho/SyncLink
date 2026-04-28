@@ -54,6 +54,8 @@ jest.mock('expo-router', () => ({
   Redirect: () => null,
 }));
 
+// useColors is globally mocked in jest.setup.js — no override needed here.
+
 // authService: 실제 네이티브 모듈 호출 없이 mock으로 대체
 jest.mock('@/services/authService', () => ({
   signInWithGoogle: jest.fn(),

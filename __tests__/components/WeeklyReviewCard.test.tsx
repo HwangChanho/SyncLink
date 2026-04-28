@@ -90,18 +90,7 @@ jest.mock('expo-router', () => {
   };
 });
 
-jest.mock('@/hooks/useColors', () => ({
-  useColors: () => ({
-    surface:         '#FFFFFF',
-    border:          '#E0E0E0',
-    primary:         '#6B8CFF',
-    textPrimary:     '#1A1A1A',
-    textSecondary:   '#666666',
-    textTertiary:    '#999999',
-    backgroundAlt:   '#F5F5F5',
-    error:           '#FF4444',
-  }),
-}));
+// useColors is globally mocked in jest.setup.js — no override needed here.
 
 // spacing: 모든 key에 대해 숫자 반환 (0.5, 1.5 포함)
 jest.mock('@/constants/spacing', () => ({

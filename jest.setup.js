@@ -326,3 +326,35 @@ console.warn = (...args) => {
   }
   originalWarn(...args);
 };
+
+// ─── useColors global mock ────────────────────────────────────────────────────
+// Prevents Zustand appearanceStore → Appearance.addChangeListener from keeping
+// the Jest process alive after tests finish → SIGTERM / OOM on MacBook Air M2.
+// Individual test files can override with jest.mock('@/hooks/useColors', ...).
+jest.mock('@/hooks/useColors', () => ({
+  useColors: () => ({
+    primary:         '#6B8CFF',
+    primaryLight:    '#E8EEFF',
+    primaryDark:     '#4A6CF7',
+    accent:          '#6B8CFF',
+    background:      '#FFFFFF',
+    backgroundAlt:   '#F5F5F5',
+    surface:         '#FFFFFF',
+    surfaceAlt:      '#F0F0F0',
+    textPrimary:     '#1A1A1A',
+    textSecondary:   '#666666',
+    textTertiary:    '#999999',
+    textInverse:     '#FAFAFA',
+    textPlaceholder: '#BBBBBB',
+    border:          '#E0E0E0',
+    borderStrong:    '#CCCCCC',
+    success:         '#059669',
+    warning:         '#D97706',
+    error:           '#DC2626',
+    tabActive:       '#6B8CFF',
+    tabInactive:     '#999999',
+    inputBackground: '#F5F5F5',
+    inputBorder:     '#E0E0E0',
+    inputFocus:      '#6B8CFF',
+  }),
+}));

@@ -5,6 +5,8 @@
  * Sprint 14 변경: 명시적 Save 버튼 제거, 닫기 버튼 탭 시 자동 저장.
  */
 
+// useColors is globally mocked in jest.setup.js — no override needed here.
+
 import { fireEvent, render } from '@testing-library/react-native';
 import { TodoEditSheet } from '@/components/planner/TodoEditSheet';
 import type { Todo } from '@/types';
