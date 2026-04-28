@@ -649,6 +649,7 @@ export default function EventCreateScreen() {
           {title.trim() || t('event.untitled')}
         </Text>
         <Pressable
+          testID="event-create-save"
           style={[styles.headerButton, isSaving && styles.headerButtonDisabled]}
           onPress={() => void handleSave()}
           disabled={isSaving}
@@ -681,6 +682,7 @@ export default function EventCreateScreen() {
         {/* Title with autocomplete from prior calendar events */}
         <View style={styles.titleWrapper}>
           <TextInput
+            testID="event-create-title-input"
             style={styles.titleInput}
             placeholder={t('event.title_placeholder')}
             placeholderTextColor={colors.textSecondary}

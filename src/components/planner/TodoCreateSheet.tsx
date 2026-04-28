@@ -143,6 +143,7 @@ export function TodoCreateSheet({
                 </Pressable>
                 <Text style={styles.headerTitle}>{t('todo.label')}</Text>
                 <Pressable
+                  testID="todo-create-save"
                   onPress={() => void handleCreate()}
                   disabled={isSaving || title.trim().length === 0}
                   style={(isSaving || title.trim().length === 0) && styles.disabled}
@@ -192,6 +193,7 @@ export function TodoCreateSheet({
 
                 <TextInput
                   ref={titleInputRef}
+                  testID="todo-create-title-input"
                   style={styles.titleInput}
                   placeholder={t('todo.label')}
                   placeholderTextColor={colors.textPlaceholder}

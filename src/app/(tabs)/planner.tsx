@@ -156,6 +156,7 @@ export default function PlannerScreen() {
         {(['todo', 'notes'] as PlannerTab[]).map(tab => (
           <TouchableOpacity
             key={tab}
+            testID={tab === 'todo' ? 'planner-tab-todo' : 'planner-tab-notes'}
             style={[styles.tabItem, activeTab === tab && styles.tabItemActive]}
             onPress={() => setActiveTab(tab)}
           >
@@ -267,6 +268,7 @@ export default function PlannerScreen() {
         the affordance is consistent.
       */}
       <TouchableOpacity
+        testID={activeTab === 'notes' ? 'planner-fab-notes' : 'planner-fab-todo'}
         style={styles.fab}
         onPress={() => {
           if (activeTab === 'notes') {

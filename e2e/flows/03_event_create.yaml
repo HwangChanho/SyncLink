@@ -1,44 +1,147 @@
-# 03_event_create — 이벤트 생성 골든 패스
+# 03_event_create — 이벤트 생성 골든 패스 (testID 기반)
 #
-# 캘린더 탭 → FAB(새 일정 만들기) → 제목 입력 → 저장
-# 생성된 이벤트가 캘린더에 표시되는지 확인한다.
+# 캘린더 탭 → FAB(새 일정 만들기) → 제목 입력 → 저장 → 캘린더로 복귀
 #
-# 선행 조건: 10_golden_path_login.yaml 실행 후 로그인 상태 유지
-# 이벤트 생성 모달: autoFocus 있어 typeText 직접 사용 가능
+# 자체 로그인 포함 (testID 기반, locale 무관) — 단독 실행 가능
 #
-# FAB accessibilityLabel: "새 일정 만들기" (calendar.tsx:533)
-# 저장 버튼: t('common.save') = "저장" (헤더 우측 Text)
+# 실행:
+#   maestro --device 5AA67030-E13E-45DA-B4B5-9B45CBC0AFE5 test \
+#     -e TEST_EMAIL=e2e-ios-sim-pro@synclink.test \
+#     -e TEST_PASSWORD=e2etest1234 \
+#     e2e/flows/03_event_create.yaml
+#
+# testID 참조:
+#   calendar-fab-create       — calendar.tsx FAB 버튼
+#   event-create-title-input  — create.tsx 제목 TextInput
+#   event-create-save         — create.tsx 헤더 저장 버튼
 
 appId: io.synclink.app
+env:
+  TEST_EMAIL: ${TEST_EMAIL}
+  TEST_PASSWORD: ${TEST_PASSWORD}
 ---
-# 앱 재시작 (clearState 없이) — 세션 + ONBOARDING_STORAGE_KEY 유지하면서
-# 라우팅 버그 없이 /(tabs)에 안정적으로 진입.
-# 10_golden_path_login.yaml 이후 실행 시 세션과 온보딩 완료 상태가 유지됨.
-- launchApp
+# ── 앱 초기화 ──────────────────────────────────────────────────────────────────
+- stopApp
+- clearState
+- launchApp:
+    permissions:
+      all: deny
+
+# Dialog 5회 dismiss (expo-location / RevenueCat 런타임 요청)
+- repeat:
+    times: 5
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "허용 안 함"
+          commands:
+            - tapOn:
+                text: "허용 안 함"
+            - waitForAnimationToEnd
+      - runFlow:
+          when:
+            visible:
+              text: "Don't Allow"
+          commands:
+            - tapOn:
+                text: "Don't Allow"
+            - waitForAnimationToEnd
+
+# ── 로그인 (testID 기반) ────────────────────────────────────────────────────────
 - extendedWaitUntil:
     visible:
-      text: "오늘 일정"
-    timeout: 20000
-
-# 캘린더 탭으로 이동
+      id: "login-dev-submit"
+    timeout: 30000
 - tapOn:
-    label: "캘린더, tab, 2 of 4"
+    id: "login-dev-email"
+- eraseText
+- inputText: ${TEST_EMAIL}
+- tapOn:
+    id: "login-dev-password"
+- eraseText
+- inputText: ${TEST_PASSWORD}
+- tapOn:
+    id: "login-dev-submit"
+- waitForAnimationToEnd
+
+# Post-login dialog dismiss (5회)
+- repeat:
+    times: 5
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "허용 안 함"
+          commands:
+            - tapOn:
+                text: "허용 안 함"
+            - waitForAnimationToEnd
+      - runFlow:
+          when:
+            visible:
+              text: "Don't Allow"
+          commands:
+            - tapOn:
+                text: "Don't Allow"
+            - waitForAnimationToEnd
+
+# Onboarding skip (testID)
+- runFlow:
+    when:
+      visible:
+        id: "onboarding-button-skip"
+    commands:
+      - tapOn:
+          id: "onboarding-button-skip"
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        id: "profile-onboarding-button-skip"
+    commands:
+      - tapOn:
+          id: "profile-onboarding-button-skip"
+      - waitForAnimationToEnd
+
+# 홈 탭 도달 확인
+- extendedWaitUntil:
+    visible:
+      id: "tab-button-home"
+    timeout: 30000
+
+# ── 캘린더 탭으로 이동 ─────────────────────────────────────────────────────────
+- tapOn:
+    id: "tab-button-calendar"
 - waitForAnimationToEnd
 - takeScreenshot: screenshots/03_calendar_before_create
 
-# FAB(+) 버튼 탭 — accessibilityLabel: "새 일정 만들기"
+# ── FAB 탭 → 이벤트 생성 화면 진입 ────────────────────────────────────────────
+# testID: calendar-fab-create (calendar.tsx)
 - tapOn:
-    label: "새 일정 만들기"
+    id: "calendar-fab-create"
 - waitForAnimationToEnd
 - takeScreenshot: screenshots/03_event_create_form
 
-# 제목 입력 — autoFocus이므로 별도 tapOn 없이 typeText 직접 사용
+# ── 제목 입력 ──────────────────────────────────────────────────────────────────
+# testID: event-create-title-input (create.tsx, autoFocus 있음)
+- extendedWaitUntil:
+    visible:
+      id: "event-create-title-input"
+    timeout: 10000
+- tapOn:
+    id: "event-create-title-input"
 - inputText: "E2E 테스트 이벤트"
 - takeScreenshot: screenshots/03_event_title_entered
 
-# 저장 — 헤더 오른쪽 "저장" Text 버튼
-# 저장 버튼은 Pressable이라 text 속성이 비어있음 → label 사용
+# ── 저장 버튼 탭 ───────────────────────────────────────────────────────────────
+# testID: event-create-save (create.tsx 헤더 Pressable)
 - tapOn:
-    label: "저장"
+    id: "event-create-save"
 - waitForAnimationToEnd
 - takeScreenshot: screenshots/03_event_created
+
+# ── 캘린더로 복귀 확인 ─────────────────────────────────────────────────────────
+# 저장 후 router.back()으로 캘린더 탭 복귀. 탭 버튼 가시성으로 검증.
+- assertVisible:
+    id: "tab-button-calendar"

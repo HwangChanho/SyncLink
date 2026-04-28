@@ -703,6 +703,7 @@ export default function CalendarScreen() {
 
         {/* FAB: quick create pre-filled with selectedDate (kept alongside NLInputBar) */}
         <Pressable
+          testID="calendar-fab-create"
           style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
           onPress={() => {
             router.push({

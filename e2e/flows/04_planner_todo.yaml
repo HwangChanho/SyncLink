@@ -1,58 +1,158 @@
-# 04_planner_todo — 플래너 할일 생성 골든 패스
+# 04_planner_todo — 플래너 할일 생성 골든 패스 (testID 기반)
 #
-# 플래너 탭 → FAB(새 할일) → 제목 입력 → 저장
-# 생성된 할일이 목록에 표시되는지 확인한다.
+# 플래너 탭 → 할일 탭 확인 → FAB → 제목 입력 → 저장 → 플래너로 복귀
 #
-# 선행 조건: 10_golden_path_login.yaml 실행 후 로그인 상태 유지
+# 자체 로그인 포함 (testID 기반, locale 무관) — 단독 실행 가능
 #
-# FAB accessibilityLabel: "새 할일" (activeTab === 'todo' 시, planner.tsx:279)
-# TodoCreateSheet: useEffect로 200ms 후 auto-focus → typeText 직접 사용 가능
-# 저장 버튼: t('common.save') = "저장" (시트 헤더 오른쪽 Pressable Text)
+# 실행:
+#   maestro --device 5AA67030-E13E-45DA-B4B5-9B45CBC0AFE5 test \
+#     -e TEST_EMAIL=e2e-ios-sim-pro@synclink.test \
+#     -e TEST_PASSWORD=e2etest1234 \
+#     e2e/flows/04_planner_todo.yaml
+#
+# testID 참조:
+#   planner-tab-todo        — planner.tsx 할일 서브탭 버튼
+#   planner-fab-todo        — planner.tsx FAB (할일 탭 활성 시)
+#   todo-create-title-input — TodoCreateSheet.tsx 제목 TextInput
+#   todo-create-save        — TodoCreateSheet.tsx 헤더 저장 버튼
 
 appId: io.synclink.app
+env:
+  TEST_EMAIL: ${TEST_EMAIL}
+  TEST_PASSWORD: ${TEST_PASSWORD}
 ---
-# 앱 재시작 (clearState 없이) — 세션 + ONBOARDING_STORAGE_KEY 유지.
-# 03_event_create.yaml 이후 실행 가능.
-- launchApp
+# ── 앱 초기화 ──────────────────────────────────────────────────────────────────
+- stopApp
+- clearState
+- launchApp:
+    permissions:
+      all: deny
+
+# Dialog 5회 dismiss (expo-location / RevenueCat 런타임 요청)
+- repeat:
+    times: 5
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "허용 안 함"
+          commands:
+            - tapOn:
+                text: "허용 안 함"
+            - waitForAnimationToEnd
+      - runFlow:
+          when:
+            visible:
+              text: "Don't Allow"
+          commands:
+            - tapOn:
+                text: "Don't Allow"
+            - waitForAnimationToEnd
+
+# ── 로그인 (testID 기반) ────────────────────────────────────────────────────────
 - extendedWaitUntil:
     visible:
-      text: "오늘 일정"
-    timeout: 20000
-
-# 플래너 탭 이동
+      id: "login-dev-submit"
+    timeout: 30000
 - tapOn:
-    label: "플래너, tab, 3 of 4"
+    id: "login-dev-email"
+- eraseText
+- inputText: ${TEST_EMAIL}
+- tapOn:
+    id: "login-dev-password"
+- eraseText
+- inputText: ${TEST_PASSWORD}
+- tapOn:
+    id: "login-dev-submit"
 - waitForAnimationToEnd
 
-# 할일 탭 서브탭 레이블 확인 (스켈레톤 로딩 후 등장 가능)
+# Post-login dialog dismiss (5회)
+- repeat:
+    times: 5
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "허용 안 함"
+          commands:
+            - tapOn:
+                text: "허용 안 함"
+            - waitForAnimationToEnd
+      - runFlow:
+          when:
+            visible:
+              text: "Don't Allow"
+          commands:
+            - tapOn:
+                text: "Don't Allow"
+            - waitForAnimationToEnd
+
+# Onboarding skip (testID)
+- runFlow:
+    when:
+      visible:
+        id: "onboarding-button-skip"
+    commands:
+      - tapOn:
+          id: "onboarding-button-skip"
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        id: "profile-onboarding-button-skip"
+    commands:
+      - tapOn:
+          id: "profile-onboarding-button-skip"
+      - waitForAnimationToEnd
+
+# 홈 탭 도달 확인
 - extendedWaitUntil:
     visible:
-      label: "할일"
+      id: "tab-button-home"
+    timeout: 30000
+
+# ── 플래너 탭으로 이동 ─────────────────────────────────────────────────────────
+- tapOn:
+    id: "tab-button-planner"
+- waitForAnimationToEnd
+
+# 할일 서브탭 확인 (기본 활성 상태이나 명시적으로 탭)
+# testID: planner-tab-todo (planner.tsx)
+- extendedWaitUntil:
+    visible:
+      id: "planner-tab-todo"
     timeout: 15000
+- tapOn:
+    id: "planner-tab-todo"
+- waitForAnimationToEnd
 - takeScreenshot: screenshots/04_planner_before
 
-# FAB(+) 탭 — 새 할일 시트 열기
-# accessibilityLabel: "새 할일" (todo 탭이 기본 활성 상태)
+# ── FAB 탭 → TodoCreateSheet 열기 ─────────────────────────────────────────────
+# testID: planner-fab-todo (할일 탭 활성 시 planner.tsx FAB)
 - tapOn:
-    label: "새 할일"
+    id: "planner-fab-todo"
 - waitForAnimationToEnd
 - takeScreenshot: screenshots/04_todo_create_sheet
 
-# 할일 제목 입력
-# TodoCreateSheet에 useEffect로 200ms 후 titleInputRef.focus() → typeText 직접 가능
+# ── 할일 제목 입력 ─────────────────────────────────────────────────────────────
+# testID: todo-create-title-input (TodoCreateSheet.tsx, 200ms auto-focus)
+- extendedWaitUntil:
+    visible:
+      id: "todo-create-title-input"
+    timeout: 5000
+- tapOn:
+    id: "todo-create-title-input"
 - inputText: "E2E 테스트 할일"
 - takeScreenshot: screenshots/04_todo_title_entered
 
-# 저장 — 헤더 오른쪽 t('common.save') = "저장" Pressable (label 사용)
+# ── 저장 버튼 탭 ───────────────────────────────────────────────────────────────
+# testID: todo-create-save (TodoCreateSheet.tsx 헤더 Pressable)
 - tapOn:
-    label: "저장"
+    id: "todo-create-save"
 - waitForAnimationToEnd
 - takeScreenshot: screenshots/04_todo_created
 
-# 시트가 닫혀 플래너 탭으로 돌아왔으면 저장 성공.
-# 목록에서 할일 텍스트 확인은 Metro 핫 리로드 트리거 가능성이 있어 제외.
-# (스크린샷 저장 → Metro 파일 워처 감지 → 번들 리로드 → 라우팅 버그 재발 위험)
-- extendedWaitUntil:
-    visible:
-      label: "할일"
-    timeout: 5000
+# ── 플래너 탭 복귀 확인 ────────────────────────────────────────────────────────
+# 시트 닫힌 후 플래너 탭에 있는지 확인 (testID)
+- assertVisible:
+    id: "planner-tab-todo"

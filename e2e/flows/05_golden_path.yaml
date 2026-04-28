@@ -1,84 +1,213 @@
-# 05_golden_path — 전체 골든 패스 (로그인 → 주요 기능 순서대로)
+# 05_golden_path — 전체 골든 패스 (testID 기반, locale 무관)
 #
-# 완전한 E2E 스모크 테스트. 각 세부 플로우를 순서대로 실행한다.
-# 한 번에 전체 앱 흐름을 검증하고 싶을 때 사용.
+# 완전한 E2E 스모크 테스트:
+#   로그인 → 홈 → 캘린더 → 이벤트 생성 → 플래너 → 할일 생성 → My 탭
+#
+# 자체 로그인 포함 — 단독 실행 가능
 #
 # 실행:
-#   TEST_EMAIL=test@example.com TEST_PASSWORD=secret \
-#   maestro test e2e/flows/05_golden_path.yaml
+#   maestro --device 5AA67030-E13E-45DA-B4B5-9B45CBC0AFE5 test \
+#     -e TEST_EMAIL=e2e-ios-sim-pro@synclink.test \
+#     -e TEST_PASSWORD=e2etest1234 \
+#     e2e/flows/05_golden_path.yaml
+#
+# testID 참조:
+#   login-dev-email / login-dev-password / login-dev-submit
+#   tab-button-{home,calendar,planner,my}
+#   calendar-fab-create, event-create-title-input, event-create-save
+#   planner-tab-todo, planner-fab-todo, todo-create-title-input, todo-create-save
 
 appId: io.synclink.app
 env:
   TEST_EMAIL: ${TEST_EMAIL}
   TEST_PASSWORD: ${TEST_PASSWORD}
 ---
-# ── 1. 앱 실행 + 로그인 화면 검증 ────────────────────────────────────────────
+# ── 1. 앱 초기화 ───────────────────────────────────────────────────────────────
+- stopApp
+- clearState
 - launchApp:
-    clearState: true
-- waitForAnimationToEnd
-- assertVisible: "SyncLink"
-- takeScreenshot: screenshots/gp_01_login
+    permissions:
+      all: deny
 
-# ── 2. Dev 로그인 ─────────────────────────────────────────────────────────────
+# Dialog 5회 dismiss (expo-location / RevenueCat 런타임 요청)
+- repeat:
+    times: 5
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "허용 안 함"
+          commands:
+            - tapOn:
+                text: "허용 안 함"
+            - waitForAnimationToEnd
+      - runFlow:
+          when:
+            visible:
+              text: "Don't Allow"
+          commands:
+            - tapOn:
+                text: "Don't Allow"
+            - waitForAnimationToEnd
+
+# ── 2. 로그인 (testID 기반) ────────────────────────────────────────────────────
+- extendedWaitUntil:
+    visible:
+      id: "login-dev-submit"
+    timeout: 30000
 - tapOn:
-    text: "이메일"
+    id: "login-dev-email"
+- eraseText
 - inputText: ${TEST_EMAIL}
 - tapOn:
-    text: "비밀번호"
+    id: "login-dev-password"
+- eraseText
 - inputText: ${TEST_PASSWORD}
 - tapOn:
-    text: "이메일로 로그인"
+    id: "login-dev-submit"
 - waitForAnimationToEnd
-- assertVisible: "홈"
+- takeScreenshot: screenshots/gp_01_after_login
+
+# Post-login dialog dismiss (5회)
+- repeat:
+    times: 5
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "허용 안 함"
+          commands:
+            - tapOn:
+                text: "허용 안 함"
+            - waitForAnimationToEnd
+      - runFlow:
+          when:
+            visible:
+              text: "Don't Allow"
+          commands:
+            - tapOn:
+                text: "Don't Allow"
+            - waitForAnimationToEnd
+
+# Onboarding skip (testID)
+- runFlow:
+    when:
+      visible:
+        id: "onboarding-button-skip"
+    commands:
+      - tapOn:
+          id: "onboarding-button-skip"
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        id: "profile-onboarding-button-skip"
+    commands:
+      - tapOn:
+          id: "profile-onboarding-button-skip"
+      - waitForAnimationToEnd
+
+# ── 3. 홈 탭 도달 확인 ─────────────────────────────────────────────────────────
+- extendedWaitUntil:
+    visible:
+      id: "tab-button-home"
+    timeout: 30000
+- assertVisible:
+    id: "tab-button-home"
+- assertVisible:
+    id: "tab-button-calendar"
+- assertVisible:
+    id: "tab-button-planner"
+- assertVisible:
+    id: "tab-button-my"
 - takeScreenshot: screenshots/gp_02_home
 
-# ── 3. 탭 네비게이션 ──────────────────────────────────────────────────────────
-- tapOn: "캘린더"
+# ── 4. 탭 네비게이션 (testID 기반) ────────────────────────────────────────────
+- tapOn:
+    id: "tab-button-calendar"
 - waitForAnimationToEnd
 - takeScreenshot: screenshots/gp_03_calendar
 
-- tapOn: "플래너"
+- tapOn:
+    id: "tab-button-planner"
 - waitForAnimationToEnd
-- assertVisible: "할일"
+- assertVisible:
+    id: "planner-tab-todo"
 - takeScreenshot: screenshots/gp_04_planner
 
-- tapOn: "내 정보"
+- tapOn:
+    id: "tab-button-my"
 - waitForAnimationToEnd
 - takeScreenshot: screenshots/gp_05_my
 
-- tapOn: "홈"
+- tapOn:
+    id: "tab-button-home"
 - waitForAnimationToEnd
 
-# ── 4. 이벤트 생성 ────────────────────────────────────────────────────────────
-- tapOn: "캘린더"
-- waitForAnimationToEnd
+# ── 5. 이벤트 생성 ────────────────────────────────────────────────────────────
 - tapOn:
-    label: "새 일정 만들기"
+    id: "tab-button-calendar"
 - waitForAnimationToEnd
+
+# FAB 탭 → 이벤트 생성 화면 진입
+- tapOn:
+    id: "calendar-fab-create"
+- waitForAnimationToEnd
+
+# 제목 입력 (testID, autoFocus)
+- extendedWaitUntil:
+    visible:
+      id: "event-create-title-input"
+    timeout: 10000
+- tapOn:
+    id: "event-create-title-input"
 - inputText: "E2E 골든패스 이벤트"
 - takeScreenshot: screenshots/gp_06_event_form
+
+# 저장 (testID)
 - tapOn:
-    text: "저장"
-    optional: true
+    id: "event-create-save"
 - waitForAnimationToEnd
 - takeScreenshot: screenshots/gp_07_event_done
 
-# ── 5. 할일 생성 ──────────────────────────────────────────────────────────────
-- tapOn: "플래너"
-- waitForAnimationToEnd
+# 캘린더 탭 복귀 확인
+- assertVisible:
+    id: "tab-button-calendar"
+
+# ── 6. 할일 생성 ──────────────────────────────────────────────────────────────
 - tapOn:
-    label: "새 할일"
-    optional: true
-- runFlow:
-    when:
-      notVisible: "제목"
-    commands:
-      - tapOn:
-          label: "새 할일 만들기"
+    id: "tab-button-planner"
 - waitForAnimationToEnd
+
+# 할일 탭 활성화 확인 (testID)
+- extendedWaitUntil:
+    visible:
+      id: "planner-tab-todo"
+    timeout: 10000
+- tapOn:
+    id: "planner-tab-todo"
+- waitForAnimationToEnd
+
+# FAB 탭 → TodoCreateSheet 열기
+- tapOn:
+    id: "planner-fab-todo"
+- waitForAnimationToEnd
+
+# 제목 입력 (testID, 200ms auto-focus)
+- extendedWaitUntil:
+    visible:
+      id: "todo-create-title-input"
+    timeout: 5000
+- tapOn:
+    id: "todo-create-title-input"
 - inputText: "E2E 골든패스 할일"
+
+# 저장 (testID)
 - tapOn:
-    text: "저장"
-    optional: true
+    id: "todo-create-save"
 - waitForAnimationToEnd
 - takeScreenshot: screenshots/gp_08_todo_done
+
+# 플래너 탭 복귀 확인
+- assertVisible:
+    id: "planner-tab-todo"
