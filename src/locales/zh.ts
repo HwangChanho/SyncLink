@@ -295,6 +295,11 @@ const zh = {
     share_message: '邀请您加入 SyncLink Space "{{name}}"！\n邀请码：{{code}}\n加入链接：{{link}}',
     email_body: '邀请您加入 SyncDay Space "{{name}}"！\n\n邀请码：{{code}}\n加入链接：{{link}}\n\n点击上方链接，或在 SyncDay 应用中输入邀请码加入。',
     edit_accessibility: '编辑 Space',
+    // IDEA-011 Phase B — 明确所有权转让 UX
+    transfer_ownership: '转让所有权',
+    transfer_confirm: '将所有权转让给 {{nickname}}？此操作无法撤销，确定继续吗？',
+    transfer_failed: '所有权转让失败。',
+    new_owner: '选择新管理员',
   },
 
   // IDEA-015 — contact picker modal i18n

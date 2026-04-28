@@ -295,6 +295,11 @@ const en = {
     share_message: 'You are invited to SyncLink Space "{{name}}"!\nInvite code: {{code}}\nJoin link: {{link}}',
     email_body: 'You are invited to SyncDay Space "{{name}}"!\n\nInvite code: {{code}}\nJoin link: {{link}}\n\nClick the link above or enter the code in the SyncDay app to join.',
     edit_accessibility: 'Edit Space',
+    // IDEA-011 Phase B — explicit ownership transfer UX
+    transfer_ownership: 'Transfer Ownership',
+    transfer_confirm: 'Transfer ownership to {{nickname}}? This cannot be undone.',
+    transfer_failed: 'Failed to transfer ownership.',
+    new_owner: 'Select New Owner',
   },
 
   // IDEA-015 — contact picker modal i18n

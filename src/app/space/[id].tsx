@@ -85,6 +85,12 @@ export default function SpaceDetailScreen() {
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   // ─── Contact picker modal — invite from OS contacts ──────────────────────
   const [isContactPickerVisible, setIsContactPickerVisible] = useState(false);
+  // ─── Transfer ownership modal state (IDEA-011 Phase B) ───────────────────
+  /**
+   * Controls the "소유권 양도" member-picker modal.
+   * true = modal is visible, false = modal hidden.
+   */
+  const [isTransferModalVisible, setIsTransferModalVisible] = useState(false);
   // ─── Web-only invite state (IDEA-014) ─────────────────────────────────────
   /**
    * Controls QR panel visibility on web.
@@ -355,6 +361,48 @@ export default function SpaceDetailScreen() {
               router.back();
             } catch (err) {
               showAlert(t('common.error'), err instanceof Error ? err.message : t('space.leave_failed'));
+              setIsActionLoading(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  // ─── Transfer ownership handler (IDEA-011 Phase B) ───────────────────────
+
+  /**
+   * Called when the owner selects a target member from the transfer modal.
+   * Shows a final confirm dialog (irreversible warning) before executing the
+   * transferOwnership service call.
+   *
+   * @param member - The SpaceMember who will become the new owner
+   */
+  const handleTransferOwnership = (member: SpaceMember) => {
+    // Close the member-picker first, then show confirm alert
+    setIsTransferModalVisible(false);
+    showAlert(
+      t('space.transfer_ownership'),
+      t('space.transfer_confirm', { nickname: member.nickname }),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('space.transfer_ownership'),
+          style: 'destructive',
+          onPress: async () => {
+            if (!space) return;
+            setIsActionLoading(true);
+            try {
+              await spaceService.transferOwnership(space.id, member.userId);
+              // Reload space so that the caller's role is updated to 'member'
+              // and the new owner's role is updated to 'owner' in the UI.
+              await loadSpace();
+            } catch (err) {
+              showAlert(
+                t('common.error'),
+                err instanceof Error ? err.message : t('space.transfer_failed'),
+              );
+            } finally {
               setIsActionLoading(false);
             }
           },
@@ -883,6 +931,21 @@ export default function SpaceDetailScreen() {
 
         {/* Danger zone */}
         <View style={styles.dangerZone}>
+          {/*
+           * ── 소유권 양도 버튼 (owner only, IDEA-011 Phase B) ──────────────
+           * 양도 가능한 다른 멤버가 1명 이상 있을 때만 표시한다.
+           * 커플/그룹 관계없이 멤버 수 ≥ 2 이면 노출.
+           */}
+          {isOwner && space.members.length >= 2 && (
+            <TouchableOpacity
+              testID="space-button-transfer"
+              style={styles.leaveButton}
+              onPress={() => setIsTransferModalVisible(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.leaveButtonText}>{t('space.transfer_ownership')}</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={styles.leaveButton}
             onPress={handleLeaveSpace}
@@ -891,6 +954,42 @@ export default function SpaceDetailScreen() {
             <Text style={styles.leaveButtonText}>{t('space.leave')}</Text>
           </TouchableOpacity>
         </View>
+
+        {/*
+         * ── 소유권 양도 멤버 선택 모달 (IDEA-011 Phase B) ──────────────────
+         * isOwner가 true이고 다른 멤버가 있을 때만 렌더.
+         * 현재 로그인 유저 자신은 선택 목록에서 제외한다.
+         */}
+        {isOwner && isTransferModalVisible && (
+          <View
+            testID="space-modal-transfer"
+            style={styles.transferModalOverlay}
+          >
+            <View style={styles.transferModalCard}>
+              <Text style={styles.transferModalTitle}>{t('space.new_owner')}</Text>
+              {space.members
+                .filter(m => m.userId !== user?.id)
+                .map(member => (
+                  <TouchableOpacity
+                    key={member.userId}
+                    style={styles.transferMemberRow}
+                    onPress={() => handleTransferOwnership(member)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.transferMemberName}>{member.nickname}</Text>
+                  </TouchableOpacity>
+                ))
+              }
+              <TouchableOpacity
+                style={styles.transferCancelButton}
+                onPress={() => setIsTransferModalVisible(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.transferCancelText}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

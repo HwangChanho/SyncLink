@@ -560,6 +560,59 @@ export function makeSpaceDetailStyles(colors: ReturnType<typeof useColors>) {
     ...textStyles.labelLg,
     color: colors.textInverse,
   },
+
+  // ── Transfer ownership modal (IDEA-011 Phase B) ──────────────────────────
+
+  /** Full-screen semi-transparent overlay behind the transfer member picker */
+  transferModalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 100,
+  },
+  /** White card containing the member list */
+  transferModalCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing[5],
+    width: '85%',
+    maxWidth: 340,
+  },
+  /** Title of the transfer modal ("새 관리자 선택") */
+  transferModalTitle: {
+    ...textStyles.title,
+    color: colors.textPrimary,
+    marginBottom: spacing[4],
+    textAlign: 'center',
+  },
+  /** Each selectable member row inside the transfer modal */
+  transferMemberRow: {
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[2],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  /** Member nickname text inside a transfer row */
+  transferMemberName: {
+    ...textStyles.body,
+    color: colors.textPrimary,
+  },
+  /** "취소" button at the bottom of the transfer modal */
+  transferCancelButton: {
+    marginTop: spacing[3],
+    paddingVertical: spacing[3],
+    alignItems: 'center',
+  },
+  /** Text for the cancel button */
+  transferCancelText: {
+    ...textStyles.label,
+    color: colors.textSecondary,
+  },
   });
 }
 

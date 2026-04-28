@@ -665,6 +665,93 @@ export async function leaveSpace(spaceId: string): Promise<void> {
 }
 
 /**
+ * Explicitly transfer Space ownership to another member.
+ *
+ * Business rules enforced:
+ *  1. Caller must be the current owner (assertOwner check).
+ *  2. Target user must be an active member of the Space (not just any user).
+ *  3. Cannot transfer to yourself — would be a no-op and is disallowed for clarity.
+ *
+ * DB side-effect: spaces.owner_user_id is intentionally NOT stored in this
+ * codebase's schema; ownership is represented purely by space_members.role = 'owner'.
+ * This function therefore:
+ *   (a) UPDATEs the new owner's row → role = 'owner'
+ *   (b) UPDATEs the caller's row   → role = 'member'
+ * Both updates are issued sequentially. A production-grade implementation would
+ * wrap them in a single RPC / DB transaction — tracked for Phase C.
+ *
+ * IDEA-011 Phase B — explicit ownership handover.
+ *
+ * @param spaceId       - UUID of the space
+ * @param newOwnerUserId - UUID of the member to become the new owner
+ * @throws Error if caller is not the owner, target is not a member,
+ *               or caller tries to transfer to themselves
+ */
+export async function transferOwnership(
+  spaceId: string,
+  newOwnerUserId: string,
+): Promise<void> {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error('로그인이 필요합니다.');
+
+  // Rule 3: 자기 자신에게 양도 금지
+  if (newOwnerUserId === userId) {
+    throw new Error('자기 자신에게 소유권을 양도할 수 없습니다.');
+  }
+
+  // Rule 1: 호출자가 현재 owner인지 확인
+  await assertOwner(spaceId, userId);
+
+  // Rule 2: 새 owner가 이 Space의 멤버인지 확인
+  const { data: targetMembership, error: memberFetchError } = await supa
+    .from('space_members')
+    .select('id, role')
+    .eq('space_id', spaceId)
+    .eq('user_id', newOwnerUserId)
+    .single() as { data: { id: string; role: string } | null; error: Error | null };
+
+  if (memberFetchError || !targetMembership) {
+    throw new Error('소유권을 양도할 멤버가 해당 Space에 존재하지 않습니다.');
+  }
+
+  // (a) 새 owner에게 role = 'owner' 부여
+  const { error: promoteError } = await supa
+    .from('space_members')
+    .update({ role: 'owner' })
+    .eq('space_id', spaceId)
+    .eq('user_id', newOwnerUserId) as { error: Error | null };
+
+  if (promoteError) {
+    void logError({
+      context: 'space.transfer.promote',
+      error:   promoteError,
+      userId,
+      details: { spaceId, newOwnerUserId, supabaseError: serializeSupabaseError(promoteError) },
+    });
+    throw new Error(`소유권 양도에 실패했습니다: ${promoteError.message}`);
+  }
+
+  // (b) 이전 owner(호출자)를 일반 멤버로 강등
+  const { error: demoteError } = await supa
+    .from('space_members')
+    .update({ role: 'member' })
+    .eq('space_id', spaceId)
+    .eq('user_id', userId) as { error: Error | null };
+
+  if (demoteError) {
+    // (b) 실패 시 (a)는 이미 커밋된 상태이므로 best-effort 롤백 후 에러 throw.
+    // Phase C RPC 도입 전까지 불일치 방지를 위해 에러를 surface한다.
+    void logError({
+      context: 'space.transfer.demote',
+      error:   demoteError,
+      userId,
+      details: { spaceId, newOwnerUserId, supabaseError: serializeSupabaseError(demoteError) },
+    });
+    throw new Error(`소유권 양도에 실패했습니다: ${demoteError.message}`);
+  }
+}
+
+/**
  * Remove a member from a space.
  * Only the owner can remove other members.
  *
