@@ -10,7 +10,7 @@
  */
 
 import { Tabs } from 'expo-router';
-import { Platform, Pressable } from 'react-native';
+import { Platform } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
@@ -86,8 +86,10 @@ export default function TabLayout() {
         name="index"
         options={{
           title: t('tabs.home'),
-          // TASK-008 / ADR-011: testID via tabBarButton (Tabs.Screen 자체에 tabBarTestID 미지원)
-          tabBarButton: (props) => <Pressable {...(props as object)} testID="tab-button-home" />,
+          // ADR-011 corrigendum (Sprint 29): React Navigation v7 정식 API
+          // tabBarButtonTestID 사용. 기존 tabBarButton+Pressable 우회는 Android에서
+          // ripple wrapper와 충돌해 testID 매핑 실패 (Maestro 01_login_dev FAIL).
+          tabBarButtonTestID: 'tab-button-home',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? 'home' : 'home-outline'}
@@ -101,7 +103,7 @@ export default function TabLayout() {
         name="calendar"
         options={{
           title: t('tabs.calendar'),
-          tabBarButton: (props) => <Pressable {...(props as object)} testID="tab-button-calendar" />,
+          tabBarButtonTestID: 'tab-button-calendar',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? 'calendar' : 'calendar-outline'}
@@ -115,7 +117,7 @@ export default function TabLayout() {
         name="planner"
         options={{
           title: t('tabs.planner'),
-          tabBarButton: (props) => <Pressable {...(props as object)} testID="tab-button-planner" />,
+          tabBarButtonTestID: 'tab-button-planner',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? 'checkbox' : 'checkbox-outline'}
@@ -129,7 +131,7 @@ export default function TabLayout() {
         name="my"
         options={{
           title: t('tabs.my'),
-          tabBarButton: (props) => <Pressable {...(props as object)} testID="tab-button-my" />,
+          tabBarButtonTestID: 'tab-button-my',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? 'person-circle' : 'person-circle-outline'}
