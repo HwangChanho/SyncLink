@@ -103,8 +103,8 @@ describe('purchaseService', () => {
 
       await initializePurchases('user-ios-123');
 
-      // setLogLevel이 DEBUG로 호출되었는지 확인
-      expect(Purchases.setLogLevel).toHaveBeenCalledWith(LOG_LEVEL.DEBUG);
+      // setLogLevel이 ERROR로 호출되었는지 확인 (운영 환경 최소 로그)
+      expect(Purchases.setLogLevel).toHaveBeenCalledWith(LOG_LEVEL.ERROR);
 
       // configure가 appUserID와 함께 호출되었는지 확인
       expect(Purchases.configure).toHaveBeenCalledWith(

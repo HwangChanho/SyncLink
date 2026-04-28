@@ -22,6 +22,8 @@
  * TASK-502 (Sprint 5) → TASK-520 (Sprint 5 전체 테마 확장)
  */
 
+import { useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useAppearanceStore } from '@/stores/appearanceStore';
 import { buildPalette, type ThemePalette } from '@/lib/themePalette';
 
@@ -44,15 +46,15 @@ export type ColorTokens = ThemePalette;
  * @returns ColorTokens — 컴포넌트에서 바로 사용 가능한 색상 토큰 객체
  */
 export function useColors(): ColorTokens {
-  // resolvedScheme + accentHue 를 단일 selector 로 구독
-  // → 두 값 중 하나라도 바뀌면 리렌더, 둘 다 안 바뀌면 리렌더 없음
+  // useShallow: 객체 selector가 매 렌더마다 새 참조를 반환해도
+  // 내부 값이 같으면 리렌더 skip → 무한 재렌더 방지.
   const { resolvedScheme, accentHue } = useAppearanceStore(
-    (state) => ({ resolvedScheme: state.resolvedScheme, accentHue: state.accentHue }),
+    useShallow((state) => ({ resolvedScheme: state.resolvedScheme, accentHue: state.accentHue })),
   );
 
   const isDark = resolvedScheme === 'dark';
 
-  // buildPalette 는 순수 함수 (동일 입력 → 동일 출력) 이므로
-  // memoize 없이 렌더마다 호출해도 성능 문제 없음 (O(1) 문자열 연산).
-  return buildPalette(accentHue, isDark);
+  // useMemo: 동일 입력(accentHue, isDark)에서 같은 객체 참조 반환 →
+  // 하위 컴포넌트의 불필요한 리렌더 방지 (memo / React.PureComponent 최적화 지원).
+  return useMemo(() => buildPalette(accentHue, isDark), [accentHue, isDark]);
 }

@@ -20,6 +20,18 @@
  * @verifiedBy QA
  */
 
+// _layout.tsx calls LogBox.ignoreLogs at module level.
+// Mock @/app/_layout to avoid needing a full native LogBox.
+jest.mock('@/app/_layout', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    __esModule: true,
+    default: ({ children }: { children?: React.ReactNode }) =>
+      React.createElement(View, { testID: 'root-layout' }, children),
+  };
+});
+
 import React from 'react';
 import { render } from '@testing-library/react-native';
 

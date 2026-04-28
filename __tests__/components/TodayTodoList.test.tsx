@@ -250,19 +250,16 @@ describe('TodayTodoList', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('마운트 동작', () => {
-    it('마운트 시 fetchTodos 호출 (contentType=todo, 오늘 날짜 범위)', () => {
+    it('마운트 시 fetchTodos를 직접 호출하지 않음 — 부모(Home screen)가 소유', () => {
+      // Sprint 30: fetchTodos 소유권을 Home screen(index.tsx)으로 이전.
+      // TodayTodoList는 todoStore의 todos를 구독만 하고 fetch는 부모에 위임.
       const mockFetch = jest.fn();
       mockStore({ fetchTodos: mockFetch });
 
       render(<TodayTodoList />);
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.objectContaining({
-          contentType: 'todo',
-          dueBefore:   expect.any(Date),
-          dueAfter:    expect.any(Date),
-        })
-      );
+      // TodayTodoList 자체는 fetch 호출 안 함.
+      expect(mockFetch).not.toHaveBeenCalled();
     });
   });
 });

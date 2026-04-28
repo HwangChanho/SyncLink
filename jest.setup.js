@@ -44,6 +44,22 @@ jest.mock('@supabase/supabase-js', () => ({
   })),
 }));
 
+// ─── react-native LogBox mock ─────────────────────────────────────────────────
+// LogBox is not fully provided by jest-expo. Components that call
+// LogBox.ignoreLogs() at module level (e.g. _layout.tsx) crash without this.
+jest.mock('react-native/Libraries/LogBox/LogBox', () => ({
+  ignoreLogs: jest.fn(),
+  ignoreAllLogs: jest.fn(),
+  install: jest.fn(),
+  uninstall: jest.fn(),
+}), { virtual: true });
+
+// Extend the global react-native mock to expose LogBox
+const rnMock = jest.requireMock('react-native');
+if (rnMock && !rnMock.LogBox) {
+  rnMock.LogBox = { ignoreLogs: jest.fn(), ignoreAllLogs: jest.fn() };
+}
+
 // ─── Expo modules mock ────────────────────────────────────────────────────────
 // Expo modules require native bridges unavailable in Jest environment.
 // ─── @expo/vector-icons mock ─────────────────────────────────────────────────

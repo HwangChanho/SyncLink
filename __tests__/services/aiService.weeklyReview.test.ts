@@ -78,10 +78,10 @@ function getMondayOfWeek(date: Date = new Date()): Date {
 
 /**
  * AsyncStorage 캐시 키 생성 헬퍼.
- * aiService.ts의 weeklyReviewCacheKey()와 동일한 구조.
+ * aiService.ts의 weeklyReviewCacheKey()와 동일한 구조 (locale 포함).
  */
-function cacheKey(weekStart: Date): string {
-  return `synclink:weekly_review:${localDateStr(weekStart)}`;
+function cacheKey(weekStart: Date, locale: string = 'ko'): string {
+  return `synclink:weekly_review:${localDateStr(weekStart)}:${locale}`;
 }
 
 /**

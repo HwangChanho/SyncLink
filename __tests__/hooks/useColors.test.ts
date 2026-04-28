@@ -26,32 +26,49 @@
  * @task TASK-611
  */
 
-// ─── Mock 선언 (TDZ-safe) ─────────────────────────────────────────────────────
+// This test verifies real useColors — override the global mock in jest.setup.js.
+jest.unmock('@/hooks/useColors');
 
-/**
- * react-native mock.
- * Appearance.getColorScheme: 기본값 'light'로 제어 가능한 jest.fn()
- * Appearance.addChangeListener: 모듈 로드 시 즉시 호출되므로 mock 필요
- * 팩토리 외부 변수를 절대 참조하지 않음 (TDZ 오류 방지).
- */
-jest.mock('react-native', () => {
-  const getColorSchemeFn   = jest.fn().mockReturnValue('light');
-  const addChangeListenerFn = jest.fn().mockReturnValue({ remove: jest.fn() });
+// Mock OS scheme control (used by system-mode tests).
+const mockOsScheme = { value: 'light' as 'light' | 'dark' };
 
-  return {
-    Appearance: {
-      getColorScheme:    getColorSchemeFn,
-      addChangeListener: addChangeListenerFn,
-    },
-    StyleSheet: { create: (s: unknown) => s },
-    Platform:   { OS: 'ios', select: (obj: Record<string, unknown>) => obj.ios },
-    // 테스트에서 mock 함수에 접근하기 위한 내부 참조
-    __getColorScheme:    getColorSchemeFn,
-    __addChangeListener: addChangeListenerFn,
+// Mock appearanceStore: full Zustand store without triggering Appearance.getColorScheme()
+// during initialization (react-native native mock ordering issue in Jest).
+jest.mock('@/stores/appearanceStore', () => {
+  const { create } = require('zustand');
+  const { ACCENT_PRESETS } = require('@/lib/themePalette');
+
+  // useAppearanceStore must be declared before the actions reference it.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const useAppearanceStore: any = create(() => ({
+    colorScheme:      'system',
+    resolvedScheme:   'light',
+    accentHue:        ACCENT_PRESETS.default,
+    accentPreset:     'default',
+    headerTitleColor: 'default',
+  }));
+
+  // Actions that mutate store state (mirrors real implementation)
+  useAppearanceStore.getState().setColorScheme = (scheme: string) => {
+    const resolved = scheme === 'system' ? mockOsScheme.value : scheme;
+    useAppearanceStore.setState({ colorScheme: scheme, resolvedScheme: resolved });
   };
+  useAppearanceStore.getState()._syncSystemScheme = (os: string) => {
+    if (useAppearanceStore.getState().colorScheme === 'system') {
+      useAppearanceStore.setState({ resolvedScheme: os });
+    }
+  };
+  useAppearanceStore.getState().setAccentPreset = (preset: string) => {
+    useAppearanceStore.setState({ accentPreset: preset, accentHue: ACCENT_PRESETS[preset] });
+  };
+  useAppearanceStore.getState().setAccentHue = (hue: number) => {
+    useAppearanceStore.setState({ accentHue: hue, accentPreset: null });
+  };
+  useAppearanceStore.getState().setHeaderTitleColor = jest.fn();
+
+  return { useAppearanceStore, ACCENT_PRESETS };
 });
 
-/** AsyncStorage: 공식 jest mock (인메모리 구현) */
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
@@ -61,26 +78,36 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 import { renderHook, act } from '@testing-library/react-native';
 import { useColors } from '@/hooks/useColors';
 import { useAppearanceStore } from '@/stores/appearanceStore';
-import { light, dark } from '@/constants/colors';
+import { buildPalette, ACCENT_PRESETS } from '@/lib/themePalette';
 
-// ─── Mock 함수 접근 ───────────────────────────────────────────────────────────
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const rnMock = require('react-native') as any;
-const mockGetColorScheme = rnMock.__getColorScheme as jest.Mock;
+// Expected values based on buildPalette (v2 theme system)
+const DEFAULT_HUE = ACCENT_PRESETS.default; // 258 (violet)
+const light = buildPalette(DEFAULT_HUE, false);
+const dark  = buildPalette(DEFAULT_HUE, true);
 
 // ─── 테스트 스위트 ────────────────────────────────────────────────────────────
 
 describe('useColors', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // OS 기본값: 'light'
-    mockGetColorScheme.mockReturnValue('light');
-    // 스토어를 기본 상태로 리셋 (system + light)
+    mockOsScheme.value = 'light';
+    // Reset store to default state (system + light)
     useAppearanceStore.setState({
       colorScheme:    'system',
       resolvedScheme: 'light',
+      accentHue:      DEFAULT_HUE,
+      accentPreset:   'default',
     });
+    // Re-attach action functions (clearAllMocks may reset jest.fn() implementations)
+    useAppearanceStore.getState().setColorScheme = (scheme: string) => {
+      const resolved = scheme === 'system' ? mockOsScheme.value : scheme;
+      useAppearanceStore.setState({ colorScheme: scheme, resolvedScheme: resolved });
+    };
+    useAppearanceStore.getState()._syncSystemScheme = (os: string) => {
+      if (useAppearanceStore.getState().colorScheme === 'system') {
+        useAppearanceStore.setState({ resolvedScheme: os });
+      }
+    };
   });
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -208,7 +235,7 @@ describe('useColors', () => {
     });
 
     it('system 모드에서 OS가 dark → dark 토큰 반환', () => {
-      mockGetColorScheme.mockReturnValue('dark');
+      mockOsScheme.value = 'dark';
 
       const { result } = renderHook(() => useColors());
 
@@ -221,7 +248,7 @@ describe('useColors', () => {
     });
 
     it('system 모드에서 OS가 light → light 토큰 반환', () => {
-      mockGetColorScheme.mockReturnValue('light');
+      mockOsScheme.value = 'light';
 
       const { result } = renderHook(() => useColors());
 
