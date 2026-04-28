@@ -31,8 +31,8 @@ import { textStyles } from '@/constants/typography';
 import * as spaceService from '@/services/spaceService';
 import { useSpaceStore } from '@/stores/spaceStore';
 
-// Invite code is always 6 characters
-const CODE_LENGTH = 6;
+// Invite code is 8 characters (upgraded from 6 in Sprint 28 fix — UNIQUE guarantee)
+const CODE_LENGTH = 8;
 
 // ─── Component ────────────────────────────────────────────────────────────────
 

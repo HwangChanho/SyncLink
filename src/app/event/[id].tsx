@@ -405,6 +405,7 @@ export default function EventDetailScreen() {
         {event.isOwn && (
           <Pressable
             style={styles.editButton}
+            testID="event-detail-edit"
             onPress={() => router.push(`/event/edit/${event.id}`)}
           >
             <Ionicons name="pencil-outline" size={20} color={colors.primary} />
@@ -690,6 +691,7 @@ export default function EventDetailScreen() {
         {event.isOwn && (
           <Pressable
             style={styles.deleteButton}
+            testID="event-detail-delete"
             onPress={handleDelete}
             disabled={isDeleting}
           >

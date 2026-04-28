@@ -172,6 +172,48 @@ export function makeSpaceDetailStyles(colors: ReturnType<typeof useColors>) {
     ...textStyles.caption,
     color: colors.textTertiary,
   },
+
+  // ── InviteCodeSection — 초대 코드 hide/show + 타이머 ─────────────────────
+
+  /**
+   * "초대 코드 보기" 버튼 — 코드가 숨겨진 상태에서 노출.
+   * 플렉스 행으로 아이콘과 텍스트를 가로 정렬.
+   */
+  showInviteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    paddingVertical: spacing[3],
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primaryLight,
+  },
+  showInviteButtonText: {
+    ...textStyles.label,
+    color: colors.primary,
+  },
+
+  /**
+   * 카운트다운 힌트 행 — 코드 표시 상태에서 코드 하단에 나타남.
+   * "4:59 후 사라짐  [숨기기]" 형태.
+   */
+  inviteCodeTimerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing[1],
+  },
+  inviteCodeTimerText: {
+    ...textStyles.caption,
+    color: colors.textTertiary,
+  },
+  inviteCodeHideText: {
+    ...textStyles.caption,
+    color: colors.textSecondary,
+    textDecorationLine: 'underline',
+  },
   // Members
   memberRow: {
     flexDirection: 'row',
@@ -597,7 +639,7 @@ export function makeSpaceDetailStyles(colors: ReturnType<typeof useColors>) {
   },
   /** Title of the transfer modal ("새 관리자 선택") */
   transferModalTitle: {
-    ...textStyles.title,
+    ...textStyles.h4,
     color: colors.textPrimary,
     marginBottom: spacing[4],
     textAlign: 'center',

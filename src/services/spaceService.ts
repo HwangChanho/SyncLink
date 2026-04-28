@@ -337,9 +337,16 @@ export async function joinSpaceByInviteCode(inviteCode: string): Promise<Space> 
   // ── IDEA-016: 사용 횟수 한도 체크 ─────────────────────────────────────────
   // invite_code_max_uses 가 설정되어 있고 이미 uses_count >= max_uses 면 차단.
   // NULL 이면 무제한.
+  //
+  // NULL 안전 처리: invite_code_uses_count 는 DB에서 NOT NULL default 0 이지만,
+  // migration 022 이전에 생성된 row 또는 직접 INSERT된 row에서 NULL일 수 있다.
+  // NULL 을 0으로 coalesce 하여 false positive(잘못된 차단)를 방지한다.
+  // (NULL >= number 는 JS에서 false 이므로 coalesce 없이도 통과되지만,
+  //  명시적으로 처리하여 의도를 명확히 한다.)
+  const usesCount = spaceRow.invite_code_uses_count ?? 0;
   if (
     spaceRow.invite_code_max_uses !== null &&
-    spaceRow.invite_code_uses_count >= spaceRow.invite_code_max_uses
+    usesCount >= spaceRow.invite_code_max_uses
   ) {
     throw new Error('초대 코드 사용 한도에 도달했습니다. Space 관리자에게 새 코드를 요청하세요.');
   }
@@ -393,9 +400,11 @@ export async function joinSpaceByInviteCode(inviteCode: string): Promise<Space> 
   // Supabase PostgREST는 server-side increment를 직접 지원하지 않으므로
   // RPC-style raw update 로 처리. 실패해도 JOIN 자체는 성공으로 간주
   // (사용 횟수 부정확보다 join 실패가 더 나쁜 UX이므로 비치명적 처리).
+  //
+  // NULL 안전: usesCount는 위에서 이미 coalesce(0)됨.
   const { error: counterError } = await supa
     .from('spaces')
-    .update({ invite_code_uses_count: spaceRow.invite_code_uses_count + 1 })
+    .update({ invite_code_uses_count: usesCount + 1 })
     .eq('id', spaceRow.id)
     .eq('invite_code', spaceRow.invite_code) as { error: Error | null };
   // Optimistic concurrency guard: .eq('invite_code', ...) ensures we only
@@ -439,9 +448,10 @@ export async function regenerateInviteCode(spaceId: string): Promise<string> {
   await assertOwner(spaceId, userId);
 
   // Maximum retry attempts on UNIQUE constraint collision (Postgres: 23505).
-  // With 32^6 ≈ 1.07B combinations and even 100k spaces, collision prob ≈ 0.005%.
-  // 5 retries reduce the compounded probability to negligible levels.
-  const MAX_REGEN_ATTEMPTS = 5;
+  // Code space is now 32^8 ≈ 1.1 trillion (8-char alphanumeric, ambiguous chars
+  // excluded). Even with 1M active spaces, collision probability per attempt is
+  // ~9×10^-7. 10 retries reduce the compounded probability to < 10^-60.
+  const MAX_REGEN_ATTEMPTS = 10;
 
   let lastError: Error | null = null;
 
@@ -887,15 +897,20 @@ export async function deleteAnniversary(anniversaryId: string): Promise<void> {
 // ─── Private helpers ──────────────────────────────────────────────────────────
 
 /**
- * Generate a random 6-character invite code.
+ * Generate a random 8-character invite code.
  * Excludes ambiguous characters: O, 0, I, 1 to avoid confusion.
  * Result is always uppercase.
+ *
+ * Code space: 32^8 ≈ 1.1 trillion — collision probability is negligible even
+ * at scale. Changed from 6-char (32^6 ≈ 1B) in Sprint 28 fix to strengthen
+ * uniqueness guarantee. DB UNIQUE constraint on spaces.invite_code provides
+ * the final safety net; regenerateInviteCode retries up to 10× on collision.
  */
 function generateCode(): string {
-  // O(오), 0(영), I(아이), 1(일) 제외한 영숫자
+  // O(오), 0(영), I(아이), 1(일) 제외한 영숫자 — 32개 문자
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 8; i++) {
     code += chars[Math.floor(Math.random() * chars.length)];
   }
   return code;

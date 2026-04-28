@@ -40,6 +40,7 @@ import { textStyles } from '@/constants/typography';
 import { PlaceSearchInput } from '@/components/places/PlaceSearchInput';
 import { ReminderPicker } from '@/components/reminders/ReminderPicker';
 import { DateTimeModal } from '@/components/common/DateTimeModal';
+import { ColorPicker } from '@/components/event/ColorPicker';
 import { showAlert } from '@/lib/webAlert';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -152,6 +153,12 @@ export default function EventEditScreen() {
   const [shareSpaceIds, setShareSpaceIds] = useState<string[]>([]);
 
   /**
+   * User-selected event color override.
+   * Pre-filled from event.color on load. null = use category/member color fallback.
+   */
+  const [eventColor, setEventColor] = useState<string | null>(null);
+
+  /**
    * Current reminder offsets (minutes before event start).
    * Pre-loaded from `event_reminders` table on mount (TASK-1304).
    */
@@ -194,6 +201,8 @@ export default function EventEditScreen() {
         setLocation(ev.location ?? '');
         setDescription(ev.description ?? '');
         setShareSpaceIds(ev.sharedSpaceIds);
+        // Pre-fill user-overridden color (null if not set — picker shows "default" state)
+        setEventColor(ev.color ?? null);
         // Pre-fill reminder offsets from DB
         setReminderMinutes(reminders.map((r) => r.minutesBefore));
       } catch (err) {
@@ -280,6 +289,8 @@ export default function EventEditScreen() {
         repeatType,
         ...(location.trim()    ? { location:    location.trim() }    : {}),
         ...(description.trim() ? { description: description.trim() } : {}),
+        // Always pass color so clearing the override (null) also persists
+        color: eventColor,
       });
 
       // 2. Compute sharing diff
@@ -324,7 +335,7 @@ export default function EventEditScreen() {
     }
   }, [
     id, originalEvent, title, allDay, startAt, repeatType, location, description,
-    shareSpaceIds, reminderMinutes, upsertEvent, router, colors.primary, t,
+    eventColor, shareSpaceIds, reminderMinutes, upsertEvent, router, colors.primary, t,
   ]);
 
   /**
@@ -477,10 +488,14 @@ export default function EventEditScreen() {
       {/*
        * KeyboardAvoidingView keeps the memo/description TextInput above the
        * software keyboard (Sprint 14 TASK-1411).
+       *
+       * keyboardVerticalOffset=56 accounts for the 56 px header bar so the KAV
+       * computes the remaining height correctly on iOS and lifts exactly enough.
        */}
       <KeyboardAvoidingView
         style={styles.scroll}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 56 : 0}
       >
       <ScrollView
         style={styles.scroll}
@@ -582,6 +597,11 @@ export default function EventEditScreen() {
                 ))}
               </View>
             </ScrollView>
+          </FormRow>
+
+          {/* Color picker — user can override the default category/member color */}
+          <FormRow label={t('event.form.color')} rowStyle={rowStyle}>
+            <ColorPicker value={eventColor} onChange={setEventColor} />
           </FormRow>
 
           {/* Location — Google Places Autocomplete (TASK-901) */}

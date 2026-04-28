@@ -127,18 +127,31 @@ export const useEventStore = create<EventState>((set, _get) => ({
 
   upsertEvent: (event) =>
     set((state) => {
-      // Get the local date key for this event's start date (TASK-005)
-      const dateKey = localDateKey(event.startAt);
-      const existing = state.eventsByDate[dateKey] ?? [];
-      const index = existing.findIndex((e) => e.id === event.id);
+      // Get the local date key for this event's new start date (TASK-005)
+      const newDateKey = localDateKey(event.startAt);
 
-      const updated =
-        index >= 0
-          ? [...existing.slice(0, index), event, ...existing.slice(index + 1)]
-          : [...existing, event];
+      // Build a fresh eventsByDate map:
+      //  1. Remove the event from ANY existing bucket (handles the case where
+      //     the event has been moved to a different day — we must evict it from
+      //     its original date bucket, not just add it to the new one).
+      //  2. Insert/replace in the new date bucket.
+      //
+      // Without step 1, dragging an event from Jan 12 → Jan 13 would leave a
+      // stale ghost copy on Jan 12 while the new copy appears on Jan 13, making
+      // the UI appear as if the event never moved. (Bug: drag visual works but
+      // reschedule looks ineffective because old slot is still occupied.)
+      const withoutEvent = Object.fromEntries(
+        Object.entries(state.eventsByDate).map(([date, events]) => [
+          date,
+          events.filter((e) => e.id !== event.id),
+        ]),
+      );
+
+      const existing = withoutEvent[newDateKey] ?? [];
+      const updated = [...existing, event];
 
       return {
-        eventsByDate: { ...state.eventsByDate, [dateKey]: updated },
+        eventsByDate: { ...withoutEvent, [newDateKey]: updated },
       };
     }),
 

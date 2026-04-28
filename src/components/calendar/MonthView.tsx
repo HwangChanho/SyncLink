@@ -246,7 +246,8 @@ export function MonthView({
                    - compact:  small colour dots only (overview / mobile)
                 */}
                 {dayItems.length > 0 && density === 'detailed' && (
-                  <View style={styles.barStack}>
+                  // LEAD 2026-04-28: 다른 월(leading/trailing) 일정은 연하게.
+                  <View style={[styles.barStack, !isCurrentMonth && styles.dimItems]}>
                     {dayItems.slice(0, MAX_BARS).map((it) => (
                       <View
                         key={it.id}
@@ -266,7 +267,8 @@ export function MonthView({
                           style={[
                             styles.itemBarText,
                             it.kind === 'event'
-                              ? { color: '#1F2937' }
+                              // textPrimary adapts: gray-900 in light, white in dark
+                              ? { color: colors.textPrimary }
                               : { color: it.color },
                           ]}
                           numberOfLines={1}
@@ -378,6 +380,11 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     // still reads as "secondary context" but stays clearly legible.
     color: colors.textSecondary,
     opacity: 0.55,
+  },
+  // LEAD 2026-04-28: 다른 월(leading/trailing) 일자에 표시되는 일정/할일
+  // chip들도 함께 dim 처리. 0.4 opacity로 본 월과 시각 구분.
+  dimItems: {
+    opacity: 0.4,
   },
   sundayText: {
     color: colors.accent,

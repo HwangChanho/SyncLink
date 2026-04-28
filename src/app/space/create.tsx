@@ -140,6 +140,8 @@ export default function CreateSpaceScreen() {
           {/* Space name */}
           <Text style={styles.label}>{t('space.name_label')}</Text>
           <TextInput
+            // testID="space-create-name-input" — e2e로 이름 입력 필드 지정 (06_space_create_invite)
+            testID="space-create-name-input"
             style={styles.input}
             placeholder={t('space.name_placeholder')}
             placeholderTextColor={colors.textPlaceholder}
@@ -194,6 +196,8 @@ export default function CreateSpaceScreen() {
 
           {/* Create button */}
           <TouchableOpacity
+            // testID="space-create-submit" — e2e로 생성 버튼 탭 (06_space_create_invite)
+            testID="space-create-submit"
             style={[
               styles.createButton,
               (isLoading || !name.trim()) && styles.createButtonDisabled,

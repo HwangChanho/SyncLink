@@ -361,7 +361,8 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       color: colors.textSecondary,
     },
     yearTextSelected: {
-      color: '#ffffff',
+      // textInverse: white in light, gray-900 in dark — contrasts with primary selected background
+      color: colors.textInverse,
       fontWeight: fontWeight.semibold,
     },
     yearTextToday: {
@@ -407,7 +408,8 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       color: colors.textSecondary,
     },
     monthTextSelected: {
-      color: '#ffffff',
+      // textInverse: white in light, gray-900 in dark — contrasts with primary selected background
+      color: colors.textInverse,
       fontWeight: fontWeight.semibold,
     },
     monthTextToday: {
@@ -445,7 +447,8 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     },
     confirmBtnText: {
       ...textStyles.label,
-      color: '#ffffff',
+      // textInverse: white in light, gray-900 in dark — contrasts with primary button background
+      color: colors.textInverse,
       fontWeight: fontWeight.semibold,
     },
   });

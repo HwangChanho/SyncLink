@@ -32,6 +32,15 @@
  *   - MonthView: drag skip — cell too small. Long-press → modal (carry to R3).
  *   - Maestro e2e smoke script: e2e/flows/22_drag_to_reschedule.yaml (written only).
  *
+ * ## Long-press activation (LEAD fix, 2026-04-28)
+ *   - Previously used `.minDistance(8)` — drag activated immediately on any movement,
+ *     which conflicted with the surrounding ScrollView swipe gesture.
+ *   - Now uses `.activateAfterLongPress(LONG_PRESS_MS)` (500 ms) so the user must
+ *     hold for half a second before drag starts. This matches the iPhone Calendar
+ *     app's interaction model and eliminates swipe/drag conflicts.
+ *   - Vibration.vibrate([0, 30]) fires on long-press activation as haptic feedback
+ *     (uses React Native's built-in Vibration API — no extra package needed).
+ *
  * ## Feature flag
  *   Only rendered by WeekView/DayView when `__DEV__ && config.dragMode === 'gh'`.
  *   The production EventBlock (PanResponder) keeps shipping unchanged.
@@ -40,7 +49,7 @@
  */
 
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, TouchableOpacity, Vibration, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -49,6 +58,7 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 
+import { useColors } from '@/hooks/useColors';
 import { radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import {
@@ -68,10 +78,17 @@ import type { EventSummary } from '@/types';
 const MIN_HEIGHT = 22;
 
 /**
- * Dead-zone before we steal touches from the surrounding ScrollView.
- * 8 px is the same threshold react-navigation uses for swipe-back.
+ * Long-press hold duration (ms) before the pan gesture activates.
+ *
+ * Matches the iPhone Calendar app's feel — the user must hold for 500 ms
+ * before the drag mode engages. This eliminates conflicts with the
+ * surrounding ScrollView's swipe-to-navigate gesture because a quick swipe
+ * across the event block never triggers drag mode.
+ *
+ * RNGH v2's `activateAfterLongPress()` on the PanGesture handles this
+ * natively on the UI thread, so there is no JS-bridge latency.
  */
-const PAN_ACTIVATION_PX = 8;
+const LONG_PRESS_MS = 500;
 
 /**
  * Duration of the Undo toast in milliseconds.
@@ -180,6 +197,10 @@ export function EventBlockGestureHandler({
   onHoverSlot,
   onDropped,
 }: EventBlockGestureHandlerProps) {
+  // Resolve theme-aware color tokens for dynamic styling
+  const colors = useColors();
+  const styles = makeStyles(colors);
+
   const blockHeight = Math.max(height, MIN_HEIGHT);
   const showSubtitle = blockHeight >= 38;
   const bgColor = `${event.color}CC`;
@@ -271,8 +292,22 @@ export function EventBlockGestureHandler({
         viewMode,
       });
 
+      if (__DEV__) {
+        // Diagnostic: log drop details so LEAD can verify the full call chain.
+        // Output example: [DragDrop] onEnd event:<id> dx:12.3 dy:45.0 dayDelta:0 minuteDelta:30
+        console.log(
+          '[DragDrop] onEnd fired',
+          '| event:', eventRef.current.id,
+          '| dx:', dx.toFixed(1), 'dy:', dy.toFixed(1),
+          '| dayDelta:', dayDelta, 'minuteDelta:', minuteDelta,
+        );
+      }
+
       // No-op drop — don't call onDropped
-      if (dayDelta === 0 && minuteDelta === 0) return;
+      if (dayDelta === 0 && minuteDelta === 0) {
+        if (__DEV__) console.log('[DragDrop] no-op drop (delta=0,0) — skipping onDropped');
+        return;
+      }
 
       const { newStartAt, newEndAt } = applyDelta(
         eventRef.current.startAt,
@@ -280,6 +315,14 @@ export function EventBlockGestureHandler({
         dayDelta,
         minuteDelta,
       );
+
+      if (__DEV__) {
+        console.log(
+          '[DragDrop] calling onDropped',
+          '| newStart:', newStartAt.toISOString(),
+          '| newEnd:', newEndAt.toISOString(),
+        );
+      }
 
       onDropped({
         event:      eventRef.current,
@@ -295,27 +338,49 @@ export function EventBlockGestureHandler({
   // ── Gesture definition ────────────────────────────────────────────────────
 
   /**
+   * Fires a short haptic buzz when the long-press threshold is reached.
+   * Uses React Native's built-in Vibration API (no extra package).
+   * Called via runOnJS from the worklet so it runs on the JS thread.
+   */
+  const triggerHaptic = useCallback(() => {
+    // [delay, duration] pattern — 0 ms delay + 30 ms buzz.
+    // On iOS the actual vibration pattern is approximated by the system
+    // (Taptic Engine fires a short impact). On Android it vibrates for 30 ms.
+    Vibration.vibrate([0, 30]);
+  }, []);
+
+  /**
    * Build the pan gesture once per event identity.
    * Worklet closures capture stable shared-value handles; JS callbacks go
    * through runOnJS so they can access the React state and Zustand store.
+   *
+   * Long-press activation:
+   *   `.activateAfterLongPress(LONG_PRESS_MS)` requires the finger to be held
+   *   still for 500 ms before the pan gesture activates. This prevents the
+   *   drag from conflicting with the surrounding horizontal scroll/swipe — a
+   *   quick swipe across the event block will not trigger drag mode.
+   *   On activation, a haptic buzz confirms to the user that drag is ready.
    */
   const panGesture = useMemo(
     () =>
       Gesture.Pan()
-        // Small dead-zone prevents scroll from being hijacked by an
-        // accidental slight movement during a long-press.
-        .minDistance(PAN_ACTIVATION_PX)
+        // Require a 500 ms hold before the drag mode engages.
+        // This matches the iPhone Calendar app's long-press-then-drag UX and
+        // prevents the surrounding ScrollView from losing horizontal swipes.
+        .activateAfterLongPress(LONG_PRESS_MS)
         .onStart(() => {
           'worklet';
-          // Lift the card — spring for physical feel
+          // Haptic feedback confirms long-press threshold reached.
+          runOnJS(triggerHaptic)();
+          // Lift the card — spring for physical feel.
           isActive.value = withSpring(1);
         })
         .onUpdate((evt) => {
           'worklet';
-          // Track finger 1:1 — no spring here, spring only on lift/drop
+          // Track finger 1:1 — no spring here, spring only on lift/drop.
           translateX.value = evt.translationX;
           translateY.value = evt.translationY;
-          // Notify JS thread about hover slot (runs asynchronously via bridge)
+          // Notify JS thread about hover slot (runs asynchronously via bridge).
           runOnJS(notifyHover)(evt.translationX, evt.translationY);
         })
         .onEnd((evt) => {
@@ -330,7 +395,7 @@ export function EventBlockGestureHandler({
         })
         .onFinalize(() => {
           'worklet';
-          // Safety net: gesture cancelled externally (e.g. another handler wins)
+          // Safety net: gesture cancelled externally (e.g. another handler wins).
           if (isActive.value !== 0) {
             runOnJS(clearHover)();
             isActive.value   = withSpring(0);
@@ -339,8 +404,8 @@ export function EventBlockGestureHandler({
           }
         }),
     // Recreate only when event identity or geometry props change.
-    // notifyHover/clearHover/handleDrop are stable useCallback refs captured
-    // via the runOnJS bridge so we don't need them in the deps array.
+    // notifyHover/clearHover/handleDrop/triggerHaptic are stable useCallback
+    // refs captured via the runOnJS bridge — not needed in deps array.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [event.id, columnWidth, pxPerMinute, viewMode],
   );
@@ -398,21 +463,30 @@ export function EventBlockGestureHandler({
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  block: {
-    position: 'absolute',
-    borderLeftWidth: 3,
-    borderRadius: radius.sm,
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    overflow: 'hidden',
-    elevation: 1,
-  },
-  title: {
-    ...textStyles.labelSm,
-    color: '#1F2937',
-  },
-});
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ * Must be called inside the component so it reacts to theme changes.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
+    block: {
+      position: 'absolute',
+      borderLeftWidth: 3,
+      borderRadius: radius.sm,
+      paddingHorizontal: 4,
+      paddingVertical: 2,
+      overflow: 'hidden',
+      elevation: 1,
+    },
+    title: {
+      ...textStyles.labelSm,
+      // textPrimary adapts: gray-900 in light, white in dark
+      color: colors.textPrimary,
+    },
+  });
+}
 
 // ─── Undo toast hook ──────────────────────────────────────────────────────────
 
@@ -489,6 +563,10 @@ export function useUndoToast(): {
  * ```
  */
 export function UndoToast({ toast }: { toast: UndoToastState }) {
+  // Resolve theme-aware color tokens so toast adapts to light and dark mode
+  const colors = useColors();
+  const toastStyles = makeToastStyles(colors);
+
   return (
     <View style={toastStyles.container} testID="undo-toast">
       <Text style={toastStyles.label} numberOfLines={1}>
@@ -505,38 +583,51 @@ export function UndoToast({ toast }: { toast: UndoToastState }) {
   );
 }
 
-const toastStyles = StyleSheet.create({
-  container: {
-    position: 'absolute',
-    bottom: 16,
-    left: 16,
-    right: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#1F2937',
-    borderRadius: radius.md,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    elevation: 8,
-    // iOS shadow
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  label: {
-    ...textStyles.labelSm,
-    color: '#F9FAFB',
-    flex: 1,
-    marginRight: 12,
-  },
-  undoButton: {
-    ...textStyles.labelSm,
-    color: '#60A5FA',
-    fontWeight: '700',
-  },
-});
+/**
+ * Dynamic toast styles factory — adapts to the active theme.
+ * The toast uses surfaceAlt as background (dark grey in dark mode,
+ * light grey in light mode) so it remains visually distinct from page content
+ * without being invisible against either theme's background.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeToastStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
+    container: {
+      position: 'absolute',
+      bottom: 16,
+      left: 16,
+      right: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      // surfaceAlt: gray-100 light / gray-700 dark — distinct from page bg
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: radius.md,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      elevation: 8,
+      // iOS shadow
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+    },
+    label: {
+      ...textStyles.labelSm,
+      // textPrimary: gray-900 in light, white in dark
+      color: colors.textPrimary,
+      flex: 1,
+      marginRight: 12,
+    },
+    undoButton: {
+      ...textStyles.labelSm,
+      // primary: violet-600 in light, violet-400 in dark
+      color: colors.primary,
+      fontWeight: '700',
+    },
+  });
+}
 
 // ─── Optimistic-update hook (Day 3 + Day 4 conflict detection) ────────────────
 
@@ -637,6 +728,17 @@ export function useOptimisticReschedule(opts?: {
 
     // ─── Optimistic upsert (after conflict gate passed) ─────────────────────
 
+    if (__DEV__) {
+      // Diagnostic: confirm the optimistic update path is reached and show
+      // the before/after times so LEAD can verify the store is being updated.
+      console.log(
+        '[DragDrop] useOptimisticReschedule: upsertEvent (optimistic)',
+        '| id:', originalEvent.id,
+        '| oldStart:', originalEvent.startAt.toISOString(),
+        '| newStart:', payload.newStartAt.toISOString(),
+      );
+    }
+
     // 1. Optimistic upsert — UI responds immediately before network round-trip.
     store.upsertEvent(optimisticEvent);
 
@@ -646,6 +748,10 @@ export function useOptimisticReschedule(opts?: {
         startAt: payload.newStartAt,
         endAt:   payload.newEndAt,
       });
+
+      if (__DEV__) {
+        console.log('[DragDrop] updateEvent succeeded — reschedule committed to server');
+      }
 
       // 3. Notify parent to show Undo toast (Day 4).
       //    The undo closure reverts the store to the original event and

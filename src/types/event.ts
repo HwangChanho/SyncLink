@@ -79,7 +79,12 @@ export interface CreateEventInput {
   repeatType?: RepeatType;
   repeatUntil?: Date;
   categoryId?: string;
-  color?: string;
+  /**
+   * Hex color override for this event.
+   * null = clear the override (fall back to category/member color).
+   * undefined = do not touch the existing color value (patch semantics).
+   */
+  color?: string | null;
   /** Space IDs to share this event to immediately upon creation. */
   shareToSpaceIds?: string[];
 }

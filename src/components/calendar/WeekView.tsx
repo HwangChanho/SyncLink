@@ -834,10 +834,14 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     justifyContent: 'center',
     paddingHorizontal: spacing[1],
   },
-  /** White text inside the chip, bold for readability on colored backgrounds. */
+  /**
+   * Text inside the all-day chip sits on a colored (event.color) background.
+   * textInverse (white in light, gray-900 in dark) ensures contrast against
+   * any saturated event color in both themes.
+   */
   allDayChipText: {
     ...textStyles.caption,
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontWeight: '600',
   },
   /**

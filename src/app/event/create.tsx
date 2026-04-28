@@ -45,6 +45,7 @@ import { PlaceSearchInput } from '@/components/places/PlaceSearchInput';
 import { ReminderPicker } from '@/components/reminders/ReminderPicker';
 import { DateTimeModal } from '@/components/common/DateTimeModal';
 import { CategoryPickerSheet } from '@/components/planner/CategoryPickerSheet';
+import { ColorPicker } from '@/components/event/ColorPicker';
 import { getCategories } from '@/services/categoryService';
 import { logError } from '@/lib/errorLogger';
 import type { Category } from '@/types';
@@ -211,17 +212,28 @@ export default function EventCreateScreen() {
   const [title, setTitle] = useState('');
   const [allDay, setAllDay] = useState(false);
 
-  /** Start date — pre-filled from route param. */
+  /** Start date — pre-filled from route param.
+   *  LEAD 2026-04-28: 시작 시간을 현재 시간 기준으로 (이전엔 09:00 고정).
+   *  분(minute)은 다음 30분 단위로 round (시각적 가독성 + 슬롯 align).
+   */
   const [startAt, setStartAt] = useState<Date>(() => {
     const base = parseDateParam(dateParam);
-    base.setHours(9, 0, 0, 0);
+    const now = new Date();
+    const minutes = now.getMinutes();
+    const roundedMinutes = minutes < 30 ? 30 : 0;
+    const hourOffset = minutes < 30 ? 0 : 1;
+    base.setHours(now.getHours() + hourOffset, roundedMinutes, 0, 0);
     return base;
   });
 
   /** End date — defaults to start + 1 hour. */
   const [endAt, setEndAt] = useState<Date>(() => {
     const base = parseDateParam(dateParam);
-    base.setHours(10, 0, 0, 0);
+    const now = new Date();
+    const minutes = now.getMinutes();
+    const roundedMinutes = minutes < 30 ? 30 : 0;
+    const hourOffset = minutes < 30 ? 1 : 2;
+    base.setHours(now.getHours() + hourOffset, roundedMinutes, 0, 0);
     return base;
   });
 
@@ -265,6 +277,13 @@ export default function EventCreateScreen() {
 
   /** Whether a GPS reverse-geocode is in progress. */
   const [isGettingLocation, setIsGettingLocation] = useState(false);
+
+  /**
+   * User-selected event color override.
+   * null = use category color or member color as fallback (default behaviour).
+   * Non-null = persist to events.color column and render with this color.
+   */
+  const [eventColor, setEventColor] = useState<string | null>(null);
 
   // ── Title autocomplete ─────────────────────────────────────────────────────
   // As the user types, suggest prior calendar events with matching titles.
@@ -471,6 +490,8 @@ export default function EventCreateScreen() {
         ...(location.trim()     ? { location:    location.trim() }     : {}),
         ...(description.trim()  ? { description: description.trim() }  : {}),
         ...(categoryId          ? { categoryId }                       : {}),
+        // Pass color override — null is fine (service layer accepts null = no override)
+        ...(eventColor          ? { color: eventColor }                : {}),
         shareToSpaceIds: shareSpaceIds,
       });
 
@@ -507,7 +528,7 @@ export default function EventCreateScreen() {
     }
   }, [
     title, allDay, startAt, repeatType, location, description, categoryId,
-    shareSpaceIds, reminderMinutes, upsertEvent, router, colors.primary, t, showToast,
+    eventColor, shareSpaceIds, reminderMinutes, upsertEvent, router, colors.primary, t, showToast,
   ]);
 
   /**
@@ -669,10 +690,15 @@ export default function EventCreateScreen() {
        * `behavior={undefined}` lets the OS resize the activity itself —
        * stacking both would double-adjust and leave a grey strip above the
        * keyboard (Sprint 14 TASK-1411).
+       *
+       * keyboardVerticalOffset=56 accounts for the fixed 56 px header bar above
+       * so the KAV measures available height correctly on iOS (without this the
+       * bar is double-counted and the view lifts too little).
        */}
       <KeyboardAvoidingView
         style={styles.scroll}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 56 : 0}
       >
       <ScrollView
         style={styles.scroll}
@@ -857,6 +883,11 @@ export default function EventCreateScreen() {
                 </Pressable>
               );
             })()}
+          </FormRow>
+
+          {/* Color picker — user can override the default category/member color */}
+          <FormRow label={t('event.form.color')} rowStyle={rowStyle}>
+            <ColorPicker value={eventColor} onChange={setEventColor} />
           </FormRow>
 
           {/* Location — GPS shortcut + Google Places Autocomplete (TASK-901 / TASK-1302) */}

@@ -22,6 +22,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { Animated, PanResponder, StyleSheet, Text, View } from 'react-native';
 import type { EventSummary } from '@/types';
+import { useColors } from '@/hooks/useColors';
 import { radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 
@@ -87,6 +88,10 @@ export function EventBlock({
   columnWidth = 0,
   translatedTitle,
 }: EventBlockProps) {
+  // Resolve theme-aware color tokens for dynamic styling
+  const colors = useColors();
+  const styles = makeStyles(colors);
+
   const blockHeight = Math.max(height, MIN_HEIGHT);
   const showSubtitle = blockHeight >= 38;
   const bgColor = `${event.color}CC`;
@@ -223,33 +228,42 @@ export function EventBlock({
   );
 }
 
-const styles = StyleSheet.create({
-  block: {
-    position: 'absolute',
-    borderLeftWidth: 3,
-    borderRadius: radius.sm,
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    overflow: 'hidden',
-  },
-  title: {
-    ...textStyles.labelSm,
-    color: '#1F2937',
-  },
-  /**
-   * Small dot positioned at the top-right corner of the event chip.
-   * Indicates that this event belongs to another Space member.
-   * Size and position kept within 8px of the chip edge per IDEA-012 spec.
-   */
-  ownerDot: {
-    position: 'absolute',
-    top: 3,
-    right: 3,
-    width: OWNER_DOT_SIZE,
-    height: OWNER_DOT_SIZE,
-    borderRadius: OWNER_DOT_SIZE / 2,
-    // White border adds contrast against both light and dark chip backgrounds.
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.85)',
-  },
-});
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ * Must be called inside the component so it reacts to theme changes.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
+    block: {
+      position: 'absolute',
+      borderLeftWidth: 3,
+      borderRadius: radius.sm,
+      paddingHorizontal: 4,
+      paddingVertical: 2,
+      overflow: 'hidden',
+    },
+    title: {
+      ...textStyles.labelSm,
+      // textPrimary adapts: gray-900 in light, white in dark
+      color: colors.textPrimary,
+    },
+    /**
+     * Small dot positioned at the top-right corner of the event chip.
+     * Indicates that this event belongs to another Space member.
+     * Size and position kept within 8px of the chip edge per IDEA-012 spec.
+     */
+    ownerDot: {
+      position: 'absolute',
+      top: 3,
+      right: 3,
+      width: OWNER_DOT_SIZE,
+      height: OWNER_DOT_SIZE,
+      borderRadius: OWNER_DOT_SIZE / 2,
+      // Semi-transparent white border adds contrast against any chip background.
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.85)',
+    },
+  });
+}

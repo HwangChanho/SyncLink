@@ -412,7 +412,8 @@ export function FreeTimeRecommendSheet({
                   accessibilityLabel={`${activity.name}: ${texts.createBtn}`}
                   accessibilityRole="button"
                 >
-                  <Text style={[textStyles.caption, { color: '#fff' }]}>
+                  {/* textInverse: white in light mode, gray-900 in dark — contrasts against primary background */}
+                  <Text style={[textStyles.caption, { color: colors.textInverse }]}>
                     {texts.createBtn}
                   </Text>
                 </TouchableOpacity>

@@ -39,6 +39,7 @@ import { MemberRow } from '@/components/space/MemberRow';
 import { AnniversaryAddModal } from '@/components/space/AnniversaryAddModal';
 import { FreeTimeSlotRow } from '@/components/space/FreeTimeSlotRow';
 import { AnniversaryRow } from '@/components/space/AnniversaryRow';
+import { InviteCodeSection } from '@/components/space/InviteCodeSection';
 import { findFreeTimeSlots } from '@/services/freeTimeService';
 import { useSpaceStore } from '@/stores/spaceStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -163,10 +164,13 @@ export default function SpaceDetailScreen() {
    */
   const handleShareInviteCode = async () => {
     if (!space) return;
+    // Use buildInviteUrl() so the https:// Universal Link is always sent out.
+    // The synclink:// custom scheme stays alive in _layout.tsx as a fallback
+    // but should no longer appear in outgoing share messages (DEVOPS 2026-04-28).
     const message = t('space.share_message', {
       name: space.name,
       code: space.inviteCode,
-      link: `synclink://space/join/${space.inviteCode}`,
+      link: buildInviteUrl(),
     });
     const title   = `${space.name} ${t('space.invite_title')}`;
 
@@ -207,14 +211,27 @@ export default function SpaceDetailScreen() {
    * Builds the canonical invite URL used by both the "Copy Link" and
    * "Email Invite" actions.
    *
-   * Format: `synclink://space/join/{inviteCode}`
-   * On web a universal-link deep-link scheme is used so that clicking the
-   * link on mobile opens the app directly (see IDEA-017 for full universal
-   * link support).
+   * Primary format: `https://synclink.pages.dev/space/{inviteCode}`
+   * This is an Apple Universal Link / Android App Link — clicking it on a
+   * device with the app installed will open the app directly. On a device
+   * without the app it shows the hosted fallback page (store links + manual
+   * code entry).
+   *
+   * The legacy `synclink://` custom scheme is kept alive in the deep link
+   * handler (_layout.tsx) as a fallback, but we no longer *send* it out.
+   *
+   * DEVOPS 2026-04-28: switched from synclink:// custom scheme to
+   * https://synclink.pages.dev (Universal Link) per LEAD decision (option A).
+   * Rollback: set EXPO_PUBLIC_INVITE_LINK_BASE=synclink://space
    */
   const buildInviteUrl = useCallback((): string => {
     if (!space) return '';
-    return `synclink://space/join/${space.inviteCode}`;
+    // Prefer EXPO_PUBLIC_INVITE_LINK_BASE if set (allows instant rollback via env).
+    // Falls back to the production Universal Link domain when the env var is absent.
+    const base =
+      process.env.EXPO_PUBLIC_INVITE_LINK_BASE?.replace(/\/$/, '') ??
+      'https://synclink.pages.dev';
+    return `${base}/space/${space.inviteCode}`;
   }, [space]);
 
   /**
@@ -284,34 +301,9 @@ export default function SpaceDetailScreen() {
     setIsQrVisible(prev => !prev);
   }, []);
 
-  /** Regenerate invite code (owner only). */
-  const handleRegenerateCode = () => {
-    showAlert(
-      t('space.invite_regen'),
-      t('space.regen_confirm'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('space.regen'),
-          style: 'destructive',
-          onPress: async () => {
-            if (!space) return;
-            setIsActionLoading(true);
-            try {
-              const newCode = await spaceService.regenerateInviteCode(space.id);
-              const updated = { ...space, inviteCode: newCode };
-              setSpace(updated);
-              setSpaceDetail(updated);
-            } catch (err) {
-              showAlert(t('common.error'), err instanceof Error ? err.message : t('space.regen_failed'));
-            } finally {
-              setIsActionLoading(false);
-            }
-          },
-        },
-      ],
-    );
-  };
+  // handleRegenerateCode removed — regeneration is now handled inside
+  // InviteCodeSection on every "보기" press (Sprint 28 fix).
+  // The confirm-dialog pattern is intentionally dropped: "보기" = rotate immediately.
 
   /** Remove a member (owner only). */
   const handleRemoveMember = (member: SpaceMember) => {
@@ -687,114 +679,35 @@ export default function SpaceDetailScreen() {
           </View>
         </View>
 
-        {/* Invite code section */}
+        {/* Invite code section — InviteCodeSection manages hide/show/timer/regenerate */}
         <SectionCard title={t('space.invite_code_section')} colors={colors} styles={styles}>
-          {/* testID="space-invite-code" enables e2e assertions on the code value */}
-          <View style={styles.inviteCodeRow} testID="space-invite-code">
-            <Text style={styles.inviteCode}>{space.inviteCode}</Text>
-            <View style={styles.inviteActions}>
-              <TouchableOpacity
-                style={styles.shareButton}
-                onPress={handleShareInviteCode}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.shareButtonText}>{t('space.invite_share_button')}</Text>
-              </TouchableOpacity>
-              {Platform.OS !== 'web' && (
-                <TouchableOpacity
-                  style={styles.contactButton}
-                  onPress={() => setIsContactPickerVisible(true)}
-                  activeOpacity={0.7}
-                  accessibilityLabel={t('contact.title')}
-                >
-                  <Ionicons name="people" size={16} color={colors.primary} />
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-          {/*
-           * ── Web-only invite actions (IDEA-014) ──────────────────────────
-           * ContactPickerModal is blocked on web (no OS contacts API).
-           * Instead we surface three web-native invite paths:
-           *   1. "Copy Invite Link"  — clipboard write (primary CTA)
-           *   2. "Send Email Invite" — opens mailto: in system mail client
-           *   3. "Show QR Code"      — toggles an <img> QR via qrserver.com
-           */}
-          {Platform.OS === 'web' && (
-            <View style={styles.webInviteContainer}>
-              {/* Primary CTA: copy the full invite URL to clipboard */}
-              <TouchableOpacity
-                testID="space-invite-link"
-                style={[styles.webInviteButton, styles.webInviteButtonPrimary]}
-                onPress={() => void handleCopyInviteLink()}
-                activeOpacity={0.8}
-                accessibilityLabel={t('space.invite_link_copy')}
-              >
-                <Ionicons name="link-outline" size={16} color={styles.webInviteButtonTextPrimary.color} />
-                <Text style={styles.webInviteButtonTextPrimary}>{t('space.invite_link_copy')}</Text>
-              </TouchableOpacity>
-
-              {/* Email invite: opens system mail client via mailto: */}
-              <TouchableOpacity
-                testID="space-invite-email"
-                style={styles.webInviteButton}
-                onPress={handleEmailInvite}
-                activeOpacity={0.8}
-                accessibilityLabel={t('space.invite_email')}
-              >
-                <Ionicons name="mail-outline" size={16} color={styles.webInviteButtonText.color} />
-                <Text style={styles.webInviteButtonText}>{t('space.invite_email')}</Text>
-              </TouchableOpacity>
-
-              {/* QR code toggle: renders QR image inline */}
-              <TouchableOpacity
-                testID="space-invite-qr"
-                style={styles.webInviteButton}
-                onPress={handleToggleQr}
-                activeOpacity={0.8}
-                accessibilityLabel={t('space.invite_qr')}
-              >
-                <Ionicons name={isQrVisible ? 'qr-code' : 'qr-code-outline'} size={16} color={styles.webInviteButtonText.color} />
-                <Text style={styles.webInviteButtonText}>{t('space.invite_qr')}</Text>
-              </TouchableOpacity>
-
-              {/*
-               * QR image panel — visible only after user taps "Show QR Code".
-               * Uses api.qrserver.com (free, no-auth) to generate a PNG on the fly.
-               * The invite URL is URI-encoded so special characters are safe.
-               * On web, React Native's <Image> renders as <img> under the hood,
-               * so this works without any extra native module.
-               */}
-              {isQrVisible && (
-                <View style={styles.webQrWrapper}>
-                  <Image
-                    source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(buildInviteUrl())}` }}
-                    style={{ width: 200, height: 200 }}
-                    contentFit="contain"
-                    accessibilityLabel="QR code for space invite"
-                  />
-                  <Text style={styles.webQrHint}>{buildInviteUrl()}</Text>
-                </View>
-              )}
-            </View>
-          )}
-
-          {isOwner && (
-            <TouchableOpacity
-              style={styles.regenerateButton}
-              onPress={handleRegenerateCode}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.regenerateText}>{t('space.code_regen_button')}</Text>
-            </TouchableOpacity>
-          )}
-          {/* Couple Space capacity indicator */}
-          {space.type === 'couple' && (
-            <Text style={styles.capacityHint}>
-              {t('space.capacity_hint', { current: space.members.length })}
-              {space.members.length >= 2 ? t('space.capacity_full_suffix') : ''}
-            </Text>
-          )}
+          <InviteCodeSection
+            spaceId={space.id}
+            inviteCode={space.inviteCode}
+            isOwner={isOwner}
+            onCodeChange={(newCode) => {
+              const updated = { ...space, inviteCode: newCode };
+              setSpace(updated);
+              setSpaceDetail(updated);
+            }}
+            onShare={handleShareInviteCode}
+            // exactOptionalPropertyTypes: web-only props are omitted entirely on native.
+            // Spreading a conditional object avoids passing `undefined` where the
+            // prop type is `() => void` (not `() => void | undefined`).
+            {...(Platform.OS === 'web' ? {
+              onCopyLink: handleCopyInviteLink,
+              onEmailInvite: handleEmailInvite,
+              onToggleQr: handleToggleQr,
+            } : {})}
+            isQrVisible={isQrVisible}
+            qrUrl={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(buildInviteUrl())}`}
+            isContactPickerAvailable={Platform.OS !== 'web'}
+            onOpenContactPicker={() => setIsContactPickerVisible(true)}
+            colors={colors}
+            styles={styles}
+            isCoupleSpace={space.type === 'couple'}
+            memberCount={space.members.length}
+          />
         </SectionCard>
 
         {/* Member list */}
