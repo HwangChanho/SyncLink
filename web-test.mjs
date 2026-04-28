@@ -1,6 +1,7 @@
 import { chromium } from 'playwright';
 
 const BASE = 'http://localhost:8081';
+const HEADLESS = process.env.HEADLESS === '1';
 const results = [];
 const errors = [];
 
@@ -35,7 +36,7 @@ async function clickText(page, ko, en, timeout = 30000) {
   await page.click(`text=${found}`);
 }
 
-const browser = await chromium.launch({ headless: false });
+const browser = await chromium.launch({ headless: HEADLESS });
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
 const page = await ctx.newPage();
 
