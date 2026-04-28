@@ -46,28 +46,12 @@ import { textStyles } from '@/constants/typography';
 // ─── Feature flag ─────────────────────────────────────────────────────────────
 
 /**
- * TASK-009 Day 2 feature flag.
- *
- * When true, WeekView renders EventBlockGestureHandler (Gesture Handler v2 +
- * Reanimated 3 PoC) instead of the production EventBlock (PanResponder).
- *
- * Activation: set `dragMode` to 'gh' in your local dev config.
- * Default: false — production users always see EventBlock until Day 5.
- *
- * @example
- *   // enable in a dev build:
- *   // src/constants/devConfig.ts → export const dragMode = 'gh';
+ * Drag-to-reschedule is enabled in all builds (dev + production).
+ * TASK-009 Days 1-5 complete — Gesture Handler v2 + Reanimated 3,
+ * long-press 500ms activation, 15-min snapping, conflict detection,
+ * optimistic update + undo toast.
  */
-const DRAG_MODE_GH = __DEV__ && (() => {
-  try {
-    // Dynamic require so the constant is tree-shaken in production.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const cfg = require('@/constants/devConfig') as { dragMode?: string };
-    return cfg.dragMode === 'gh';
-  } catch {
-    return false;
-  }
-})();
+const DRAG_MODE_GH = true;
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
 

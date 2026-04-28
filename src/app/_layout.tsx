@@ -56,6 +56,10 @@ if (__DEV__) {
     'RevenueCat',
     '[RevenueCat]',
     'RevenueCat SDK',
+    'RNPurchases',
+    'NSURLSession',
+    'VirtualizedList',
+    'ReactImageView',
   ]);
 }
 initSentry();

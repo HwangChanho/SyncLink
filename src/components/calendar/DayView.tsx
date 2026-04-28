@@ -38,19 +38,9 @@ import { textStyles } from '@/constants/typography';
 // ─── Feature flag (mirrors WeekView) ──────────────────────────────────────────
 
 /**
- * TASK-009 Day 5 feature flag for DayView.
- * Mirrors WeekView's DRAG_MODE_GH — both views use the same devConfig toggle.
- * When true, EventBlockGestureHandler replaces EventBlock in the time grid.
+ * Drag-to-reschedule enabled in all builds (mirrors WeekView).
  */
-const DRAG_MODE_GH = __DEV__ && (() => {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const cfg = require('@/constants/devConfig') as { dragMode?: string };
-    return cfg.dragMode === 'gh';
-  } catch {
-    return false;
-  }
-})();
+const DRAG_MODE_GH = true;
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
 
