@@ -146,6 +146,7 @@ export default function OnboardingScreen() {
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityLabel="온보딩 건너뛰기"
           accessibilityRole="button"
+          testID="onboarding-button-skip"
         >
           <Text style={styles.skipText}>{t('onboarding.skip')}</Text>
         </TouchableOpacity>

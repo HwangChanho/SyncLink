@@ -10,40 +10,47 @@ env:
   TEST_EMAIL: ${TEST_EMAIL}
   TEST_PASSWORD: ${TEST_PASSWORD}
 ---
-# Sprint 24 R2: clearState 제거 + 더 긴 splash 대기.
-# clearState true는 dev client cache 도 reset해서 Metro reconnect 시간 큼.
-# 이미 install된 dev APK + Metro fresh 번들이면 stopApp 후 launchApp만으로 충분.
+# Sprint 30: clearState + permissions deny.
+# - clearState로 매 회귀 fresh start (이전 로그인 잔존 회피).
+# - permissions deny로 RevenueCat/expo-notifications 알림 dialog 자체 안 뜨게.
+#   (떠있으면 hierarchy를 가려서 SyncLink assertion fail.)
 - stopApp
+- clearState
 - launchApp:
     permissions:
-      all: allow
+      all: deny
 
-- extendedWaitUntil:
-    visible:
-      text: "SyncLink"
-    timeout: 30000
-
-# 위치/알림 권한 다이얼로그가 떠 있으면 dismiss (시뮬 fresh install 시)
-- runFlow:
-    when:
-      visible:
-        text: "허용 안 함"
+# 시스템 dialog는 Maestro permissions 설정 외에도 SDK 자체가 런타임에 직접
+# 요청할 수 있음 (expo-location, RevenueCat). 떠있으면 hierarchy를 가려서
+# 다른 assertion 전부 fail. login-dev-submit testID로 바로 대기 + 그동안
+# dialog 보이면 dismiss.
+# SDK가 dialog 여러 개를 순차적으로 띄울 수 있음 (location, notifications,
+# tracking 등). 최대 5번까지 같은 dismiss 반복.
+- repeat:
+    times: 5
     commands:
-      - tapOn:
-          text: "허용 안 함"
-- runFlow:
-    when:
-      visible:
-        text: "Don't allow"
-    commands:
-      - tapOn:
-          text: "Don't allow"
+      - runFlow:
+          when:
+            visible:
+              text: "허용 안 함"
+          commands:
+            - tapOn:
+                text: "허용 안 함"
+            - waitForAnimationToEnd
+      - runFlow:
+          when:
+            visible:
+              text: "Don't Allow"
+          commands:
+            - tapOn:
+                text: "Don't Allow"
+            - waitForAnimationToEnd
 
-# Dev 전용 입력 필드 (testID 사용 — locale 무관, ADR-011)
+# Dev 전용 입력 필드 (testID 사용 — locale 무관, ADR-011, 30s timeout)
 - extendedWaitUntil:
     visible:
       id: "login-dev-submit"
-    timeout: 10000
+    timeout: 30000
 
 # 이메일 입력
 - tapOn:
@@ -65,11 +72,53 @@ env:
 
 - takeScreenshot: screenshots/01_after_login
 
-# 홈 탭 도달 확인 (testID 사용 — locale 무관)
+# 로그인 후 알림 권한 dialog (이전 launchApp permissions:all과 별개로 RevenueCat/expo-notifications가
+# 런타임에 별도로 요청할 수 있음 — Sprint 30에서 발견)
+- runFlow:
+    when:
+      visible:
+        text: "허용 안 함"
+    commands:
+      - tapOn:
+          text: "허용 안 함"
+- runFlow:
+    when:
+      visible:
+        text: "Don't Allow"
+    commands:
+      - tapOn:
+          text: "Don't Allow"
+
+# Onboarding skip — testID 기반 (text는 RevenueCat 토스트 등으로 hierarchy 누락 위험)
+- extendedWaitUntil:
+    visible:
+      id: "onboarding-button-skip"
+    timeout: 30000
+    optional: true
+- runFlow:
+    when:
+      visible:
+        id: "onboarding-button-skip"
+    commands:
+      - tapOn:
+          id: "onboarding-button-skip"
+      - waitForAnimationToEnd
+
+# 닉네임 onboarding skip
+- runFlow:
+    when:
+      visible:
+        id: "profile-onboarding-button-skip"
+    commands:
+      - tapOn:
+          id: "profile-onboarding-button-skip"
+      - waitForAnimationToEnd
+
+# 홈 탭 도달 확인 (testID 사용 — locale 무관, 30s)
 - extendedWaitUntil:
     visible:
       id: "tab-button-home"
-    timeout: 15000
+    timeout: 30000
 
 - assertVisible:
     id: "tab-button-home"

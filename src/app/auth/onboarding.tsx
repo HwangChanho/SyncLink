@@ -155,6 +155,7 @@ export default function OnboardingScreen() {
               disabled={isSaving}
               accessibilityLabel={t('profile.onboarding_skip')}
               accessibilityRole="button"
+              testID="profile-onboarding-button-skip"
             >
               <Text style={styles.skipText}>{t('profile.onboarding_skip')}</Text>
             </TouchableOpacity>
