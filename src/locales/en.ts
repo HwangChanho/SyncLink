@@ -161,6 +161,10 @@ const en = {
       current_location: 'Use current location',
     },
     edit_back: 'Back',
+    // IDEA-019 — event created success toast message
+    added_toast: 'Event added',
+    // IDEA-019 — find free time inline button on event create screen
+    find_free_time: 'Find free time',
   },
 
   todo: {

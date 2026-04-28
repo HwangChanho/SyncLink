@@ -49,6 +49,9 @@ import { getCategories } from '@/services/categoryService';
 import { logError } from '@/lib/errorLogger';
 import type { Category } from '@/types';
 import { showAlert } from '@/lib/webAlert';
+import { SimpleToast, useSimpleToast } from '@/components/common/SimpleToast';
+import { FreeTimeRecommendSheet } from '@/components/calendar/FreeTimeRecommendSheet';
+import type { FreeSlot } from '@/types/freeTime';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -236,6 +239,21 @@ export default function EventCreateScreen() {
   const [reminderMinutes, setReminderMinutes] = useState<number[]>([]);
 
   const [isSaving, setIsSaving] = useState(false);
+
+  // ── IDEA-019: Toast state (일정 생성 완료 피드백) ──────────────────────────
+  const { toast, showToast } = useSimpleToast();
+
+  // ── IDEA-019: Free-time inline (빈 시간 찾기 → 시작/종료 prefill) ─────────
+  /**
+   * When the user taps "빈 시간 찾기" we open FreeTimeRecommendSheet.
+   * The sheet's onCreateEvent callback pre-fills title/startAt/endAt from the
+   * chosen slot, then the user finishes editing and saves normally.
+   *
+   * Note: FreeTimeRecommendSheet expects a FreeSlot from @/types/freeTime.
+   * We open it with a synthetic slot derived from the current form dates so
+   * the sheet can show relevant AI recommendations immediately.
+   */
+  const [freeTimeSlot, setFreeTimeSlot] = useState<FreeSlot | null>(null);
 
   /**
    * DateTimeModal state.
@@ -476,6 +494,10 @@ export default function EventCreateScreen() {
         isOwn: true,
       });
 
+      // IDEA-019: Show a brief success toast before navigating back.
+      // We show first, then navigate so the toast is briefly visible on the
+      // calendar screen (the toast outlasts the navigation transition).
+      showToast(t('event.added_toast'));
       router.back();
     } catch (err) {
       void logError({ context: 'event.create.ui', error: err });
@@ -485,7 +507,7 @@ export default function EventCreateScreen() {
     }
   }, [
     title, allDay, startAt, repeatType, location, description, categoryId,
-    shareSpaceIds, reminderMinutes, upsertEvent, router, colors.primary, t,
+    shareSpaceIds, reminderMinutes, upsertEvent, router, colors.primary, t, showToast,
   ]);
 
   /**
@@ -571,6 +593,43 @@ export default function EventCreateScreen() {
     title, allDay, startAt, endAt, shareSpaceIds,
     formatConflictList, performSave, t,
   ]);
+
+  // ── IDEA-019: Free-time inline handlers ────────────────────────────────────
+
+  /**
+   * Open FreeTimeRecommendSheet with a synthetic slot spanning the current
+   * form's start–end range so the sheet can seed AI recommendations.
+   * If the range is invalid or zero-length, we fall back to a 1-hour slot.
+   */
+  const handleOpenFreeTime = useCallback(() => {
+    const durationMinutes = allDay
+      ? 60
+      : Math.max(30, Math.round((endAt.getTime() - startAt.getTime()) / 60_000));
+    const slot: FreeSlot = {
+      start:           startAt,
+      end:             endAt,
+      durationMinutes: durationMinutes,
+    };
+    setFreeTimeSlot(slot);
+  }, [startAt, endAt, allDay]);
+
+  /**
+   * Called when the user taps "이 활동으로 일정 만들기" inside the sheet.
+   * Pre-fills the form's title and (optionally) adjusts start/end to the slot.
+   *
+   * @param activityTitle - The chosen activity name (e.g. "산책")
+   * @param slot          - The free slot the activity was suggested for
+   */
+  const handleFreeTimeCreateEvent = useCallback((
+    activityTitle: string,
+    slot: FreeSlot,
+  ) => {
+    setTitle(activityTitle);
+    // Apply slot times to the form, keeping the user's chosen date
+    setStartAt(slot.start);
+    setEndAt(slot.end);
+    setFreeTimeSlot(null);
+  }, []);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -859,13 +918,23 @@ export default function EventCreateScreen() {
 
           {/* Space sharing */}
           {spaces.length > 0 && (
-            <View style={styles.sharingSection}>
+            /*
+             * testID="event-share-section" — e2e can assert the entire sharing
+             * section is visible before checking individual toggles (IDEA-019 #7).
+             */
+            <View testID="event-share-section" style={styles.sharingSection}>
               <Text style={styles.sharingLabel}>{t('event.form.share_section')}</Text>
               {spaces.map((space) => {
                 const selected = shareSpaceIds.includes(space.id);
                 return (
                   <Pressable
                     key={space.id}
+                    /*
+                     * testID="event-share-toggle-{spaceId}" — stable identifier
+                     * per Space so e2e can tap specific toggles without relying
+                     * on name text that might change (IDEA-019 #7).
+                     */
+                    testID={`event-share-toggle-${space.id}`}
                     style={styles.spaceRow}
                     onPress={() => toggleSpace(space.id)}
                   >
@@ -894,6 +963,43 @@ export default function EventCreateScreen() {
           setCategoryPickerVisible(false);
         }}
       />
+
+      {/*
+       * IDEA-019 — Free-time inline button (Tier 3 BottomSheet trigger).
+       * Rendered at root level (above keyboard, below SafeArea bottom edge)
+       * so it floats over the form. Only shown on native; on web the space
+       * detail screen already has the finder panel.
+       */}
+      {Platform.OS !== 'web' && (
+        <TouchableOpacity
+          testID="event-create-find-free-time"
+          style={styles.freeTimeBtn}
+          onPress={handleOpenFreeTime}
+          activeOpacity={0.8}
+          accessibilityLabel={t('event.find_free_time')}
+        >
+          <Ionicons name="time-outline" size={16} color={colors.primary} />
+          <Text style={styles.freeTimeBtnText}>{t('event.find_free_time')}</Text>
+        </TouchableOpacity>
+      )}
+
+      {/*
+       * IDEA-019 — FreeTimeRecommendSheet.
+       * Opens when user taps the "빈 시간 찾기" button. Clicking an activity
+       * pre-fills the title + time in the form via handleFreeTimeCreateEvent.
+       */}
+      <FreeTimeRecommendSheet
+        slot={freeTimeSlot}
+        onClose={() => setFreeTimeSlot(null)}
+        onCreateEvent={handleFreeTimeCreateEvent}
+      />
+
+      {/*
+       * IDEA-019 — SimpleToast overlay.
+       * Shows "일정이 추가되었어요" briefly after a successful save.
+       * Positioned at the SafeAreaView root so it sits above the home indicator.
+       */}
+      {toast && <SimpleToast toast={toast} />}
     </SafeAreaView>
   );
 }
@@ -1113,6 +1219,26 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   multilineInput: {
     minHeight: 60,
     textAlignVertical: 'top',
+  },
+
+  // IDEA-019 — "빈 시간 찾기" inline button (above the form, floating)
+  freeTimeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    gap: spacing[1],
+    marginRight: spacing[5],
+    marginTop: spacing[2],
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1],
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
+  },
+  freeTimeBtnText: {
+    ...textStyles.caption,
+    color: colors.primary,
   },
 
   // Space sharing

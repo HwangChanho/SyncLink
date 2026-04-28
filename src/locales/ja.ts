@@ -161,6 +161,10 @@ const ja = {
       current_location: '現在地を使用',
     },
     edit_back: '戻る',
+    // IDEA-019 — 予定作成完了トーストメッセージ
+    added_toast: '予定が追加されました',
+    // IDEA-019 — 予定作成画面「空き時間を探す」インラインボタン
+    find_free_time: '空き時間を探す',
   },
 
   todo: {

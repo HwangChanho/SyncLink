@@ -160,6 +160,10 @@ export default function CreateSpaceScreen() {
               return (
                 <TouchableOpacity
                   key={option.type}
+                  // testID pattern: space-type-couple | space-type-group
+                  // Allows e2e tests to select type cards without relying on
+                  // emoji text which differs per locale (IDEA-019 #6).
+                  testID={`space-type-${option.type}`}
                   style={[styles.typeCard, isSelected && styles.typeCardSelected]}
                   onPress={() => setSelectedType(option.type)}
                   activeOpacity={0.7}

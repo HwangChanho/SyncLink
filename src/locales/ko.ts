@@ -170,6 +170,10 @@ const ko = {
       current_location: '현재 위치 사용',
     },
     edit_back: '돌아가기',
+    // IDEA-019 — 일정 생성 완료 토스트 메시지
+    added_toast: '일정이 추가되었어요',
+    // IDEA-019 — 일정 생성 화면 빈 시간 찾기 인라인 버튼
+    find_free_time: '빈 시간 찾기',
   },
 
   todo: {

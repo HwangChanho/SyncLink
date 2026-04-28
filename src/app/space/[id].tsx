@@ -689,7 +689,8 @@ export default function SpaceDetailScreen() {
 
         {/* Invite code section */}
         <SectionCard title={t('space.invite_code_section')} colors={colors} styles={styles}>
-          <View style={styles.inviteCodeRow}>
+          {/* testID="space-invite-code" enables e2e assertions on the code value */}
+          <View style={styles.inviteCodeRow} testID="space-invite-code">
             <Text style={styles.inviteCode}>{space.inviteCode}</Text>
             <View style={styles.inviteActions}>
               <TouchableOpacity
@@ -923,7 +924,26 @@ export default function SpaceDetailScreen() {
               </Text>
             ) : (
               ftResults.map((slot, idx) => (
-                <FreeTimeSlotRow key={idx} slot={slot} colors={colors} styles={styles} />
+                <FreeTimeSlotRow
+                  key={idx}
+                  slot={slot}
+                  colors={colors}
+                  styles={styles}
+                  /*
+                   * IDEA-019 — inline "이 시간에 만들기" CTA.
+                   * Navigate to event/create with the slot's start date
+                   * so the form is pre-filled and the user can finish in
+                   * one less step.
+                   */
+                  onCreateEvent={(s) => {
+                    const dateStr = [
+                      s.startAt.getFullYear(),
+                      String(s.startAt.getMonth() + 1).padStart(2, '0'),
+                      String(s.startAt.getDate()).padStart(2, '0'),
+                    ].join('-');
+                    router.push(`/event/create?date=${dateStr}`);
+                  }}
+                />
               ))
             )
           )}

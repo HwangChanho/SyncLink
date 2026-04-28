@@ -161,6 +161,10 @@ const zh = {
       current_location: '使用当前位置',
     },
     edit_back: '返回',
+    // IDEA-019 — 日程创建完成 Toast 消息
+    added_toast: '日程已添加',
+    // IDEA-019 — 日程创建页面"查找空闲时间"内联按钮
+    find_free_time: '查找空闲时间',
   },
 
   todo: {

@@ -418,6 +418,18 @@ export function makeSpaceDetailStyles(colors: ReturnType<typeof useColors>) {
     ...textStyles.label,
     color: colors.primary,
   },
+  // IDEA-019 — "이 시간에 만들기" CTA button inside each free-time slot row.
+  ftSlotCTA: {
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[1],
+    borderRadius: radius.sm,
+    backgroundColor: colors.primary,
+    flexShrink: 0,
+  },
+  ftSlotCTAText: {
+    ...textStyles.caption,
+    color: colors.textInverse,
+  },
 
   // ── Web-only invite actions (IDEA-014) ────────────────────────────────────
   /**
