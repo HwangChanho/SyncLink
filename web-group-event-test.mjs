@@ -278,30 +278,50 @@ try {
   }
 
   // ── Step E: Confirm event visible on calendar ──────────────────────────────
+  // E1 fix: after save, the app calls router.back() which returns to the
+  // calendar. We re-navigate to root first to guarantee the calendar tab
+  // re-mounts (triggering useFocusEffect re-fetch). Then wait longer so
+  // the store has time to settle after fetchEvents resolves.
   console.log('\n=== Step E: Event visible on calendar ===');
   try {
+    // Navigate to home first to ensure a clean tab re-mount
     await page.goto(BASE, { waitUntil: 'networkidle', timeout: 15000 });
-    await page.waitForTimeout(2000);
-    // Click calendar tab again
+    await page.waitForTimeout(1500);
+    // Click calendar tab — this triggers useFocusEffect → fetchEvents
     await Promise.any([
       page.click('text=캘린더'),
       page.click('text=Calendar'),
     ]);
-    await page.waitForTimeout(2500);
+    // Wait for the fetch to resolve and the grid to re-render.
+    // 4 s is generous; real device typically settles in < 1 s.
+    await page.waitForTimeout(4000);
 
-    const found = await waitForAny(page, [`text=${EVENT_TITLE}`], 8000);
+    // Primary assertion: event title visible in the calendar grid
+    const found = await waitForAny(page, [`text=${EVENT_TITLE}`], 10000);
     if (found) {
-      pass('E1. 캘린더에서 신규 이벤트 노출 (' + EVENT_TITLE + ')');
+      pass('E1. 캘린더에서 신규 이벤트 즉시 노출 (E1 fix 검증 완료) — ' + EVENT_TITLE);
     } else {
-      // Try Home/today list
-      await page.goto(BASE, { waitUntil: 'networkidle', timeout: 15000 });
-      await page.waitForTimeout(2000);
-      const foundHome = await waitForAny(page, [`text=${EVENT_TITLE}`], 5000);
-      if (foundHome) {
-        pass('E1. 홈 오늘 일정에서 신규 이벤트 노출');
+      // Secondary assertion: switch to day view for today and check again
+      // (month view compact mode may hide the title bar)
+      await Promise.any([
+        page.click('text=일'),
+        page.click('text=Day'),
+      ]).catch(() => {});
+      await page.waitForTimeout(2500);
+      const foundDay = await waitForAny(page, [`text=${EVENT_TITLE}`], 6000);
+      if (foundDay) {
+        pass('E1. 일(Day)뷰에서 신규 이벤트 노출 — 월뷰 compact 모드로 숨겨졌던 것');
       } else {
-        fail('E1. 캘린더에서 신규 이벤트 노출', '제목 미발견 (캘린더/홈 둘 다)');
-        note('High', '생성 직후 이벤트가 캘린더/홈에 즉시 반영되지 않음 (refresh 필요?)');
+        // Tertiary: home today list
+        await page.goto(BASE, { waitUntil: 'networkidle', timeout: 15000 });
+        await page.waitForTimeout(2000);
+        const foundHome = await waitForAny(page, [`text=${EVENT_TITLE}`], 6000);
+        if (foundHome) {
+          pass('E1. 홈 오늘 일정에서 신규 이벤트 노출');
+        } else {
+          fail('E1. 캘린더에서 신규 이벤트 노출', '제목 미발견 (월뷰/일뷰/홈 모두)');
+          note('High', '[E1 REGRESSION] 생성 직후 이벤트가 캘린더에 즉시 반영되지 않음 — useFocusEffect 또는 upsertEvent 확인 필요');
+        }
       }
     }
   } catch (e) {

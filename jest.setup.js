@@ -96,6 +96,7 @@ jest.mock('expo-router', () => {
     })),
     useLocalSearchParams: jest.fn(() => ({})),
     useSegments: jest.fn(() => []),
+    useFocusEffect: jest.fn(),
     Link: ({ children }) => children,
     Redirect: () => null,
     Stack: StackMock,

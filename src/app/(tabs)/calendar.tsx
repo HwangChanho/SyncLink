@@ -27,6 +27,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { logError } from '@/lib/errorLogger';
 import { NLInputBar } from '@/components/nl/NLInputBar';
@@ -423,6 +424,27 @@ export default function CalendarScreen() {
     const range = getViewRange(selectedDate, viewMode);
     void fetchEvents(range);
   }, [selectedDate, viewMode, fetchEvents]);
+
+  /**
+   * E1 fix — Re-fetch the current view range when the calendar screen regains
+   * focus (e.g. returning from event/create via router.back()).
+   *
+   * Without this, `selectedDate` and `viewMode` don't change on back-navigation
+   * so the useEffect above never re-fires — the newly created event is in the
+   * store via optimistic `upsertEvent` but if the user clears or re-navigates
+   * the range is stale. This ensures a server-side re-fetch on every focus so
+   * the store and the rendered grid are always in sync.
+   *
+   * `useFocusEffect` is a no-op on web (Expo Router passes through) so the
+   * web path relies on the store-level optimistic upsert in create.tsx.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      const range = getViewRange(selectedDate, viewMode);
+      void fetchEvents(range);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedDate, viewMode]),
+  );
 
   // ─── Realtime subscription (TASK-202) ────────────────────────────────────────
 

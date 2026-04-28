@@ -366,4 +366,60 @@ describe('eventStore', () => {
       expect(useEventStore.getState().eventsByDate['2026-03-10']).toEqual([mockEvent3]);
     });
   });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // E1 fix — 이벤트 생성 직후 store 갱신 검증 (Sprint 28)
+  // 시나리오: create.tsx의 performSave가 createEvent 성공 후 upsertEvent를
+  //           호출하면, 이후 fetchEvents 없이도 해당 날짜 버킷에 이벤트가
+  //           즉시 반영되어야 한다. (useFocusEffect re-fetch 전에도 store OK)
+  // ══════════════════════════════════════════════════════════════════════════
+
+  describe('E1 fix — 이벤트 생성 직후 즉시 store 반영', () => {
+    /**
+     * performSave 흐름 재현:
+     *  1. createEvent 반환값으로 upsertEvent 호출 (optimistic)
+     *  2. 곧이어 useFocusEffect → fetchEvents 호출 시 merge 후에도 이벤트 유지
+     */
+    it('upsertEvent 호출 직후 해당 날짜 버킷에 이벤트 즉시 반영', () => {
+      // 빈 store에서 시작 — fetchEvents 없이 upsertEvent만으로 반영되는지 검증
+      expect(useEventStore.getState().eventsByDate['2026-01-15']).toBeUndefined();
+
+      // performSave가 createEvent 성공 후 호출하는 upsertEvent 시뮬레이션
+      useEventStore.getState().upsertEvent(mockEvent1);
+
+      const dateKey = `${mockEvent1.startAt.getFullYear()}-${String(mockEvent1.startAt.getMonth() + 1).padStart(2, '0')}-${String(mockEvent1.startAt.getDate()).padStart(2, '0')}`;
+      const bucket = useEventStore.getState().eventsByDate[dateKey];
+      expect(bucket).toBeDefined();
+      expect(bucket).toHaveLength(1);
+      expect(bucket![0]!.id).toBe(mockEvent1.id);
+    });
+
+    it('upsertEvent 후 fetchEvents(re-fetch) 시 동일 이벤트가 중복 없이 유지됨', async () => {
+      // 1. optimistic upsert (create.tsx performSave 시뮬레이션)
+      useEventStore.getState().upsertEvent(mockEvent1);
+
+      // 2. useFocusEffect re-fetch — 서버가 동일 이벤트를 반환하는 시나리오
+      (eventService.getEventsInRange as jest.Mock).mockResolvedValue([mockEvent1]);
+      const RANGE = { start: new Date('2026-01-01'), end: new Date('2026-01-31') };
+      await useEventStore.getState().fetchEvents(RANGE);
+
+      // fetchEvents는 byDate를 merge-overwrite하므로 같은 날짜 버킷은 교체됨.
+      // 결과: 중복 없이 mockEvent1 하나만 존재해야 한다.
+      const dateKey = `${mockEvent1.startAt.getFullYear()}-${String(mockEvent1.startAt.getMonth() + 1).padStart(2, '0')}-${String(mockEvent1.startAt.getDate()).padStart(2, '0')}`;
+      const bucket = useEventStore.getState().eventsByDate[dateKey];
+      expect(bucket).toHaveLength(1);
+      expect(bucket![0]!.id).toBe(mockEvent1.id);
+    });
+
+    it('upsertEvent가 다른 날짜 버킷에 영향을 주지 않음 (범위 밖 이벤트 보존)', () => {
+      // 미리 다른 날짜에 이벤트 설정
+      useEventStore.getState().setEventsForDate('2026-01-16', [mockEvent3]);
+
+      // 새 이벤트 upsert (1-15 버킷)
+      useEventStore.getState().upsertEvent(mockEvent1);
+
+      // 1-16 버킷은 변경되지 않아야 함
+      expect(useEventStore.getState().eventsByDate['2026-01-16']).toEqual([mockEvent3]);
+    });
+  });
 });
