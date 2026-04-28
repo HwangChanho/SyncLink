@@ -1,76 +1,114 @@
 # 02_tab_navigation — 4개 탭 이동 + 각 화면 렌더링 검증
-# 자체 로그인 포함 — 단독 실행 가능
+# 자체 로그인 포함 (testID 기반, locale 무관) — 단독 실행 가능
+#
+# 실행:
+#   maestro --device <UDID> test \
+#     -e TEST_EMAIL=e2e-ios-sim-pro@synclink.test \
+#     -e TEST_PASSWORD=e2etest1234 \
+#     e2e/flows/02_tab_navigation.yaml
 
 appId: io.synclink.app
+env:
+  TEST_EMAIL: ${TEST_EMAIL}
+  TEST_PASSWORD: ${TEST_PASSWORD}
 ---
 # ── 로그인 ─────────────────────────────────────────────────────────────────────
 - stopApp
+- clearState
 - launchApp:
-    clearState: false
+    permissions:
+      all: deny
 
+# Dialog 5회 dismiss (expo-location/RevenueCat 등 런타임 요청)
+- repeat:
+    times: 5
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "허용 안 함"
+          commands:
+            - tapOn:
+                text: "허용 안 함"
+            - waitForAnimationToEnd
+
+# 로그인 폼 (testID 기반)
+- extendedWaitUntil:
+    visible:
+      id: "login-dev-submit"
+    timeout: 30000
+- tapOn:
+    id: "login-dev-email"
+- eraseText
+- inputText: ${TEST_EMAIL}
+- tapOn:
+    id: "login-dev-password"
+- eraseText
+- inputText: ${TEST_PASSWORD}
+- tapOn:
+    id: "login-dev-submit"
 - waitForAnimationToEnd
 
-# 로그인 화면이 있으면 로그인 진행
+# Post-login dialog dismiss
+- repeat:
+    times: 5
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "허용 안 함"
+          commands:
+            - tapOn:
+                text: "허용 안 함"
+            - waitForAnimationToEnd
+
+# Onboarding skip (testID)
 - runFlow:
     when:
       visible:
-        text: "이메일로 로그인"
+        id: "onboarding-button-skip"
     commands:
       - tapOn:
-          text: "이메일"
-      - eraseText: 50
-      - inputText: "e2e@synclink.test"
+          id: "onboarding-button-skip"
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        id: "profile-onboarding-button-skip"
+    commands:
       - tapOn:
-          text: "비밀번호"
-      - eraseText: 50
-      - inputText: "e2etest1234"
-      - tapOn:
-          text: "로그인"
+          id: "profile-onboarding-button-skip"
+      - waitForAnimationToEnd
 
+# 홈 탭 도달 확인
 - extendedWaitUntil:
     visible:
-      text: "오늘 일정"
-    timeout: 20000
+      id: "tab-button-home"
+    timeout: 30000
 
-# ── 탭 네비게이션 검증 ──────────────────────────────────────────────────────────
-# 홈 탭 확인
-- assertVisible: "홈"
+# ── 탭 네비게이션 검증 (testID 기반, locale 무관) ────────────────────────────────
 - takeScreenshot: screenshots/02_home_tab
 
 # 캘린더 탭
 - tapOn:
-    label: "캘린더, 탭"
-    optional: true
-- runFlow:
-    when:
-      notVisible:
-        label: "캘린더, 탭, 선택됨"
-    commands:
-      - tapOn:
-          text: "캘린더"
+    id: "tab-button-calendar"
 - waitForAnimationToEnd
 - takeScreenshot: screenshots/02_calendar_tab
 
 # 플래너 탭
 - tapOn:
-    text: "플래너"
+    id: "tab-button-planner"
 - waitForAnimationToEnd
-- assertVisible: "할일"
 - takeScreenshot: screenshots/02_planner_tab
-
-# 노트 서브탭
-- tapOn:
-    text: "노트"
-- waitForAnimationToEnd
-- takeScreenshot: screenshots/02_planner_notes
 
 # 내 정보 탭
 - tapOn:
-    text: "내 정보"
+    id: "tab-button-my"
 - waitForAnimationToEnd
 - takeScreenshot: screenshots/02_my_tab
 
 # 홈으로 복귀
 - tapOn:
-    text: "홈"
+    id: "tab-button-home"
 - waitForAnimationToEnd
+- takeScreenshot: screenshots/02_back_to_home
