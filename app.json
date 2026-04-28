@@ -27,7 +27,7 @@
         ]
       },
       "associatedDomains": [
-        "applinks:link.synclink.app"
+        "applinks:synclink.pages.dev"
       ],
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "프로필 사진 변경에 사용됩니다.",
@@ -57,7 +57,7 @@
           "data": [
             {
               "scheme": "https",
-              "host": "link.synclink.app",
+              "host": "synclink.pages.dev",
               "pathPrefix": "/"
             }
           ],
