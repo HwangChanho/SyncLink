@@ -23,6 +23,25 @@
  * @task TASK-210
  */
 
+// Prevent Zustand store subscription (Appearance.addChangeListener) from causing OOM.
+jest.mock('@/hooks/useColors', () => ({
+  useColors: () => ({
+    primary: 'hsl(258, 65%, 48%)', primaryLight: 'hsl(258, 50%, 94%)',
+    primaryDark: 'hsl(258, 70%, 38%)', accent: 'hsl(258, 72%, 52%)',
+    background: '#FFFFFF', backgroundAlt: '#F5F5F5', surface: '#FFFFFF', surfaceAlt: '#F0F0F0',
+    textPrimary: '#1A1A1A', textSecondary: '#666666', textTertiary: '#999999',
+    textInverse: '#FAFAFA', textPlaceholder: '#BBBBBB',
+    border: '#E0E0E0', borderStrong: '#CCCCCC',
+    success: '#059669', warning: '#D97706', error: '#DC2626',
+    tabActive: 'hsl(258, 65%, 48%)', tabInactive: '#999999',
+    inputBackground: '#F5F5F5', inputBorder: '#E0E0E0', inputFocus: 'hsl(258, 65%, 48%)',
+  }),
+}));
+
+// Force PanResponder path so UNSAFE_getAllByType(EventBlock) works.
+// dragMode='gh' enables EventBlockGestureHandler which is not what these tests verify.
+jest.mock('@/constants/devConfig', () => ({ dragMode: 'panresponder' }));
+
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 import { WeekView } from '@/components/calendar/WeekView';
