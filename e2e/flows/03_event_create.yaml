@@ -27,7 +27,7 @@ env:
     permissions:
       all: deny
 
-# Dialog 5회 dismiss (expo-location / RevenueCat 런타임 요청)
+# Dialog 5회 dismiss (expo-location / RevenueCat / Apple 계정 등 런타임 요청)
 - repeat:
     times: 5
     commands:
@@ -47,22 +47,29 @@ env:
             - tapOn:
                 text: "Don't Allow"
             - waitForAnimationToEnd
+      - runFlow:
+          when:
+            visible:
+              text: "닫기"
+          commands:
+            - tapOn:
+                text: "닫기"
+            - waitForAnimationToEnd
 
 # ── 로그인 (testID 기반) ────────────────────────────────────────────────────────
 - extendedWaitUntil:
     visible:
       id: "login-dev-submit"
     timeout: 30000
+# 로그인: 이메일 입력 → Return 키로 onSubmitEditing 트리거
+# login.tsx onSubmitEditing: @synclink.test 계정은 직접 signInWithEmail 호출
 - tapOn:
     id: "login-dev-email"
-- eraseText
+- waitForAnimationToEnd
+- eraseText: 100
 - inputText: ${TEST_EMAIL}
-- tapOn:
-    id: "login-dev-password"
-- eraseText
-- inputText: ${TEST_PASSWORD}
-- tapOn:
-    id: "login-dev-submit"
+- waitForAnimationToEnd
+- pressKey: enter
 - waitForAnimationToEnd
 
 # Post-login dialog dismiss (5회)
@@ -105,15 +112,35 @@ env:
       - waitForAnimationToEnd
 
 # 홈 탭 도달 확인
+# RevenueCat Console Error 오버레이 dismiss (suite 실행 시 발생 가능)
+- runFlow:
+    when:
+      visible:
+        text: "Dismiss"
+    commands:
+      - tapOn:
+          text: "Dismiss"
+      - waitForAnimationToEnd
 - extendedWaitUntil:
     visible:
       id: "tab-button-home"
     timeout: 30000
 
 # ── 캘린더 탭으로 이동 ─────────────────────────────────────────────────────────
+# waitForAnimationToEnd 후에도 React Navigation transition이 완료되지 않을 수 있어
+# calendar-screen-header(CalendarHeader testID)가 실제로 보일 때까지 명시적 대기.
+- waitForAnimationToEnd
 - tapOn:
     id: "tab-button-calendar"
 - waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "calendar-screen-header"
+    timeout: 30000
+- extendedWaitUntil:
+    visible:
+      id: "calendar-fab-create"
+    timeout: 15000
 - takeScreenshot: screenshots/03_calendar_before_create
 
 # ── FAB 탭 → 이벤트 생성 화면 진입 ────────────────────────────────────────────

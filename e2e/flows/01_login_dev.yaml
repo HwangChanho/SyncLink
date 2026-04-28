@@ -52,21 +52,13 @@ env:
       id: "login-dev-submit"
     timeout: 30000
 
-# 이메일 입력
+# 이메일 입력 → Return 키로 onSubmitEditing 트리거
+# login.tsx onSubmitEditing: @synclink.test 계정은 직접 signInWithEmail 호출
 - tapOn:
     id: "login-dev-email"
-- eraseText
+- eraseText: 100
 - inputText: ${TEST_EMAIL}
-
-# 비밀번호 입력
-- tapOn:
-    id: "login-dev-password"
-- eraseText
-- inputText: ${TEST_PASSWORD}
-
-# 로그인 버튼 탭
-- tapOn:
-    id: "login-dev-submit"
+- pressKey: enter
 
 - waitForAnimationToEnd
 

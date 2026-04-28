@@ -159,7 +159,7 @@ export function CalendarHeader({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="calendar-screen-header">
       {/* ─── Period navigation row ─── */}
       {/*
         Arrows were removed in favour of horizontal swipe gestures (already

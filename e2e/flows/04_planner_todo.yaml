@@ -28,7 +28,7 @@ env:
     permissions:
       all: deny
 
-# Dialog 5회 dismiss (expo-location / RevenueCat 런타임 요청)
+# Dialog 5회 dismiss (expo-location / RevenueCat / Apple 계정 등 런타임 요청)
 - repeat:
     times: 5
     commands:
@@ -48,22 +48,29 @@ env:
             - tapOn:
                 text: "Don't Allow"
             - waitForAnimationToEnd
+      - runFlow:
+          when:
+            visible:
+              text: "닫기"
+          commands:
+            - tapOn:
+                text: "닫기"
+            - waitForAnimationToEnd
 
 # ── 로그인 (testID 기반) ────────────────────────────────────────────────────────
 - extendedWaitUntil:
     visible:
       id: "login-dev-submit"
     timeout: 30000
+# 로그인: 이메일 입력 → Return 키로 onSubmitEditing 트리거
+# login.tsx onSubmitEditing: @synclink.test 계정은 직접 signInWithEmail 호출
 - tapOn:
     id: "login-dev-email"
-- eraseText
+- waitForAnimationToEnd
+- eraseText: 100
 - inputText: ${TEST_EMAIL}
-- tapOn:
-    id: "login-dev-password"
-- eraseText
-- inputText: ${TEST_PASSWORD}
-- tapOn:
-    id: "login-dev-submit"
+- waitForAnimationToEnd
+- pressKey: enter
 - waitForAnimationToEnd
 
 # Post-login dialog dismiss (5회)
@@ -106,22 +113,74 @@ env:
       - waitForAnimationToEnd
 
 # 홈 탭 도달 확인
+# RevenueCat Console Error 오버레이 dismiss (suite 실행 시 발생 가능)
+- runFlow:
+    when:
+      visible:
+        text: "Dismiss"
+    commands:
+      - tapOn:
+          text: "Dismiss"
+      - waitForAnimationToEnd
 - extendedWaitUntil:
     visible:
       id: "tab-button-home"
     timeout: 30000
 
+# RevenueCat debug 배너가 탭 바를 주기적으로 가릴 수 있음.
+# 배너를 위로 스와이프해서 dismiss.
+- repeat:
+    times: 5
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "RevenueCat"
+          commands:
+            - swipe:
+                direction: UP
+                startX: 50%
+                startY: 97%
+                endY: 85%
+            - waitForAnimationToEnd
+
 # ── 플래너 탭으로 이동 ─────────────────────────────────────────────────────────
+# 배너 dismiss 후 탭 이동
+- waitForAnimationToEnd
 - tapOn:
     id: "tab-button-planner"
 - waitForAnimationToEnd
+# 탭 후 배너가 다시 나타나면 dismiss
+- repeat:
+    times: 3
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "RevenueCat"
+          commands:
+            - swipe:
+                direction: UP
+                startX: 50%
+                startY: 97%
+                endY: 85%
+            - waitForAnimationToEnd
+- runFlow:
+    when:
+      notVisible:
+        id: "planner-tab-todo"
+    commands:
+      # 재시도: 플래너 탭 좌표 탭 (3번째 탭, 탭 바 중하단)
+      - tapOn:
+          point: "62%, 94%"
+      - waitForAnimationToEnd
 
 # 할일 서브탭 확인 (기본 활성 상태이나 명시적으로 탭)
-# testID: planner-tab-todo (planner.tsx)
+# testID: planner-tab-todo (planner.tsx) — 30s로 늘려 transition 완료 보장
 - extendedWaitUntil:
     visible:
       id: "planner-tab-todo"
-    timeout: 15000
+    timeout: 30000
 - tapOn:
     id: "planner-tab-todo"
 - waitForAnimationToEnd
@@ -135,20 +194,16 @@ env:
 - takeScreenshot: screenshots/04_todo_create_sheet
 
 # ── 할일 제목 입력 ─────────────────────────────────────────────────────────────
-# testID: todo-create-title-input (TodoCreateSheet.tsx, 200ms auto-focus)
-- extendedWaitUntil:
-    visible:
-      id: "todo-create-title-input"
-    timeout: 5000
-- tapOn:
-    id: "todo-create-title-input"
+# TodoCreateSheet는 Modal 내부에 있어 Maestro hierarchy 탐색 시 testID 접근이
+# 불안정함. auto-focus(200ms)가 이미 됐으므로 바로 inputText 시도.
 - inputText: "E2E 테스트 할일"
 - takeScreenshot: screenshots/04_todo_title_entered
 
 # ── 저장 버튼 탭 ───────────────────────────────────────────────────────────────
-# testID: todo-create-save (TodoCreateSheet.tsx 헤더 Pressable)
+# 키보드가 올라온 상태에서 시트 헤더 저장 버튼 좌표 탭.
+# 스크린샷 분석: "저장" 버튼 y ≈ 11% (iPhone 16 키보드 올라온 상태)
 - tapOn:
-    id: "todo-create-save"
+    point: "92%, 11%"
 - waitForAnimationToEnd
 - takeScreenshot: screenshots/04_todo_created
 

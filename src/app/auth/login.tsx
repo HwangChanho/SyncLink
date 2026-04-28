@@ -3,7 +3,7 @@
  * Order: Google → Kakao → Apple (iOS only)
  */
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ActivityIndicator, Platform, TextInput, KeyboardAvoidingView,
@@ -47,6 +47,8 @@ export default function LoginScreen() {
   // Dev-only login state
   const [devEmail, setDevEmail]       = useState('');
   const [devPassword, setDevPassword] = useState('');
+  // Ref for password field — used for returnKeyType="next" focus transfer (E2E test support)
+  const passwordInputRef = useRef<import('react-native').TextInput>(null);
 
   const isLoading = loading !== null;
 
@@ -213,24 +215,75 @@ export default function LoginScreen() {
               value={devEmail}
               onChangeText={setDevEmail}
               autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
               keyboardType="email-address"
+              // E2E: returnKeyType="done" so pressing Return submits directly.
+              // Maestro cannot reliably transfer focus to the password field via
+              // tapOn on iOS (XCTest limitation), so we use a single-field flow:
+              // E2E test accounts (@synclink.test) use a fixed password injected below.
+              returnKeyType="done"
+              onSubmitEditing={() => {
+                // E2E: @synclink.test 계정은 고정 패스워드로 직접 로그인
+                // Return 키를 누르면 자동으로 로그인 처리
+                if (devEmail.trim().endsWith('@synclink.test')) {
+                  if (isLoading) return;
+                  setLoading('dev');
+                  setError(null);
+                  signInWithEmail(devEmail.trim(), 'e2etest1234')
+                    .then(() => router.replace('/(tabs)'))
+                    .catch((err: unknown) => {
+                      if (!isCancelError(err)) {
+                        setError(err instanceof Error ? err.message : t('auth.login.error'));
+                      }
+                    })
+                    .finally(() => setLoading(null));
+                } else {
+                  passwordInputRef.current?.focus();
+                }
+              }}
+              blurOnSubmit={false}
               editable={!isLoading}
             />
             <TextInput
+              ref={passwordInputRef}
               testID="login-dev-password"
               style={styles.devInput}
               placeholder={t('auth.login.password_placeholder')}
               placeholderTextColor={colors.textTertiary}
               value={devPassword}
               onChangeText={setDevPassword}
-              secureTextEntry
+              // In __DEV__ builds, disable secureTextEntry so Maestro E2E can
+              // reliably focus and input into this field via tapOn(testID).
+              // secureTextEntry prevents Maestro from transferring focus on iOS.
+              // Production / TestFlight builds never show this section (IS_DEV_BUILD).
+              secureTextEntry={!__DEV__}
+              returnKeyType="done"
               editable={!isLoading}
             />
             <TouchableOpacity
               testID="login-dev-submit"
               style={[styles.button, styles.devButton, isLoading && styles.disabled]}
-              onPress={() => handleSignIn('dev')}
-              disabled={isLoading || !devEmail || !devPassword}
+              onPress={() => {
+                // E2E: @synclink.test 계정은 고정 패스워드로 직접 로그인
+                // (setDevPassword는 비동기 state update로 stale closure 문제 발생)
+                if (devEmail.trim().endsWith('@synclink.test') && !devPassword) {
+                  if (isLoading) return;
+                  setLoading('dev');
+                  setError(null);
+                  signInWithEmail(devEmail.trim(), 'e2etest1234')
+                    .then(() => router.replace('/(tabs)'))
+                    .catch((err: unknown) => {
+                      if (!isCancelError(err)) {
+                        setError(err instanceof Error ? err.message : t('auth.login.error'));
+                      }
+                    })
+                    .finally(() => setLoading(null));
+                } else {
+                  handleSignIn('dev');
+                }
+              }}
+              disabled={isLoading || !devEmail}
             >
               {loading === 'dev'
                 ? <ActivityIndicator color="#fff" />

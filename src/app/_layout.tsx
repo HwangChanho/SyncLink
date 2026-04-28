@@ -12,6 +12,18 @@
 
 import '@/lib/i18n'; // initialize i18n before any component renders (synchronous default locale)
 import { initSentry } from '@/lib/sentry';
+import { LogBox } from 'react-native';
+
+// E2E / DEV builds: suppress RevenueCat SDK configuration warnings that appear as
+// Console Error overlays and block Maestro test interactions.
+// These warnings are expected in dev environments without a real RC project setup.
+if (__DEV__) {
+  LogBox.ignoreLogs([
+    'RevenueCat',
+    '[RevenueCat]',
+    'RevenueCat SDK',
+  ]);
+}
 import { useEffect, useRef, useState } from 'react';
 import { AppState, AppStateStatus, Platform, View, StyleSheet, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
@@ -594,9 +606,10 @@ export default function RootLayout() {
     // Handle deep links for Space invite codes.
     //
     // Supported patterns:
-    //  - synclink://space/join/<code>  (new canonical form)
-    //  - synclink://join/<code>        (legacy fallback)
-    //  - https://synclink.app/space/join/<code>  (universal link)
+    //  - https://synclink.pages.dev/space/<code>  (primary — Universal Link / App Link)
+    //  - synclink://space/join/<code>             (custom scheme fallback)
+    //  - synclink://join/<code>                   (legacy custom scheme)
+    //  - https://synclink.app/space/join/<code>  (old universal link — kept for compatibility)
     //
     // All patterns navigate to /space/join/<code> for the preview screen.
     const handleDeepLink = (event: { url: string }) => {
@@ -604,7 +617,22 @@ export default function RootLayout() {
       try {
         const parsed = Linking.parse(url);
 
-        // Pattern 1: synclink://space/join/<code>
+        // Pattern 1 (primary): https://synclink.pages.dev/space/<code>
+        // DEVOPS 2026-04-28: synclink.pages.dev is the new Universal Link domain.
+        // parsed.hostname = 'synclink.pages.dev', parsed.path = '/space/<code>'
+        if (
+          parsed.hostname === 'synclink.pages.dev' &&
+          parsed.path?.startsWith('/space/')
+        ) {
+          // Strip leading /space/ to get the raw invite code
+          const code = parsed.path.replace(/^\/space\//, '').split('/')[0];
+          if (code) {
+            router.push(`/space/join/${encodeURIComponent(code)}`);
+            return;
+          }
+        }
+
+        // Pattern 2 (fallback): synclink://space/join/<code>
         // parsed.hostname = 'space', parsed.path = '/join/<code>'
         if (parsed.hostname === 'space' && parsed.path?.startsWith('/join/')) {
           const code = parsed.path.replace(/^\/join\//, '');
@@ -614,7 +642,7 @@ export default function RootLayout() {
           }
         }
 
-        // Pattern 2 (legacy): synclink://join/<code>
+        // Pattern 3 (legacy): synclink://join/<code>
         // parsed.hostname = 'join', parsed.path = '/<code>'
         if (parsed.hostname === 'join' && parsed.path) {
           const code = parsed.path.replace(/^\//, '');
@@ -624,9 +652,13 @@ export default function RootLayout() {
           }
         }
 
-        // Pattern 3: https://synclink.app/space/join/<code>
+        // Pattern 4 (compat): https://synclink.app/space/join/<code>
         // parsed.path = '/space/join/<code>'
-        if (parsed.path?.includes('/space/join/')) {
+        if (
+          parsed.scheme === 'https' &&
+          parsed.hostname !== 'synclink.pages.dev' &&
+          parsed.path?.includes('/space/join/')
+        ) {
           const parts = parsed.path.split('/space/join/');
           const code = parts[1]?.split('/')[0];
           if (code) {

@@ -53,9 +53,10 @@ const RC_API_KEY_ANDROID = process.env.EXPO_PUBLIC_RC_API_KEY_ANDROID ?? '';
  * @param userId - Supabase user UUID; used as RevenueCat appUserID
  */
 export async function initializePurchases(userId: string): Promise<void> {
-  // Set verbose logging in development to help debug StoreKit sandbox issues.
-  // In production builds, LOG_LEVEL.ERROR is recommended to reduce noise.
-  Purchases.setLogLevel(LOG_LEVEL.DEBUG);
+  // Use VERBOSE only in explicit debug sessions; ERROR everywhere else to
+  // suppress the RevenueCat overlay banner that blocks Maestro UI tests.
+  // The banner appears with DEBUG/VERBOSE level even in __DEV__ simulator builds.
+  Purchases.setLogLevel(LOG_LEVEL.ERROR);
 
   // Select API key based on platform — iOS and Android use separate RC projects
   const apiKey = Platform.OS === 'ios' ? RC_API_KEY_IOS : RC_API_KEY_ANDROID;

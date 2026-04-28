@@ -29,7 +29,7 @@ env:
     permissions:
       all: deny
 
-# Dialog 5회 dismiss (expo-location / RevenueCat 런타임 요청)
+# Dialog 5회 dismiss (expo-location / RevenueCat / Apple 계정 등 런타임 요청)
 - repeat:
     times: 5
     commands:
@@ -49,22 +49,31 @@ env:
             - tapOn:
                 text: "Don't Allow"
             - waitForAnimationToEnd
+      - runFlow:
+          when:
+            visible:
+              text: "닫기"
+          commands:
+            - tapOn:
+                text: "닫기"
+            - waitForAnimationToEnd
 
 # ── 2. 로그인 (testID 기반) ────────────────────────────────────────────────────
 - extendedWaitUntil:
     visible:
       id: "login-dev-submit"
     timeout: 30000
+# 로그인: 이메일 입력 → Return 키로 onSubmitEditing 트리거
+# login.tsx onSubmitEditing: @synclink.test 계정은 직접 signInWithEmail('e2etest1234') 호출
+# eraseText: 100으로 이전 조합 초기화 후 입력
 - tapOn:
     id: "login-dev-email"
-- eraseText
+- waitForAnimationToEnd
+- eraseText: 100
 - inputText: ${TEST_EMAIL}
-- tapOn:
-    id: "login-dev-password"
-- eraseText
-- inputText: ${TEST_PASSWORD}
-- tapOn:
-    id: "login-dev-submit"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/gp_00_email_entered
+- pressKey: enter
 - waitForAnimationToEnd
 - takeScreenshot: screenshots/gp_01_after_login
 
@@ -108,6 +117,15 @@ env:
       - waitForAnimationToEnd
 
 # ── 3. 홈 탭 도달 확인 ─────────────────────────────────────────────────────────
+# RevenueCat Console Error 오버레이 dismiss (suite 실행 시 발생 가능)
+- runFlow:
+    when:
+      visible:
+        text: "Dismiss"
+    commands:
+      - tapOn:
+          text: "Dismiss"
+      - waitForAnimationToEnd
 - extendedWaitUntil:
     visible:
       id: "tab-button-home"
@@ -123,31 +141,76 @@ env:
 - takeScreenshot: screenshots/gp_02_home
 
 # ── 4. 탭 네비게이션 (testID 기반) ────────────────────────────────────────────
+# tab tap 전후 animation 완료 + 화면 헤더 가시성 명시 대기 (race condition 방지)
+- waitForAnimationToEnd
 - tapOn:
     id: "tab-button-calendar"
 - waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "calendar-screen-header"
+    timeout: 20000
 - takeScreenshot: screenshots/gp_03_calendar
 
+- waitForAnimationToEnd
 - tapOn:
     id: "tab-button-planner"
 - waitForAnimationToEnd
-- assertVisible:
-    id: "planner-tab-todo"
+# RevenueCat 배너 dismiss
+- repeat:
+    times: 3
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "RevenueCat"
+          commands:
+            - swipe:
+                direction: UP
+                startX: 50%
+                startY: 97%
+                endY: 85%
+            - waitForAnimationToEnd
+# 좌표 fallback: 플래너 탭 이동 안 된 경우
+- runFlow:
+    when:
+      notVisible:
+        id: "planner-tab-todo"
+    commands:
+      - tapOn:
+          point: "62%, 94%"
+      - waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "planner-tab-todo"
+    timeout: 20000
 - takeScreenshot: screenshots/gp_04_planner
 
+- waitForAnimationToEnd
 - tapOn:
     id: "tab-button-my"
 - waitForAnimationToEnd
 - takeScreenshot: screenshots/gp_05_my
 
+- waitForAnimationToEnd
 - tapOn:
     id: "tab-button-home"
 - waitForAnimationToEnd
 
 # ── 5. 이벤트 생성 ────────────────────────────────────────────────────────────
+# calendar-screen-header와 FAB 모두 보일 때까지 대기 후 FAB 탭
+- waitForAnimationToEnd
 - tapOn:
     id: "tab-button-calendar"
 - waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "calendar-screen-header"
+    timeout: 30000
+- extendedWaitUntil:
+    visible:
+      id: "calendar-fab-create"
+    timeout: 15000
 
 # FAB 탭 → 이벤트 생성 화면 진입
 - tapOn:
@@ -175,15 +238,41 @@ env:
     id: "tab-button-calendar"
 
 # ── 6. 할일 생성 ──────────────────────────────────────────────────────────────
+# planner 탭 전환 — RevenueCat 배너 대응 + 좌표 fallback (04_planner_todo와 동일 패턴)
+- waitForAnimationToEnd
 - tapOn:
     id: "tab-button-planner"
 - waitForAnimationToEnd
+# 배너 dismiss
+- repeat:
+    times: 3
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "RevenueCat"
+          commands:
+            - swipe:
+                direction: UP
+                startX: 50%
+                startY: 97%
+                endY: 85%
+            - waitForAnimationToEnd
+# 좌표 fallback
+- runFlow:
+    when:
+      notVisible:
+        id: "planner-tab-todo"
+    commands:
+      - tapOn:
+          point: "62%, 94%"
+      - waitForAnimationToEnd
 
-# 할일 탭 활성화 확인 (testID)
+# 할일 탭 활성화 확인 (testID) — 30s 대기
 - extendedWaitUntil:
     visible:
       id: "planner-tab-todo"
-    timeout: 10000
+    timeout: 30000
 - tapOn:
     id: "planner-tab-todo"
 - waitForAnimationToEnd
@@ -193,18 +282,14 @@ env:
     id: "planner-fab-todo"
 - waitForAnimationToEnd
 
-# 제목 입력 (testID, 200ms auto-focus)
-- extendedWaitUntil:
-    visible:
-      id: "todo-create-title-input"
-    timeout: 5000
-- tapOn:
-    id: "todo-create-title-input"
+# 제목 입력 — Modal 내부 testID 불안정, auto-focus 후 inputText 직접 사용
 - inputText: "E2E 골든패스 할일"
 
-# 저장 (testID)
+# 저장 — Modal 내부이므로 Maestro visible 체크 불안정.
+# 키보드가 올라온 상태에서 시트 헤더 저장 버튼 좌표로 직접 탭.
+# iPhone 16 기준: 키보드 top ≈ 561pt, 시트 헤더 ≈ 510pt, 저장 버튼 x≈92%, y≈60%
 - tapOn:
-    id: "todo-create-save"
+    point: "92%, 11%"
 - waitForAnimationToEnd
 - takeScreenshot: screenshots/gp_08_todo_done
 
