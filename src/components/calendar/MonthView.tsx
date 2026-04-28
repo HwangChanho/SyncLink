@@ -65,6 +65,11 @@ interface MonthViewProps {
   density?: 'detailed' | 'compact';
   /** Called when the user taps a day cell. */
   onDateSelect: (date: Date) => void;
+  /**
+   * Optional: called when the user long-presses an empty area of a day cell.
+   * Parent can open a quick-create sheet pre-filled with that date.
+   */
+  onDateLongPress?: (date: Date) => void;
 }
 
 // ─── Date utilities ────────────────────────────────────────────────────────────
@@ -133,6 +138,7 @@ export function MonthView({
   todosByDate,
   density = 'detailed',
   onDateSelect,
+  onDateLongPress,
 }: MonthViewProps) {
   // Resolve active theme colors for dark mode support (TASK-700)
   const colors = useColors();
@@ -215,6 +221,8 @@ export function MonthView({
                 key={dateKey}
                 style={styles.dayCell}
                 onPress={() => onDateSelect(date)}
+                onLongPress={onDateLongPress ? () => onDateLongPress(date) : undefined}
+                delayLongPress={400}
                 activeOpacity={0.7}
                 accessibilityRole="button"
                 accessibilityLabel={`${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일`}

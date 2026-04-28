@@ -408,6 +408,18 @@ export default function CalendarScreen() {
     }
   }, [viewMode]);
 
+  /**
+   * Long-pressing a date in MonthView jumps straight to event/create
+   * with that date pre-filled (startAt = date 09:00, endAt = date 10:00).
+   * Faster than: tap date → enter day view → press + button → fill form.
+   */
+  const handleDateLongPress = useCallback((date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    router.push(`/event/create?date=${y}-${m}-${d}`);
+  }, [router]);
+
   /** Tapping an event opens the event detail screen. */
   const handleEventPress = useCallback((event: EventSummary) => {
     router.push(`/event/${event.id}`);
@@ -643,6 +655,7 @@ export default function CalendarScreen() {
               todosByDate={todosByDate}
               density={monthDensity}
               onDateSelect={handleDateSelect}
+              onDateLongPress={handleDateLongPress}
             />
           )}
 
