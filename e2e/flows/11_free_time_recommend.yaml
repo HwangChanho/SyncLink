@@ -1,0 +1,180 @@
+# 11_free_time_recommend — 캘린더 빈 시간 보기 + BottomSheet 추천 활동 표시
+#
+# 목적:
+#   1. 로그인 → 캘린더 탭 도달
+#   2. "빈 시간 보기" 토글 버튼 탭 (testID: calendar-button-free-time)
+#   3. 빈 시간 overlay/hint 표시 확인 (testID: free-time-hint)
+#   4. 빈 슬롯 탭 → FreeTimeRecommendSheet BottomSheet 열림 확인
+#   5. BottomSheet 추천 활동 카드 표시 확인
+#
+# 주의:
+#   - 23_free_time_recommend.yaml의 레거시 패턴과 달리 신규 패턴(testID 기반) 적용.
+#   - free-time-hint testID: calendar.tsx freeTimeOn && View (overlay indicator).
+#   - week-free-slot-{날짜} testID는 동적이므로 regex 매칭("week-free-slot-.*") 사용.
+#   - QA 계정에 빈 슬롯이 없을 수 있으므로 슬롯 탭 이하는 optional 처리.
+#   - free-time-recommend-sheet / free-time-recommend-activity-0 testID는
+#     23번 파일에서 이미 정의된 값 재사용.
+#
+# 실행:
+#   maestro --device <UDID> test \
+#     -e TEST_EMAIL=e2e-ios-sim-pro@synclink.test \
+#     -e TEST_PASSWORD=e2etest1234 \
+#     e2e/flows/11_free_time_recommend.yaml
+#
+# testID 참조:
+#   calendar-button-free-time       — calendar.tsx 빈 시간 토글 버튼
+#   free-time-hint                  — calendar.tsx 빈 시간 활성 힌트 View
+#   week-free-slot-{YYYY-MM-DD}     — WeekView.tsx 빈 슬롯 오버레이 (동적)
+#   free-time-recommend-sheet       — FreeTimeRecommendSheet BottomSheet 컨테이너
+#   free-time-recommend-activity-0  — 첫 번째 추천 활동 카드
+
+appId: io.synclink.app
+env:
+  TEST_EMAIL: ${TEST_EMAIL}
+  TEST_PASSWORD: ${TEST_PASSWORD}
+---
+# ── 1. 앱 초기화 ───────────────────────────────────────────────────────────────
+- stopApp
+- clearState
+- launchApp:
+    permissions:
+      all: deny
+
+# Dialog 5회 dismiss
+- repeat:
+    times: 5
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "허용 안 함"
+          commands:
+            - tapOn:
+                text: "허용 안 함"
+            - waitForAnimationToEnd
+      - runFlow:
+          when:
+            visible:
+              text: "Don't Allow"
+          commands:
+            - tapOn:
+                text: "Don't Allow"
+            - waitForAnimationToEnd
+
+# ── 2. 로그인 (testID 기반) ─────────────────────────────────────────────────────
+- extendedWaitUntil:
+    visible:
+      id: "login-dev-submit"
+    timeout: 30000
+- tapOn:
+    id: "login-dev-email"
+- eraseText
+- inputText: ${TEST_EMAIL}
+- tapOn:
+    id: "login-dev-password"
+- eraseText
+- inputText: ${TEST_PASSWORD}
+- tapOn:
+    id: "login-dev-submit"
+- waitForAnimationToEnd
+
+# Post-login dialog dismiss
+- repeat:
+    times: 5
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "허용 안 함"
+          commands:
+            - tapOn:
+                text: "허용 안 함"
+            - waitForAnimationToEnd
+      - runFlow:
+          when:
+            visible:
+              text: "Don't Allow"
+          commands:
+            - tapOn:
+                text: "Don't Allow"
+            - waitForAnimationToEnd
+
+# Onboarding skip
+- runFlow:
+    when:
+      visible:
+        id: "onboarding-button-skip"
+    commands:
+      - tapOn:
+          id: "onboarding-button-skip"
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        id: "profile-onboarding-button-skip"
+    commands:
+      - tapOn:
+          id: "profile-onboarding-button-skip"
+      - waitForAnimationToEnd
+
+# 홈 탭 도달 확인
+- extendedWaitUntil:
+    visible:
+      id: "tab-button-home"
+    timeout: 30000
+
+# ── 3. 캘린더 탭 이동 ──────────────────────────────────────────────────────────
+- tapOn:
+    id: "tab-button-calendar"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/11_calendar
+
+# ── 4. "빈 시간 보기" 토글 탭 ──────────────────────────────────────────────────
+# testID: calendar-button-free-time (calendar.tsx 헤더 우측 버튼)
+- extendedWaitUntil:
+    visible:
+      id: "calendar-button-free-time"
+    timeout: 10000
+- tapOn:
+    id: "calendar-button-free-time"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/11_free_time_toggled
+
+# ── 5. 빈 시간 overlay/hint 표시 확인 ──────────────────────────────────────────
+# testID: free-time-hint (calendar.tsx freeTimeOn 조건부 View)
+# optional: true — 빈 슬롯이 없으면 hint View가 렌더되지 않을 수 있음
+- assertVisible:
+    id: "free-time-hint"
+    optional: true
+- takeScreenshot: screenshots/11_free_time_hint
+
+# ── 6. 빈 슬롯 탭 → BottomSheet 열림 ─────────────────────────────────────────
+# week-free-slot-{YYYY-MM-DD} 패턴 — 날짜가 런타임 결정이므로 regex 매칭 사용.
+# optional: true — QA 계정에 해당 주 빈 슬롯이 없으면 skip.
+- tapOn:
+    id: "week-free-slot-.*"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/11_free_slot_tapped
+
+# ── 7. FreeTimeRecommendSheet 표시 확인 ────────────────────────────────────────
+- assertVisible:
+    id: "free-time-recommend-sheet"
+    optional: true
+- takeScreenshot: screenshots/11_recommend_sheet
+
+# ── 8. 추천 활동 카드(첫 번째) 표시 확인 ───────────────────────────────────────
+# 룰 baseline은 즉시(0ms) 표시되므로 sheet 열리자마자 확인 가능.
+- assertVisible:
+    id: "free-time-recommend-activity-0"
+    optional: true
+- takeScreenshot: screenshots/11_recommend_activities
+
+# ── 9. 앱 크래시 없음 최종 확인 ────────────────────────────────────────────────
+# 토글을 다시 탭하여 비활성화 — 앱이 크래시 없이 정상 동작하는지 확인.
+- tapOn:
+    id: "calendar-button-free-time"
+- waitForAnimationToEnd
+- assertVisible:
+    id: "tab-button-calendar"
+- takeScreenshot: screenshots/11_final

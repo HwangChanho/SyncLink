@@ -20,12 +20,15 @@
       "bundleIdentifier": "io.synclink.app",
       "appleTeamId": "QUVU2PY6PG",
       "newArchEnabled": false,
-      "buildNumber": "35",
+      "buildNumber": "36",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.io.synclink.app.widget"
         ]
       },
+      "associatedDomains": [
+        "applinks:link.synclink.app"
+      ],
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "프로필 사진 변경에 사용됩니다.",
         "NSCameraUsageDescription": "프로필 사진 촬영에 사용됩니다.",
@@ -47,6 +50,23 @@
       "package": "io.synclink.app",
       "versionCode": 1,
       "softwareKeyboardLayoutMode": "resize",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "link.synclink.app",
+              "pathPrefix": "/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ],
       "permissions": [
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.VIBRATE",

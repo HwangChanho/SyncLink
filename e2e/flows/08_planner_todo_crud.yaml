@@ -1,0 +1,187 @@
+# 08_planner_todo_crud — 할일 생성 → 체크박스 토글 → 스와이프 삭제 CRUD 검증
+#
+# 목적:
+#   1. 로그인 → 플래너 탭 → FAB → 할일 제목 입력 → 저장
+#   2. 할일 목록에 새 항목 표시 확인
+#   3. 체크박스 토글 (완료 처리)
+#   4. 좌측 스와이프 → 삭제 액션 실행
+#
+# 주의:
+#   - TodoCreateSheet에서 할일 생성 후 planner-fab-todo로 닫히고 Todo 목록 표시.
+#   - 체크박스 testID: todo-checkbox-{id} — id는 런타임에 결정되므로
+#     첫 번째 todo-row-* 를 찾아 그 내 checkbox를 탭하는 방식 사용.
+#   - 스와이프 삭제: Maestro swipe 명령으로 Swipeable 우측 액션(삭제) 노출.
+#
+# 실행:
+#   maestro --device <UDID> test \
+#     -e TEST_EMAIL=e2e-ios-sim-pro@synclink.test \
+#     -e TEST_PASSWORD=e2etest1234 \
+#     e2e/flows/08_planner_todo_crud.yaml
+#
+# testID 참조:
+#   planner-fab-todo         — planner.tsx FAB (Todo 탭 활성 시)
+#   todo-create-title-input  — TodoCreateSheet.tsx 제목 입력 필드
+#   todo-create-save         — TodoCreateSheet.tsx 저장 버튼
+#   todo-row-{id}            — TodoTab.tsx 할일 행 Pressable
+#   todo-checkbox-{id}       — TodoTab.tsx 체크박스 TouchableOpacity
+
+appId: io.synclink.app
+env:
+  TEST_EMAIL: ${TEST_EMAIL}
+  TEST_PASSWORD: ${TEST_PASSWORD}
+---
+# ── 1. 앱 초기화 ───────────────────────────────────────────────────────────────
+- stopApp
+- clearState
+- launchApp:
+    permissions:
+      all: deny
+
+# Dialog 5회 dismiss
+- repeat:
+    times: 5
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "허용 안 함"
+          commands:
+            - tapOn:
+                text: "허용 안 함"
+            - waitForAnimationToEnd
+      - runFlow:
+          when:
+            visible:
+              text: "Don't Allow"
+          commands:
+            - tapOn:
+                text: "Don't Allow"
+            - waitForAnimationToEnd
+
+# ── 2. 로그인 (testID 기반) ─────────────────────────────────────────────────────
+- extendedWaitUntil:
+    visible:
+      id: "login-dev-submit"
+    timeout: 30000
+- tapOn:
+    id: "login-dev-email"
+- eraseText
+- inputText: ${TEST_EMAIL}
+- tapOn:
+    id: "login-dev-password"
+- eraseText
+- inputText: ${TEST_PASSWORD}
+- tapOn:
+    id: "login-dev-submit"
+- waitForAnimationToEnd
+
+# Post-login dialog dismiss
+- repeat:
+    times: 5
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "허용 안 함"
+          commands:
+            - tapOn:
+                text: "허용 안 함"
+            - waitForAnimationToEnd
+      - runFlow:
+          when:
+            visible:
+              text: "Don't Allow"
+          commands:
+            - tapOn:
+                text: "Don't Allow"
+            - waitForAnimationToEnd
+
+# Onboarding skip
+- runFlow:
+    when:
+      visible:
+        id: "onboarding-button-skip"
+    commands:
+      - tapOn:
+          id: "onboarding-button-skip"
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        id: "profile-onboarding-button-skip"
+    commands:
+      - tapOn:
+          id: "profile-onboarding-button-skip"
+      - waitForAnimationToEnd
+
+# 홈 탭 도달 확인
+- extendedWaitUntil:
+    visible:
+      id: "tab-button-home"
+    timeout: 30000
+
+# ── 3. 플래너 탭 이동 ──────────────────────────────────────────────────────────
+- tapOn:
+    id: "tab-button-planner"
+- waitForAnimationToEnd
+
+# Todo 탭이 기본이지만 명시적으로 탭 선택
+- tapOn:
+    id: "planner-tab-todo"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/08_planner_todo_empty
+
+# ── 4. FAB → 할일 생성 시트 열기 ───────────────────────────────────────────────
+# testID: planner-fab-todo (Todo 탭 활성 시)
+- tapOn:
+    id: "planner-fab-todo"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "todo-create-title-input"
+    timeout: 10000
+- takeScreenshot: screenshots/08_todo_create_sheet
+
+# ── 5. 할일 제목 입력 ──────────────────────────────────────────────────────────
+- tapOn:
+    id: "todo-create-title-input"
+- inputText: "E2E 테스트 할일"
+- takeScreenshot: screenshots/08_todo_title_entered
+
+# ── 6. 저장 버튼 탭 ─────────────────────────────────────────────────────────────
+# testID: todo-create-save (TodoCreateSheet.tsx)
+- tapOn:
+    id: "todo-create-save"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/08_todo_created
+
+# ── 7. 할일 목록에 표시 확인 ────────────────────────────────────────────────────
+# 생성된 할일 제목 "E2E 테스트 할일" text로 확인
+- assertVisible:
+    text: "E2E 테스트 할일"
+- takeScreenshot: screenshots/08_todo_in_list
+
+# ── 8. 체크박스 토글 (완료 처리) ──────────────────────────────────────────────
+# todo-checkbox-{id} testID 패턴으로 첫 번째 체크박스를 탭.
+# Maestro의 id regex 매칭: "todo-checkbox-.*"
+- tapOn:
+    id: "todo-checkbox-.*"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/08_todo_checked
+
+# ── 9. 스와이프 삭제 ────────────────────────────────────────────────────────────
+# todo-row-{id} testID 패턴 매칭 후 왼쪽으로 스와이프 → 삭제 액션 노출.
+# direction: left → Swipeable의 renderRightActions(삭제 아이콘) 노출.
+# onSwipeableOpen(direction='right')가 onDelete를 호출하는 구조이므로
+# Maestro swipe left → 앱 내부에서 삭제 처리.
+- swipe:
+    id: "todo-row-.*"
+    direction: LEFT
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/08_todo_swipe_delete
+
+# 삭제 후 "E2E 테스트 할일"이 목록에서 사라졌는지 확인
+- assertNotVisible:
+    text: "E2E 테스트 할일"
+- takeScreenshot: screenshots/08_todo_deleted

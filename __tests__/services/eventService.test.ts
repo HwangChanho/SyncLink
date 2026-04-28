@@ -357,6 +357,35 @@ describe('eventService', () => {
       expect(result.sharedSpaceIds).toEqual(['space-abc']);
     });
 
+    it('color 지정 시: INSERT payload에 color 필드 포함', async () => {
+      const coloredRow: EventRow = { ...mockEventRow, color: '#DB2777' };
+
+      (supabase.from as jest.Mock)
+        // INSERT (color 포함)
+        .mockReturnValueOnce(makeChain({ data: coloredRow, error: null }))
+        // getEventById - event
+        .mockReturnValueOnce(makeChain({ data: coloredRow, error: null }))
+        // getEventById - shares
+        .mockReturnValueOnce(makeChain({ data: [], error: null }))
+        // getEventById - user
+        .mockReturnValueOnce(makeChain({ data: { nickname: '홍길동' }, error: null }));
+
+      const result = await createEvent({
+        title: '색상 일정',
+        startAt: NOW,
+        endAt: NOW_END,
+        color: '#DB2777',
+      });
+
+      // INSERT 체인에 color 필드가 포함되었는지 확인
+      const insertChain = (supabase.from as jest.Mock).mock.results[0]?.value;
+      expect(insertChain.insert).toHaveBeenCalledWith(
+        expect.objectContaining({ color: '#DB2777' }),
+      );
+      // 반환 Event 의 color도 일치
+      expect(result.color).toBe('#DB2777');
+    });
+
     it('INSERT 실패: 에러 throw', async () => {
       (supabase.from as jest.Mock).mockReturnValueOnce(
         makeChain({ data: null, error: new Error('INSERT constraint') }),

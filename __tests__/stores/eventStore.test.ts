@@ -180,6 +180,49 @@ describe('eventStore', () => {
       expect(useEventStore.getState().eventsByDate['2026-01-16']).toHaveLength(1);
     });
 
+    // ── drag-to-reschedule regression (TASK-009 fix) ─────────────────────────
+
+    it('[TASK-009 fix] 날짜 이동 시 원래 버킷에서 제거되고 새 버킷에만 존재', () => {
+      // Arrange: 이벤트를 Jan 15에 세팅
+      useEventStore.getState().setEventsForDate('2026-01-15', [mockEvent1]);
+
+      // Act: 같은 이벤트를 Jan 16으로 이동 (drag-to-reschedule optimistic update)
+      const movedEvent: EventSummary = {
+        ...mockEvent1,
+        startAt: new Date('2026-01-16T09:00:00.000Z'),
+        endAt:   new Date('2026-01-16T10:00:00.000Z'),
+      };
+      useEventStore.getState().upsertEvent(movedEvent);
+
+      // Assert: Jan 15 버킷에서 해당 이벤트가 사라져야 함 (ghost copy 방지)
+      const jan15 = useEventStore.getState().eventsByDate['2026-01-15'] ?? [];
+      expect(jan15.find((e) => e.id === mockEvent1.id)).toBeUndefined();
+
+      // Assert: Jan 16 버킷에 새 버전이 들어와야 함
+      const jan16 = useEventStore.getState().eventsByDate['2026-01-16'] ?? [];
+      expect(jan16.find((e) => e.id === mockEvent1.id)).toBeDefined();
+      expect(jan16.find((e) => e.id === mockEvent1.id)?.startAt).toEqual(movedEvent.startAt);
+    });
+
+    it('[TASK-009 fix] 같은 날짜 내 시간 이동 시 버킷 길이 불변', () => {
+      // Arrange: Jan 15에 두 이벤트 세팅
+      useEventStore.getState().setEventsForDate('2026-01-15', [mockEvent1, mockEvent2]);
+
+      // Act: mockEvent1을 같은 날 오후로 이동
+      const movedSameDay: EventSummary = {
+        ...mockEvent1,
+        startAt: new Date('2026-01-15T14:00:00.000Z'),
+        endAt:   new Date('2026-01-15T15:00:00.000Z'),
+      };
+      useEventStore.getState().upsertEvent(movedSameDay);
+
+      // Assert: 버킷은 여전히 2개 (ghost copy 없이 교체)
+      const jan15 = useEventStore.getState().eventsByDate['2026-01-15'] ?? [];
+      expect(jan15).toHaveLength(2);
+      const moved = jan15.find((e) => e.id === mockEvent1.id);
+      expect(moved?.startAt).toEqual(movedSameDay.startAt);
+    });
+
     // TASK-005 / ADR-009: 로컬 timezone 기반 dateKey
     // 시스템 timezone이 KST 가정. KST 28일 00:30 = UTC 27일 15:30.
     // 옛 코드(toISOString)였으면 dateKey="2026-04-27" → 27일에 표시됐던 버그.

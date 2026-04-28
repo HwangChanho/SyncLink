@@ -1,0 +1,222 @@
+# 07_event_crud — 일정 생성 → 캘린더 표시 → 수정 → 삭제 CRUD 검증
+#
+# 목적:
+#   1. 로그인 → 캘린더 탭 → FAB → 제목 "테스트 일정" 입력 → 저장
+#   2. 캘린더로 복귀 확인
+#   3. 생성된 일정 탭 → 상세 화면 → 수정(편집) 진입
+#   4. 수정 후 저장 → 캘린더 복귀 확인
+#   5. 일정 상세 → 삭제 버튼 탭 → 확인
+#
+# 주의:
+#   - 일정 수정은 /event/edit/{id} 화면으로 이동 (event-detail-edit testID).
+#   - 수정 화면은 /event/create.tsx와 동일 폼을 재사용하므로 같은 testID 사용.
+#   - 삭제는 event-detail-delete testID로 트리거, 시스템 Alert 확인 필요.
+#   - 캘린더에서 새로 생성된 일정을 찾으려면 일정 제목 text로 탭 (testID 없음).
+#
+# 실행:
+#   maestro --device <UDID> test \
+#     -e TEST_EMAIL=e2e-ios-sim-pro@synclink.test \
+#     -e TEST_PASSWORD=e2etest1234 \
+#     e2e/flows/07_event_crud.yaml
+#
+# testID 참조:
+#   calendar-fab-create      — calendar.tsx FAB 버튼
+#   event-create-title-input — event/create.tsx 제목 입력 필드
+#   event-create-save        — event/create.tsx 헤더 저장 버튼
+#   event-detail-edit        — event/[id].tsx 편집 아이콘 버튼
+#   event-detail-delete      — event/[id].tsx 삭제 버튼
+
+appId: io.synclink.app
+env:
+  TEST_EMAIL: ${TEST_EMAIL}
+  TEST_PASSWORD: ${TEST_PASSWORD}
+---
+# ── 1. 앱 초기화 ───────────────────────────────────────────────────────────────
+- stopApp
+- clearState
+- launchApp:
+    permissions:
+      all: deny
+
+# Dialog 5회 dismiss
+- repeat:
+    times: 5
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "허용 안 함"
+          commands:
+            - tapOn:
+                text: "허용 안 함"
+            - waitForAnimationToEnd
+      - runFlow:
+          when:
+            visible:
+              text: "Don't Allow"
+          commands:
+            - tapOn:
+                text: "Don't Allow"
+            - waitForAnimationToEnd
+
+# ── 2. 로그인 (testID 기반) ─────────────────────────────────────────────────────
+- extendedWaitUntil:
+    visible:
+      id: "login-dev-submit"
+    timeout: 30000
+- tapOn:
+    id: "login-dev-email"
+- eraseText
+- inputText: ${TEST_EMAIL}
+- tapOn:
+    id: "login-dev-password"
+- eraseText
+- inputText: ${TEST_PASSWORD}
+- tapOn:
+    id: "login-dev-submit"
+- waitForAnimationToEnd
+
+# Post-login dialog dismiss
+- repeat:
+    times: 5
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "허용 안 함"
+          commands:
+            - tapOn:
+                text: "허용 안 함"
+            - waitForAnimationToEnd
+      - runFlow:
+          when:
+            visible:
+              text: "Don't Allow"
+          commands:
+            - tapOn:
+                text: "Don't Allow"
+            - waitForAnimationToEnd
+
+# Onboarding skip
+- runFlow:
+    when:
+      visible:
+        id: "onboarding-button-skip"
+    commands:
+      - tapOn:
+          id: "onboarding-button-skip"
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        id: "profile-onboarding-button-skip"
+    commands:
+      - tapOn:
+          id: "profile-onboarding-button-skip"
+      - waitForAnimationToEnd
+
+# 홈 탭 도달 확인
+- extendedWaitUntil:
+    visible:
+      id: "tab-button-home"
+    timeout: 30000
+
+# ── 3. 캘린더 탭 이동 ──────────────────────────────────────────────────────────
+- tapOn:
+    id: "tab-button-calendar"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/07_calendar_before_create
+
+# ── 4. FAB → 일정 생성 화면 진입 ───────────────────────────────────────────────
+- tapOn:
+    id: "calendar-fab-create"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "event-create-title-input"
+    timeout: 10000
+- takeScreenshot: screenshots/07_event_create_form
+
+# ── 5. 제목 "테스트 일정" 입력 ─────────────────────────────────────────────────
+- tapOn:
+    id: "event-create-title-input"
+- inputText: "테스트 일정"
+- takeScreenshot: screenshots/07_event_title_entered
+
+# ── 6. 저장 버튼 탭 → 캘린더 복귀 ──────────────────────────────────────────────
+- tapOn:
+    id: "event-create-save"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/07_after_create
+
+# 캘린더 탭 버튼 가시성으로 복귀 확인
+- assertVisible:
+    id: "tab-button-calendar"
+
+# ── 7. 생성된 일정 탭 → 상세 화면 진입 ────────────────────────────────────────
+# 캘린더에서 제목 "테스트 일정" 텍스트를 탭.
+# text 의존이지만 제목은 방금 우리가 입력한 고정값이므로 안정적.
+- tapOn:
+    text: "테스트 일정"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/07_event_detail
+
+# ── 8. 수정 버튼 탭 → 편집 화면 진입 ──────────────────────────────────────────
+# testID: event-detail-edit (event/[id].tsx 헤더 연필 아이콘)
+- extendedWaitUntil:
+    visible:
+      id: "event-detail-edit"
+    timeout: 10000
+- tapOn:
+    id: "event-detail-edit"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "event-create-title-input"
+    timeout: 10000
+- takeScreenshot: screenshots/07_event_edit_form
+
+# ── 9. 제목 변경 → 저장 ────────────────────────────────────────────────────────
+- tapOn:
+    id: "event-create-title-input"
+- eraseText
+- inputText: "수정된 테스트 일정"
+- takeScreenshot: screenshots/07_event_title_modified
+
+- tapOn:
+    id: "event-create-save"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/07_after_edit
+
+# 수정 후 캘린더(또는 상세)로 복귀 확인
+- assertVisible:
+    id: "tab-button-calendar"
+
+# ── 10. 캘린더에서 수정된 제목 확인 ────────────────────────────────────────────
+- tapOn:
+    text: "수정된 테스트 일정"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/07_event_detail_after_edit
+
+# ── 11. 삭제 버튼 탭 ────────────────────────────────────────────────────────────
+# testID: event-detail-delete (event/[id].tsx 하단 삭제 버튼)
+- extendedWaitUntil:
+    visible:
+      id: "event-detail-delete"
+    timeout: 10000
+- tapOn:
+    id: "event-detail-delete"
+- waitForAnimationToEnd
+
+# Alert "삭제" 확인 버튼 — iOS system alert
+- tapOn:
+    text: "삭제"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/07_after_delete
+
+# 삭제 후 캘린더로 복귀 확인
+- assertVisible:
+    id: "tab-button-calendar"
+- takeScreenshot: screenshots/07_final

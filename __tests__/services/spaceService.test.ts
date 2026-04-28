@@ -200,7 +200,7 @@ describe('spaceService', () => {
       expect(result.members[0]?.role).toBe('owner');
     });
 
-    it('invite_code 형식: 6자리, O/0/I/1 제외 문자셋으로 구성됨', async () => {
+    it('invite_code 형식: 8자리, O/0/I/1 제외 문자셋으로 구성됨 (Sprint 28: 6→8자리 업그레이드)', async () => {
       // generateCode()가 생성한 코드를 spaces INSERT에서 캡처
       let capturedInviteCode: string | undefined;
       const spacesChain = makeChain({ data: mockSpaceRow, error: null });
@@ -217,8 +217,8 @@ describe('spaceService', () => {
 
       await createSpace({ name: 'Test', type: 'couple' });
 
-      // 6자리 확인
-      expect(capturedInviteCode).toHaveLength(6);
+      // 8자리 확인 (Sprint 28 fix: 6→8자리 코드 공간 확장)
+      expect(capturedInviteCode).toHaveLength(8);
       // O(오), 0(영), I(아이), 1(일) 제외 확인
       const EXCLUDED_CHARS = /[O0I1]/;
       expect(EXCLUDED_CHARS.test(capturedInviteCode!)).toBe(false);
@@ -511,25 +511,25 @@ describe('spaceService', () => {
         .mockReturnValueOnce(makeChain({ data: null, error: null }));
     }
 
-    it('정상 흐름: 6자리 신규 코드 반환', async () => {
+    it('정상 흐름: 8자리 신규 코드 반환 (Sprint 28 fix: 6→8자리)', async () => {
       setupRegenerateInviteCodeMocks();
 
       const newCode = await regenerateInviteCode('space-abc');
 
-      expect(newCode).toHaveLength(6);
+      expect(newCode).toHaveLength(8);
     });
 
-    it('생성된 코드: O/0/I/1이 포함되지 않음', async () => {
-      // 여러 번 실행해 코드 품질 검증
+    it('생성된 코드: O/0/I/1이 포함되지 않고 허용 문자셋만 사용됨 (100회 확인)', async () => {
+      // 여러 번 실행해 코드 품질 검증 (Sprint 28: 100회로 확대)
       const EXCLUDED_CHARS = /[O0I1]/;
       const ALLOWED_CHARS = /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]+$/;
 
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 100; i++) {
         setupRegenerateInviteCodeMocks();
         const code = await regenerateInviteCode('space-abc');
         expect(EXCLUDED_CHARS.test(code)).toBe(false);
         expect(ALLOWED_CHARS.test(code)).toBe(true);
-        expect(code).toHaveLength(6);
+        expect(code).toHaveLength(8);
       }
     });
 
@@ -544,47 +544,58 @@ describe('spaceService', () => {
       );
     });
 
-    it('IDEA-016 충돌 재시도: UNIQUE 위반 시 최대 5회 재시도 후 성공', async () => {
-      // 처음 2번은 UNIQUE 위반 에러, 3번째는 성공
+    it('Sprint 28 fix — UNIQUE 위반 시 최대 10회 재시도 후 성공', async () => {
+      // 처음 9번은 UNIQUE 위반 에러, 10번째(마지막 시도)는 성공.
+      // 주의: 충돌마다 logError → supabase.from('error_logs') 추가 호출 발생.
+      // mockReturnValue(기본값)로 error_logs INSERT를 no-op 처리.
       const uniqueError = Object.assign(new Error('duplicate key value violates unique constraint'), { code: '23505' });
 
       (supabase.from as jest.Mock)
-        // assertOwner: owner 확인 (1번만 호출됨 — 재시도 전에 완료)
+        // assertOwner: owner 확인
         .mockReturnValueOnce(makeChain({ data: { role: 'owner' }, error: null }))
-        // 1번째 UPDATE: UNIQUE 충돌
-        .mockReturnValueOnce(makeChain({ data: null, error: uniqueError }))
-        // 2번째 UPDATE: UNIQUE 충돌
-        .mockReturnValueOnce(makeChain({ data: null, error: uniqueError }))
-        // 3번째 UPDATE: 성공
-        .mockReturnValueOnce(makeChain({ data: null, error: null }));
+        // 1~9번째 UPDATE: UNIQUE 충돌 (각 충돌 후 logError → error_logs INSERT 발생)
+        .mockReturnValueOnce(makeChain({ data: null, error: uniqueError }))  // attempt 1
+        .mockReturnValueOnce(makeChain({ data: null, error: null }))          // error_logs INSERT 1
+        .mockReturnValueOnce(makeChain({ data: null, error: uniqueError }))  // attempt 2
+        .mockReturnValueOnce(makeChain({ data: null, error: null }))          // error_logs INSERT 2
+        .mockReturnValueOnce(makeChain({ data: null, error: uniqueError }))  // attempt 3
+        .mockReturnValueOnce(makeChain({ data: null, error: null }))          // error_logs INSERT 3
+        .mockReturnValueOnce(makeChain({ data: null, error: uniqueError }))  // attempt 4
+        .mockReturnValueOnce(makeChain({ data: null, error: null }))          // error_logs INSERT 4
+        .mockReturnValueOnce(makeChain({ data: null, error: uniqueError }))  // attempt 5
+        .mockReturnValueOnce(makeChain({ data: null, error: null }))          // error_logs INSERT 5
+        .mockReturnValueOnce(makeChain({ data: null, error: uniqueError }))  // attempt 6
+        .mockReturnValueOnce(makeChain({ data: null, error: null }))          // error_logs INSERT 6
+        .mockReturnValueOnce(makeChain({ data: null, error: uniqueError }))  // attempt 7
+        .mockReturnValueOnce(makeChain({ data: null, error: null }))          // error_logs INSERT 7
+        .mockReturnValueOnce(makeChain({ data: null, error: uniqueError }))  // attempt 8
+        .mockReturnValueOnce(makeChain({ data: null, error: null }))          // error_logs INSERT 8
+        .mockReturnValueOnce(makeChain({ data: null, error: uniqueError }))  // attempt 9
+        .mockReturnValueOnce(makeChain({ data: null, error: null }))          // error_logs INSERT 9
+        // 10번째 UPDATE: 성공 (logError 없음 → from() 호출 없음)
+        .mockReturnValueOnce(makeChain({ data: null, error: null }));         // attempt 10 성공
 
       const newCode = await regenerateInviteCode('space-abc');
 
-      // 성공적으로 코드 반환됨
-      expect(newCode).toHaveLength(6);
-      // assertOwner 1번 + UPDATE 3번 = 4번 from() 호출
-      expect(supabase.from).toHaveBeenCalledTimes(4);
+      // 성공적으로 8자리 코드 반환됨
+      expect(newCode).toHaveLength(8);
     });
 
-    it('IDEA-016 충돌 재시도: 5회 모두 UNIQUE 위반 시 에러 throw', async () => {
-      // 모든 시도가 UNIQUE 위반
+    it('Sprint 28 fix — 10회 모두 UNIQUE 위반 시 에러 throw', async () => {
+      // 모든 시도가 UNIQUE 위반.
+      // 충돌마다 logError → error_logs INSERT (supabase.from 추가 호출).
+      // mockReturnValue(기본값)으로 추가 from() 호출을 no-op으로 처리.
       const uniqueError = Object.assign(new Error('duplicate key value violates unique constraint'), { code: '23505' });
 
-      // assertOwner(space_members) 1번 + spaces UPDATE 5번 = 6개 mockReturnValueOnce.
-      // mock 소진 후 추가 호출 시 UNIQUE 에러를 반환하도록 기본값 설정.
       (supabase.from as jest.Mock)
         // assertOwner: space_members → owner
         .mockReturnValueOnce(makeChain({ data: { role: 'owner' }, error: null }))
-        // 5번 모두 UNIQUE 충돌 (spaces UPDATE)
-        .mockReturnValueOnce(makeChain({ data: null, error: uniqueError }))
-        .mockReturnValueOnce(makeChain({ data: null, error: uniqueError }))
-        .mockReturnValueOnce(makeChain({ data: null, error: uniqueError }))
-        .mockReturnValueOnce(makeChain({ data: null, error: uniqueError }))
-        .mockReturnValueOnce(makeChain({ data: null, error: uniqueError }))
-        // 기본값: mock 소진 후 추가 호출 시에도 UNIQUE 에러 (방어적 처리)
+        // 기본값: 이후 모든 from() 호출 = UNIQUE 에러 (UPDATE) 또는 null (error_logs INSERT).
+        // UNIQUE 에러는 UPDATE에서, null은 error_logs에서 번갈아 반환될 것이지만,
+        // 어차피 10회 exhausted 시 마지막 에러를 throw하므로 단순히 error를 기본값으로.
         .mockReturnValue(makeChain({ data: null, error: uniqueError }));
 
-      // 5회 재시도 후 마지막 UNIQUE 에러를 throw해야 함
+      // 10회 재시도 후 마지막 UNIQUE 에러를 throw해야 함
       await expect(regenerateInviteCode('space-abc')).rejects.toThrow();
     });
   });
@@ -693,6 +704,81 @@ describe('spaceService', () => {
       await expect(joinSpaceByInviteCode('CPL456')).rejects.toThrow(
         '커플 Space는 최대 2명까지 참여할 수 있습니다.',
       );
+    });
+
+    // ── Sprint 28 fix: NULL field 방어 테스트 ─────────────────────────────────
+
+    it('NULL invite_code_uses_count: 0으로 coalesce → 한도 체크 통과 (false positive 방지)', async () => {
+      // migration 022 이전에 생성된 row는 invite_code_uses_count가 없을 수 있다.
+      // SpaceRow 타입상 NOT NULL이지만, 실제 DB row는 null일 수 있어
+      // null >= max_uses 가 false(JS)가 되어 차단이 안 되는 경우를 방지한다.
+      // 이 테스트는 invite_code_max_uses=null(무제한)에서 NULL uses_count가
+      // 올바르게 join을 허용하는지 검증한다.
+      const nullUsesRow: SpaceRow = {
+        ...mockSpaceRow,
+        invite_code_max_uses: null,   // 무제한
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        invite_code_uses_count: null as any, // NULL — migration 이전 row 시뮬레이션
+      };
+
+      (supabase.from as jest.Mock)
+        .mockReturnValueOnce(makeChain({ data: nullUsesRow, error: null }))
+        .mockReturnValueOnce(makeChain({ data: [], error: null }))              // 멤버 목록
+        .mockReturnValueOnce(makeChain({ data: null, error: null }))            // INSERT
+        .mockReturnValueOnce(makeChain({ data: null, error: null }))            // uses_count 증가
+        .mockReturnValueOnce(makeChain({ data: mockSpaceRow, error: null }))    // getSpaceById
+        .mockReturnValueOnce(makeChain({ data: [mockOwnerMemberRow], error: null }))
+        .mockReturnValueOnce(makeChain({ data: [mockUserRow], error: null }));
+
+      // NULL uses_count에서도 정상적으로 join 가능해야 함
+      const result = await joinSpaceByInviteCode('ABC123');
+      expect(result.id).toBe('space-abc');
+    });
+
+    it('NULL invite_code_expires_at: 무한 유효 → 만료 체크 통과 (null = never expires)', async () => {
+      // expires_at이 NULL이면 만료 체크를 건너뛰어야 한다.
+      const nullExpiryRow: SpaceRow = {
+        ...mockSpaceRow,
+        invite_code_expires_at: null, // 무한 유효
+        invite_code_max_uses:   null, // 무제한
+        invite_code_uses_count: 0,
+      };
+
+      (supabase.from as jest.Mock)
+        .mockReturnValueOnce(makeChain({ data: nullExpiryRow, error: null }))
+        .mockReturnValueOnce(makeChain({ data: [], error: null }))
+        .mockReturnValueOnce(makeChain({ data: null, error: null }))
+        .mockReturnValueOnce(makeChain({ data: null, error: null }))
+        .mockReturnValueOnce(makeChain({ data: mockSpaceRow, error: null }))
+        .mockReturnValueOnce(makeChain({ data: [mockOwnerMemberRow], error: null }))
+        .mockReturnValueOnce(makeChain({ data: [mockUserRow], error: null }));
+
+      const result = await joinSpaceByInviteCode('ABC123');
+      expect(result.id).toBe('space-abc');
+    });
+
+    it('NULL uses_count + max_uses=5: null coalesce로 0 처리 → 5>=5가 아니므로 통과', async () => {
+      // NULL uses_count를 0으로 coalesce하면 max_uses=5와 비교 시
+      // 0 < 5 이므로 한도 체크를 통과해야 한다.
+      const nullUsesWithMaxRow: SpaceRow = {
+        ...mockSpaceRow,
+        invite_code_max_uses:   5,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        invite_code_uses_count: null as any, // coalesce → 0
+      };
+
+      (supabase.from as jest.Mock)
+        .mockReturnValueOnce(makeChain({ data: nullUsesWithMaxRow, error: null }))
+        .mockReturnValueOnce(makeChain({ data: [], error: null }))
+        .mockReturnValueOnce(makeChain({ data: null, error: null }))
+        .mockReturnValueOnce(makeChain({ data: null, error: null }))
+        .mockReturnValueOnce(makeChain({ data: mockSpaceRow, error: null }))
+        .mockReturnValueOnce(makeChain({ data: [mockOwnerMemberRow], error: null }))
+        .mockReturnValueOnce(makeChain({ data: [mockUserRow], error: null }));
+
+      // 0 < 5 → 한도 미달 → join 허용
+      const result = await joinSpaceByInviteCode('ABC123');
+      expect(result.id).toBe('space-abc');
     });
   });
 

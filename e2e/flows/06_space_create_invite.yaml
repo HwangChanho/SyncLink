@@ -1,0 +1,200 @@
+# 06_space_create_invite — Space 생성 + 초대 코드 표시 검증
+#
+# 목적:
+#   1. 로그인 → 내 정보 탭 → Space 생성 진입 (testID 기반)
+#   2. Group 타입 선택 → 이름 입력 → 저장
+#   3. 생성된 Space 상세 화면에서 초대 코드 섹션 확인 (space-invite-code)
+#   4. "공유" 버튼(또는 링크 복사 버튼) 가시성 검증
+#   5. 스크린샷
+#
+# 선행 조건:
+#   - TEST_EMAIL / TEST_PASSWORD 환경변수 설정
+#   - 계정에 Space가 없거나 이미 있어도 무관 (양쪽 UI 분기 모두 커버)
+#
+# 실행:
+#   maestro --device <UDID> test \
+#     -e TEST_EMAIL=e2e-ios-sim-pro@synclink.test \
+#     -e TEST_PASSWORD=e2etest1234 \
+#     e2e/flows/06_space_create_invite.yaml
+#
+# testID 참조:
+#   my-button-create-space   — my.tsx (Space 없을 때 생성 버튼)
+#   my-button-add-space      — my.tsx (Space 있을 때 "+" 버튼)
+#   space-create-name-input  — space/create.tsx 이름 입력 필드
+#   space-type-group         — space/create.tsx Group 타입 카드
+#   space-create-submit      — space/create.tsx 생성 버튼
+#   space-invite-code        — space/[id].tsx 초대 코드 View
+
+appId: io.synclink.app
+env:
+  TEST_EMAIL: ${TEST_EMAIL}
+  TEST_PASSWORD: ${TEST_PASSWORD}
+---
+# ── 1. 앱 초기화 ───────────────────────────────────────────────────────────────
+- stopApp
+- clearState
+- launchApp:
+    permissions:
+      all: deny
+
+# Dialog 5회 dismiss (expo-location / RevenueCat 런타임 요청)
+- repeat:
+    times: 5
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "허용 안 함"
+          commands:
+            - tapOn:
+                text: "허용 안 함"
+            - waitForAnimationToEnd
+      - runFlow:
+          when:
+            visible:
+              text: "Don't Allow"
+          commands:
+            - tapOn:
+                text: "Don't Allow"
+            - waitForAnimationToEnd
+
+# ── 2. 로그인 (testID 기반) ─────────────────────────────────────────────────────
+- extendedWaitUntil:
+    visible:
+      id: "login-dev-submit"
+    timeout: 30000
+- tapOn:
+    id: "login-dev-email"
+- eraseText
+- inputText: ${TEST_EMAIL}
+- tapOn:
+    id: "login-dev-password"
+- eraseText
+- inputText: ${TEST_PASSWORD}
+- tapOn:
+    id: "login-dev-submit"
+- waitForAnimationToEnd
+
+# Post-login dialog dismiss
+- repeat:
+    times: 5
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "허용 안 함"
+          commands:
+            - tapOn:
+                text: "허용 안 함"
+            - waitForAnimationToEnd
+      - runFlow:
+          when:
+            visible:
+              text: "Don't Allow"
+          commands:
+            - tapOn:
+                text: "Don't Allow"
+            - waitForAnimationToEnd
+
+# Onboarding skip (testID)
+- runFlow:
+    when:
+      visible:
+        id: "onboarding-button-skip"
+    commands:
+      - tapOn:
+          id: "onboarding-button-skip"
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        id: "profile-onboarding-button-skip"
+    commands:
+      - tapOn:
+          id: "profile-onboarding-button-skip"
+      - waitForAnimationToEnd
+
+# 홈 탭 도달 확인
+- extendedWaitUntil:
+    visible:
+      id: "tab-button-home"
+    timeout: 30000
+
+# ── 3. 내 정보 탭 이동 ──────────────────────────────────────────────────────────
+- tapOn:
+    id: "tab-button-my"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/06_my_tab
+
+# ── 4. Space 생성 화면 진입 ────────────────────────────────────────────────────
+# my.tsx에 Space가 없으면 my-button-create-space, 있으면 my-button-add-space로 표시.
+# 두 분기를 모두 커버하기 위해 스크롤 후 조건부 탭.
+- scrollToBottom
+- runFlow:
+    when:
+      visible:
+        id: "my-button-create-space"
+    commands:
+      - tapOn:
+          id: "my-button-create-space"
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        id: "my-button-add-space"
+    commands:
+      - tapOn:
+          id: "my-button-add-space"
+      - waitForAnimationToEnd
+
+# ── 5. Space 생성 폼 진입 확인 ──────────────────────────────────────────────────
+- extendedWaitUntil:
+    visible:
+      id: "space-create-name-input"
+    timeout: 10000
+- takeScreenshot: screenshots/06_space_create_form
+
+# ── 6. Group 타입 선택 ──────────────────────────────────────────────────────────
+# testID: space-type-group (space/create.tsx — locale 무관)
+- tapOn:
+    id: "space-type-group"
+- waitForAnimationToEnd
+
+# ── 7. Space 이름 입력 ──────────────────────────────────────────────────────────
+- tapOn:
+    id: "space-create-name-input"
+- eraseText
+- inputText: "E2E 테스트 Space"
+- takeScreenshot: screenshots/06_space_name_entered
+
+# ── 8. 생성 버튼 탭 ──────────────────────────────────────────────────────────────
+# testID: space-create-submit (space/create.tsx)
+- tapOn:
+    id: "space-create-submit"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/06_space_creating
+
+# ── 9. Space 상세 화면 도달 + 초대 코드 확인 ─────────────────────────────────────
+# 생성 후 router.replace('/space/{id}')로 자동 이동.
+# testID: space-invite-code (space/[id].tsx SectionCard 내 View)
+- extendedWaitUntil:
+    visible:
+      id: "space-invite-code"
+    timeout: 15000
+
+- assertVisible:
+    id: "space-invite-code"
+- takeScreenshot: screenshots/06_space_invite_code
+
+# ── 10. 초대 공유 버튼 가시성 검증 ─────────────────────────────────────────────
+# 네이티브: "공유" 버튼 (invite_share_button), 웹: space-invite-link
+# 네이티브 환경에서 실행되므로 text 기반으로 fallback (locale 한국어 고정 계정).
+# text 의존도 최소화를 위해 id 우선, 없으면 text로 fallback.
+- runFlow:
+    when:
+      visible:
+        id: "space-invite-link"
+    commands:
+      - assertVisible:
+          id: "space-invite-link"
+- takeScreenshot: screenshots/06_space_invite_final

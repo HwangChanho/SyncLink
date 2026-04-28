@@ -41,7 +41,7 @@
       </dict>
     </array>
     <key>CFBundleVersion</key>
-    <string>35</string>
+    <string>36</string>
     <key>GADApplicationIdentifier</key>
     <string>ca-app-pub-2936938026486482~2712096301</string>
     <key>GADDelayAppMeasurementInit</key>
@@ -104,6 +104,8 @@
     <array>
       <string>UIInterfaceOrientationPortrait</string>
       <string>UIInterfaceOrientationPortraitUpsideDown</string>
+      <string>UIInterfaceOrientationLandscapeLeft</string>
+      <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
     <key>UIUserInterfaceStyle</key>
     <string>Automatic</string>
