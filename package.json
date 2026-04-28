@@ -12,6 +12,7 @@
     "test:ci": "jest --ci --passWithNoTests --forceExit",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx --max-warnings 30",
+    "postinstall": "patch-package",
     "test:e2e": "maestro test e2e/flows/",
     "test:e2e:launch": "maestro test e2e/flows/00_launch.yaml",
     "test:e2e:golden": "maestro test e2e/flows/05_golden_path.yaml",
