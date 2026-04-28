@@ -252,7 +252,7 @@ export function getRuleBaseline(
 export function getRuleBaselineAll(
   slots: FreeSlot[],
   locale: SupportedLocale | string,
-): Array<{ slot: FreeSlot; rule: RuleActivities }> {
+): { slot: FreeSlot; rule: RuleActivities }[] {
   return slots.map((slot) => ({
     slot,
     rule: getRuleBaseline(slot, locale),

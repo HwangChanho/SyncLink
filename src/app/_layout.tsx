@@ -13,17 +13,6 @@
 import '@/lib/i18n'; // initialize i18n before any component renders (synchronous default locale)
 import { initSentry } from '@/lib/sentry';
 import { LogBox } from 'react-native';
-
-// E2E / DEV builds: suppress RevenueCat SDK configuration warnings that appear as
-// Console Error overlays and block Maestro test interactions.
-// These warnings are expected in dev environments without a real RC project setup.
-if (__DEV__) {
-  LogBox.ignoreLogs([
-    'RevenueCat',
-    '[RevenueCat]',
-    'RevenueCat SDK',
-  ]);
-}
 import { useEffect, useRef, useState } from 'react';
 import { AppState, AppStateStatus, Platform, View, StyleSheet, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
@@ -58,6 +47,17 @@ import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
 import { useColors } from '@/hooks/useColors';
 import { logError } from '@/lib/errorLogger';
 import { ONBOARDING_STORAGE_KEY } from '@/app/onboarding/index';
+
+// E2E / DEV builds: suppress RevenueCat SDK configuration warnings that appear as
+// Console Error overlays and block Maestro test interactions.
+// These warnings are expected in dev environments without a real RC project setup.
+if (__DEV__) {
+  LogBox.ignoreLogs([
+    'RevenueCat',
+    '[RevenueCat]',
+    'RevenueCat SDK',
+  ]);
+}
 initSentry();
 
 // ─── Auth guard ───────────────────────────────────────────────────────────────

@@ -394,10 +394,10 @@ export interface FreeTimeRecommendationsResult {
  * Edge Function으로부터 받은 응답 형태 (내부 타입).
  */
 interface EdgeRecommendResponse {
-  recommendations: Array<{
+  recommendations: {
     slot: { start: string; end: string; durationMinutes: number };
     activities: ActivityItem[];
-  }>;
+  }[];
   fromCache: boolean;
   source: 'rule' | 'ai';
 }
