@@ -448,7 +448,8 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     },
     customConfirmText: {
       ...textStyles.label,
-      color: '#FFFFFF',
+      // textInverse: white in light, gray-900 in dark — contrasts with primary button background
+      color: colors.textInverse,
     },
   });
 }

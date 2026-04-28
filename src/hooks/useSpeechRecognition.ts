@@ -14,6 +14,23 @@
  *            Not available in Firefox/Safari without flags.
  *  - Native: Uses @react-native-voice/voice for iOS and Android.
  *
+ * VAD (Voice Activity Detection):
+ *  - Native: onSpeechRecognized(isFinal=true) 수신 시 자동으로 listening 종료.
+ *    iOS SFSpeechRecognizer가 말이 끝났다고 판단하면 isFinal 결과를 보냄.
+ *    사용자가 말을 멈추면 ~1-2초 내에 자동 종료됨.
+ *  - Web: continuous=false 모드로 동작하며, onend 이벤트로 자동 종료.
+ *    단, MIN_LISTEN_DURATION_MS 이전에 끝나면 재시작(초반 무음 대응).
+ *
+ * Noise suppression (iOS):
+ *  - @react-native-voice/voice 네이티브 레이어가 AVAudioSession을
+ *    PlayAndRecord 카테고리로 설정하지만 mode는 기본값(.measurement).
+ *  - voiceChat/voiceRecognition 모드 설정은 추가 네이티브 모듈 필요
+ *    → IDEA-026으로 carry (docs/queue/todo/).
+ *  - 현재는 iOS SFSpeechRecognizer 자체 노이즈 필터링에 의존.
+ *
+ * Speaker recognition:
+ *  - 모바일 SDK 레이어에서는 직접 지원 불가 → IDEA-025로 carry.
+ *
  * Usage:
  *  ```tsx
  *  const { isListening, isSupported, startListening, stopListening, transcript } =
@@ -123,8 +140,14 @@ interface WebSpeechRecognitionErrorEvent {
  * Minimum listening duration in milliseconds.
  * Browsers and native Voice API stop recognition aggressively on short silences
  * (~1–2s). Users expect the mic to stay open for at least 5 seconds before
- * deciding they're done speaking. We restart recognition if it ends naturally
- * before this window elapses; after 5s we let onEnd close the session.
+ * deciding they're done speaking.
+ *
+ * Web only: We restart recognition if it ends naturally before this window
+ * elapses; after 5s we let onEnd close the session.
+ *
+ * Native (iOS/Android): MIN_LISTEN_DURATION_MS is NOT used for auto-restart.
+ * Instead, VAD relies on onSpeechRecognized(isFinal=true) to detect speech end.
+ * The constant is kept for web compatibility only.
  */
 const MIN_LISTEN_DURATION_MS = 5000;
 
@@ -151,10 +174,10 @@ export function useSpeechRecognition({
     // Hold a ref to the active recognition instance so we can stop it
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const recognitionRef = useRef<WebSpeechRecognitionInstance | null>(null);
-    // Track when listening started to enforce MIN_LISTEN_DURATION_MS
+    // Track when listening started to enforce MIN_LISTEN_DURATION_MS (web only).
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const startTimeRef = useRef<number>(0);
-    // Whether the user manually requested stop (so we don't auto-restart)
+    // Whether the user manually requested stop (so we don't auto-restart).
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const userStoppedRef = useRef<boolean>(false);
 
@@ -169,14 +192,23 @@ export function useSpeechRecognition({
 
     /**
      * Create a new recognition instance with all event handlers wired.
-     * Extracted so we can restart recognition when it ends prematurely
-     * (before MIN_LISTEN_DURATION_MS has elapsed).
+     *
+     * VAD on web: continuous=false so the browser auto-stops after the user
+     * finishes speaking (typically ~1-2s of silence). This mirrors native VAD.
+     * interimResults=true is kept for live transcript feedback.
+     *
+     * MIN_LISTEN_DURATION_MS guard: The browser can fire onend almost
+     * immediately if there is silence at session start (before the user begins
+     * speaking). We restart once in that case so the user has a chance to begin.
+     * After MIN_LISTEN_DURATION_MS the browser's own VAD takes over.
      */
     const createRecognition = useCallback((): WebSpeechRecognitionInstance | null => {
       if (!WebSpeechAPI) return null;
       const recognition = new WebSpeechAPI();
       recognition.lang = language;
-      recognition.continuous = true;
+      // VAD: continuous=false lets the browser detect speech end and stop
+      // automatically. The browser fires onend after ~1-2s of post-speech silence.
+      recognition.continuous = false;
       recognition.interimResults = true;
 
       let lastResultIndex = 0;
@@ -202,15 +234,23 @@ export function useSpeechRecognition({
       };
 
       recognition.onend = () => {
-        // If user hit stop or we're past the minimum duration, end normally.
-        const elapsed = Date.now() - startTimeRef.current;
-        if (userStoppedRef.current || elapsed >= MIN_LISTEN_DURATION_MS) {
+        // User explicitly stopped — close session.
+        if (userStoppedRef.current) {
           setIsListening(false);
           onEnd?.();
           return;
         }
-        // Otherwise restart to satisfy the 5s minimum — browser stopped
-        // due to a transient silence but the user hasn't finished speaking.
+        // Past MIN_LISTEN_DURATION_MS: the browser's VAD fired after real speech.
+        // End the session normally.
+        const elapsed = Date.now() - startTimeRef.current;
+        if (elapsed >= MIN_LISTEN_DURATION_MS) {
+          setIsListening(false);
+          onEnd?.();
+          return;
+        }
+        // Too early (< MIN_LISTEN_DURATION_MS): browser ended before the user
+        // started speaking (initial silence). Restart once so the user has a
+        // chance to begin speaking — this is the only restart we permit.
         try {
           const next = createRecognition();
           if (next) {
@@ -263,29 +303,68 @@ export function useSpeechRecognition({
     onSpeechPartialResults: ((e: { value?: string[] }) => void) | null;
     onSpeechError: ((e: { error?: { message?: string } }) => void) | null;
     onSpeechEnd: (() => void) | null;
+    /** Fired when iOS SFSpeechRecognizer finalises a recognition result. */
+    onSpeechRecognized: ((e: { isFinal?: boolean }) => void) | null;
   };
 
   const isSupported = true; // Always available on iOS/Android
 
-  // Refs for 5s-minimum enforcement + user-stop detection (same pattern as web).
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const startTimeRef = useRef<number>(0);
+  // Whether the user manually requested stop — prevents VAD from closing twice.
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const userStoppedRef = useRef<boolean>(false);
+  /**
+   * Guards against duplicate auto-stop: onSpeechRecognized(isFinal=true) and
+   * onSpeechEnd can both fire in quick succession. Once we initiate auto-stop
+   * we set this flag so the second event is a no-op.
+   */
   // eslint-disable-next-line react-hooks/rules-of-hooks
-  const languageRef = useRef<string>(language);
-  languageRef.current = language;
+  const vadStoppedRef = useRef<boolean>(false);
 
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
+    /**
+     * onSpeechPartialResults — incremental interim transcript.
+     * Fired continuously while the user is speaking.
+     * We forward the highest-confidence alternative (index 0) to the caller.
+     */
     Voice.onSpeechPartialResults = (e: { value?: string[] }) => {
       const partial = e.value?.[0];
       if (partial && onResult) onResult(partial);
     };
 
+    /**
+     * onSpeechResults — final consolidated transcript for the utterance.
+     * Fired alongside or just before onSpeechRecognized(isFinal=true).
+     * We deliver the result to the caller here.
+     */
     Voice.onSpeechResults = (e: { value?: string[] }) => {
       const text = e.value?.[0];
       if (text && onResult) onResult(text);
+    };
+
+    /**
+     * onSpeechRecognized — VAD signal from iOS SFSpeechRecognizer.
+     *
+     * When isFinal=true the recogniser has determined the user finished speaking
+     * (silence detected). We treat this as the VAD trigger and auto-stop.
+     *
+     * This is the primary auto-stop path for native (iOS/Android).
+     * onSpeechEnd below is the fallback for cases where isFinal never fires
+     * (e.g., user manually hits stop, or an unexpected engine termination).
+     */
+    Voice.onSpeechRecognized = (e: { isFinal?: boolean }) => {
+      if (!e.isFinal) return;
+      // Guard: ignore if user already stopped or we already auto-stopped.
+      if (userStoppedRef.current || vadStoppedRef.current) return;
+
+      vadStoppedRef.current = true;
+      // Stop the audio engine — this also triggers onSpeechEnd, which will
+      // be a no-op because vadStoppedRef is set.
+      Voice.stop().catch((err: unknown) => {
+        console.warn('[SpeechRecognition] VAD auto-stop failed:', err);
+      });
+      setIsListening(false);
+      onEnd?.();
     };
 
     Voice.onSpeechError = (e: { error?: { message?: string } }) => {
@@ -296,26 +375,31 @@ export function useSpeechRecognition({
       onError?.(msg);
     };
 
+    /**
+     * onSpeechEnd — fallback termination signal.
+     *
+     * Fires when the audio engine stops for any reason (VAD auto-stop,
+     * user stop, or engine error). If VAD already handled closure via
+     * onSpeechRecognized(isFinal=true), vadStoppedRef prevents duplicate
+     * onEnd calls. If we arrive here fresh (neither user nor VAD stopped),
+     * we close normally rather than restarting — on native the engine has
+     * already decided there is nothing more to recognise.
+     */
     Voice.onSpeechEnd = () => {
-      const elapsed = Date.now() - startTimeRef.current;
-      // User-requested stop OR past the 5s minimum → close normally.
-      if (userStoppedRef.current || elapsed >= MIN_LISTEN_DURATION_MS) {
-        setIsListening(false);
-        onEnd?.();
-        return;
-      }
-      // Otherwise restart so the user gets at least 5s of listening time.
-      Voice.start(languageRef.current).catch((err: unknown) => {
-        console.error('[SpeechRecognition] native restart failed:', err);
-        setIsListening(false);
-        onEnd?.();
-      });
+      // Already handled by VAD (onSpeechRecognized isFinal=true) or user stop.
+      if (userStoppedRef.current || vadStoppedRef.current) return;
+
+      // Engine ended on its own without a final result (e.g. very short silence
+      // at session start). Close cleanly — no restart on native.
+      setIsListening(false);
+      onEnd?.();
     };
 
     return () => {
       void Voice.destroy();
       Voice.onSpeechResults        = null;
       Voice.onSpeechPartialResults = null;
+      Voice.onSpeechRecognized     = null;
       Voice.onSpeechError          = null;
       Voice.onSpeechEnd            = null;
     };
@@ -325,8 +409,9 @@ export function useSpeechRecognition({
   const startListening = useCallback(async () => {
     if (isListening) return;
     try {
+      // Reset guard flags for a fresh session.
       userStoppedRef.current = false;
-      startTimeRef.current = Date.now();
+      vadStoppedRef.current  = false;
       await Voice.start(language);
       setIsListening(true);
     } catch (err) {
@@ -337,6 +422,7 @@ export function useSpeechRecognition({
   }, [isListening, language, Voice, onError]);
 
   const stopListening = useCallback(async () => {
+    // Mark as user-initiated so VAD / onSpeechEnd don't re-fire onEnd.
     userStoppedRef.current = true;
     try {
       await Voice.stop();

@@ -22,6 +22,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { useColors } from '@/hooks/useColors';
 import { radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 
@@ -100,6 +101,10 @@ export function useSimpleToast(): {
  * ```
  */
 export function SimpleToast({ toast }: { toast: SimpleToastState }) {
+  // Resolve theme-aware color tokens so the toast adapts to light and dark mode
+  const colors = useColors();
+  const styles = makeStyles(colors);
+
   return (
     <View style={styles.container} testID="simple-toast">
       <Text
@@ -115,37 +120,47 @@ export function SimpleToast({ toast }: { toast: SimpleToastState }) {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  /**
-   * Toast container — absolutely positioned at the bottom of the host view.
-   * Matches the visual language of UndoToast (dark background, rounded corners).
-   * The caller does NOT need to position this; the style is self-contained.
-   */
-  container: {
-    position: 'absolute',
-    bottom: 24,
-    left: 24,
-    right: 24,
-    backgroundColor: '#1F2937',
-    borderRadius: radius.md,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    // iOS shadow
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    // Android elevation
-    elevation: 8,
-  },
+/**
+ * Dynamic styles factory — receives current theme color tokens.
+ * Toast uses surfaceAlt as background so it is visually distinct from the
+ * page background in both light (gray-100) and dark (gray-700) themes.
+ *
+ * @param colors - Active theme color tokens from useColors()
+ */
+function makeStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
+    /**
+     * Toast container — absolutely positioned at the bottom of the host view.
+     * Uses surfaceAlt instead of a hardcoded dark hex so the toast remains
+     * visible in both light and dark mode.
+     */
+    container: {
+      position: 'absolute',
+      bottom: 24,
+      left: 24,
+      right: 24,
+      // surfaceAlt: gray-100 in light, gray-700 in dark — contrasts with background
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: radius.md,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      // iOS shadow
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      // Android elevation
+      elevation: 8,
+    },
 
-  /**
-   * Toast message text.
-   * Uses labelSm weight from the design system for consistency with UndoToast.
-   */
-  message: {
-    ...textStyles.labelSm,
-    color: '#F9FAFB',
-    textAlign: 'center',
-  },
-});
+    /**
+     * Toast message text.
+     * textPrimary adapts: gray-900 in light, white in dark.
+     */
+    message: {
+      ...textStyles.labelSm,
+      color: colors.textPrimary,
+      textAlign: 'center',
+    },
+  });
+}

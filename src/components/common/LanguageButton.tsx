@@ -43,14 +43,32 @@ const LANG_OPTIONS: LangOption[] = [
 
 // ─── Component ─────────────────────────────────────────────────────────────────
 
+interface LanguageButtonProps {
+  /**
+   * Optional explicit tint color for the icon and label.
+   *
+   * When the header has a custom accent background (set in Appearance settings),
+   * the parent (_layout.tsx) passes the auto-computed contrasting foreground
+   * color so the button stays legible against any header swatch.
+   *
+   * Falls back to `colors.textPrimary` from the active theme when omitted,
+   * which is correct for the default (no accent) header.
+   */
+  tintColor?: string;
+}
+
 /**
  * Icon button that opens an OS-native action sheet for language selection.
  * On iOS uses ActionSheetIOS; on Android falls back to an Alert-based picker.
  */
-export function LanguageButton() {
+export function LanguageButton({ tintColor }: LanguageButtonProps = {}) {
   const { t } = useTranslation();
   const colors = useColors();
   const { currentLanguage, changeLanguage }: UseLanguageReturn = useLanguage();
+
+  // Use the explicit tintColor when provided (custom header accent), otherwise
+  // fall back to the theme's textPrimary token (default header).
+  const iconColor = tintColor ?? colors.textPrimary;
 
   /** Two-letter uppercase code shown next to the icon (KO / EN / ZH / JA). */
   const languageLabel = currentLanguage.toUpperCase();
@@ -112,8 +130,8 @@ export function LanguageButton() {
       accessibilityRole="button"
     >
       <View style={styles.row}>
-        <Ionicons name="language" size={20} color={colors.textPrimary} />
-        <Text style={[styles.label, { color: colors.textPrimary }]}>{languageLabel}</Text>
+        <Ionicons name="language" size={20} color={iconColor} />
+        <Text style={[styles.label, { color: iconColor }]}>{languageLabel}</Text>
       </View>
     </TouchableOpacity>
   );

@@ -7,7 +7,6 @@
  * TASK-600 (Sprint 6): 다크모드 대응 — makeStyles(colors) 패턴으로 교체
  */
 
-import { useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTodoStore } from '@/stores/todoStore';
@@ -85,18 +84,10 @@ export function TodayTodoList() {
   const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
-  const { todos, fetchTodos, toggleTodo } = useTodoStore();
-
-  // Load todos due today on mount
-  useEffect(() => {
-    const today = new Date();
-    void fetchTodos({
-      contentType: 'todo',
-      dueBefore:   today,
-      dueAfter:    today,
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Fetch is owned by the parent Home screen (index.tsx) which calls fetchTodos
+  // on mount and pull-to-refresh. Fetching here too would race with optimistic
+  // toggle updates and cause the UI to revert on server response. (#fix-reactivity)
+  const { todos, toggleTodo } = useTodoStore();
 
   // Filter to just today's items (the service returns a range; guard here too)
   const todayTodos = todos.filter(t => isDueToday(t.dueDate));
@@ -205,7 +196,8 @@ function makeStyles(colors: ColorTokens) {
       borderColor:     colors.primary,
     },
     checkmark: {
-      color:      '#FFF',
+      // textInverse: white in light mode, gray-900 in dark — contrasts with primary checkbox background
+      color:      colors.textInverse,
       fontSize:   12,
       fontWeight: '700',
     },

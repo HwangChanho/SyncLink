@@ -95,6 +95,8 @@ const TodoRow = memo(function TodoRow({
       overshootRight={false}
     >
       <Pressable
+        // testID="todo-row-{id}" — e2e로 특정 할일 행 지정 가능 (ISSUE-011 검증 시나리오)
+        testID={`todo-row-${todo.id}`}
         style={({ pressed }) => [styles.todoRow, pressed && styles.todoRowPressed]}
         onPress={() => onEdit(todo)}
         onLongPress={() => {
@@ -109,6 +111,8 @@ const TodoRow = memo(function TodoRow({
         }}
       >
         <TouchableOpacity
+          // testID="todo-checkbox-{id}" — e2e에서 체크박스 토글 검증 (08_planner_todo_crud)
+          testID={`todo-checkbox-${todo.id}`}
           style={styles.checkboxContainer}
           onPress={() => onToggle(todo.id)}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}

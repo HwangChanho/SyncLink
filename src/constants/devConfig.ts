@@ -8,11 +8,13 @@
  * Available flags:
  *
  * `dragMode`:
- *   'panresponder' (default) — use the existing EventBlock PanResponder path.
- *   'gh'                     — use EventBlockGestureHandler (TASK-009 PoC).
+ *   'panresponder' — use the existing EventBlock PanResponder path.
+ *   'gh'           — use EventBlockGestureHandler (TASK-009, long-press drag).
+ *                    Long-press 500 ms → drag activates + haptic feedback.
+ *                    Swipe conflicts resolved — matches iPhone Calendar UX.
  *
- * To activate the GH drag PoC:
- *   Change `dragMode` below to 'gh' and restart Metro.
- *   Remember to revert before creating a TestFlight build.
+ * Default is now 'gh' so LEAD can test long-press drag immediately in dev
+ * builds. Revert to 'panresponder' before creating a TestFlight build if
+ * the feature is not yet ready for external testers.
  */
-export const dragMode: 'panresponder' | 'gh' = 'panresponder';
+export const dragMode: 'panresponder' | 'gh' = 'gh';

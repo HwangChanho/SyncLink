@@ -17,7 +17,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, TextInput, Pressable, Text, ActivityIndicator,
-  StyleSheet, Keyboard, Alert,
+  StyleSheet, Keyboard, Alert, Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -91,7 +91,33 @@ export function NLInputBar({ onEventCreated }: Props) {
    * the paywall (Sprint 14 TASK-1404).
    */
   const [quotaSheetVisible, setQuotaSheetVisible] = useState(false);
+  /**
+   * Live keyboard height (px). Tracked via Keyboard events so the bar
+   * lifts above the software keyboard on both iOS and Android.
+   *
+   * iOS:     keyboardWillShow fires before animation starts → smooth lift.
+   * Android: keyboardDidShow fires after the window has resized, but
+   *          windowSoftInputMode=adjustResize already shrinks the layout,
+   *          so we only need this as a safety net on Android.
+   * Web:     virtual keyboard is handled by the browser; no offset needed.
+   */
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const inputRef = useRef<TextInput>(null);
+
+  // ── Keyboard height tracking ─────────────────────────────────────────────────
+  useEffect(() => {
+    if (Platform.OS === 'web') return; // browser handles virtual keyboard
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, (e) =>
+      setKeyboardHeight(e.endCoordinates.height),
+    );
+    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // ── Voice recognition setup ─────────────────────────────────────────────────
 
@@ -259,7 +285,14 @@ export function NLInputBar({ onEventCreated }: Props) {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <View style={styles.container}>
+    /**
+     * paddingBottom: keyboardHeight lifts the bar above the software keyboard
+     * when it rises. On web keyboardHeight is always 0 (browser handles it).
+     * On Android, windowSoftInputMode=adjustResize already shrinks the layout,
+     * so this acts as a secondary safety net for edge cases where the resize
+     * hasn't fully propagated yet.
+     */
+    <View style={[styles.container, { paddingBottom: keyboardHeight > 0 ? keyboardHeight + 8 : undefined }]}>
       {/* Error snackbar */}
       {inputState === 'error' && errorMsg ? (
         <View style={styles.snackbar} accessibilityRole="alert">

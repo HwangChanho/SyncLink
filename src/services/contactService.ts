@@ -125,6 +125,13 @@ export function searchContacts(rows: ContactRow[], query: string): ContactRow[] 
  * Build the canonical Space invite message for a single contact.
  * Kept here (not at the call site) so every channel — share sheet,
  * mailto, kakao deep link — uses the same phrasing.
+ *
+ * DEVOPS 2026-04-28: switched invite link from synclink:// custom scheme to
+ * https://synclink.pages.dev/space/<code> (Universal Link / App Link).
+ * The custom scheme remains alive in _layout.tsx as a fallback handler, but
+ * we no longer send it out in shareable messages.
+ *
+ * Rollback: set EXPO_PUBLIC_INVITE_LINK_BASE=synclink://space to revert.
  */
 export function buildInviteMessage(
   spaceName: string,
@@ -132,10 +139,15 @@ export function buildInviteMessage(
   recipientName?: string,
 ): string {
   const greeting = recipientName ? `${recipientName}님,\n\n` : '';
+  // Use the env-overridable base so the link can be hotswapped without a rebuild.
+  const base =
+    process.env.EXPO_PUBLIC_INVITE_LINK_BASE?.replace(/\/$/, '') ??
+    'https://synclink.pages.dev';
+  const link = `${base}/space/${inviteCode}`;
   return [
     `${greeting}SyncLink Space "${spaceName}"에 초대합니다!`,
     `초대 코드: ${inviteCode}`,
-    `참여 링크: synclink://space/join/${inviteCode}`,
+    `참여 링크: ${link}`,
   ].join('\n');
 }
 

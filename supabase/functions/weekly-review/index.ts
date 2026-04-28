@@ -148,6 +148,11 @@ Deno.serve(async (req: Request) => {
       .lte('start_at', nextWeekEnd.toISOString());
 
     // ── Build prompt context ──────────────────────────────────────────────────
+    // LEAD 2026-04-28: 다국어 적용. 클라이언트가 locale 전달 (default 'ko').
+    const locale: string = (body?.locale as string) || 'ko';
+    const localeForDate: Record<string, string> = {
+      ko: 'ko-KR', en: 'en-US', zh: 'zh-CN', ja: 'ja-JP',
+    };
 
     const completedTodos = (pastTodos ?? []).filter((t: { is_completed: boolean }) => t.is_completed);
     const totalTodos     = (pastTodos ?? []).length;
@@ -158,26 +163,71 @@ Deno.serve(async (req: Request) => {
     const dayCounts: Record<string, number> = {};
     for (const ev of pastEvents ?? []) {
       const day = new Date((ev as { start_at: string }).start_at)
-        .toLocaleDateString('ko-KR', { weekday: 'long' });
+        .toLocaleDateString(localeForDate[locale] ?? 'ko-KR', { weekday: 'long' });
       dayCounts[day] = (dayCounts[day] ?? 0) + 1;
     }
     const busiestDay = Object.entries(dayCounts)
       .sort(([, a], [, b]) => b - a)[0]?.[0] ?? null;
 
+    // Locale-specific context summary + prompt
+    type ReviewLabels = {
+      pastEvents: (n: number) => string;
+      todos: (done: number, total: number) => string;
+      noTodos: string;
+      busiest: (d: string) => string;
+      upcoming: (n: number) => string;
+      prompt: (ctx: string) => string;
+    };
+
+    const labelsByLocale: Record<string, ReviewLabels> = {
+      ko: {
+        pastEvents: (n) => `지난 주 일정: ${n}개`,
+        todos: (d, t) => `할일: ${t}개 중 ${d}개 완료`,
+        noTodos: '할일 없음',
+        busiest: (d) => `가장 바쁜 날: ${d}`,
+        upcoming: (n) => `이번 주 예정 일정: ${n}개`,
+        prompt: (ctx) => `다음 정보를 바탕으로 간략하고 친근한 주간 리뷰를 한국어로 2-3문장 작성해 주세요. 격려하는 톤으로, 이모지 없이 작성해 주세요.\n\n${ctx}`,
+      },
+      en: {
+        pastEvents: (n) => `Past week events: ${n}`,
+        todos: (d, t) => `Todos: ${d}/${t} completed`,
+        noTodos: 'No todos',
+        busiest: (d) => `Busiest day: ${d}`,
+        upcoming: (n) => `Upcoming events this week: ${n}`,
+        prompt: (ctx) => `Write a short, friendly weekly review in 2-3 sentences in English based on the following data. Use an encouraging tone, no emojis.\n\n${ctx}`,
+      },
+      zh: {
+        pastEvents: (n) => `上周日程: ${n} 个`,
+        todos: (d, t) => `待办: ${t} 项中完成 ${d} 项`,
+        noTodos: '无待办事项',
+        busiest: (d) => `最忙的一天: ${d}`,
+        upcoming: (n) => `本周即将到来的日程: ${n} 个`,
+        prompt: (ctx) => `请根据以下信息用中文写一段简短友好的周回顾,2-3 句话,鼓励语气,不要使用表情符号。\n\n${ctx}`,
+      },
+      ja: {
+        pastEvents: (n) => `先週の予定: ${n}件`,
+        todos: (d, t) => `タスク: ${t}件中 ${d}件完了`,
+        noTodos: 'タスクなし',
+        busiest: (d) => `一番忙しい日: ${d}`,
+        upcoming: (n) => `今週の予定: ${n}件`,
+        prompt: (ctx) => `次の情報をもとに、短く親しみのある週間レビューを日本語で2〜3文書いてください。励ます口調で、絵文字は使わないでください。\n\n${ctx}`,
+      },
+    };
+
+    const L = labelsByLocale[locale] ?? labelsByLocale.ko;
+
     const contextSummary = [
-      `지난 주 일정: ${totalEvents}개`,
-      totalTodos > 0
-        ? `할일: ${totalTodos}개 중 ${completedTodos.length}개 완료`
-        : '할일 없음',
-      busiestDay ? `가장 바쁜 날: ${busiestDay}` : null,
-      `이번 주 예정 일정: ${upcomingCount}개`,
+      L.pastEvents(totalEvents),
+      totalTodos > 0 ? L.todos(completedTodos.length, totalTodos) : L.noTodos,
+      busiestDay ? L.busiest(busiestDay) : null,
+      L.upcoming(upcomingCount),
     ].filter(Boolean).join('. ');
 
     // ── Claude Haiku call ─────────────────────────────────────────────────────
 
     const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
     if (!apiKey) {
-      throw new Error('ANTHROPIC_API_KEY 환경 변수가 설정되지 않았습니다.');
+      throw new Error('ANTHROPIC_API_KEY missing');
     }
 
     const anthropic = new Anthropic({ apiKey });
@@ -186,10 +236,7 @@ Deno.serve(async (req: Request) => {
       model:      'claude-haiku-4-5-20251001',
       max_tokens: 200,
       messages: [
-        {
-          role: 'user',
-          content: `다음 정보를 바탕으로 간략하고 친근한 주간 리뷰를 한국어로 2-3문장 작성해 주세요. 격려하는 톤으로, 이모지 없이 작성해 주세요.\n\n${contextSummary}`,
-        },
+        { role: 'user', content: L.prompt(contextSummary) },
       ],
     });
 

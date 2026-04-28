@@ -176,10 +176,10 @@ function NLInputBarSpacer() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    // Note: background color is now dynamic (light/dark); using white here
-    // for the static stylesheet. The SafeAreaView background is updated
-    // via the colors.background from useColors() in the rendered style.
-    backgroundColor: '#FFFFFF',
+    // backgroundColor is overridden at render-time via colors.background from useColors()
+    // (see SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}).
+    // Using transparent here as the static placeholder so it is clear this value is unused.
+    backgroundColor: 'transparent',
   },
   scroll: {
     flex: 1,

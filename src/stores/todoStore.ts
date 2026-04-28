@@ -141,7 +141,7 @@ export const useTodoStore = create<TodoState>((set, get) => ({
 
       // Convert TodoSummary → Todo by filling in defaults for missing fields.
       // Full Todo data is loaded lazily when a user taps a specific item.
-      const todos: Todo[] = summaries.map(s => ({
+      const serverTodos: Todo[] = summaries.map(s => ({
         id:          s.id,
         userId:      '',        // not in summary — populated on getTodoById
         spaceId:     null,
@@ -159,7 +159,28 @@ export const useTodoStore = create<TodoState>((set, get) => ({
         updatedAt:   new Date(),
       }));
 
-      set({ todos, isLoading: false });
+      // Merge server results while preserving any in-flight optimistic state.
+      //
+      // Problem: toggleTodo() applies an optimistic flip immediately, then
+      // awaits the server. If fetchTodos() completes during that window it
+      // would replace the store with stale server data, reverting the visual
+      // toggle. (#fix-reactivity)
+      //
+      // Solution: for each server item, keep the current in-memory version
+      // when it already exists in the store — its isCompleted/completedAt may
+      // already reflect an in-flight toggle. Items that don't exist locally
+      // are added as-is from the server.
+      set(state => {
+        const localById = new Map(state.todos.map(t => [t.id, t]));
+        const merged = serverTodos.map(serverItem => {
+          const local = localById.get(serverItem.id);
+          // If the item is already in the store (possibly with an optimistic
+          // toggle applied), keep the local version; the toggleTodo callback
+          // will sync with the confirmed server value once the PATCH completes.
+          return local ?? serverItem;
+        });
+        return { todos: merged, isLoading: false };
+      });
     } catch (err) {
       set({
         isLoading: false,

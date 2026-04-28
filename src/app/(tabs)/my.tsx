@@ -37,7 +37,10 @@ import { showAlert } from '@/lib/webAlert';
 import { logError } from '@/lib/errorLogger';
 import type { SpaceSummary } from '@/types';
 import { SettingsSection } from '@/components/my/SettingsSection';
-import { LinkedAccountsSection } from '@/components/my/LinkedAccountsSection';
+// LinkedAccountsSection is intentionally not imported here.
+// SSO is handled server-side; UI exposure is disabled per LEAD directive.
+// The component itself is preserved at src/components/my/LinkedAccountsSection.tsx
+// for future re-activation when a user-facing linked-account UI is needed.
 import { ServiceInfoSection } from '@/components/my/ServiceInfoSection';
 import { AccountSection } from '@/components/my/AccountSection';
 import { DevDashboard } from '@/components/DevDashboard';
@@ -421,6 +424,8 @@ export default function MyScreen() {
               <Text style={styles.emptySpacesText}>{t('common.none')}</Text>
               <View style={styles.spaceActionsRow}>
                 <TouchableOpacity
+                  // testID="my-button-create-space" — e2e 06_space_create_invite 진입점
+                  testID="my-button-create-space"
                   style={styles.createSpaceButton}
                   onPress={() => router.push('/space/create')}
                   activeOpacity={0.7}
@@ -449,6 +454,8 @@ export default function MyScreen() {
                   create a new Space, member can join via invite code. */}
               <View style={styles.spaceActionsRow}>
                 <TouchableOpacity
+                  // testID="my-button-add-space" — e2e 06_space_create_invite 진입점 (Space 있을 때)
+                  testID="my-button-add-space"
                   style={styles.addSpaceRow}
                   onPress={() => router.push('/space/create')}
                   activeOpacity={0.7}
@@ -488,8 +495,8 @@ export default function MyScreen() {
           </View>
         )}
 
-        {/* ── Linked accounts (TASK-002 / ADR-010) ─────────────────── */}
-        <LinkedAccountsSection />
+        {/* ── Linked accounts: hidden per LEAD directive (SSO is server-side only) ── */}
+        {/* <LinkedAccountsSection /> */}
 
         <SettingsSection />
 

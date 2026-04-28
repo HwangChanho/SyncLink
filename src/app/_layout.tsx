@@ -316,9 +316,11 @@ function LockOverlay({ onUnlock }: { onUnlock: () => void }) {
         activeOpacity={0.8}
       >
         {isAuthenticating ? (
-          <ActivityIndicator color="#ffffff" />
+          // textInverse ensures contrast against the primary-colored button in both themes
+          <ActivityIndicator color={colors.textInverse} />
         ) : (
-          <Text style={lockStyles.buttonText}>{t('settings.authenticate')}</Text>
+          // textInverse: white in light, gray-900 in dark — contrasts with primary background
+          <Text style={[lockStyles.buttonText, { color: colors.textInverse }]}>{t('settings.authenticate')}</Text>
         )}
       </TouchableOpacity>
       {pinEnabled && (
@@ -369,7 +371,7 @@ const lockStyles = StyleSheet.create({
     alignItems: 'center',
   },
   buttonText: {
-    color: '#ffffff',
+    // Color overridden inline via colors.textInverse — this placeholder is unused
     fontSize: 16,
     fontWeight: '600',
   },

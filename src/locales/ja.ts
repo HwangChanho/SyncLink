@@ -159,6 +159,8 @@ const ja = {
       memo: 'メモ',
       share_section: 'Space に共有',
       current_location: '現在地を使用',
+      color: 'カラー',
+      color_default: 'デフォルトカラー',
     },
     edit_back: '戻る',
     // IDEA-019 — 予定作成完了トーストメッセージ

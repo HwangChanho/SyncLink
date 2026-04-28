@@ -190,11 +190,12 @@ function makeStyles(colors: ColorTokens) {
       width:           6,
       height:          6,
       borderRadius:    3,
-      backgroundColor: '#22C55E', // green — live
+      // success token: green-500 in light, green-400 in dark — semantic live indicator
+      backgroundColor: colors.success,
     },
     liveText: {
       ...textStyles.caption,
-      color: '#22C55E',
+      color: colors.success,
     },
     emptyContainer: {
       paddingVertical: spacing[3],

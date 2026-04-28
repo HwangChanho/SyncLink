@@ -159,6 +159,8 @@ const zh = {
       memo: '备注',
       share_section: '共享到 Space',
       current_location: '使用当前位置',
+      color: '颜色',
+      color_default: '默认颜色',
     },
     edit_back: '返回',
     // IDEA-019 — 日程创建完成 Toast 消息
@@ -256,6 +258,11 @@ const zh = {
     // IDEA-016: invite code lifecycle error messages
     invite_expired: '邀请码已过期，请向 Space 管理员申请新的邀请码。',
     invite_max_uses_reached: '邀请码已达到使用上限，请向 Space 管理员申请新的邀请码。',
+    // Sprint 28 fix: invite code hide/show/timer
+    invite_show: '查看邀请码',
+    invite_hide: '隐藏',
+    invite_hide_in: '{{time}} 后消失',
+    invite_regenerated: '已生成新的邀请码。',
     couple_full: '情侣 Space 最多只能有 2 名成员。',
     // IDEA-015 — hardcoded Korean → i18n
     create_title: '创建新 Space',

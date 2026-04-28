@@ -235,11 +235,11 @@ export async function resetDailyUsage(): Promise<void> {
  *
  * @param weekStart - Monday of the review week
  */
-function weeklyReviewCacheKey(weekStart: Date): string {
+function weeklyReviewCacheKey(weekStart: Date, locale: string): string {
   const y = weekStart.getFullYear();
   const m = String(weekStart.getMonth() + 1).padStart(2, '0');
   const d = String(weekStart.getDate()).padStart(2, '0');
-  return `synclink:weekly_review:${y}-${m}-${d}`;
+  return `synclink:weekly_review:${y}-${m}-${d}:${locale}`;
 }
 
 /** Shape stored in AsyncStorage for a cached weekly review. */
@@ -266,13 +266,16 @@ interface CachedWeeklyReview {
  * @returns Object with review text and generation timestamp
  * @throws If Edge Function returns an error
  */
-export async function getWeeklyReview(weekStart: Date): Promise<{
+export async function getWeeklyReview(
+  weekStart: Date,
+  locale: string = 'ko',
+): Promise<{
   review: string;
   generatedAt: Date;
 }> {
-  const cacheKey = weeklyReviewCacheKey(weekStart);
+  const cacheKey = weeklyReviewCacheKey(weekStart, locale);
 
-  // Step 1: check cache
+  // Step 1: check cache (locale-scoped)
   try {
     const raw = await AsyncStorage.getItem(cacheKey);
     if (raw) {
@@ -283,12 +286,12 @@ export async function getWeeklyReview(weekStart: Date): Promise<{
     // Cache miss or parse error — fall through to Edge Function call
   }
 
-  // Step 2: call Edge Function
+  // Step 2: call Edge Function (locale 전달)
   const { data, error } = await supabase.functions.invoke<{
     review: string;
     generatedAt: string;
   }>(EDGE_FUNCTIONS.WEEKLY_REVIEW, {
-    body: { weekStart: weekStart.toISOString() },
+    body: { weekStart: weekStart.toISOString(), locale },
   });
 
   if (error || !data) {

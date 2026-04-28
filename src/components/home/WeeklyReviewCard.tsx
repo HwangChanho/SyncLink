@@ -67,7 +67,7 @@ function formatWeekRange(weekStart: Date): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function WeeklyReviewCard() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
 
@@ -98,7 +98,9 @@ export function WeeklyReviewCard() {
     setError(null);
 
     try {
-      const result = await getWeeklyReview(weekStart);
+      // LEAD 2026-04-28: 현재 i18n locale 전달 → AI 응답 다국어
+      const locale = (i18n.language || 'ko').slice(0, 2);
+      const result = await getWeeklyReview(weekStart, locale);
       setReview(result.review);
       setGeneratedAt(result.generatedAt);
 

@@ -168,6 +168,8 @@ const ko = {
       memo: '메모',
       share_section: '공유할 Space',
       current_location: '현재 위치 사용',
+      color: '색상',
+      color_default: '기본 색상',
     },
     edit_back: '돌아가기',
     // IDEA-019 — 일정 생성 완료 토스트 메시지
@@ -265,6 +267,11 @@ const ko = {
     // IDEA-016: invite code lifecycle error messages
     invite_expired: '초대 코드가 만료되었습니다. Space 관리자에게 새 코드를 요청하세요.',
     invite_max_uses_reached: '초대 코드 사용 한도에 도달했습니다. Space 관리자에게 새 코드를 요청하세요.',
+    // Sprint 28 fix: invite code hide/show/timer
+    invite_show: '초대 코드 보기',
+    invite_hide: '숨기기',
+    invite_hide_in: '{{time}} 후 사라짐',
+    invite_regenerated: '새 초대 코드가 생성되었습니다.',
     couple_full: '커플 Space는 최대 2명까지 참여할 수 있습니다.',
     // IDEA-015 — 하드코딩 한국어 i18n 정비
     create_title: '새 Space 만들기',

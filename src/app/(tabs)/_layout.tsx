@@ -71,8 +71,10 @@ export default function TabLayout() {
           paddingVertical: 0,
           marginVertical: 0,
         },
-        // Language picker button appears on every tab's top-right header.
-        headerRight: () => <LanguageButton />,
+        // Pass headerFg so the button color matches the header title/tint
+        // when a custom accent background is active (Appearance settings).
+        // Falls back to colors.textPrimary inside LanguageButton when no accentHex.
+        headerRight: () => <LanguageButton tintColor={headerFg} />,
         tabBarActiveTintColor: colors.tabActive,
         tabBarInactiveTintColor: colors.tabInactive,
         tabBarStyle: {

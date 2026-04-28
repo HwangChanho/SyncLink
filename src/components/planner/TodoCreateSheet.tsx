@@ -256,8 +256,12 @@ export function TodoCreateSheet({
           initialValue={
             dueDate ??
             (() => {
+              // LEAD 2026-04-28: 현재 시간 기준 (이전엔 09:00 고정).
               const d = new Date();
-              d.setHours(9, 0, 0, 0);
+              const m = d.getMinutes();
+              const round = m < 30 ? 30 : 0;
+              const off = m < 30 ? 0 : 1;
+              d.setHours(d.getHours() + off, round, 0, 0);
               return d;
             })()
           }

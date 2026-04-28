@@ -397,8 +397,9 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     ...textStyles.body, color: colors.textPrimary,
     backgroundColor: colors.surface,
   },
-  devButton: { backgroundColor: '#555' },
-  devButtonText: { ...textStyles.labelLg, color: '#fff' },
+  // Dev-only shortcut button — uses surfaceAlt for neutral "dev tool" visual
+  devButton: { backgroundColor: colors.surfaceAlt },
+  devButtonText: { ...textStyles.labelLg, color: colors.textPrimary },
   legal: {
     ...textStyles.caption, color: colors.textTertiary,
     textAlign: 'center', marginTop: spacing[8], paddingHorizontal: spacing[4],
