@@ -13,8 +13,8 @@
 # 한계 (Maestro 제약):
 #   - Maestro는 long-press + pan 조합을 네이티브 gesture-handler와 완벽하게
 #     맞추기 어렵다. 실 drag 완료(DB 변경)는 실기 수동 QA로 별도 확인.
-#   - DRAG_MODE_GH 플래그가 활성화된 dev 빌드에서만 event-block-gh testID 표시.
-#     production 빌드에서는 EventBlock(PanResponder)이 렌더링된다.
+#   - Phase 1.1 이후 DRAG_MODE_GH 플래그는 제거됨. 모든 빌드에서 RNGH 단일
+#     gesture 시스템을 사용하므로 event-block-gh testID는 항상 렌더링된다.
 #
 # 실행:
 #   TEST_EMAIL=test@example.com TEST_PASSWORD=secret \
@@ -69,7 +69,7 @@ env:
 - takeScreenshot: screenshots/drag_03_week_view
 
 # ── 4. 이벤트 블록 드래그 시도 ──────────────────────────────────────────────
-# DRAG_MODE_GH dev 빌드: event-block-gh testID를 갖는 블록 존재 시 drag 시도.
+# event-block-gh testID를 갖는 블록 존재 시 drag 시도.
 # 블록이 없으면(이벤트 없는 날) skip.
 - runFlow:
     when:

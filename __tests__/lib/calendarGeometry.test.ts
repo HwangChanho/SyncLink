@@ -172,6 +172,76 @@ describe('computeRescheduleDelta', () => {
       // Guard in computeRescheduleDelta: columnWidth > 0 check
       expect(dayDelta).toBe(0);
     });
+
+    it('negative columnWidth defensively yields dayDelta=0', () => {
+      // The columnWidth > 0 guard also catches a corrupted layout where the
+      // measurement returned a negative number. Without this we'd be dividing
+      // by a negative and producing nonsense day deltas.
+      const { dayDelta } = computeRescheduleDelta({
+        dx: 100,
+        dy: 0,
+        columnWidth: -50,
+        viewMode: 'week',
+      });
+      expect(dayDelta).toBe(0);
+    });
+  });
+
+  // ── Snap boundary at exactly half a snap step ────────────────────────────
+
+  describe('exact snap boundaries', () => {
+    it('dy = 15 (exactly half a 30-min snap) snaps up to 30', () => {
+      // Math.round(0.5) = 1 in JavaScript (banker's rounding does NOT apply
+      // here — JS spec rounds half-to-even is NOT what Math.round does).
+      const { minuteDelta } = computeRescheduleDelta({
+        dx: 0,
+        dy: 15,
+        columnWidth: COLUMN_WIDTH,
+      });
+      expect(minuteDelta).toBe(30);
+    });
+
+    it('dy = -15 with default 30-min snap rounds to 0 (no shift)', () => {
+      // JS quirk: Math.round(-0.5) === -0 (rounds toward +Infinity at .5).
+      // -0 multiplied by 30 stays -0, which is still numerically zero — the
+      // event position does not shift. We use toBeCloseTo to avoid Object.is
+      // strictness around the negative-zero edge case.
+      const { minuteDelta } = computeRescheduleDelta({
+        dx: 0,
+        dy: -15,
+        columnWidth: COLUMN_WIDTH,
+      });
+      expect(minuteDelta).toBeCloseTo(0);
+    });
+  });
+});
+
+// ─── applyDelta: cross-midnight from minuteDelta alone ───────────────────────
+
+describe('applyDelta — cross-midnight via minuteDelta', () => {
+  it('23:30→00:30 next day via minuteDelta=+60 only', () => {
+    const startAt = new Date(2026, 0, 12, 23, 30, 0, 0); // Mon Jan 12 23:30
+    const endAt   = new Date(2026, 0, 13,  0, 30, 0, 0); // Tue Jan 13 00:30
+    const { newStartAt, newEndAt } = applyDelta(startAt, endAt, 0, 60);
+    // Should land at 00:30 Jan 13 → 01:30 Jan 13
+    expect(newStartAt.getDate()).toBe(13);
+    expect(newStartAt.getHours()).toBe(0);
+    expect(newStartAt.getMinutes()).toBe(30);
+    expect(newEndAt.getDate()).toBe(13);
+    expect(newEndAt.getHours()).toBe(1);
+    expect(newEndAt.getMinutes()).toBe(30);
+  });
+
+  it('00:30→23:30 previous day via minuteDelta=-60', () => {
+    const startAt = new Date(2026, 0, 13,  0, 30, 0, 0); // Tue Jan 13 00:30
+    const endAt   = new Date(2026, 0, 13,  1, 30, 0, 0); // Tue Jan 13 01:30
+    const { newStartAt, newEndAt } = applyDelta(startAt, endAt, 0, -60);
+    expect(newStartAt.getDate()).toBe(12);
+    expect(newStartAt.getHours()).toBe(23);
+    expect(newStartAt.getMinutes()).toBe(30);
+    expect(newEndAt.getDate()).toBe(13);
+    expect(newEndAt.getHours()).toBe(0);
+    expect(newEndAt.getMinutes()).toBe(30);
   });
 });
 
