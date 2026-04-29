@@ -17,7 +17,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, TextInput, Pressable, Text, ActivityIndicator,
-  StyleSheet, Keyboard, Alert, Platform,
+  StyleSheet, Keyboard, Alert, Platform, ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -86,6 +86,8 @@ export function NLInputBar({ onEventCreated }: Props) {
   const [parseResult, setParseResult] = useState<NLParseResult | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [isListening, setIsListening] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
    * When true, the QuotaExceededSheet is displayed instead of routing to
    * the paywall (Sprint 14 TASK-1404).
@@ -293,6 +295,29 @@ export function NLInputBar({ onEventCreated }: Props) {
      * hasn't fully propagated yet.
      */
     <View style={[styles.container, { paddingBottom: keyboardHeight > 0 ? keyboardHeight + 8 : undefined }]}>
+      {/* Suggestion chips — shown when focused with empty text */}
+      {isFocused && !text && inputState === 'idle' && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="always"
+          contentContainerStyle={styles.chipsRow}
+        >
+          {(t('nl.suggestions', { returnObjects: true }) as string[]).map((chip, i) => (
+            <Pressable
+              key={i}
+              style={styles.chip}
+              onPress={() => {
+                setText(chip);
+                inputRef.current?.focus();
+              }}
+            >
+              <Text style={styles.chipText}>{chip}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
+
       {/* Error snackbar */}
       {inputState === 'error' && errorMsg ? (
         <View style={styles.snackbar} accessibilityRole="alert">
@@ -330,6 +355,14 @@ export function NLInputBar({ onEventCreated }: Props) {
           editable={inputState !== 'loading'}
           multiline={false}
           maxLength={200}
+          onFocus={() => {
+            if (blurTimer.current) clearTimeout(blurTimer.current);
+            setIsFocused(true);
+          }}
+          onBlur={() => {
+            // Delay so chip Pressable onPress fires before focus is lost
+            blurTimer.current = setTimeout(() => setIsFocused(false), 200);
+          }}
         />
 
         <Pressable
@@ -449,6 +482,22 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     ...(textStyles.bodySm as object),
     color: colors.textInverse,
     flex: 1,
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    gap: spacing[2],
+    paddingHorizontal: spacing[1],
+    paddingVertical: spacing[1],
+  },
+  chip: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1.5],
+  },
+  chipText: {
+    ...(textStyles.labelSm as object),
+    color: colors.primary,
   },
   });
 }

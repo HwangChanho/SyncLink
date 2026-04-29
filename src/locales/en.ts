@@ -420,6 +420,7 @@ const en = {
 
   nl: {
     placeholder: 'Add an event in plain language…',
+    suggestions: ['Meeting tomorrow 2pm', 'Dinner Saturday 8pm', 'Weekly workout Friday'],
     ai_limit: 'AI usage limit reached.',
     save_failed: 'Failed to save event. Please try again.',
     error: 'An error occurred.',

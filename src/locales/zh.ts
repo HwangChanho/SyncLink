@@ -420,6 +420,7 @@ const zh = {
 
   nl: {
     placeholder: '用自然语言添加日程…',
+    suggestions: ['明天下午2点开会', '周六晚8点聚餐', '每周五健身'],
     ai_limit: 'AI 使用次数已达上限。',
     save_failed: '日程保存失败，请重试。',
     error: '发生错误。',
