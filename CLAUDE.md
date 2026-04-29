@@ -1,6 +1,6 @@
 # SyncDay — Project Context
 
-모든 Claude Code 세션 + 에이전트(LEAD, DEV, QA)가 공통으로 참조하는 프로젝트 컨텍스트.
+모든 Claude Code 세션 + 에이전트(LEAD, DEV, QA, DEVOPS)가 공통으로 참조하는 프로젝트 컨텍스트.
 
 ## 프로젝트 개요
 
@@ -27,7 +27,7 @@
 - **iOS Simulator + Android AVD 동시 실행 절대 금지**
 - **Android 빌드는 EAS Build(클라우드) 전담** — 로컬 `expo run:android` 금지
 - `/qa all` = ios-sim → web 순차 실행. android-sim 병렬 spawn 금지
-- 에이전트 동시 실행 상한: **최대 2개** (ORCHESTRATOR + 작업 에이전트 1개)
+- 에이전트 동시 실행 상한: **최대 2개** (메인 세션 + 작업 에이전트 1개)
 - 빌드 중(`expo run:ios`, `fastlane beta`) 다른 Heavy 작업 금지
 
 상세 규칙: `docs/DEPLOY_RULES.md`
@@ -52,23 +52,26 @@ docs/
   handoffs/     ← 스프린트별 에이전트 재시작 프롬프트
   escalations/  ← Level 4 사안만
   plans/        ← 큰 작업 plan 문서
-  queue/        ← todo/in_progress/done/blocked/escalated
+  queue/        ← todo/done
 ```
 
 ## 에이전트 역할
 
 | 에이전트 | 담당 |
 |---------|------|
-| **LEAD (사용자)** | 스프린트 결정, 아키텍처/BM 승인, Level 4 승인 |
-| **ORCHESTRATOR** | 에이전트 spawn, 진행 취합, 리스크 리포트 |
-| DEV | `src/` 기능 구현 |
+| **LEAD (사용자)** | 스프린트 결정, 아키텍처 승인, Level 4 승인 |
+| DEV | `src/` 기능 구현, 큰 변경 직전에 plan 파일 작성 |
 | QA | `__tests__/`, `docs/issues/`, e2e |
 | qa-{ios-sim, web} | 시뮬 회귀 (**순차**) — `/qa ios-sim` → `/qa web` |
 | qa-{android-sim, ios-device, android-device} | 개별 실행 (뮤텍스 주의) |
-| DEVOPS | 빌드/배포, CI/CD |
-| ARCHITECT | ADR 작성, 설계 리뷰 |
+| DEVOPS | 빌드/배포, CI/CD, 인증서 관리 |
 
 Sub-agent 정의: `.claude/agents/` | QA 디스패처: `.claude/commands/qa.md`
+
+**비용 가드레일 (Max $100 플랜)**: 에이전트 spawn은 cold start로 컨텍스트를
+다시 빌드해 비용이 큼. PM/IDEATION/TRIAGE/ARCHITECT/ORCHESTRATOR 같은
+별도 에이전트는 두지 않고, 그 책임은 LEAD(사용자) 또는 메인 세션이 직접
+수행. 정말 병렬 탐색이 필요할 때만 Explore 또는 일반 에이전트 사용.
 
 ## 자율성 레벨
 
@@ -94,9 +97,8 @@ Sub-agent 정의: `.claude/agents/` | QA 디스패처: `.claude/commands/qa.md`
 ## 세션 시작 루틴
 
 1. `docs/handoffs/sprint-N/LEAD.md` 읽어 컨텍스트 복원
-2. `docs/escalations/` 확인 (최우선)
-3. `docs/issues/` 미해결 이슈 확인
-4. 미완료 태스크부터 즉시 시작
+2. `docs/issues/` 미해결 이슈 확인
+3. 미완료 태스크부터 즉시 시작
 
 ## 핸드오프 규칙
 
