@@ -436,6 +436,10 @@ const en = {
     empty: 'Pull to refresh and generate a review.',
     regenerate: 'Regenerate',
     regen_failed: 'Failed to regenerate.',
+    title: "This Week's Review",
+    refresh_label: 'Refresh weekly review',
+    generated_at: 'Generated {{date}}',
+    free_plan_limit: 'Free plan · 1 generation/month',
   },
 
   settings: {

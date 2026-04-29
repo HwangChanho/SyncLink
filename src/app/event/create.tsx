@@ -1087,7 +1087,7 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   // Scroll
   scroll: { flex: 1 },
   scrollContent: {
-    paddingBottom: spacing[10],
+    paddingBottom: spacing[20],
   },
 
   // Title input
@@ -1246,7 +1246,7 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   inlineInput: {
     ...textStyles.body,
     color: colors.textPrimary,
-    paddingVertical: spacing[1],
+    paddingVertical: spacing[2],
     flex: 1,
   },
   multilineInput: {

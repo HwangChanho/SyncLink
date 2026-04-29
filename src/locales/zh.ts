@@ -432,6 +432,10 @@ const zh = {
     empty: '下拉刷新以生成周报。',
     regenerate: '重新生成',
     regen_failed: '重新生成失败。',
+    title: '本周回顾',
+    refresh_label: '刷新周报',
+    generated_at: '{{date}} 生成',
+    free_plan_limit: '免费计划 · 每月1次',
   },
 
   settings: {

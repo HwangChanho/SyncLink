@@ -427,6 +427,10 @@ const ja = {
     empty: '更新してレビューを生成してください。',
     regenerate: '再生成',
     regen_failed: '再生成に失敗しました。',
+    title: '今週のレビュー',
+    refresh_label: '週次レビューを更新',
+    generated_at: '{{date}} 生成',
+    free_plan_limit: '無料プラン · 月1回生成',
   },
 
   settings: {

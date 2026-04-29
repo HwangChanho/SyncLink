@@ -445,6 +445,10 @@ const ko = {
     empty: '이번 주 리뷰가 없습니다.',
     regenerate: '재생성',
     regen_failed: '재생성에 실패했습니다.',
+    title: '이번 주 리뷰',
+    refresh_label: '주간 리뷰 새로고침',
+    generated_at: '{{date}} 생성',
+    free_plan_limit: '무료 플랜 · 월 1회 생성',
   },
 
   settings: {

@@ -50,16 +50,22 @@ function getMondayOfWeek(date: Date = new Date()): Date {
 }
 
 /**
- * Formats a week range as "M월 D일 (월) ~ M월 D일 (일)".
+ * Formats a week range using the active i18n locale.
  *
  * @param weekStart - Monday of the week
- * @returns Human-readable week range string in Korean
+ * @param locale    - BCP-47 locale tag (e.g. 'ko', 'en', 'ja', 'zh')
+ * @returns Human-readable week range string
  */
-function formatWeekRange(weekStart: Date): string {
+function formatWeekRange(weekStart: Date, locale: string): string {
   const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000);
 
+  const localeMap: Record<string, string> = {
+    ko: 'ko-KR', en: 'en-US', ja: 'ja-JP', zh: 'zh-CN',
+  };
+  const tag = localeMap[locale] ?? localeMap['ko'];
+
   const fmt = (d: Date) =>
-    d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' });
+    d.toLocaleDateString(tag, { month: 'long', day: 'numeric', weekday: 'short' });
 
   return `${fmt(weekStart)} ~ ${fmt(weekEnd)}`;
 }
@@ -133,8 +139,8 @@ export function WeeklyReviewCard() {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>이번 주 리뷰</Text>
-          <Text style={styles.weekRange}>{formatWeekRange(weekStart)}</Text>
+          <Text style={styles.title}>{t('review.title')}</Text>
+          <Text style={styles.weekRange}>{formatWeekRange(weekStart, i18n.language)}</Text>
         </View>
 
         {/* Refresh button */}
@@ -143,7 +149,7 @@ export function WeeklyReviewCard() {
             style={styles.refreshButton}
             onPress={() => loadReview(true)}
             activeOpacity={0.7}
-            accessibilityLabel="주간 리뷰 새로고침"
+            accessibilityLabel={t('review.refresh_label')}
           >
             <Text style={styles.refreshText}>{t('common.refresh')}</Text>
           </TouchableOpacity>
@@ -179,16 +185,19 @@ export function WeeklyReviewCard() {
           <Text style={styles.reviewText}>{review}</Text>
           {generatedAt && (
             <Text style={styles.generatedAtText}>
-              {generatedAt.toLocaleDateString('ko-KR', {
-                month: 'short', day: 'numeric',
-              })} 생성
+              {t('review.generated_at', {
+                date: generatedAt.toLocaleDateString(
+                  { ko: 'ko-KR', en: 'en-US', ja: 'ja-JP', zh: 'zh-CN' }[i18n.language] ?? 'ko-KR',
+                  { month: 'short', day: 'numeric' },
+                ),
+              })}
             </Text>
           )}
         </View>
       ) : (
         // Empty state (no review generated yet, or error suppressed).
         <View style={styles.emptyContainer}>
-          <Text style={styles.reviewText}>이번 주 리뷰가 없습니다.</Text>
+          <Text style={styles.reviewText}>{t('review.empty')}</Text>
         </View>
       )}
 
@@ -196,7 +205,7 @@ export function WeeklyReviewCard() {
       {plan === 'free' && (
         <View style={styles.freeIndicator}>
           <Text style={styles.freeIndicatorText}>
-            무료 플랜 · 월 1회 생성
+            {t('review.free_plan_limit')}
           </Text>
         </View>
       )}

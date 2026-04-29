@@ -519,10 +519,15 @@ export default function CalendarScreen() {
 
   const panResponder = useRef(
     PanResponder.create({
-      // Only claim the gesture if it's predominantly horizontal
+      // Only claim the gesture if it's predominantly horizontal AND fast enough.
+      // The velocity check (vx > 0.3) distinguishes a quick swipe-to-navigate
+      // from a slow post-long-press drag (RNGH drag-to-reschedule starts from
+      // rest, vx ≈ 0). Without this check the PanResponder intercepts RNGH
+      // drags and the event snaps back instead of moving.
       onMoveShouldSetPanResponder: (_, gs) =>
         Math.abs(gs.dx) > Math.abs(gs.dy) * SWIPE_RATIO &&
-        Math.abs(gs.dx) > 10,
+        Math.abs(gs.dx) > 10 &&
+        Math.abs(gs.vx) > 0.3,
 
       onPanResponderMove: (_, gs) => {
         // Follow the finger with mild rubber-banding so over-pull feels natural.
