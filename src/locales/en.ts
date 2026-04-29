@@ -176,6 +176,7 @@ const en = {
 
   todo: {
     today_list_title: "Today's Todos",
+    today_empty: 'No todos today',
     delete: 'Delete Todo',
     label: 'Todo',
     priority: {

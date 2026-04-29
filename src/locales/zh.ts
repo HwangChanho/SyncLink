@@ -176,6 +176,7 @@ const zh = {
 
   todo: {
     today_list_title: '今日待办',
+    today_empty: '今天没有待办',
     delete: '删除待办',
     label: '待办',
     priority: {

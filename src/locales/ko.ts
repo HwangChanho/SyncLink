@@ -185,6 +185,7 @@ const ko = {
 
   todo: {
     today_list_title: '오늘 할일',
+    today_empty: '오늘 할일이 없어요',
     delete: '할일 삭제',
     label: '할일',
     priority: {

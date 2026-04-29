@@ -7,7 +7,7 @@
  * TASK-600 (Sprint 6): 다크모드 대응 — makeStyles(colors) 패턴으로 교체
  */
 
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Vibration } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTodoStore } from '@/stores/todoStore';
 import type { Todo } from '@/types';
@@ -109,7 +109,7 @@ export function TodayTodoList() {
 
       {todayTodos.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>{t('todo.today_list_title')} {t('common.none')}</Text>
+          <Text style={styles.emptyText}>{t('todo.today_empty')}</Text>
         </View>
       ) : (
         <View style={styles.list}>
@@ -118,7 +118,10 @@ export function TodayTodoList() {
             <TodoRow
               key={todo.id}
               todo={todo}
-              onToggle={() => void toggleTodo(todo.id)}
+              onToggle={() => {
+                Vibration.vibrate([0, 20]);
+                void toggleTodo(todo.id);
+              }}
               colors={colors}
               styles={styles}
             />
@@ -128,7 +131,10 @@ export function TodayTodoList() {
             <TodoRow
               key={todo.id}
               todo={todo}
-              onToggle={() => void toggleTodo(todo.id)}
+              onToggle={() => {
+                Vibration.vibrate([0, 20]);
+                void toggleTodo(todo.id);
+              }}
               colors={colors}
               styles={styles}
             />

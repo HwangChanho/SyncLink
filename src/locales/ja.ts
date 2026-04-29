@@ -176,6 +176,7 @@ const ja = {
 
   todo: {
     today_list_title: '今日のタスク',
+    today_empty: '今日のタスクはありません',
     delete: 'タスクを削除',
     label: 'タスク',
     priority: {
