@@ -13,7 +13,7 @@
  * TASK-904 (Sprint 9)
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -53,6 +53,12 @@ export function DateSuggestionCard() {
   const colors = useColors();
   const styles = makeStyles(colors);
 
+  // Ref so the latest language is always available inside the callback
+  // without making i18n.language a dep (which would re-call the API on
+  // every language switch).
+  const localeRef = useRef(i18n.language);
+  localeRef.current = i18n.language;
+
   const { spaces } = useSpaceStore();
 
   const [result, setResult] = useState<DateSuggestionResult | null>(null);
@@ -71,7 +77,7 @@ export function DateSuggestionCard() {
     setHasError(false);
     try {
       const weekStart = getCurrentWeekMonday();
-      const locale = (i18n.language || 'ko').slice(0, 2);
+      const locale = (localeRef.current || 'ko').slice(0, 2);
       const data = await getDateSuggestion(spaceId, weekStart, locale);
       setResult(data);
     } catch {
@@ -79,7 +85,7 @@ export function DateSuggestionCard() {
     } finally {
       setIsLoading(false);
     }
-  }, [spaces, i18n.language]);
+  }, [spaces]);
 
   useEffect(() => {
     void fetchSuggestion();
