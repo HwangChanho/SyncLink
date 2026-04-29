@@ -21,14 +21,21 @@ import { textStyles, fontSize } from '@/constants/typography';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const WEEKDAY_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
+const LOCALE_MAP: Record<string, string> = {
+  ko: 'ko-KR',
+  en: 'en-US',
+  ja: 'ja-JP',
+  zh: 'zh-CN',
+};
 
-/** Formats today's date as "4월 20일 (일)" */
-function formatTodayKo(date: Date): string {
-  const month   = date.getMonth() + 1;
-  const day     = date.getDate();
-  const weekday = WEEKDAY_KO[date.getDay()];
-  return `${month}월 ${day}일 (${weekday})`;
+/** Formats today's date in locale-aware form using Intl.DateTimeFormat. */
+function formatTodayLocale(date: Date, i18nLang: string): string {
+  const locale = LOCALE_MAP[i18nLang] ?? 'en-US';
+  return new Intl.DateTimeFormat(locale, {
+    month: 'long',
+    day:   'numeric',
+    weekday: 'short',
+  }).format(date);
 }
 
 // getGreeting is now inside the component using i18n.
@@ -36,7 +43,7 @@ function formatTodayKo(date: Date): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function HomeHeader() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const colors    = useColors();
   const styles    = makeStyles(colors);
   const user      = useAuthStore(s => s.user);
@@ -52,7 +59,7 @@ export function HomeHeader() {
   }
 
   const greeting  = getGreeting();
-  const dateLabel = formatTodayKo(new Date());
+  const dateLabel = formatTodayLocale(new Date(), i18n.language);
 
   return (
     <View style={styles.container}>

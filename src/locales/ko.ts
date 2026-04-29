@@ -144,6 +144,9 @@ const ko = {
     today_list_title: '오늘 일정',
     today_empty: '오늘 일정이 없어요',
     add: '일정 추가하기',
+    upcoming: '다가오는 일정',
+    upcoming_empty: '다가오는 일정이 없어요',
+    event_count: '{{count}}개',
     reminder: '일정 리마인더',
     reminder_desc: '일정 30분 전에 알림을 받습니다.',
     // Sprint 26 R3 — Space 멤버 일정 충돌 경고
@@ -260,6 +263,11 @@ const ko = {
     need_name: '이름 필요',
     activity_notification: 'Space 활동 알림',
     activity_notification_desc: 'Space 멤버가 공유 일정을 추가하거나 수정할 때 알림을 받습니다.',
+    activity_shared: '"{{title}}" 일정이 공유되었습니다',
+    activity_updated: '"{{title}}" 일정이 수정되었습니다',
+    activity_removed: '"{{title}}" 일정 공유가 취소되었습니다',
+    live: '실시간',
+    activity_empty: 'Space 활동이 없습니다',
     // IDEA-014 — Web 초대 UX 보강
     invite_email: '이메일로 초대 보내기',
     invite_qr: 'QR 코드 보기',

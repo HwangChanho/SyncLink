@@ -140,6 +140,9 @@ const zh = {
     today_list_title: '今日日程',
     today_empty: '今天没有日程',
     add: '添加日程',
+    upcoming: '即将到来',
+    upcoming_empty: '暂无即将到来的日程',
+    event_count: '{{count}}个日程',
     reminder: '日程提醒',
     reminder_desc: '在日程开始前30分钟收到通知。',
     // Sprint 26 R3 — Space 成员日程冲突警告
@@ -250,6 +253,11 @@ const zh = {
     join_fail_desc: '加入失败',
     need_name: '需要名称',
     activity_notification: 'Space 动态通知',
+    activity_shared: '"{{title}}"已共享',
+    activity_updated: '"{{title}}"已更新',
+    activity_removed: '"{{title}}"的共享已取消',
+    live: '实时',
+    activity_empty: '暂无Space动态',
     // IDEA-014 — Web 邀请 UX 增强
     invite_email: '通过邮件邀请',
     invite_qr: '显示二维码',

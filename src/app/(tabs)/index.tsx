@@ -29,9 +29,10 @@ import { HomeHeader }         from '@/components/home/HomeHeader';
 import { TodayEventList }     from '@/components/home/TodayEventList';
 import { TodayTodoList }      from '@/components/home/TodayTodoList';
 import { SpaceActivityFeed }  from '@/components/home/SpaceActivityFeed';
-import { WeeklyReviewCard }   from '@/components/home/WeeklyReviewCard';
-import { WeatherWidget }      from '@/components/home/WeatherWidget';
-import { DateSuggestionCard } from '@/components/home/DateSuggestionCard';
+import { WeeklyReviewCard }    from '@/components/home/WeeklyReviewCard';
+import { WeatherWidget }       from '@/components/home/WeatherWidget';
+import { DateSuggestionCard }  from '@/components/home/DateSuggestionCard';
+import { UpcomingEventsCard }  from '@/components/home/UpcomingEventsCard';
 import { useColors } from '@/hooks/useColors';
 import { useTranslation } from 'react-i18next';
 import { spacing } from '@/constants/spacing';
@@ -40,11 +41,16 @@ import type { DateRange } from '@/types';
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
-/** Returns a DateRange spanning only today (start = 00:00, end = 23:59). */
-function todayRange(): DateRange {
+/**
+ * Returns a DateRange from today 00:00 through 7 days later at 23:59.
+ * The wider window populates eventsByDate for UpcomingEventsCard without
+ * a separate fetch.
+ */
+function homeRange(): DateRange {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
-  const end = new Date();
+  const end = new Date(start);
+  end.setDate(end.getDate() + 7);
   end.setHours(23, 59, 59, 999);
   return { start, end };
 }
@@ -62,7 +68,7 @@ export default function HomeScreen() {
 
   // ── Load today's data on mount ─────────────────────────────────────────
   const loadTodayData = () => {
-    const range = todayRange();
+    const range = homeRange();
     void fetchEvents(range);
     void fetchTodos({
       contentType: 'todo',
@@ -149,6 +155,9 @@ export default function HomeScreen() {
 
         {/* Today's events */}
         <TodayEventList />
+
+        {/* Upcoming events (tomorrow → +6 days) */}
+        <UpcomingEventsCard />
 
         {/* Today's todos */}
         <TodayTodoList />

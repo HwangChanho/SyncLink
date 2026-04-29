@@ -87,7 +87,7 @@ export function TodayEventList() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>{t('event.today_list_title')}</Text>
         <Text style={styles.headerCount}>
-          {sortedEvents.length > 0 ? `${sortedEvents.length}개` : ''}
+          {sortedEvents.length > 0 ? t('event.event_count', { count: sortedEvents.length }) : ''}
         </Text>
       </View>
 

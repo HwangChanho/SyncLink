@@ -140,6 +140,9 @@ const en = {
     today_list_title: "Today's Events",
     today_empty: 'No events today',
     add: 'Add event',
+    upcoming: 'Upcoming',
+    upcoming_empty: 'No upcoming events',
+    event_count: '{{count}} events',
     reminder: 'Event Reminder',
     reminder_desc: 'Receive a notification 30 minutes before the event.',
     // Sprint 26 R3 — Space member schedule conflict warning
@@ -250,6 +253,11 @@ const en = {
     join_fail_desc: 'Failed to join',
     need_name: 'Name Required',
     activity_notification: 'Space Activity',
+    activity_shared: '"{{title}}" was shared',
+    activity_updated: '"{{title}}" was updated',
+    activity_removed: 'Sharing "{{title}}" was removed',
+    live: 'Live',
+    activity_empty: 'No Space activity',
     // IDEA-014 — Web invite UX enhancement
     invite_email: 'Send Email Invite',
     invite_qr: 'Show QR Code',

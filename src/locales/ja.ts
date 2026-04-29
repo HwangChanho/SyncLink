@@ -140,6 +140,9 @@ const ja = {
     today_list_title: '今日のイベント',
     today_empty: '今日の予定はありません',
     add: '予定を追加',
+    upcoming: '近日の予定',
+    upcoming_empty: '近日の予定はありません',
+    event_count: '{{count}}件',
     reminder: 'イベントリマインダー',
     reminder_desc: 'イベントの30分前に通知を受け取ります。',
     // Sprint 26 R3 — Space メンバーの予定重複警告
@@ -250,6 +253,11 @@ const ja = {
     join_fail_desc: '参加に失敗しました',
     need_name: '名前が必要です',
     activity_notification: 'Space アクティビティ',
+    activity_shared: '"{{title}}"が共有されました',
+    activity_updated: '"{{title}}"が更新されました',
+    activity_removed: '"{{title}}"の共有が取り消されました',
+    live: 'リアルタイム',
+    activity_empty: 'Space アクティビティはありません',
     // IDEA-014 — Web 招待 UX 強化
     invite_email: 'メールで招待を送る',
     invite_qr: 'QR コードを表示',

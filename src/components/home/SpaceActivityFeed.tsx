@@ -35,13 +35,16 @@ interface ActivityItem {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Generates a human-readable activity label. */
-function activityLabel(item: ActivityItem): string {
-  switch (item.type) {
-    case 'shared':  return `"${item.event.title}" 일정이 공유되었습니다`;
-    case 'updated': return `"${item.event.title}" 일정이 수정되었습니다`;
-    case 'removed': return `"${item.event.title}" 일정 공유가 취소되었습니다`;
-  }
+/** Generates a human-readable activity label using i18n. */
+function useActivityLabel() {
+  const { t } = useTranslation();
+  return (item: ActivityItem): string => {
+    switch (item.type) {
+      case 'shared':  return t('space.activity_shared',  { title: item.event.title });
+      case 'updated': return t('space.activity_updated', { title: item.event.title });
+      case 'removed': return t('space.activity_removed', { title: item.event.title });
+    }
+  };
 }
 
 /** Formats timestamp as relative string (방금, N분 전, etc.) */
@@ -66,6 +69,7 @@ export function SpaceActivityFeed() {
   const styles = makeStyles(colors);
   const router = useRouter();
   const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const getActivityLabel = useActivityLabel();
 
   // ── Add item to feed (newest first, capped at MAX_ITEMS) ──────────────────
   const addActivity = useCallback((
@@ -112,13 +116,13 @@ export function SpaceActivityFeed() {
         <Text style={styles.headerTitle}>{t('space.activity_notification')}</Text>
         <View style={styles.liveIndicator}>
           <View style={styles.liveDot} />
-          <Text style={styles.liveText}>실시간</Text>
+          <Text style={styles.liveText}>{t('space.live')}</Text>
         </View>
       </View>
 
       {activities.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>{t('space.activity_notification')} {t('common.none')}</Text>
+          <Text style={styles.emptyText}>{t('space.activity_empty')}</Text>
         </View>
       ) : (
         <View style={styles.list}>
@@ -144,7 +148,7 @@ export function SpaceActivityFeed() {
 
               <View style={styles.activityContent}>
                 <Text style={styles.activityLabel} numberOfLines={2}>
-                  {activityLabel(item)}
+                  {getActivityLabel(item)}
                 </Text>
                 <Text style={styles.activityTime}>
                   {formatRelative(item.timestamp)}
