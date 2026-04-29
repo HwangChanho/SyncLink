@@ -7,9 +7,10 @@
  * TASK-600 (Sprint 6): 다크모드 대응 — makeStyles(colors) 패턴으로 교체
  */
 
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { Ionicons } from '@expo/vector-icons';
 import { useEventStore } from '@/stores/eventStore';
 import type { EventSummary } from '@/types';
 import { useColors } from '@/hooks/useColors';
@@ -91,9 +92,19 @@ export function TodayEventList() {
       </View>
 
       {sortedEvents.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>{t('event.today_list_title')} {t('common.none')}</Text>
-        </View>
+        <Pressable
+          style={styles.emptyContainer}
+          onPress={() => router.push('/event/create')}
+          accessibilityRole="button"
+          accessibilityLabel={t('event.add')}
+        >
+          <Ionicons name="calendar-outline" size={28} color={colors.textTertiary} />
+          <Text style={styles.emptyText}>{t('event.today_empty')}</Text>
+          <View style={styles.emptyAddRow}>
+            <Ionicons name="add-circle-outline" size={16} color={colors.primary} />
+            <Text style={styles.emptyAddText}>{t('event.add')}</Text>
+          </View>
+        </Pressable>
       ) : (
         <ScrollView
           horizontal={false}
@@ -183,12 +194,28 @@ function makeStyles(colors: ColorTokens) {
       color: colors.primary,
     },
     emptyContainer: {
-      paddingVertical: spacing[3],
-      alignItems:      'center',
+      paddingVertical:   spacing[5],
+      alignItems:        'center',
+      gap:               spacing[2],
+      backgroundColor:   colors.surface,
+      borderRadius:      radius.md,
+      borderWidth:       1,
+      borderColor:       colors.border,
+      borderStyle:       'dashed',
     },
     emptyText: {
       ...textStyles.bodySm,
       color: colors.textTertiary,
+    },
+    emptyAddRow: {
+      flexDirection:  'row',
+      alignItems:     'center',
+      gap:            spacing[1],
+      marginTop:      spacing[1],
+    },
+    emptyAddText: {
+      ...textStyles.labelSm,
+      color: colors.primary,
     },
   });
 }

@@ -138,6 +138,8 @@ const ja = {
     end_after_start: '終了時刻は開始時刻より後にしてください。',
     end_date_after_start: '終了日は開始日より後にしてください。',
     today_list_title: '今日のイベント',
+    today_empty: '今日の予定はありません',
+    add: '予定を追加',
     reminder: 'イベントリマインダー',
     reminder_desc: 'イベントの30分前に通知を受け取ります。',
     // Sprint 26 R3 — Space メンバーの予定重複警告

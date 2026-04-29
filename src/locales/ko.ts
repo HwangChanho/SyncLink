@@ -142,6 +142,8 @@ const ko = {
     end_after_start: '종료 시간이 시작 시간보다 늦어야 합니다.',
     end_date_after_start: '종료일이 시작일보다 늦어야 합니다.',
     today_list_title: '오늘 일정',
+    today_empty: '오늘 일정이 없어요',
+    add: '일정 추가하기',
     reminder: '일정 리마인더',
     reminder_desc: '일정 30분 전에 알림을 받습니다.',
     // Sprint 26 R3 — Space 멤버 일정 충돌 경고

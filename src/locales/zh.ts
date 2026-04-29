@@ -138,6 +138,8 @@ const zh = {
     end_after_start: '结束时间必须晚于开始时间。',
     end_date_after_start: '结束日期必须晚于开始日期。',
     today_list_title: '今日日程',
+    today_empty: '今天没有日程',
+    add: '添加日程',
     reminder: '日程提醒',
     reminder_desc: '在日程开始前30分钟收到通知。',
     // Sprint 26 R3 — Space 成员日程冲突警告

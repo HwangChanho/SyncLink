@@ -138,6 +138,8 @@ const en = {
     end_after_start: 'End time must be after start time.',
     end_date_after_start: 'End date must be after start date.',
     today_list_title: "Today's Events",
+    today_empty: 'No events today',
+    add: 'Add event',
     reminder: 'Event Reminder',
     reminder_desc: 'Receive a notification 30 minutes before the event.',
     // Sprint 26 R3 — Space member schedule conflict warning
