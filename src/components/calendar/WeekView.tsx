@@ -51,7 +51,17 @@ import { textStyles } from '@/constants/typography';
  * long-press 500ms activation, 15-min snapping, conflict detection,
  * optimistic update + undo toast.
  */
-const DRAG_MODE_GH = true;
+// Read dragMode from devConfig when available; default to 'gh' (drag enabled in production).
+// Tests can override via jest.mock('@/constants/devConfig', () => ({ dragMode: 'panresponder' }))
+// to exercise the PanResponder path without the Gesture Handler overhead.
+const DRAG_MODE_GH = (() => {
+  try {
+    const cfg = require('@/constants/devConfig') as { dragMode?: string };
+    return cfg.dragMode !== 'panresponder';
+  } catch {
+    return true;
+  }
+})();
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
 

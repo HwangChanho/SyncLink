@@ -244,15 +244,15 @@ describe('HomeScreen', () => {
     it('오늘 일정 없음 → 빈 상태 표시', () => {
       mockEventStore({ eventsByDate: {} });
       const { getByText } = render(<HomeScreen />);
-      // i18n 적용 후: t('event.today_list_title') + ' ' + t('common.none') = '오늘 일정 없음'
-      expect(getByText('오늘 일정 없음')).toBeTruthy();
+      // event.today_empty 키로 변경됨 (Sprint 31 i18n 정비)
+      expect(getByText('오늘 일정이 없어요')).toBeTruthy();
     });
 
     it('오늘 할일 없음 → 빈 상태 표시', () => {
       mockTodoStore({ todos: [] });
       const { getByText } = render(<HomeScreen />);
-      // i18n 적용 후: t('todo.today_list_title') + ' ' + t('common.none') = '오늘 할일 없음'
-      expect(getByText('오늘 할일 없음')).toBeTruthy();
+      // todo.today_empty 키로 변경됨 (Sprint 31 i18n 정비)
+      expect(getByText('오늘 할일이 없어요')).toBeTruthy();
     });
   });
 

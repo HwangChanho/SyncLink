@@ -37,10 +37,14 @@ import { textStyles } from '@/constants/typography';
 
 // ─── Feature flag (mirrors WeekView) ──────────────────────────────────────────
 
-/**
- * Drag-to-reschedule enabled in all builds (mirrors WeekView).
- */
-const DRAG_MODE_GH = true;
+const DRAG_MODE_GH = (() => {
+  try {
+    const cfg = require('@/constants/devConfig') as { dragMode?: string };
+    return cfg.dragMode !== 'panresponder';
+  } catch {
+    return true;
+  }
+})();
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
 
