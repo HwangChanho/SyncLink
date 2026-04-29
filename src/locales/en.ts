@@ -446,6 +446,14 @@ const en = {
     language_help: 'The entire app updates instantly when you choose a language.',
   },
 
+  event_search: {
+    title: 'Search Events',
+    placeholder: 'Search by event title…',
+    empty: 'No results found.',
+    hint: 'Type part of the event title',
+    past: 'Past events',
+  },
+
   places: {
     search_placeholder: 'Search for a place…',
     no_results: 'No results found.',

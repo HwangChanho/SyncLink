@@ -442,6 +442,14 @@ const zh = {
     language_help: '选择后整个应用的文本会立即切换。',
   },
 
+  event_search: {
+    title: '搜索日程',
+    placeholder: '按日程标题搜索…',
+    empty: '未找到结果。',
+    hint: '输入日程标题的部分文字',
+    past: '过去的日程',
+  },
+
   places: {
     search_placeholder: '搜索地点…',
     no_results: '无结果。',

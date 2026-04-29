@@ -632,6 +632,7 @@ export default function CalendarScreen() {
           onToday={goToday}
           onYearMonthPress={handleYearMonthPress}
           onViewModeChange={setViewMode}
+          onSearchPress={() => router.push('/search')}
         />
 
         {/* Year/month picker modal — opens when the header title is tapped */}

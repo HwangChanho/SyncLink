@@ -437,6 +437,14 @@ const ja = {
     language_help: '選択するとアプリ全体のテキストが即座に切り替わります。',
   },
 
+  event_search: {
+    title: 'イベントを検索',
+    placeholder: 'イベントタイトルで検索…',
+    empty: '結果がありません。',
+    hint: 'タイトルの一部を入力してください',
+    past: '過去のイベント',
+  },
+
   places: {
     search_placeholder: '場所を検索…',
     no_results: '結果がありません。',

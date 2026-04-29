@@ -16,6 +16,7 @@
  */
 
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
@@ -68,6 +69,8 @@ interface CalendarHeaderProps {
   onYearMonthPress?: () => void;
   /** Switch between month / week / day views. */
   onViewModeChange: (mode: ViewMode) => void;
+  /** Open the event search screen. */
+  onSearchPress?: () => void;
 }
 
 const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
@@ -141,6 +144,7 @@ export function CalendarHeader({
   onToday,
   onYearMonthPress,
   onViewModeChange,
+  onSearchPress,
 }: CalendarHeaderProps) {
   // Resolve active theme colors for dark mode support (TASK-700)
   const { t } = useTranslation();
@@ -184,6 +188,17 @@ export function CalendarHeader({
             <Text style={styles.titleChevron}>▾</Text>
           </View>
         </TouchableOpacity>
+
+        {onSearchPress && (
+          <TouchableOpacity
+            onPress={onSearchPress}
+            hitSlop={HIT_SLOP}
+            style={styles.searchButton}
+            accessibilityLabel="일정 검색"
+          >
+            <Ionicons name="search-outline" size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* ─── View mode tabs ─── */}
@@ -262,6 +277,12 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     fontSize: 12,
     color: colors.textSecondary,
     marginTop: 2,
+  },
+  searchButton: {
+    width:  36,
+    height: 36,
+    alignItems:     'center',
+    justifyContent: 'center',
   },
   tabRow: {
     flexDirection: 'row',

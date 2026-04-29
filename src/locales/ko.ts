@@ -455,6 +455,14 @@ const ko = {
     language_help: '선택 즉시 앱 전체 텍스트가 전환됩니다.',
   },
 
+  event_search: {
+    title: '일정 검색',
+    placeholder: '일정 제목으로 검색…',
+    empty: '검색 결과가 없습니다.',
+    hint: '일정 제목의 일부를 입력하세요',
+    past: '지난 일정',
+  },
+
   places: {
     search_placeholder: '장소를 검색하세요…',
     no_results: '결과가 없습니다.',
