@@ -582,6 +582,12 @@ const en = {
     restore_failed_title: 'Restore Failed',
     restore_failed_desc: 'An error occurred during restore.',
   },
+
+  my: {
+    linked_accounts: {
+      title: 'Linked accounts',
+    },
+  },
 } as const;
 
 export default en;

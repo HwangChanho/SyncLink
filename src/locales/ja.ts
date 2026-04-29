@@ -250,6 +250,8 @@ const ja = {
     regen: '再生成',
     regen_failed: '再生成に失敗しました。',
     invite_regen: '招待コードを再生成',
+    invite_show: '招待コードを表示',
+    invite_hide: '隠す',
     join_fail_title: '参加失敗',
     join_fail_desc: '参加に失敗しました',
     need_name: '名前が必要です',
@@ -419,6 +421,9 @@ const ja = {
     ai_limit: 'AI の使用制限に達しました。',
     save_failed: 'イベントの保存に失敗しました。もう一度お試しください。',
     error: 'エラーが発生しました。',
+    voice_start: '音声で入力',
+    voice_stop: '音声入力を停止',
+    voice_error: '音声認識に失敗しました。',
   },
 
   review: {
@@ -572,6 +577,12 @@ const ja = {
     restore_none_desc: '過去の購入履歴が見つかりませんでした。',
     restore_failed_title: '復元失敗',
     restore_failed_desc: '復元中にエラーが発生しました。',
+  },
+
+  my: {
+    linked_accounts: {
+      title: 'リンクされたアカウント',
+    },
   },
 } as const;
 

@@ -424,6 +424,9 @@ const zh = {
     ai_limit: 'AI 使用次数已达上限。',
     save_failed: '日程保存失败，请重试。',
     error: '发生错误。',
+    voice_start: '语音输入',
+    voice_stop: '停止语音输入',
+    voice_error: '语音识别失败。',
   },
 
   review: {
@@ -577,6 +580,12 @@ const zh = {
     restore_none_desc: '未找到历史购买记录。',
     restore_failed_title: '恢复失败',
     restore_failed_desc: '恢复过程中发生错误。',
+  },
+
+  my: {
+    linked_accounts: {
+      title: '已链接账号',
+    },
   },
 } as const;
 

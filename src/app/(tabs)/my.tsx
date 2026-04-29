@@ -579,7 +579,10 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: spacing[10],
+    // 80px so the bottom-most menu row clears the tab bar + home indicator
+    // even on devices where the safe-area inset is small (matches event
+    // create/edit forms — sprint-31 user feedback "홈바에 딱 붙어있음").
+    paddingBottom: spacing[20],
     gap: spacing[4],
   },
 

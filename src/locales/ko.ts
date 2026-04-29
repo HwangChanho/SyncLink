@@ -591,6 +591,12 @@ const ko = {
     restore_failed_title: '복원 실패',
     restore_failed_desc: '복원 중 오류가 발생했습니다.',
   },
+
+  my: {
+    linked_accounts: {
+      title: '연결된 로그인',
+    },
+  },
 } as const;
 
 export type TranslationKeys = typeof ko;
