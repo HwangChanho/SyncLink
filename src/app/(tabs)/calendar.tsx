@@ -340,19 +340,27 @@ export default function CalendarScreen() {
       const newEnd = new Date(evt.endAt);
       newEnd.setDate(newEnd.getDate() + dayDelta);
       newEnd.setMinutes(newEnd.getMinutes() + minuteDelta);
+
+      // Optimistic update — show the moved position immediately without
+      // waiting for the network round-trip.
+      const optimistic: EventSummary = {
+        ...evt,
+        startAt: newStart,
+        endAt:   newEnd,
+      };
+      upsertEvent(optimistic);
+
       try {
         await updateEvent(evt.id, { startAt: newStart, endAt: newEnd });
-        const range = getViewRange(selectedDate, viewMode);
-        void fetchEvents(range);
       } catch (err) {
-        // Mirror to errorLogger so production crashes surface in Sentry
-        // alongside the local Metro/console trail. Sprint 19 — auto-review #2.
+        // Rollback to original position on failure.
+        upsertEvent(evt);
         void logError({ context: 'calendar.reschedule', error: err });
         // eslint-disable-next-line no-console
         console.error('[calendar] reschedule failed:', err);
       }
     },
-    [selectedDate, viewMode, fetchEvents],
+    [upsertEvent],
   );
 
   const toggleCategoryDim = useCallback((bucket: string) => {

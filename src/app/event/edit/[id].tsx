@@ -753,7 +753,7 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
 
   scroll: { flex: 1 },
   scrollContent: {
-    paddingBottom: spacing[10],
+    paddingBottom: spacing[20],
   },
 
   titleInput: {

@@ -49,7 +49,7 @@ function getCurrentWeekMonday(): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function DateSuggestionCard() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
 
@@ -71,14 +71,15 @@ export function DateSuggestionCard() {
     setHasError(false);
     try {
       const weekStart = getCurrentWeekMonday();
-      const data = await getDateSuggestion(spaceId, weekStart);
+      const locale = (i18n.language || 'ko').slice(0, 2);
+      const data = await getDateSuggestion(spaceId, weekStart, locale);
       setResult(data);
     } catch {
       setHasError(true);
     } finally {
       setIsLoading(false);
     }
-  }, [spaces]);
+  }, [spaces, i18n.language]);
 
   useEffect(() => {
     void fetchSuggestion();

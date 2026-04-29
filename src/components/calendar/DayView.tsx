@@ -20,9 +20,7 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-// Use RNGH ScrollView for the same reason as WeekView — prevents the
-// native scroll from competing with the drag-to-reschedule gesture.
-import { ScrollView } from 'react-native-gesture-handler';
+import { ScrollView } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { EventSummary } from '@/types';
 import type { FreeSlot } from '@/types/freeTime';

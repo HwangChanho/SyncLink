@@ -28,11 +28,7 @@ import {
   StyleSheet,
   PanResponder,
 } from 'react-native';
-// Use RNGH ScrollView so the vertical-scroll gesture participates in
-// RNGH's orchestration system. Without this, after a long-press activates
-// the drag gesture, moving the finger also triggers the native UIScrollView
-// scroll — both gestures compete and drag-to-reschedule appears broken.
-import { ScrollView } from 'react-native-gesture-handler';
+import { ScrollView } from 'react-native';
 import type { EventSummary } from '@/types';
 import type { FreeSlot } from '@/types/freeTime';
 import { EventBlock } from './EventBlock';

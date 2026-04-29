@@ -17,4 +17,4 @@
  * builds. Revert to 'panresponder' before creating a TestFlight build if
  * the feature is not yet ready for external testers.
  */
-export const dragMode: 'panresponder' | 'gh' = 'gh';
+export const dragMode: 'panresponder' | 'gh' = 'panresponder';

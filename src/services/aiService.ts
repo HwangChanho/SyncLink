@@ -707,16 +707,18 @@ export interface DateSuggestionResult {
  *
  * @param spaceId   - UUID of the Space to suggest a date for
  * @param weekStart - ISO-8601 string for the Monday of the target week
+ * @param locale    - BCP-47 language tag (e.g. 'ko', 'en', 'ja', 'zh') for the AI response
  * @returns DateSuggestionResult — suggestion text + matching slots
  * @throws If the Edge Function returns an error
  */
 export async function getDateSuggestion(
   spaceId: string,
   weekStart: string,
+  locale = 'ko',
 ): Promise<DateSuggestionResult> {
   const { data, error } = await supabase.functions.invoke<DateSuggestionResult>(
     EDGE_FUNCTIONS.SUGGEST_DATE,
-    { body: { spaceId, weekStart } },
+    { body: { spaceId, weekStart, locale } },
   );
 
   if (error || !data) {
