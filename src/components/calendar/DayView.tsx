@@ -19,19 +19,16 @@
  */
 
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-// RNGH ScrollView keeps scroll/drag orchestration on the native side so
-// the long-press inside EventBlockGestureHandler can claim the touch.
-import { ScrollView } from 'react-native-gesture-handler';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { EventSummary } from '@/types';
 import type { FreeSlot } from '@/types/freeTime';
-import {
-  EventBlockGestureHandler,
-  UndoToast,
-  useOptimisticReschedule,
-  useUndoToast,
-} from './EventBlockGestureHandler';
+import { EventBlock } from './EventBlock';
+import { UndoToast, useUndoToast } from './UndoToast';
+import { useOptimisticReschedule } from './useOptimisticReschedule';
+import { DragGhost } from './DragGhost';
+import { useGridDragHandler, type DragLayoutRect } from './useGridDragHandler';
+import { applyDelta } from '@/lib/calendarGeometry';
 import { useColors } from '@/hooks/useColors';
 import { useTranslatedTitles } from '@/hooks/useTranslatedTitles';
 import { spacing } from '@/constants/spacing';
@@ -165,38 +162,51 @@ export function DayView({
   // ── TASK-009 Day 5: GH PoC drag support ─────────────────────────────────
 
   /**
-   * Drop-target hover slot state for DayView.
-   * In DayView there is only one column (no horizontal movement),
-   * so dayIndex is always ignored. We track minuteOfDay for the vertical
-   * hover highlight band.
-   */
-  const [hoverSlot, setHoverSlot] = useState<{ minuteOfDay: number } | null>(null);
-
   /**
-   * Stable onHoverSlot callback for EventBlockGestureHandler.
-   * DayView ignores dayIndex — it's always a single-column view.
+   * Phase 5 — drag-to-reschedule via PanResponder hit-testing. DayView is
+   * a single column so dayDelta is always 0; we still pass everything
+   * through `useGridDragHandler` for API parity with WeekView.
    */
-  const handleHoverSlot = useCallback(
-    (minuteOfDay: number | null, _dayIndex: number | null) => {
-      if (minuteOfDay === null) {
-        setHoverSlot(null);
-      } else {
-        setHoverSlot({ minuteOfDay });
-      }
+  const { toast: undoToast, showUndo } = useUndoToast();
+  const handleRescheduleDrop = useOptimisticReschedule({ onMoved: showUndo });
+
+  const handleGridDrop = useCallback(
+    (event: EventSummary, dayDelta: number, minuteDelta: number) => {
+      const { newStartAt, newEndAt } = applyDelta(
+        event.startAt, event.endAt, dayDelta, minuteDelta,
+      );
+      handleRescheduleDrop({
+        event, dayDelta, minuteDelta, newStartAt, newEndAt,
+      });
     },
-    [],
+    [handleRescheduleDrop],
   );
 
   /**
-   * TASK-009 Day 4+5: Undo toast hook and stable drop handler.
-   * showUndo is passed so a 5-second "되돌리기" toast appears after each
-   * successful drag move.
+   * Pre-computed pixel rectangles for hit-testing. The container width is
+   * tracked via onLayout so the rects can be measured in real px instead
+   * of percentages. dayIndex is always 0 in single-day view.
    */
-  const { toast: undoToast, showUndo } = useUndoToast();
-  const handleDropped = useOptimisticReschedule({ onMoved: showUndo });
+  const [containerWidth, setContainerWidth] = useState(0);
+  const dragLayouts = useMemo<DragLayoutRect[]>(() => {
+    if (containerWidth <= 0) return [];
+    return timedEvents.map((lay) => ({
+      event:    lay.event,
+      dayIndex: 0,
+      left:     lay.leftFraction * containerWidth,
+      top:      lay.topOffset,
+      width:    lay.widthFraction * containerWidth,
+      height:   lay.height,
+    }));
+  }, [timedEvents, containerWidth]);
 
-  /** Height of the drop-target hover highlight band (30-min slot at 1px/min). */
-  const HOVER_SLOT_HEIGHT = HOUR_HEIGHT / 2;
+  const { panHandlers: gridPanHandlers, dragState } = useGridDragHandler({
+    layouts:    dragLayouts,
+    columnWidth: 0,           // single column — no horizontal day shift
+    viewMode:   'day',
+    onDropped:  handleGridDrop,
+    onTap:      onEventPress,
+  });
 
   return (
     <View style={styles.container}>
@@ -286,6 +296,8 @@ export function DayView({
                 styles.eventsArea,
                 { minWidth: Math.max(1, maxOverlapColumns) * MIN_COLUMN_WIDTH },
               ]}
+              onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+              {...gridPanHandlers}
             >
               {/* Hour separator lines */}
               {HOURS.map((h) => (
@@ -333,44 +345,33 @@ export function DayView({
                 ),
               )}
 
-              {/*
-                Drop-target hover highlight: shown while the user is
-                dragging an event vertically (DayView has no column axis).
-              */}
-              {hoverSlot !== null && (
-                <View
-                  pointerEvents="none"
-                  testID="day-drop-target"
-                  style={[
-                    styles.dropTargetHighlight,
-                    {
-                      top:    hoverSlot.minuteOfDay * 1, // 1 px/min
-                      height: HOVER_SLOT_HEIGHT,
-                    },
-                  ]}
-                />
-              )}
-
-              {/* Timed event blocks — drag-capable via RNGH gesture handler. */}
+              {/* Timed event blocks. The drag handler claims touches that
+                  land on these chips; everything else falls through to
+                  the parent ScrollView. */}
               {timedEvents.map((lay) => {
                 const tt = translatedTitles.get(lay.event.id);
+                const isDragSource =
+                  dragState !== null && dragState.event.id === lay.event.id;
                 return (
-                  <EventBlockGestureHandler
+                  <View
                     key={lay.event.id}
-                    event={lay.event}
-                    topOffset={lay.topOffset}
-                    height={lay.height}
-                    widthFraction={lay.widthFraction}
-                    leftFraction={lay.leftFraction}
-                    onPress={onEventPress}
-                    columnWidth={0}
-                    viewMode="day"
-                    onHoverSlot={handleHoverSlot}
-                    onDropped={handleDropped}
-                    {...(tt ? { translatedTitle: tt } : {})}
-                  />
+                    style={isDragSource ? styles.draggingSource : undefined}
+                  >
+                    <EventBlock
+                      event={lay.event}
+                      topOffset={lay.topOffset}
+                      height={lay.height}
+                      widthFraction={lay.widthFraction}
+                      leftFraction={lay.leftFraction}
+                      onPress={onEventPress}
+                      {...(tt ? { translatedTitle: tt } : {})}
+                    />
+                  </View>
                 );
               })}
+
+              {/* Floating ghost — same coordinate system as hit-test. */}
+              {dragState && <DragGhost drag={dragState} />}
             </View>
           </ScrollView>
         </View>
@@ -524,6 +525,12 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     borderWidth: 1.5,
     borderColor: colors.primary,
     borderRadius: 4,
+  },
+  // Phase 5 — original chip dimmed while the floating ghost follows the
+  // finger. Keeps the slot visible (so the drop position is obvious) but
+  // makes it clear which chip is "in flight".
+  draggingSource: {
+    opacity: 0.35,
   },
   });
 }

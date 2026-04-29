@@ -28,19 +28,18 @@ import {
   StyleSheet,
   PanResponder,
 } from 'react-native';
-// RNGH ScrollView participates in RNGH's gesture orchestration so the
-// long-press + pan inside EventBlockGestureHandler can win the touch
-// when needed. Using react-native's plain ScrollView would let the
-// native scroll handler steal touches before RNGH gets to evaluate them.
-import { ScrollView } from 'react-native-gesture-handler';
+// Phase 5 — pure React Native ScrollView. The drag system below uses
+// PanResponder hit-testing to claim touches that land on event chips and
+// yields all other touches to ScrollView so vertical scroll just works.
+import { ScrollView } from 'react-native';
 import type { EventSummary } from '@/types';
 import type { FreeSlot } from '@/types/freeTime';
-import {
-  EventBlockGestureHandler,
-  UndoToast,
-  useOptimisticReschedule,
-  useUndoToast,
-} from './EventBlockGestureHandler';
+import { EventBlock } from './EventBlock';
+import { UndoToast, useUndoToast } from './UndoToast';
+import { useOptimisticReschedule } from './useOptimisticReschedule';
+import { DragGhost } from './DragGhost';
+import { useGridDragHandler, type DragLayoutRect } from './useGridDragHandler';
+import { applyDelta } from '@/lib/calendarGeometry';
 import { useColors } from '@/hooks/useColors';
 import { useTranslatedTitles } from '@/hooks/useTranslatedTitles';
 import { spacing, radius } from '@/constants/spacing';
@@ -170,46 +169,66 @@ export function WeekView({
   const [gridWidth, setGridWidth] = useState(0);
   const columnWidth = gridWidth > 0 ? gridWidth / 7 : 0;
 
-  // ── TASK-009 Day 2: drop-target hover state ───────────────────────────────
-  // When the GH PoC component is active and the user is dragging, we receive
-  // the snapped hover slot via onHoverSlot. Render a highlight band in that
-  // day column at the hover time to give a visual "snap target" affordance.
-
   /**
-   * Hover slot state updated by EventBlockGestureHandler via onHoverSlot.
-   * `null` when no drag is in progress.
+   * Phase 5 — drag-to-reschedule UI state.
+   *
+   * `useGridDragHandler` (PanResponder at the day-columns container) drives
+   * the drag flow without any external gesture library. It exposes the live
+   * dragState we use both to dim the original chip and to render a
+   * <DragGhost> that follows the finger.
+   *
+   * Drop handling stays in `useOptimisticReschedule` (conflict gate +
+   * optimistic store upsert + undo toast) — only the input is reshaped via
+   * an `applyDelta` wrapper so the existing hook keeps working unchanged.
    */
-  const [hoverSlot, setHoverSlot] = useState<{
-    minuteOfDay: number;
-    dayIndex: number;
-  } | null>(null);
+  const { toast: undoToast, showUndo } = useUndoToast();
+  const handleRescheduleDrop = useOptimisticReschedule({ onMoved: showUndo });
 
-  /**
-   * Stable callback for onHoverSlot prop — avoids recreating EventBlockGH
-   * on every render (gesture object rebuild is expensive).
-   */
-  const handleHoverSlot = useCallback(
-    (minuteOfDay: number | null, dayIndex: number | null) => {
-      if (minuteOfDay === null || dayIndex === null) {
-        setHoverSlot(null);
-      } else {
-        setHoverSlot({ minuteOfDay, dayIndex });
-      }
+  const handleGridDrop = useCallback(
+    (event: EventSummary, dayDelta: number, minuteDelta: number) => {
+      const { newStartAt, newEndAt } = applyDelta(
+        event.startAt, event.endAt, dayDelta, minuteDelta,
+      );
+      handleRescheduleDrop({
+        event, dayDelta, minuteDelta, newStartAt, newEndAt,
+      });
     },
-    [],
+    [handleRescheduleDrop],
   );
 
   /**
-   * TASK-009 Day 4: Undo toast hook — shows a 5-second banner after a
-   * successful drag-to-reschedule so the user can revert immediately.
+   * Pre-computed pixel rectangles for every visible event. The drag hook
+   * hit-tests touchStart against these in O(n) where n is "events on screen
+   * this week" (typically a few dozen). Recomputed only when the visible
+   * data changes — kept memoised to avoid re-creating the PanResponder.
    */
-  const { toast: undoToast, showUndo } = useUndoToast();
+  const dragLayouts = useMemo<DragLayoutRect[]>(() => {
+    if (columnWidth <= 0) return [];
+    const out: DragLayoutRect[] = [];
+    weekDays.forEach((day, idx) => {
+      const k = toDateKey(day);
+      const timed = (eventsByDate[k] ?? []).filter((e) => !e.allDay);
+      computeLayout(timed).forEach((lay) => {
+        out.push({
+          event:    lay.event,
+          dayIndex: idx,
+          left:     idx * columnWidth + lay.leftFraction * columnWidth,
+          top:      lay.topOffset,
+          width:    lay.widthFraction * columnWidth,
+          height:   lay.height,
+        });
+      });
+    });
+    return out;
+  }, [weekDays, eventsByDate, columnWidth]);
 
-  /**
-   * TASK-009 Day 3+4: stable drop handler via useOptimisticReschedule.
-   * Day 4 addition: passes showUndo so a toast appears after each move.
-   */
-  const handleDropped = useOptimisticReschedule({ onMoved: showUndo });
+  const { panHandlers: gridPanHandlers, dragState } = useGridDragHandler({
+    layouts:    dragLayouts,
+    columnWidth,
+    viewMode:   'week',
+    onDropped:  handleGridDrop,
+    onTap:      onEventPress,
+  });
 
   // Scroll to 8 AM on mount so mornings are visible by default
   const handleLayout = () => {
@@ -429,10 +448,17 @@ export function WeekView({
             ))}
           </View>
 
-          {/* Event grid area — measured so drag-to-reschedule knows column width */}
+          {/*
+            Event grid area — onLayout measures one-day column width.
+            {...gridPanHandlers} attaches the root PanResponder. Touches
+            on event chips are claimed for drag; everything else falls
+            through to the parent ScrollView (vertical scroll keeps
+            working without a single line of orchestration glue).
+          */}
           <View
             style={styles.eventsArea}
             onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}
+            {...gridPanHandlers}
           >
             {/* Hour separator lines */}
             {HOURS.map((h) => (
@@ -466,13 +492,6 @@ export function WeekView({
               const layouts = computeLayout(timedEvents);
 
               const slotsForDay = freeSlotsByDayKey[dateKey] ?? [];
-
-              // Drop-target hover highlight is shown when this column matches
-              // the dragged event's current snapped position.
-              const isHoverColumn =
-                hoverSlot !== null && hoverSlot.dayIndex === idx;
-              // Snap highlight height = 30-min slot in pixels (HOUR_HEIGHT / 2)
-              const HOVER_SLOT_HEIGHT = HOUR_HEIGHT / 2;
 
               return (
                 <View
@@ -521,48 +540,40 @@ export function WeekView({
                     ),
                   )}
 
-                  {/*
-                    TASK-009 Day 2 — drop-target highlight.
-                    Rendered when the GH feature flag is active and the user
-                    is hovering over this column. Sits between free-time
-                    overlays and EventBlocks in z-order.
-                  */}
-                  {isHoverColumn && hoverSlot !== null && (
-                    <View
-                      pointerEvents="none"
-                      testID={`week-drop-target-${dateKey}`}
-                      style={[
-                        styles.dropTargetHighlight,
-                        {
-                          top:    hoverSlot.minuteOfDay * 1, // 1 px/min
-                          height: HOVER_SLOT_HEIGHT,
-                        },
-                      ]}
-                    />
-                  )}
-
                   {layouts.map((lay) => {
                     const tt = translatedTitles.get(lay.event.id);
+                    // Dim the original chip while it's the active drag
+                    // source — visual cue that the floating ghost is the
+                    // "live" copy.
+                    const isDragSource =
+                      dragState !== null && dragState.event.id === lay.event.id;
                     return (
-                      <EventBlockGestureHandler
+                      <View
                         key={lay.event.id}
-                        event={lay.event}
-                        topOffset={lay.topOffset}
-                        height={lay.height}
-                        widthFraction={lay.widthFraction}
-                        leftFraction={lay.leftFraction}
-                        onPress={onEventPress}
-                        columnWidth={columnWidth}
-                        viewMode="week"
-                        onHoverSlot={handleHoverSlot}
-                        onDropped={handleDropped}
-                        {...(tt ? { translatedTitle: tt } : {})}
-                      />
+                        style={isDragSource ? styles.draggingSource : undefined}
+                      >
+                        <EventBlock
+                          event={lay.event}
+                          topOffset={lay.topOffset}
+                          height={lay.height}
+                          widthFraction={lay.widthFraction}
+                          leftFraction={lay.leftFraction}
+                          onPress={onEventPress}
+                          {...(tt ? { translatedTitle: tt } : {})}
+                        />
+                      </View>
                     );
                   })}
                 </View>
               );
             })}
+
+            {/*
+              Floating ghost — rendered inside the same eventsArea coordinate
+              system that the drag hook uses for hit-testing, so its (left,
+              top) match the finger position 1:1.
+            */}
+            {dragState && <DragGhost drag={dragState} />}
           </View>
         </View>
       </ScrollView>
@@ -757,6 +768,12 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     borderWidth: 1.5,
     borderColor: colors.primary,
     borderRadius: radius.sm,
+  },
+  // Phase 5 — original chip is dimmed while the floating ghost follows
+  // the finger. The drag hook owns the source-of-truth coords, so the
+  // resting chip just needs a visual cue.
+  draggingSource: {
+    opacity: 0.35,
   },
   });
 }

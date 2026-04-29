@@ -18,11 +18,23 @@
 import { useCallback, useRef } from 'react';
 import { Alert } from 'react-native';
 
-import type { DroppedPayload } from './EventBlockGestureHandler';
 import { useEventStore } from '@/stores/eventStore';
 import { useSpaceStore } from '@/stores/spaceStore';
 import { findConflictingEvents, updateEvent } from '@/services/eventService';
 import type { EventSummary } from '@/types';
+
+/**
+ * Payload passed to the drop handler. Owns its own definition now (was
+ * previously re-exported from EventBlockGestureHandler.tsx, which is
+ * being retired in Phase 5 in favour of useGridDragHandler).
+ */
+export interface DroppedPayload {
+  event:       EventSummary;
+  dayDelta:    number;
+  minuteDelta: number;
+  newStartAt:  Date;
+  newEndAt:    Date;
+}
 
 interface Options {
   /**
