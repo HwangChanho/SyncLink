@@ -61,7 +61,7 @@ describe('aiService — getDateSuggestion', () => {
 
     expect(supabase.functions.invoke).toHaveBeenCalledWith(
       'suggest-date',
-      { body: { spaceId: SPACE_ID, weekStart: WEEK_START } },
+      { body: { spaceId: SPACE_ID, weekStart: WEEK_START, locale: 'ko' } },
     );
     expect(supabase.functions.invoke).toHaveBeenCalledTimes(1);
   });

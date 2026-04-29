@@ -20,11 +20,12 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { ScrollView } from 'react-native';
+// RNGH ScrollView keeps scroll/drag orchestration on the native side so
+// the long-press inside EventBlockGestureHandler can claim the touch.
+import { ScrollView } from 'react-native-gesture-handler';
 import { useTranslation } from 'react-i18next';
 import type { EventSummary } from '@/types';
 import type { FreeSlot } from '@/types/freeTime';
-import { EventBlock } from './EventBlock';
 import {
   EventBlockGestureHandler,
   UndoToast,
@@ -35,17 +36,6 @@ import { useColors } from '@/hooks/useColors';
 import { useTranslatedTitles } from '@/hooks/useTranslatedTitles';
 import { spacing } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
-
-// ─── Feature flag (mirrors WeekView) ──────────────────────────────────────────
-
-const DRAG_MODE_GH = (() => {
-  try {
-    const cfg = require('@/constants/devConfig') as { dragMode?: string };
-    return cfg.dragMode !== 'panresponder';
-  } catch {
-    return true;
-  }
-})();
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
 
@@ -399,11 +389,10 @@ export function DayView({
               )}
 
               {/*
-                TASK-009 Day 5 — drop-target hover highlight for DayView.
-                Shown when the GH feature flag is active and the user is
+                Drop-target hover highlight: shown while the user is
                 dragging an event vertically (DayView has no column axis).
               */}
-              {DRAG_MODE_GH && hoverSlot !== null && (
+              {hoverSlot !== null && (
                 <View
                   pointerEvents="none"
                   testID="day-drop-target"
@@ -417,31 +406,11 @@ export function DayView({
                 />
               )}
 
-              {/* Timed event blocks — A/B: GH PoC vs production EventBlock */}
+              {/* Timed event blocks — drag-capable via RNGH gesture handler. */}
               {timedEvents.map((lay) => {
                 const tt = translatedTitles.get(lay.event.id);
-
-                // TASK-009 Day 5 — feature flag: render GH handler in dev mode
-                if (DRAG_MODE_GH) {
-                  return (
-                    <EventBlockGestureHandler
-                      key={lay.event.id}
-                      event={lay.event}
-                      topOffset={lay.topOffset}
-                      height={lay.height}
-                      widthFraction={lay.widthFraction}
-                      leftFraction={lay.leftFraction}
-                      onPress={onEventPress}
-                      columnWidth={0}
-                      viewMode="day"
-                      onHoverSlot={handleHoverSlot}
-                      onDropped={handleDropped}
-                    />
-                  );
-                }
-
                 return (
-                  <EventBlock
+                  <EventBlockGestureHandler
                     key={lay.event.id}
                     event={lay.event}
                     topOffset={lay.topOffset}
@@ -449,6 +418,10 @@ export function DayView({
                     widthFraction={lay.widthFraction}
                     leftFraction={lay.leftFraction}
                     onPress={onEventPress}
+                    columnWidth={0}
+                    viewMode="day"
+                    onHoverSlot={handleHoverSlot}
+                    onDropped={handleDropped}
                     {...(tt ? { translatedTitle: tt } : {})}
                   />
                 );
@@ -466,11 +439,10 @@ export function DayView({
       </ScrollView>
 
       {/*
-        TASK-009 Day 5 — Undo toast overlay for DayView.
-        Positioned at the bottom of the view; only rendered after a
-        successful drag-to-reschedule while the 5-second window is open.
+        Undo toast overlay — rendered after a successful drag-to-reschedule
+        while the 5-second window is open.
       */}
-      {DRAG_MODE_GH && undoToast && <UndoToast toast={undoToast} />}
+      {undoToast && <UndoToast toast={undoToast} />}
     </View>
   );
 }

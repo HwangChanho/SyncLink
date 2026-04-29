@@ -77,15 +77,26 @@ import type { EventSummary } from '@/types';
 /** Smallest rendered height (matches EventBlock). */
 const MIN_HEIGHT = 22;
 
+/** Owner-indicator dot size for shared (non-own) events. */
+const OWNER_DOT_SIZE = 7;
+
 /**
  * Long-press hold duration (ms) before the pan gesture activates.
  *
- * 300 ms feels snappy while still clearly distinguishing a tap from a drag.
- * The surrounding ScrollView is now from react-native-gesture-handler, which
- * participates in RNGH's orchestration system — so scroll vs drag conflicts
- * are resolved natively without needing a long dead-zone period.
+ * 500 ms matches the iPhone Calendar app and gives the user enough time to
+ * settle their finger without accidentally cancelling. The surrounding
+ * ScrollView must come from react-native-gesture-handler so it participates
+ * in RNGH's orchestration system — that way scroll vs drag conflicts are
+ * resolved natively.
  */
-const LONG_PRESS_MS = 300;
+const LONG_PRESS_MS = 500;
+
+/**
+ * Maximum finger movement (px) tolerated during the long-press wait.
+ * Default RNGH tolerance is ~10pt which is too tight for fingers that
+ * naturally tremor while held still — 20pt feels stable.
+ */
+const LONG_PRESS_MAX_DISTANCE = 20;
 
 /**
  * Duration of the Undo toast in milliseconds.
@@ -168,6 +179,13 @@ interface EventBlockGestureHandlerProps {
    *  3. On failure: upsertEvent(original) to rollback + show Alert.
    */
   onDropped?: (payload: DroppedPayload) => void;
+
+  /**
+   * Optional pre-resolved translated title (Sprint 19 TASK-1907). Parent
+   * looks this up via useTranslatedTitles for the whole visible range so we
+   * don't fetch per-block. Falls back to event.title when undefined.
+   */
+  translatedTitle?: string;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -193,6 +211,7 @@ export function EventBlockGestureHandler({
   viewMode      = 'week',
   onHoverSlot,
   onDropped,
+  translatedTitle,
 }: EventBlockGestureHandlerProps) {
   // Resolve theme-aware color tokens for dynamic styling
   const colors = useColors();
@@ -347,65 +366,67 @@ export function EventBlockGestureHandler({
   }, []);
 
   /**
-   * Build the pan gesture once per event identity.
+   * Build the long-press + pan gesture pair once per event identity.
    * Worklet closures capture stable shared-value handles; JS callbacks go
    * through runOnJS so they can access the React state and Zustand store.
    *
-   * Long-press activation:
-   *   `.activateAfterLongPress(LONG_PRESS_MS)` requires the finger to be held
-   *   still for 500 ms before the pan gesture activates. This prevents the
-   *   drag from conflicting with the surrounding horizontal scroll/swipe — a
-   *   quick swipe across the event block will not trigger drag mode.
-   *   On activation, a haptic buzz confirms to the user that drag is ready.
+   * Architecture:
+   *   - LongPress (minDuration LONG_PRESS_MS, maxDistance LONG_PRESS_MAX_DISTANCE)
+   *     triggers the haptic + visual lift the moment the threshold is reached.
+   *   - Pan (.activateAfterLongPress) only activates AFTER the same hold, so
+   *     the pan handlers track the actual reschedule motion.
+   *   - Composing them with Gesture.Simultaneous lets the LongPress fire its
+   *     onStart (haptic) without preventing the Pan from taking over the touch.
+   *
+   * The explicit `.maxDistance(LONG_PRESS_MAX_DISTANCE)` is critical — RNGH's
+   * default tolerance (~10pt) is too tight for natural finger jitter and was
+   * the root cause of the drag-not-activating reports across builds 38–40.
    */
-  const panGesture = useMemo(
-    () =>
-      Gesture.Pan()
-        // Require a 500 ms hold before the drag mode engages.
-        // This matches the iPhone Calendar app's long-press-then-drag UX and
-        // prevents the surrounding ScrollView from losing horizontal swipes.
-        .activateAfterLongPress(LONG_PRESS_MS)
-        .onStart(() => {
-          'worklet';
-          // Haptic feedback confirms long-press threshold reached.
-          runOnJS(triggerHaptic)();
-          // Lift the card — spring for physical feel.
-          isActive.value = withSpring(1);
-        })
-        .onUpdate((evt) => {
-          'worklet';
-          // Track finger 1:1 — no spring here, spring only on lift/drop.
-          translateX.value = evt.translationX;
-          translateY.value = evt.translationY;
-          // Notify JS thread about hover slot (runs asynchronously via bridge).
-          runOnJS(notifyHover)(evt.translationX, evt.translationY);
-        })
-        .onEnd((evt) => {
-          'worklet';
-          // Clear hover highlight, then spring back to origin.
-          // (The parent re-renders the event at its new position via store.)
+  const composedGesture = useMemo(() => {
+    const longPress = Gesture.LongPress()
+      .minDuration(LONG_PRESS_MS)
+      .maxDistance(LONG_PRESS_MAX_DISTANCE)
+      .onStart(() => {
+        'worklet';
+        // Haptic feedback + visual lift the instant long-press fires —
+        // gives the user immediate confirmation that drag mode is active.
+        runOnJS(triggerHaptic)();
+        isActive.value = withSpring(1);
+      });
+
+    const pan = Gesture.Pan()
+      .activateAfterLongPress(LONG_PRESS_MS)
+      .onUpdate((evt) => {
+        'worklet';
+        // Track finger 1:1 — no spring here, spring only on lift/drop.
+        translateX.value = evt.translationX;
+        translateY.value = evt.translationY;
+        runOnJS(notifyHover)(evt.translationX, evt.translationY);
+      })
+      .onEnd((evt) => {
+        'worklet';
+        runOnJS(clearHover)();
+        runOnJS(handleDrop)(evt.translationX, evt.translationY);
+        translateX.value = withSpring(0);
+        translateY.value = withSpring(0);
+        isActive.value   = withSpring(0);
+      })
+      .onFinalize(() => {
+        'worklet';
+        if (isActive.value !== 0) {
           runOnJS(clearHover)();
-          runOnJS(handleDrop)(evt.translationX, evt.translationY);
+          isActive.value   = withSpring(0);
           translateX.value = withSpring(0);
           translateY.value = withSpring(0);
-          isActive.value   = withSpring(0);
-        })
-        .onFinalize(() => {
-          'worklet';
-          // Safety net: gesture cancelled externally (e.g. another handler wins).
-          if (isActive.value !== 0) {
-            runOnJS(clearHover)();
-            isActive.value   = withSpring(0);
-            translateX.value = withSpring(0);
-            translateY.value = withSpring(0);
-          }
-        }),
+        }
+      });
+
+    return Gesture.Simultaneous(longPress, pan);
     // Recreate only when event identity or geometry props change.
     // notifyHover/clearHover/handleDrop/triggerHaptic are stable useCallback
     // refs captured via the runOnJS bridge — not needed in deps array.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [event.id, columnWidth, pxPerMinute, viewMode],
-  );
+  }, [event.id, columnWidth, pxPerMinute, viewMode]);
 
   // ── Animated style (UI thread) ────────────────────────────────────────────
 
@@ -430,7 +451,7 @@ export function EventBlockGestureHandler({
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <GestureDetector gesture={panGesture}>
+    <GestureDetector gesture={composedGesture}>
       <Animated.View
         testID="event-block-gh"
         style={[
@@ -451,8 +472,20 @@ export function EventBlockGestureHandler({
           numberOfLines={showSubtitle ? 2 : 1}
           onPress={onPress ? () => onPress(event) : undefined}
         >
-          {event.title}
+          {translatedTitle ?? event.title}
         </Text>
+
+        {/*
+         * Owner indicator dot — shown only for shared (Space) events that
+         * belong to another member. Uses event.color (resolved server-side
+         * to the owner's member color) so the dot blends with the chip.
+         */}
+        {!event.isOwn && (
+          <View
+            testID="owner-dot"
+            style={[styles.ownerDot, { backgroundColor: event.color }]}
+          />
+        )}
       </Animated.View>
     </GestureDetector>
   );
@@ -481,6 +514,20 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       ...textStyles.labelSm,
       // textPrimary adapts: gray-900 in light, white in dark
       color: colors.textPrimary,
+    },
+    /**
+     * Small dot at the top-right corner — marks shared (Space) events that
+     * belong to another member. Mirrors EventBlock for visual parity.
+     */
+    ownerDot: {
+      position: 'absolute',
+      top: 3,
+      right: 3,
+      width:  OWNER_DOT_SIZE,
+      height: OWNER_DOT_SIZE,
+      borderRadius: OWNER_DOT_SIZE / 2,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.85)',
     },
   });
 }

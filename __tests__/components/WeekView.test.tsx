@@ -25,14 +25,10 @@
 
 // useColors is globally mocked in jest.setup.js — no override needed here.
 
-// Force PanResponder path so UNSAFE_getAllByType(EventBlock) works.
-// dragMode='gh' enables EventBlockGestureHandler which is not what these tests verify.
-jest.mock('@/constants/devConfig', () => ({ dragMode: 'panresponder' }));
-
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 import { WeekView } from '@/components/calendar/WeekView';
-import { EventBlock } from '@/components/calendar/EventBlock';
+import { EventBlockGestureHandler } from '@/components/calendar/EventBlockGestureHandler';
 import type { EventSummary } from '@/types';
 
 // ─── 날짜 헬퍼 ────────────────────────────────────────────────────────────────
@@ -153,7 +149,7 @@ describe('WeekView', () => {
         <WeekView {...defaultProps} eventsByDate={defaultEventsByDate} />,
       );
 
-      const blocks = UNSAFE_getAllByType(EventBlock);
+      const blocks = UNSAFE_getAllByType(EventBlockGestureHandler);
       expect(blocks).toHaveLength(1);
     });
 
@@ -162,7 +158,7 @@ describe('WeekView', () => {
         <WeekView {...defaultProps} eventsByDate={{}} />,
       );
 
-      expect(UNSAFE_queryAllByType(EventBlock)).toHaveLength(0);
+      expect(UNSAFE_queryAllByType(EventBlockGestureHandler)).toHaveLength(0);
     });
 
     it('EventBlock에 올바른 event prop 전달', () => {
@@ -170,7 +166,7 @@ describe('WeekView', () => {
         <WeekView {...defaultProps} eventsByDate={defaultEventsByDate} />,
       );
 
-      const [block] = UNSAFE_getAllByType(EventBlock);
+      const [block] = UNSAFE_getAllByType(EventBlockGestureHandler);
       expect(block!.props.event).toEqual(event09);
     });
 
@@ -205,7 +201,7 @@ describe('WeekView', () => {
         <WeekView {...defaultProps} eventsByDate={defaultEventsByDate} />,
       );
 
-      const [block] = UNSAFE_getAllByType(EventBlock);
+      const [block] = UNSAFE_getAllByType(EventBlockGestureHandler);
       expect(block!.props.topOffset).toBe(9 * 60); // 540
     });
 
@@ -227,7 +223,7 @@ describe('WeekView', () => {
         />,
       );
 
-      const [block] = UNSAFE_getAllByType(EventBlock);
+      const [block] = UNSAFE_getAllByType(EventBlockGestureHandler);
       expect(block!.props.topOffset).toBe(0);
     });
 
@@ -249,7 +245,7 @@ describe('WeekView', () => {
         />,
       );
 
-      const [block] = UNSAFE_getAllByType(EventBlock);
+      const [block] = UNSAFE_getAllByType(EventBlockGestureHandler);
       expect(block!.props.topOffset).toBe(9.5 * 60); // 570
     });
   });
@@ -269,7 +265,7 @@ describe('WeekView', () => {
         />,
       );
 
-      const blocks = UNSAFE_getAllByType(EventBlock);
+      const blocks = UNSAFE_getAllByType(EventBlockGestureHandler);
       expect(blocks).toHaveLength(2);
 
       // computeLayout: 겹치는 두 이벤트는 각각 widthFraction = 1/2
@@ -298,7 +294,7 @@ describe('WeekView', () => {
         />,
       );
 
-      const blocks = UNSAFE_getAllByType(EventBlock);
+      const blocks = UNSAFE_getAllByType(EventBlockGestureHandler);
       expect(blocks).toHaveLength(2);
 
       blocks.forEach((block) => {
@@ -332,7 +328,7 @@ describe('WeekView', () => {
       );
 
       // allDay 이벤트는 all-day strip에 표시되므로 EventBlock 없어야 함
-      expect(UNSAFE_queryAllByType(EventBlock)).toHaveLength(0);
+      expect(UNSAFE_queryAllByType(EventBlockGestureHandler)).toHaveLength(0);
     });
 
     it('allDay 이벤트 칩이 strip 영역에 타이틀과 함께 표시됨', () => {
@@ -370,7 +366,7 @@ describe('WeekView', () => {
       );
 
       // timed 이벤트(event09) 1개만 EventBlock으로 렌더링되어야 함
-      const blocks = UNSAFE_getAllByType(EventBlock);
+      const blocks = UNSAFE_getAllByType(EventBlockGestureHandler);
       expect(blocks).toHaveLength(1);
       expect(blocks[0]!.props.event.id).toBe('evt-09');
     });

@@ -28,10 +28,13 @@ import {
   StyleSheet,
   PanResponder,
 } from 'react-native';
-import { ScrollView } from 'react-native';
+// RNGH ScrollView participates in RNGH's gesture orchestration so the
+// long-press + pan inside EventBlockGestureHandler can win the touch
+// when needed. Using react-native's plain ScrollView would let the
+// native scroll handler steal touches before RNGH gets to evaluate them.
+import { ScrollView } from 'react-native-gesture-handler';
 import type { EventSummary } from '@/types';
 import type { FreeSlot } from '@/types/freeTime';
-import { EventBlock } from './EventBlock';
 import {
   EventBlockGestureHandler,
   UndoToast,
@@ -42,26 +45,6 @@ import { useColors } from '@/hooks/useColors';
 import { useTranslatedTitles } from '@/hooks/useTranslatedTitles';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
-
-// ─── Feature flag ─────────────────────────────────────────────────────────────
-
-/**
- * Drag-to-reschedule is enabled in all builds (dev + production).
- * TASK-009 Days 1-5 complete — Gesture Handler v2 + Reanimated 3,
- * long-press 500ms activation, 15-min snapping, conflict detection,
- * optimistic update + undo toast.
- */
-// Read dragMode from devConfig when available; default to 'gh' (drag enabled in production).
-// Tests can override via jest.mock('@/constants/devConfig', () => ({ dragMode: 'panresponder' }))
-// to exercise the PanResponder path without the Gesture Handler overhead.
-const DRAG_MODE_GH = (() => {
-  try {
-    const cfg = require('@/constants/devConfig') as { dragMode?: string };
-    return cfg.dragMode !== 'panresponder';
-  } catch {
-    return true;
-  }
-})();
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
 
@@ -93,17 +76,6 @@ interface WeekViewProps {
   onEventPress: (event: EventSummary) => void;
   /** Called when the user taps a day header to drill into DayView. */
   onDateSelect: (date: Date) => void;
-  /**
-   * Called after a long-press + drag rearranges an event. The parent is
-   * responsible for calling updateEvent() and refreshing the calendar.
-   *   dayDelta    = whole columns moved (negative = earlier in week)
-   *   minuteDelta = 15-minute snapped vertical movement
-   */
-  onReschedule?: (
-    event: EventSummary,
-    dayDelta: number,
-    minuteDelta: number,
-  ) => void;
   /**
    * Optional planner todos bucketed by ISO date key. Rendered as small
    * outlined chips in the all-day strip so a user glancing at a week
@@ -247,7 +219,6 @@ export function WeekView({
   eventsByDate,
   onEventPress,
   onDateSelect,
-  onReschedule,
   todosByDate,
   freeSlots,
   onFreeSlotPress,
@@ -561,11 +532,10 @@ export function WeekView({
 
               const slotsForDay = freeSlotsByDayKey[dateKey] ?? [];
 
-              // TASK-009 Day 2: check if this column has an active hover slot
+              // Drop-target hover highlight is shown when this column matches
+              // the dragged event's current snapped position.
               const isHoverColumn =
-                DRAG_MODE_GH &&
-                hoverSlot !== null &&
-                hoverSlot.dayIndex === idx;
+                hoverSlot !== null && hoverSlot.dayIndex === idx;
               // Snap highlight height = 30-min slot in pixels (HOUR_HEIGHT / 2)
               const HOVER_SLOT_HEIGHT = HOUR_HEIGHT / 2;
 
@@ -638,28 +608,8 @@ export function WeekView({
 
                   {layouts.map((lay) => {
                     const tt = translatedTitles.get(lay.event.id);
-
-                    // TASK-009 Day 2 — feature flag A/B: GH PoC vs EventBlock
-                    if (DRAG_MODE_GH) {
-                      return (
-                        <EventBlockGestureHandler
-                          key={lay.event.id}
-                          event={lay.event}
-                          topOffset={lay.topOffset}
-                          height={lay.height}
-                          widthFraction={lay.widthFraction}
-                          leftFraction={lay.leftFraction}
-                          onPress={onEventPress}
-                          columnWidth={columnWidth}
-                          viewMode="week"
-                          onHoverSlot={handleHoverSlot}
-                          onDropped={handleDropped}
-                        />
-                      );
-                    }
-
                     return (
-                      <EventBlock
+                      <EventBlockGestureHandler
                         key={lay.event.id}
                         event={lay.event}
                         topOffset={lay.topOffset}
@@ -668,8 +618,10 @@ export function WeekView({
                         leftFraction={lay.leftFraction}
                         onPress={onEventPress}
                         columnWidth={columnWidth}
+                        viewMode="week"
+                        onHoverSlot={handleHoverSlot}
+                        onDropped={handleDropped}
                         {...(tt ? { translatedTitle: tt } : {})}
-                        {...(onReschedule ? { onReschedule } : {})}
                       />
                     );
                   })}
@@ -687,7 +639,7 @@ export function WeekView({
         Positioned at the bottom of the calendar view; does not intercept
         touches on the calendar grid (only the toast itself is touchable).
       */}
-      {DRAG_MODE_GH && undoToast && <UndoToast toast={undoToast} />}
+      {undoToast && <UndoToast toast={undoToast} />}
     </View>
   );
 }

@@ -1,26 +1,15 @@
 /**
- * EventBlock — tappable / long-press-draggable event card for WeekView and
- * DayView time grids.
+ * EventBlock — display-only event card for WeekView and DayView time grids.
  *
  * Positioned absolutely within a day column.
  * Supports overlapping event layout via widthFraction / leftFraction props.
  *
- * Interaction model:
- *  - Tap                → onPress (navigate to detail)
- *  - Long-press 500 ms  → enter drag mode (elevated, semi-transparent)
- *  - Pan during drag    → follow the finger in both axes
- *  - Release            → onReschedule(event, dayDelta, minuteDelta); the
- *                         parent converts those deltas into updated
- *                         startAt / endAt and persists via eventService
- *
- * Time snapping: 15-minute increments (HOUR_HEIGHT / 4).
- * Day snapping: the event block snaps to the nearest column by rounding
- *               (dx / columnWidth). The parent tells us the column width
- *               because only the grid knows its own layout.
+ * Drag-to-reschedule lives in EventBlockGestureHandler (RNGH + Reanimated).
+ * EventBlock is the simple, gesture-free render path used by tests and any
+ * non-interactive surface that just needs the visual chip.
  */
 
-import { useMemo, useRef, useState } from 'react';
-import { Animated, PanResponder, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import type { EventSummary } from '@/types';
 import { useColors } from '@/hooks/useColors';
 import { radius } from '@/constants/spacing';
@@ -32,17 +21,8 @@ const MIN_HEIGHT = 22;
 /**
  * Diameter of the owner-indicator dot rendered on Space events.
  * Kept at 7px so it remains visible without overlapping the title text.
- * Only shown for shared (Space) events where isOwn === false.
  */
 const OWNER_DOT_SIZE = 7;
-/** How many pixels per minute the grid uses. 60 px/hour → 1 px/min. */
-const PX_PER_MINUTE = 1;
-/** Minute granularity for the time snap on drop. */
-const SNAP_MINUTES = 15;
-/** How long the user must hold before drag begins. */
-const LONG_PRESS_MS = 500;
-/** How many pixels of finger movement cancels a pending long-press. */
-const MOVE_CANCEL_THRESHOLD = 6;
 
 interface EventBlockProps {
   event: EventSummary;
@@ -52,27 +32,8 @@ interface EventBlockProps {
   leftFraction?: number;
   onPress: (event: EventSummary) => void;
   /**
-   * Optional reschedule callback. When provided, long-press enables a drag
-   * gesture that, on release, passes the computed day + minute deltas.
-   * `dayDelta` is how many columns the block moved (-6..6 in a week view,
-   * always 0 for DayView because parent passes columnWidth = 0).
-   * `minuteDelta` is snapped to 15-min steps.
-   */
-  onReschedule?: (
-    event: EventSummary,
-    dayDelta: number,
-    minuteDelta: number,
-  ) => void;
-  /**
-   * Pixel width of a single day column in the parent grid. Used to convert
-   * horizontal drag distance into a day delta. Pass 0 (or omit) to disable
-   * horizontal snapping (DayView case).
-   */
-  columnWidth?: number;
-  /**
-   * Optional pre-resolved translated title (Sprint 19 TASK-1907). Parent
-   * looks this up via useTranslatedTitles for the whole visible range so
-   * we don't fetch per-block. Falls back to event.title when undefined.
+   * Optional pre-resolved translated title (Sprint 19 TASK-1907). Falls back
+   * to event.title when undefined.
    */
   translatedTitle?: string;
 }
@@ -84,11 +45,8 @@ export function EventBlock({
   widthFraction = 1,
   leftFraction = 0,
   onPress,
-  onReschedule,
-  columnWidth = 0,
   translatedTitle,
 }: EventBlockProps) {
-  // Resolve theme-aware color tokens for dynamic styling
   const colors = useColors();
   const styles = makeStyles(colors);
 
@@ -96,93 +54,9 @@ export function EventBlock({
   const showSubtitle = blockHeight >= 38;
   const bgColor = `${event.color}CC`;
 
-  // Translation for drag preview. Persistent between renders.
-  const translate = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
-  const [dragging, setDragging] = useState(false);
-
-  // Refs so the PanResponder callbacks (created once) see latest values.
-  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const draggingRef = useRef(false);
-  const tapCancelledRef = useRef(false);
-
-  const responder = useMemo(
-    () => PanResponder.create({
-      onStartShouldSetPanResponder: () => !!onReschedule,
-      onPanResponderGrant: () => {
-        tapCancelledRef.current = false;
-        draggingRef.current = false;
-        longPressTimerRef.current = setTimeout(() => {
-          draggingRef.current = true;
-          setDragging(true);
-        }, LONG_PRESS_MS);
-      },
-      onPanResponderMove: (_evt, gestureState) => {
-        if (draggingRef.current) {
-          translate.setValue({ x: gestureState.dx, y: gestureState.dy });
-          return;
-        }
-        // Cancel long-press if finger moved too far before threshold.
-        if (
-          Math.abs(gestureState.dx) > MOVE_CANCEL_THRESHOLD ||
-          Math.abs(gestureState.dy) > MOVE_CANCEL_THRESHOLD
-        ) {
-          if (longPressTimerRef.current) {
-            clearTimeout(longPressTimerRef.current);
-            longPressTimerRef.current = null;
-          }
-          tapCancelledRef.current = true;
-        }
-      },
-      onPanResponderRelease: (_evt, gestureState) => {
-        if (longPressTimerRef.current) {
-          clearTimeout(longPressTimerRef.current);
-          longPressTimerRef.current = null;
-        }
-        if (draggingRef.current && onReschedule) {
-          const dx = gestureState.dx;
-          const dy = gestureState.dy;
-          const dayDelta =
-            columnWidth > 0 ? Math.round(dx / columnWidth) : 0;
-          const rawMinutes = dy / PX_PER_MINUTE;
-          const minuteDelta = Math.round(rawMinutes / SNAP_MINUTES) * SNAP_MINUTES;
-          // Reset translation first so the block pops back into place; parent
-          // is responsible for re-rendering with updated startAt.
-          translate.setValue({ x: 0, y: 0 });
-          draggingRef.current = false;
-          setDragging(false);
-          if (dayDelta !== 0 || minuteDelta !== 0) {
-            onReschedule(event, dayDelta, minuteDelta);
-          }
-          return;
-        }
-        // Not a drag → treat as tap, unless cancelled by movement.
-        translate.setValue({ x: 0, y: 0 });
-        draggingRef.current = false;
-        setDragging(false);
-        if (!tapCancelledRef.current) {
-          onPress(event);
-        }
-      },
-      onPanResponderTerminate: () => {
-        if (longPressTimerRef.current) {
-          clearTimeout(longPressTimerRef.current);
-          longPressTimerRef.current = null;
-        }
-        translate.setValue({ x: 0, y: 0 });
-        draggingRef.current = false;
-        setDragging(false);
-      },
-    }),
-    // PanResponder is created once — closed-over values (event, onReschedule,
-    // columnWidth, onPress) go through the callback closures above.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [event.id, columnWidth, !!onReschedule],
-  );
-
   return (
-    <Animated.View
+    <View
       testID="event-block"
-      {...responder.panHandlers}
       style={[
         styles.block,
         {
@@ -192,11 +66,6 @@ export function EventBlock({
           height: blockHeight,
           left: `${leftFraction * 100}%`,
           width: `${widthFraction * 100}%`,
-          transform: translate.getTranslateTransform(),
-          opacity: dragging ? 0.85 : 1,
-          // Lift during drag so the block floats over neighbouring columns.
-          zIndex: dragging ? 10 : 1,
-          elevation: dragging ? 8 : 0,
         },
       ]}
     >
@@ -208,32 +77,16 @@ export function EventBlock({
         {translatedTitle ?? event.title}
       </Text>
 
-      {/*
-       * Owner indicator dot — shown only for Space (shared) events.
-       * Uses event.color (already resolved to the owner's member color by
-       * eventService) so it blends with the chip's accent while remaining
-       * identifiable.  Self-owned events omit the dot to reduce noise.
-       * testID allows unit tests to assert presence/absence declaratively.
-       */}
       {!event.isOwn && (
         <View
           testID="owner-dot"
-          style={[
-            styles.ownerDot,
-            { backgroundColor: event.color },
-          ]}
+          style={[styles.ownerDot, { backgroundColor: event.color }]}
         />
       )}
-    </Animated.View>
+    </View>
   );
 }
 
-/**
- * Dynamic styles factory — receives current theme color tokens.
- * Must be called inside the component so it reacts to theme changes.
- *
- * @param colors - Active theme color tokens from useColors()
- */
 function makeStyles(colors: ReturnType<typeof useColors>) {
   return StyleSheet.create({
     block: {
@@ -246,14 +99,8 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     },
     title: {
       ...textStyles.labelSm,
-      // textPrimary adapts: gray-900 in light, white in dark
       color: colors.textPrimary,
     },
-    /**
-     * Small dot positioned at the top-right corner of the event chip.
-     * Indicates that this event belongs to another Space member.
-     * Size and position kept within 8px of the chip edge per IDEA-012 spec.
-     */
     ownerDot: {
       position: 'absolute',
       top: 3,
@@ -261,7 +108,6 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       width: OWNER_DOT_SIZE,
       height: OWNER_DOT_SIZE,
       borderRadius: OWNER_DOT_SIZE / 2,
-      // Semi-transparent white border adds contrast against any chip background.
       borderWidth: 1,
       borderColor: 'rgba(255, 255, 255, 0.85)',
     },

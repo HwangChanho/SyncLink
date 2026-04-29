@@ -29,7 +29,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { logError } from '@/lib/errorLogger';
 import { NLInputBar } from '@/components/nl/NLInputBar';
 import { CalendarHeader, type ViewMode } from '@/components/calendar/CalendarHeader';
 import { YearMonthPicker } from '@/components/calendar/YearMonthPicker';
@@ -38,7 +37,6 @@ import { WeekView } from '@/components/calendar/WeekView';
 import { DayView } from '@/components/calendar/DayView';
 import { useEventStore } from '@/stores/eventStore';
 import { subscribeToSharedEvents } from '@/services/eventRealtimeService';
-import { updateEvent } from '@/services/eventService';
 import { useTodoStore } from '@/stores/todoStore';
 import type { MonthViewItem } from '@/components/calendar/MonthView';
 import type { EventSummary, Category, SpaceSummary } from '@/types';
@@ -329,39 +327,10 @@ export default function CalendarScreen() {
     return out;
   }, [eventsByDate, dimmedCats]);
 
-  // Drag-to-reschedule handler: given an event + pixel-derived deltas from
-  // the grid, compute the new startAt/endAt and persist via eventService.
-  const handleReschedule = useCallback(
-    async (evt: EventSummary, dayDelta: number, minuteDelta: number) => {
-      if (dayDelta === 0 && minuteDelta === 0) return;
-      const newStart = new Date(evt.startAt);
-      newStart.setDate(newStart.getDate() + dayDelta);
-      newStart.setMinutes(newStart.getMinutes() + minuteDelta);
-      const newEnd = new Date(evt.endAt);
-      newEnd.setDate(newEnd.getDate() + dayDelta);
-      newEnd.setMinutes(newEnd.getMinutes() + minuteDelta);
-
-      // Optimistic update — show the moved position immediately without
-      // waiting for the network round-trip.
-      const optimistic: EventSummary = {
-        ...evt,
-        startAt: newStart,
-        endAt:   newEnd,
-      };
-      upsertEvent(optimistic);
-
-      try {
-        await updateEvent(evt.id, { startAt: newStart, endAt: newEnd });
-      } catch (err) {
-        // Rollback to original position on failure.
-        upsertEvent(evt);
-        void logError({ context: 'calendar.reschedule', error: err });
-        // eslint-disable-next-line no-console
-        console.error('[calendar] reschedule failed:', err);
-      }
-    },
-    [upsertEvent],
-  );
+  // Drag-to-reschedule lives entirely inside WeekView/DayView via
+  // useOptimisticReschedule (RNGH path). The calendar screen no longer
+  // needs to wire its own handler — keeps this file focused on swipe
+  // navigation + view-mode/state.
 
   const toggleCategoryDim = useCallback((bucket: string) => {
     setDimmedCats((prev) => {
@@ -682,7 +651,6 @@ export default function CalendarScreen() {
                 setSelectedDate(date);
                 setViewMode('day');
               }}
-              onReschedule={handleReschedule}
               todosByDate={todosByDate}
               {...(freeTimeOn ? { freeSlots } : {})}
             />
