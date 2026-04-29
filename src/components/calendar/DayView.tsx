@@ -36,6 +36,7 @@ import { useColors } from '@/hooks/useColors';
 import { useTranslatedTitles } from '@/hooks/useTranslatedTitles';
 import { spacing } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { computeEventLayout } from '@/lib/calendarLayout';
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
 
@@ -50,65 +51,9 @@ const TIME_COL_WIDTH = 44;
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
-// ─── Overlap layout ────────────────────────────────────────────────────────
-
-interface LayoutEvent {
-  event: EventSummary;
-  topOffset: number;
-  height: number;
-  widthFraction: number;
-  leftFraction: number;
-}
-
-/**
- * Greedy column-assignment for overlapping events.
- * Identical to WeekView's computeLayout — events within the same
- * time window are distributed into side-by-side sub-columns.
- */
-function computeLayout(events: EventSummary[]): LayoutEvent[] {
-  if (events.length === 0) return [];
-
-  const sorted = [...events].sort((a, b) => {
-    const diff = a.startAt.getTime() - b.startAt.getTime();
-    return diff !== 0 ? diff : b.endAt.getTime() - a.endAt.getTime();
-  });
-
-  const assignments: { event: EventSummary; colIndex: number }[] = [];
-  const colEndTimes: number[] = [];
-
-  for (const evt of sorted) {
-    const startMs = evt.startAt.getTime();
-    let assigned = false;
-    for (let c = 0; c < colEndTimes.length; c++) {
-      if ((colEndTimes[c] ?? 0) <= startMs) {
-        assignments.push({ event: evt, colIndex: c });
-        colEndTimes[c] = evt.endAt.getTime();
-        assigned = true;
-        break;
-      }
-    }
-    if (!assigned) {
-      assignments.push({ event: evt, colIndex: colEndTimes.length });
-      colEndTimes.push(evt.endAt.getTime());
-    }
-  }
-
-  const totalCols = colEndTimes.length;
-
-  return assignments.map(({ event, colIndex }) => {
-    const startHour = event.startAt.getHours() + event.startAt.getMinutes() / 60;
-    const endHour = event.endAt.getHours() + event.endAt.getMinutes() / 60;
-    const durationHours = Math.max(endHour - startHour, 0.25);
-
-    return {
-      event,
-      topOffset: startHour * HOUR_HEIGHT,
-      height: durationHours * HOUR_HEIGHT,
-      widthFraction: 1 / totalCols,
-      leftFraction: colIndex / totalCols,
-    };
-  });
-}
+// Overlap layout helper lives in `@/lib/calendarLayout` — shared with WeekView.
+const computeLayout = (events: EventSummary[]) =>
+  computeEventLayout(events, HOUR_HEIGHT);
 
 // ─── Component ────────────────────────────────────────────────────────────────
 

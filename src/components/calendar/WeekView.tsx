@@ -45,6 +45,7 @@ import { useColors } from '@/hooks/useColors';
 import { useTranslatedTitles } from '@/hooks/useTranslatedTitles';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { computeEventLayout } from '@/lib/calendarLayout';
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
 
@@ -133,75 +134,9 @@ function getWeekDays(date: Date): Date[] {
   });
 }
 
-// ─── Overlap layout ────────────────────────────────────────────────────────
-
-interface LayoutEvent {
-  event: EventSummary;
-  topOffset: number;
-  height: number;
-  widthFraction: number;
-  leftFraction: number;
-}
-
-/**
- * Computes positions for a list of events within a single day column.
- * Overlapping events are split into side-by-side sub-columns.
- *
- * Algorithm (greedy):
- *  1. Sort by start time.
- *  2. Maintain a list of "active columns" tracking the latest end time.
- *  3. Assign each event to the first column whose latest end ≤ event start.
- *  4. After all events are assigned, normalize widths based on max column count.
- */
-function computeLayout(events: EventSummary[]): LayoutEvent[] {
-  if (events.length === 0) return [];
-
-  // Sort by start time; on tie, longer events first
-  const sorted = [...events].sort((a, b) => {
-    const diff = a.startAt.getTime() - b.startAt.getTime();
-    return diff !== 0 ? diff : b.endAt.getTime() - a.endAt.getTime();
-  });
-
-  // Each entry: { event, colIndex, colCount placeholder }
-  const assignments: { event: EventSummary; colIndex: number }[] = [];
-  // Track the end time of the last event assigned to each sub-column
-  const colEndTimes: number[] = [];
-
-  for (const evt of sorted) {
-    const startMs = evt.startAt.getTime();
-    // Find the first available sub-column
-    let assigned = false;
-    for (let c = 0; c < colEndTimes.length; c++) {
-      if ((colEndTimes[c] ?? 0) <= startMs) {
-        assignments.push({ event: evt, colIndex: c });
-        colEndTimes[c] = evt.endAt.getTime();
-        assigned = true;
-        break;
-      }
-    }
-    if (!assigned) {
-      assignments.push({ event: evt, colIndex: colEndTimes.length });
-      colEndTimes.push(evt.endAt.getTime());
-    }
-  }
-
-  const totalCols = colEndTimes.length;
-
-  return assignments.map(({ event, colIndex }) => {
-    // Convert startAt time-of-day to pixel offset
-    const startHour = event.startAt.getHours() + event.startAt.getMinutes() / 60;
-    const endHour = event.endAt.getHours() + event.endAt.getMinutes() / 60;
-    const durationHours = Math.max(endHour - startHour, 0.25); // min 15 min
-
-    return {
-      event,
-      topOffset: startHour * HOUR_HEIGHT,
-      height: durationHours * HOUR_HEIGHT,
-      widthFraction: 1 / totalCols,
-      leftFraction: colIndex / totalCols,
-    };
-  });
-}
+// Overlap layout helper lives in `@/lib/calendarLayout` — shared with DayView.
+const computeLayout = (events: EventSummary[]) =>
+  computeEventLayout(events, HOUR_HEIGHT);
 
 // ─── Hour labels ───────────────────────────────────────────────────────────
 
