@@ -70,6 +70,21 @@ platform :ios do
       uses_non_exempt_encryption:        false,
     )
 
+    # 5. build-history.md 자동 업데이트 — 빌드/커밋/날짜를 한 행 append
+    #    (어떤 빌드에 무슨 변경이 들어갔는지 추적 못 했던 카오스를 해소)
+    history_path  = "#{PROJECT_ROOT}/docs/launch/build-history.md"
+    if File.exist?(history_path)
+      build_no   = next_build || sh("node -e \"console.log(require('#{PROJECT_ROOT}/app.json').expo.ios.buildNumber)\"").strip
+      git_sha    = sh("git -C '#{PROJECT_ROOT}' rev-parse --short HEAD").strip
+      today      = Time.now.strftime("%Y-%m-%d")
+      subject    = sh("git -C '#{PROJECT_ROOT}' log -1 --pretty=%s").strip
+      new_row    = "| #{build_no} | #{git_sha} | #{today} | #{subject} | uploaded |"
+      File.open(history_path, "a") { |f| f.puts(new_row) }
+      UI.message "📝 build-history.md 갱신: #{new_row}"
+    else
+      UI.important "build-history.md 없음 — 자동 추적 건너뜀"
+    end
+
     UI.success "✅ TestFlight 업로드 완료!"
   end
 
