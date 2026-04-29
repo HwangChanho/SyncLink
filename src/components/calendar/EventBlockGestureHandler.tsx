@@ -80,15 +80,12 @@ const MIN_HEIGHT = 22;
 /**
  * Long-press hold duration (ms) before the pan gesture activates.
  *
- * Matches the iPhone Calendar app's feel — the user must hold for 500 ms
- * before the drag mode engages. This eliminates conflicts with the
- * surrounding ScrollView's swipe-to-navigate gesture because a quick swipe
- * across the event block never triggers drag mode.
- *
- * RNGH v2's `activateAfterLongPress()` on the PanGesture handles this
- * natively on the UI thread, so there is no JS-bridge latency.
+ * 300 ms feels snappy while still clearly distinguishing a tap from a drag.
+ * The surrounding ScrollView is now from react-native-gesture-handler, which
+ * participates in RNGH's orchestration system — so scroll vs drag conflicts
+ * are resolved natively without needing a long dead-zone period.
  */
-const LONG_PRESS_MS = 500;
+const LONG_PRESS_MS = 300;
 
 /**
  * Duration of the Undo toast in milliseconds.
