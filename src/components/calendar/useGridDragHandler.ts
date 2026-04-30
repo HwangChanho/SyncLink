@@ -132,9 +132,17 @@ export function useGridDragHandler({
    * outer ScrollView (or some other parent) is intercepting the touch.
    */
   candidateEvent: EventSummary | null;
+  /**
+   * Build-43 diagnostic — last touch resolution result. Surfaced as a
+   * single-line string so the parent can render it on screen even on
+   * production TestFlight builds where __DEV__ console.log is silent.
+   * Format: "x=… y=… layouts=N hit=title|MISS".
+   */
+  debugInfo: string;
 } {
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [candidateEvent, setCandidateEvent] = useState<EventSummary | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string>('idle');
 
   // Refs are needed inside the PanResponder closure because the responder is
   // memoised — re-creating it on every render would tear down active touches.
@@ -163,14 +171,26 @@ export function useGridDragHandler({
       // space so the parent ScrollView keeps native scroll behaviour.
       onStartShouldSetPanResponder: (e) => {
         const { locationX, locationY } = e.nativeEvent;
+        const layoutsLen = layoutsRef.current.length;
         const hit = hitTest(layoutsRef.current, locationX, locationY);
+        const info = `x=${Math.round(locationX)} y=${Math.round(locationY)} layouts=${layoutsLen} hit=${hit ? hit.event.title : 'MISS'}`;
+        setDebugInfo(info);
+        if (__DEV__) {
+          // eslint-disable-next-line no-console
+          console.log('[Drag] onStartShould', info);
+        }
         if (!hit) return false;
         candidateRef.current = hit;
         startXY.current = { x: locationX, y: locationY };
-        // Visual feedback — sets the ring on the touched chip so the user
-        // (and us, during diagnosis) can see the touch was received.
         setCandidateEvent(hit.event);
         return true;
+      },
+      // Capture phase — without this the parent ScrollView can win
+      // some touches before our start-test runs. Returning the same
+      // hit-test result here makes ownership unambiguous.
+      onStartShouldSetPanResponderCapture: (e) => {
+        const { locationX, locationY } = e.nativeEvent;
+        return hitTest(layoutsRef.current, locationX, locationY) !== null;
       },
       // Don't try to take over once the gesture is already in flight —
       // the start-time decision above is the only chance.
@@ -266,5 +286,5 @@ export function useGridDragHandler({
     [columnWidth, pxPerMinute, snapMinutes, viewMode, onDropped, onTap],
   );
 
-  return { panHandlers: responder.panHandlers, dragState, candidateEvent };
+  return { panHandlers: responder.panHandlers, dragState, candidateEvent, debugInfo };
 }

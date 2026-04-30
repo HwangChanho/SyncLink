@@ -200,7 +200,7 @@ export function DayView({
     }));
   }, [timedEvents, containerWidth]);
 
-  const { panHandlers: gridPanHandlers, dragState, candidateEvent } =
+  const { panHandlers: gridPanHandlers, dragState, candidateEvent, debugInfo } =
     useGridDragHandler({
       layouts:    dragLayouts,
       columnWidth: 0,           // single column — no horizontal day shift
@@ -395,6 +395,10 @@ export function DayView({
         while the 5-second window is open.
       */}
       {undoToast && <UndoToast toast={undoToast} />}
+      {/* Build-43 diagnostic overlay — same as WeekView. */}
+      <View pointerEvents="none" style={styles.debugOverlay}>
+        <Text style={styles.debugText} numberOfLines={1}>{debugInfo}</Text>
+      </View>
     </View>
   );
 }
@@ -548,6 +552,21 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     shadowRadius:   8,
     elevation:      8,
     transform:      [{ scale: 1.02 }],
+  },
+  debugOverlay: {
+    position: 'absolute',
+    top:      4,
+    left:     4,
+    right:    4,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    paddingHorizontal: 6,
+    paddingVertical:   2,
+    borderRadius: 4,
+  },
+  debugText: {
+    color: 'white',
+    fontSize: 10,
+    fontFamily: 'Menlo',
   },
   });
 }

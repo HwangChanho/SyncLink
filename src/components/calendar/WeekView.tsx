@@ -222,7 +222,7 @@ export function WeekView({
     return out;
   }, [weekDays, eventsByDate, columnWidth]);
 
-  const { panHandlers: gridPanHandlers, dragState, candidateEvent } =
+  const { panHandlers: gridPanHandlers, dragState, candidateEvent, debugInfo } =
     useGridDragHandler({
       layouts:    dragLayouts,
       columnWidth,
@@ -596,6 +596,11 @@ export function WeekView({
         touches on the calendar grid (only the toast itself is touchable).
       */}
       {undoToast && <UndoToast toast={undoToast} />}
+      {/* Build-43 diagnostic overlay — visible on TestFlight too. Remove
+          once the drag flow is verified working on a real device. */}
+      <View pointerEvents="none" style={styles.debugOverlay}>
+        <Text style={styles.debugText} numberOfLines={1}>{debugInfo}</Text>
+      </View>
     </View>
   );
 }
@@ -796,6 +801,24 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     shadowRadius:   8,
     elevation:      8,
     transform:      [{ scale: 1.02 }],
+  },
+  // Build-43 diagnostic banner. Always-visible (not __DEV__) so it
+  // surfaces in TestFlight too. Top-left so it doesn't cover the
+  // calendar grid or the FAB.
+  debugOverlay: {
+    position: 'absolute',
+    top:      4,
+    left:     4,
+    right:    4,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    paddingHorizontal: 6,
+    paddingVertical:   2,
+    borderRadius: 4,
+  },
+  debugText: {
+    color: 'white',
+    fontSize: 10,
+    fontFamily: 'Menlo',
   },
   });
 }

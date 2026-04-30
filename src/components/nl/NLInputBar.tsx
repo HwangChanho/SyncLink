@@ -422,10 +422,9 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   return StyleSheet.create({
   container: {
     paddingHorizontal: spacing[4],
-    // Extra bottom padding so the input row sits clearly above the tab
-    // bar / home indicator. The previous 12 px gave the impression the
-    // input was glued to the tab bar boundary on small-inset devices.
-    paddingBottom: spacing[5],
+    // Generous bottom padding so the input row sits clearly above the
+    // tab bar. 32 px still feels too tight in simulator screenshots.
+    paddingBottom: spacing[10],
     paddingTop: spacing[2],
     backgroundColor: colors.background,
     borderTopWidth: 1,
