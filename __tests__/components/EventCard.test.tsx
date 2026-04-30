@@ -162,49 +162,14 @@ describe('EventBlock', () => {
   // onPress 콜백 — Text.onPress via title tap
   // ════════════════════════════════════════════════════════════════════════════
 
-  describe('onPress 콜백', () => {
-    it('블록 탭 시 onPress가 1회 호출된다', () => {
-      const onPress = jest.fn();
-      const { getByText } = render(
-        <EventBlock event={baseEvent} {...defaultLayout} onPress={onPress} />,
-      );
-
-      fireEvent.press(getByText('Test Event'));
-      expect(onPress).toHaveBeenCalledTimes(1);
-    });
-
-    it('onPress에 event 객체가 전달된다', () => {
-      const onPress = jest.fn();
-      const eventWithData = makeEvent({ id: 'evt-press', title: '미팅', color: '#4A6CF7' });
-
-      const { getByText } = render(
-        <EventBlock event={eventWithData} {...defaultLayout} onPress={onPress} />,
-      );
-
-      fireEvent.press(getByText('미팅'));
-      expect(onPress).toHaveBeenCalledWith(eventWithData);
-    });
-
-    it('서로 다른 event를 가진 두 블록 탭 → 각각 올바른 event 전달', () => {
-      const onPress = jest.fn();
-      const eventA = makeEvent({ id: 'evt-a', title: '이벤트 A' });
-      const eventB = makeEvent({ id: 'evt-b', title: '이벤트 B' });
-
-      const { getByText } = render(
-        <>
-          <EventBlock event={eventA} topOffset={0}   height={60} onPress={onPress} />
-          <EventBlock event={eventB} topOffset={120} height={60} onPress={onPress} />
-        </>,
-      );
-
-      fireEvent.press(getByText('이벤트 A'));
-      expect(onPress).toHaveBeenLastCalledWith(eventA);
-
-      fireEvent.press(getByText('이벤트 B'));
-      expect(onPress).toHaveBeenLastCalledWith(eventB);
-
-      expect(onPress).toHaveBeenCalledTimes(2);
-    });
+  // sprint-32 Phase 5+ — EventBlock is a pure display component now.
+  // Tap-to-open is dispatched by the parent useGridDragHandler.onTap
+  // (replayed at PanResponder release) so the chip carries no own
+  // press handler. The pre-Phase-5 unit tests on EventBlock.onPress
+  // are obsolete; integration coverage lives in WeekView/DayView and
+  // useGridDragHandler.onTap path.
+  describe.skip('onPress prop (obsolete after Phase 5)', () => {
+    it('— see comment above', () => { /* intentionally empty */ });
   });
 
   // ════════════════════════════════════════════════════════════════════════════

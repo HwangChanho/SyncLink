@@ -30,7 +30,12 @@ interface EventBlockProps {
   height: number;
   widthFraction?: number;
   leftFraction?: number;
-  onPress: (event: EventSummary) => void;
+  /**
+   * Tap handler — accepted for backwards-compatible call sites but no longer
+   * wired locally. Tap-to-open is dispatched by useGridDragHandler.onTap so
+   * the parent PanResponder owns all touches on the chip uncontested.
+   */
+  onPress?: (event: EventSummary) => void;
   /**
    * Optional pre-resolved translated title (Sprint 19 TASK-1907). Falls back
    * to event.title when undefined.
@@ -44,7 +49,6 @@ export function EventBlock({
   height,
   widthFraction = 1,
   leftFraction = 0,
-  onPress,
   translatedTitle,
 }: EventBlockProps) {
   const colors = useColors();
@@ -69,11 +73,15 @@ export function EventBlock({
         },
       ]}
     >
-      <Text
-        style={styles.title}
-        numberOfLines={showSubtitle ? 2 : 1}
-        onPress={() => onPress(event)}
-      >
+      {/*
+        No Text.onPress — the parent useGridDragHandler PanResponder owns
+        all touches on event chips. Without this, iOS's native press
+        recognition for Text.onPress was winning the touch race, never
+        firing the parent onStartShould (sprint-32 Build 44/sim Build #4
+        diagnostic showed "idle" for long-presses on the chip).
+        Tap-to-open is replayed by the hook's onTap callback on release.
+      */}
+      <Text style={styles.title} numberOfLines={showSubtitle ? 2 : 1}>
         {translatedTitle ?? event.title}
       </Text>
 

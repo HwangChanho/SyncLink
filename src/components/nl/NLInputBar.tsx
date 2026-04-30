@@ -427,18 +427,16 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   return StyleSheet.create({
   container: {
     paddingHorizontal: spacing[4],
-    // Symmetric vertical padding around the input row so the chip looks
-    // balanced (sprint-32 user feedback "위아래 간격이 동일해야지").
+    // Symmetric vertical padding around the input row.
     paddingTop:    spacing[3],
     paddingBottom: spacing[3],
-    // Gap to the tab bar lives entirely on marginBottom now, not on the
-    // container's bottom padding — keeps the chip vertically centered.
-    marginBottom:  spacing[6],
+    // No marginBottom — tab bar's own paddingBottom (insets.bottom) already
+    // clears the home indicator. User feedback Build 44 (real device):
+    // "텍스트필드 좀더 낮춰야" → drop the extra gap entirely so the chip
+    // sits right above the tab bar.
     backgroundColor: colors.background,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
     gap: spacing[2],
   },
   inputRow: {
