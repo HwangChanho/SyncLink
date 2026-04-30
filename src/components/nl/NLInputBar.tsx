@@ -294,7 +294,12 @@ export function NLInputBar({ onEventCreated }: Props) {
      * so this acts as a secondary safety net for edge cases where the resize
      * hasn't fully propagated yet.
      */
-    <View style={[styles.container, { paddingBottom: keyboardHeight > 0 ? keyboardHeight + 8 : undefined }]}>
+    <View style={[
+      styles.container,
+      // Conditional spread instead of `paddingBottom: undefined` because RN
+      // can read explicit-undefined as an override of the StyleSheet value.
+      keyboardHeight > 0 && { paddingBottom: keyboardHeight + 8 },
+    ]}>
       {/* Suggestion chips — shown when focused with empty text */}
       {isFocused && !text && inputState === 'idle' && (
         <ScrollView
@@ -422,13 +427,17 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   return StyleSheet.create({
   container: {
     paddingHorizontal: spacing[4],
-    // Generous bottom padding so the input row sits clearly above the
-    // tab bar. 32 px still feels too tight in simulator screenshots.
-    paddingBottom: spacing[10],
+    // Builds 41/42/43 each bumped paddingBottom (12 → 20 → 40) without
+    // visibly resolving the "glued to tab bar" feedback. Going to 56
+    // and also using marginBottom for an unmistakable gap.
+    paddingBottom: spacing[14],
     paddingTop: spacing[2],
+    marginBottom: spacing[2],
     backgroundColor: colors.background,
     borderTopWidth: 1,
     borderTopColor: colors.border,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
     gap: spacing[2],
   },
   inputRow: {

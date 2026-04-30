@@ -173,7 +173,13 @@ export function useGridDragHandler({
         const { locationX, locationY } = e.nativeEvent;
         const layoutsLen = layoutsRef.current.length;
         const hit = hitTest(layoutsRef.current, locationX, locationY);
-        const info = `x=${Math.round(locationX)} y=${Math.round(locationY)} layouts=${layoutsLen} hit=${hit ? hit.event.title : 'MISS'}`;
+        // Build-44: also surface the first layout rect so we can compare
+        // touch coords vs the rect we expect a hit against.
+        const first = layoutsRef.current[0];
+        const firstStr = first
+          ? `[L=${Math.round(first.left)} T=${Math.round(first.top)} W=${Math.round(first.width)} H=${Math.round(first.height)}]`
+          : '[]';
+        const info = `x=${Math.round(locationX)} y=${Math.round(locationY)} N=${layoutsLen} ${firstStr} hit=${hit ? hit.event.title : 'MISS'}`;
         setDebugInfo(info);
         if (__DEV__) {
           // eslint-disable-next-line no-console
