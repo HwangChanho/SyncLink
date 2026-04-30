@@ -427,12 +427,13 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   return StyleSheet.create({
   container: {
     paddingHorizontal: spacing[4],
-    // Builds 41/42/43 each bumped paddingBottom (12 → 20 → 40) without
-    // visibly resolving the "glued to tab bar" feedback. Going to 56
-    // and also using marginBottom for an unmistakable gap.
-    paddingBottom: spacing[14],
-    paddingTop: spacing[2],
-    marginBottom: spacing[2],
+    // Symmetric vertical padding around the input row so the chip looks
+    // balanced (sprint-32 user feedback "위아래 간격이 동일해야지").
+    paddingTop:    spacing[3],
+    paddingBottom: spacing[3],
+    // Gap to the tab bar lives entirely on marginBottom now, not on the
+    // container's bottom padding — keeps the chip vertically centered.
+    marginBottom:  spacing[6],
     backgroundColor: colors.background,
     borderTopWidth: 1,
     borderTopColor: colors.border,
