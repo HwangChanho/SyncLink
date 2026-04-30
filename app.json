@@ -20,7 +20,7 @@
       "bundleIdentifier": "io.synclink.app",
       "appleTeamId": "QUVU2PY6PG",
       "newArchEnabled": false,
-      "buildNumber": "40",
+      "buildNumber": "41",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.io.synclink.app.widget"

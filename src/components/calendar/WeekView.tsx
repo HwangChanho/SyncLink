@@ -222,13 +222,14 @@ export function WeekView({
     return out;
   }, [weekDays, eventsByDate, columnWidth]);
 
-  const { panHandlers: gridPanHandlers, dragState } = useGridDragHandler({
-    layouts:    dragLayouts,
-    columnWidth,
-    viewMode:   'week',
-    onDropped:  handleGridDrop,
-    onTap:      onEventPress,
-  });
+  const { panHandlers: gridPanHandlers, dragState, candidateEvent } =
+    useGridDragHandler({
+      layouts:    dragLayouts,
+      columnWidth,
+      viewMode:   'week',
+      onDropped:  handleGridDrop,
+      onTap:      onEventPress,
+    });
 
   // Scroll to 8 AM on mount so mornings are visible by default
   const handleLayout = () => {
@@ -547,10 +548,19 @@ export function WeekView({
                     // "live" copy.
                     const isDragSource =
                       dragState !== null && dragState.event.id === lay.event.id;
+                    // Long-press in progress (touched but timer not yet
+                    // fired). Renders a ring so the user gets immediate
+                    // feedback the touch was received — also serves as
+                    // diagnostics if drag misbehaves.
+                    const isCandidate =
+                      candidateEvent !== null && candidateEvent.id === lay.event.id;
                     return (
                       <View
                         key={lay.event.id}
-                        style={isDragSource ? styles.draggingSource : undefined}
+                        style={[
+                          isDragSource && styles.draggingSource,
+                          isCandidate && styles.candidateChip,
+                        ]}
                       >
                         <EventBlock
                           event={lay.event}
@@ -774,6 +784,18 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   // resting chip just needs a visual cue.
   draggingSource: {
     opacity: 0.35,
+  },
+  // Long-press in progress (before the 500 ms threshold). A bright ring
+  // gives the user immediate feedback that the chip was touched, and
+  // also serves as a diagnostic — if no ring appears when a chip is
+  // pressed, the gesture handler isn't receiving the touch.
+  candidateChip: {
+    shadowColor:    colors.primary,
+    shadowOffset:   { width: 0, height: 0 },
+    shadowOpacity:  0.9,
+    shadowRadius:   8,
+    elevation:      8,
+    transform:      [{ scale: 1.02 }],
   },
   });
 }

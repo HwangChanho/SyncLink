@@ -123,8 +123,18 @@ export function useGridDragHandler({
 }: Options): {
   panHandlers: PanResponderInstance['panHandlers'];
   dragState: DragState | null;
+  /**
+   * The event currently in the long-press "wait" window — i.e. the user
+   * has touched a chip but the 500 ms timer hasn't fired yet. Surfaced so
+   * the parent can render a visual progress indicator (ring, scale, etc).
+   * Also doubles as live diagnostics: if this never becomes non-null when
+   * the user presses a chip, hit-testing isn't running — meaning the
+   * outer ScrollView (or some other parent) is intercepting the touch.
+   */
+  candidateEvent: EventSummary | null;
 } {
   const [dragState, setDragState] = useState<DragState | null>(null);
+  const [candidateEvent, setCandidateEvent] = useState<EventSummary | null>(null);
 
   // Refs are needed inside the PanResponder closure because the responder is
   // memoised — re-creating it on every render would tear down active touches.
@@ -157,6 +167,9 @@ export function useGridDragHandler({
         if (!hit) return false;
         candidateRef.current = hit;
         startXY.current = { x: locationX, y: locationY };
+        // Visual feedback — sets the ring on the touched chip so the user
+        // (and us, during diagnosis) can see the touch was received.
+        setCandidateEvent(hit.event);
         return true;
       },
       // Don't try to take over once the gesture is already in flight —
@@ -172,6 +185,8 @@ export function useGridDragHandler({
         // this fires, onPanResponderMove cancels the timer.
         longPressTimerRef.current = setTimeout(() => {
           longPressTimerRef.current = null;
+          // Drag mode takes over the visual; ring/dim handoff to ghost.
+          setCandidateEvent(null);
           setDragState({
             event:    candidate.event,
             rect:     candidate,
@@ -199,11 +214,13 @@ export function useGridDragHandler({
         // the long-press timer (user is probably trying to scroll/tap).
         if (Math.abs(gs.dx) > 8 || Math.abs(gs.dy) > 8) {
           cancelLongPress();
+          setCandidateEvent(null);
         }
       },
 
       onPanResponderRelease: (_, gs) => {
         cancelLongPress();
+        setCandidateEvent(null);
         const drag = dragStateRef.current;
         if (drag) {
           // Drop computed via the same helper that powered the prior
@@ -234,6 +251,7 @@ export function useGridDragHandler({
 
       onPanResponderTerminate: () => {
         cancelLongPress();
+        setCandidateEvent(null);
         if (dragStateRef.current) setDragState(null);
         candidateRef.current = null;
       },
@@ -248,5 +266,5 @@ export function useGridDragHandler({
     [columnWidth, pxPerMinute, snapMinutes, viewMode, onDropped, onTap],
   );
 
-  return { panHandlers: responder.panHandlers, dragState };
+  return { panHandlers: responder.panHandlers, dragState, candidateEvent };
 }

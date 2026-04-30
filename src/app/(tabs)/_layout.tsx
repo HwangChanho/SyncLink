@@ -10,9 +10,9 @@
  */
 
 import { Tabs } from 'expo-router';
-import { Platform } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { componentHeight } from '@/constants/spacing';
 import { LanguageButton } from '@/components/common/LanguageButton';
@@ -27,6 +27,11 @@ export default function TabLayout() {
   const colors = useColors();
   const { t } = useTranslation();
   const headerTitleColor = useAppearanceStore((s) => s.headerTitleColor);
+  // Use the actual home-indicator inset so the tab bar always clears it.
+  // The previous hardcoded `+ 20` on iOS was an approximation that left
+  // child screens (NLInputBar, FAB) sitting too close to the home bar on
+  // newer devices — sprint-32 user feedback "홈바에 딱 붙어있음".
+  const insets = useSafeAreaInsets();
 
   // The colour the user picked in /settings/appearance is now applied as
   // the **header background** (the strip surrounding the title). When the
@@ -78,7 +83,8 @@ export default function TabLayout() {
         tabBarActiveTintColor: colors.tabActive,
         tabBarInactiveTintColor: colors.tabInactive,
         tabBarStyle: {
-          height: componentHeight.tabBar + (Platform.OS === 'ios' ? 20 : 0),
+          height:        componentHeight.tabBar + insets.bottom,
+          paddingBottom: insets.bottom,
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
         },

@@ -200,13 +200,14 @@ export function DayView({
     }));
   }, [timedEvents, containerWidth]);
 
-  const { panHandlers: gridPanHandlers, dragState } = useGridDragHandler({
-    layouts:    dragLayouts,
-    columnWidth: 0,           // single column — no horizontal day shift
-    viewMode:   'day',
-    onDropped:  handleGridDrop,
-    onTap:      onEventPress,
-  });
+  const { panHandlers: gridPanHandlers, dragState, candidateEvent } =
+    useGridDragHandler({
+      layouts:    dragLayouts,
+      columnWidth: 0,           // single column — no horizontal day shift
+      viewMode:   'day',
+      onDropped:  handleGridDrop,
+      onTap:      onEventPress,
+    });
 
   return (
     <View style={styles.container}>
@@ -352,10 +353,15 @@ export function DayView({
                 const tt = translatedTitles.get(lay.event.id);
                 const isDragSource =
                   dragState !== null && dragState.event.id === lay.event.id;
+                const isCandidate =
+                  candidateEvent !== null && candidateEvent.id === lay.event.id;
                 return (
                   <View
                     key={lay.event.id}
-                    style={isDragSource ? styles.draggingSource : undefined}
+                    style={[
+                      isDragSource && styles.draggingSource,
+                      isCandidate && styles.candidateChip,
+                    ]}
                   >
                     <EventBlock
                       event={lay.event}
@@ -531,6 +537,17 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   // makes it clear which chip is "in flight".
   draggingSource: {
     opacity: 0.35,
+  },
+  // Long-press in progress (touched but not yet entered drag mode). The
+  // glow doubles as a diagnostic — its absence means the touch never
+  // reached the gesture handler.
+  candidateChip: {
+    shadowColor:    colors.primary,
+    shadowOffset:   { width: 0, height: 0 },
+    shadowOpacity:  0.9,
+    shadowRadius:   8,
+    elevation:      8,
+    transform:      [{ scale: 1.02 }],
   },
   });
 }
