@@ -170,16 +170,18 @@ export function useGridDragHandler({
       // Hit-test on touch start. Yield (false) when the touch is on empty
       // space so the parent ScrollView keeps native scroll behaviour.
       onStartShouldSetPanResponder: (e) => {
-        const { locationX, locationY } = e.nativeEvent;
+        const { locationX, locationY, pageX, pageY } = e.nativeEvent;
         const layoutsLen = layoutsRef.current.length;
         const hit = hitTest(layoutsRef.current, locationX, locationY);
-        // Build-44: also surface the first layout rect so we can compare
-        // touch coords vs the rect we expect a hit against.
+        // Build-46: include pageY so we can tell if locationY is missing
+        // a ScrollView contentOffset adjustment (locationY - pageY would
+        // tell us the eventsArea's screen-Y, which combined with ScrollView
+        // scroll position lets us math out the correct hit-test offset).
         const first = layoutsRef.current[0];
         const firstStr = first
-          ? `[L=${Math.round(first.left)} T=${Math.round(first.top)} W=${Math.round(first.width)} H=${Math.round(first.height)}]`
-          : '[]';
-        const info = `x=${Math.round(locationX)} y=${Math.round(locationY)} N=${layoutsLen} ${firstStr} hit=${hit ? hit.event.title : 'MISS'}`;
+          ? `L=${Math.round(first.left)} T=${Math.round(first.top)} W=${Math.round(first.width)} H=${Math.round(first.height)}`
+          : 'no-rect';
+        const info = `loc(${Math.round(locationX)},${Math.round(locationY)}) page(${Math.round(pageX)},${Math.round(pageY)}) N=${layoutsLen} ${firstStr} hit=${hit ? 'OK' : 'MISS'}`;
         setDebugInfo(info);
         if (__DEV__) {
           // eslint-disable-next-line no-console
