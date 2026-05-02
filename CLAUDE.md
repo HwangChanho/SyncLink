@@ -96,9 +96,13 @@ Sub-agent 정의: `.claude/agents/` | QA 디스패처: `.claude/commands/qa.md`
 
 ## 세션 시작 루틴
 
-1. `docs/handoffs/sprint-N/LEAD.md` 읽어 컨텍스트 복원
-2. `docs/issues/` 미해결 이슈 확인
-3. 미완료 태스크부터 즉시 시작
+> **부트 매뉴얼**: `docs/SESSION_BOOT.md` — 새 세션/스프린트/페이즈 재시작 시 이 파일을
+> 가장 먼저 읽는다. 자율 모드 위임 받았을 때의 운영 규칙도 여기에 정의돼 있다.
+
+1. `docs/SESSION_BOOT.md` 의 부트 체크리스트 8단계 실행
+2. `docs/handoffs/sprint-N/LEAD.md` + `RESUME.md` 컨텍스트 복원
+3. `docs/issues/` 미해결 이슈 확인
+4. 미완료 태스크부터 즉시 시작
 
 ## 핸드오프 규칙
 
@@ -112,6 +116,7 @@ TestFlight 업로드 전 `docs/QA_CHECKLIST.md` 5개 게이트 통과 필수.
 
 ## 참고 문서
 
+- `docs/SESSION_BOOT.md` — **세션 재시작용 role + 부트 체크리스트 (필독)**
 - `docs/PRD.md` — 제품 요구사항
 - `docs/SPRINT_PLAN.md` — 스프린트 계획
 - `docs/architecture/DECISIONS.md` — ADR 목록
