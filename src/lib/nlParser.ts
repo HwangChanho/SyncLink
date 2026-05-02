@@ -21,15 +21,26 @@ import type { NLParseResult, Confidence, ParsedField } from '@/types';
  */
 export const datePatterns = {
   today:       /오늘/,
-  tomorrow:    /내일/,
+  // "낼" is a colloquial alias for "내일" — accept both so casual input works.
+  // Word-boundary not needed because Korean uses syllable units; matching
+  // first occurrence is fine and the consumed-range tracker will dedupe.
+  tomorrow:    /내일|낼(?!\s*모레)/,    // "낼 모레" should still match dayAfter (모레), not tomorrowAlt
   dayAfter:    /모레/,
   thisWeekday: /이번\s*주\s*(월|화|수|목|금|토|일)요일/,
+  // Two-week-out (다다음 주) must come BEFORE nextWeekday in execution order
+  // because "다다음" contains "다음" — a non-anchored regex would match the
+  // tail and silently drop one week (Build-50 NL audit, case H2).
+  afterNextWeekday: /다다음\s*주\s*(월|화|수|목|금|토|일)요일/,
   nextWeekday: /다음\s*주\s*(월|화|수|목|금|토|일)요일/,
   monthDay:    /(\d{1,2})월\s*(\d{1,2})일/,
   daysLater:   /(\d+)\s*일\s*후/,
   weeksLater:  /(\d+)\s*주\s*후/,
   monthsLater: /(\d+)\s*달\s*후/,
   nthWeekday:  /(\d+)번째\s*(월|화|수|목|금|토|일)요일/,
+  // Past-date markers — we explicitly DETECT these so the parser can
+  // reject the input with confidence='low' instead of silently parsing
+  // the time and using today's date (Build-50 NL audit, case G1/G2).
+  past:        /어제|지난\s*주|작년|지난\s*달|지난\s*해/,
 } as const;
 
 /**
@@ -43,7 +54,11 @@ export const timePatterns = {
   colonFormat: /(\d{1,2}):(\d{2})/,
   noon:        /정오|낮\s*12시/,
   midnight:    /자정|밤\s*12시/,
-  range:       /(\d{1,2})시(?:\s*(\d{1,2})분)?\s*(?:~|부터|에서)\s*(\d{1,2})시(?:\s*(\d{1,2})분)?/,
+  // Build-50 NL audit (case B2 fix): the start side of the range now
+  // accepts an optional AM/PM prefix (오후/오전/저녁/…) and we propagate
+  // it to the end side too when the end didn't carry its own prefix.
+  // Without this, "오후 2시부터 4시까지" was parsed as 02:00–04:00.
+  range:       /(?:(새벽|오전|오후|저녁|밤)\s*)?(\d{1,2})시(?:\s*(\d{1,2})분)?\s*(?:~|부터|에서)\s*(?:(새벽|오전|오후|저녁|밤)\s*)?(\d{1,2})시(?:\s*(\d{1,2})분)?(?:\s*까지)?/,
 } as const;
 
 /**
@@ -62,9 +77,16 @@ export const locationExtractor = {
  */
 export const recurrencePatterns = {
   daily:   /매일/,
-  weekly:  /매주/,
-  monthly: /매월|매달/,
-  yearly:  /매년|매해/,
+  // weeklyOn captures the weekday in "매주 X요일" so the resulting event
+  // anchors on that day instead of on the user's input-day (Build-50 NL
+  // audit, case B2 fix). Plain "매주" still works without a weekday.
+  weeklyOn: /매주\s*(월|화|수|목|금|토|일)요일/,
+  weekly:   /매주/,
+  // monthlyDay captures "매월 N일 / 매달 N일" so the anchor day-of-month
+  // is preserved (audit case B3). Plain "매월/매달" still works alone.
+  monthlyDay: /(?:매월|매달)\s*(\d{1,2})\s*일/,
+  monthly:    /매월|매달/,
+  yearly:     /매년|매해/,
 } as const;
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
@@ -214,13 +236,43 @@ export function parseLocally(text: string, contextDate: Date = new Date()): NLPa
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RegExpExecArray | null
   let m: RegExpExecArray | null;
 
+  // ── Step 0: Past-date guard ──────────────────────────────────────────────
+  // If the input explicitly references a past day/week/month/year, abort
+  // before extracting time so we don't silently schedule the event on
+  // today's date (Build-50 audit, case G1/G2). Returning low confidence
+  // makes the AI fallback (or the user) deal with intent directly.
+
+  if (datePatterns.past.exec(normalized)) {
+    return {
+      parsed: {},
+      confidence: 'low',
+      source: 'local',
+      rawInput: text,
+      processingMs: Date.now() - startMs,
+    };
+  }
+
   // ── Step 1: Recurrence ────────────────────────────────────────────────────
-  // Check most-specific patterns first to avoid partial overlaps (매년 > 매월 > 매주 > 매일).
+  // Check most-specific patterns first to avoid partial overlaps:
+  //   매년 > (매월 N일 > 매월) > (매주 X요일 > 매주) > 매일
+  // We capture the anchor day/weekday alongside the repeat type when
+  // present so the rendered event lands on the correct day.
+
+  let weeklyAnchorDay: number | null = null;       // JS getDay() value
+  let monthlyAnchorDayOfMonth: number | null = null;
 
   if ((m = recurrencePatterns.yearly.exec(normalized))) {
     repeatType = 'yearly'; consume(m);
+  } else if ((m = recurrencePatterns.monthlyDay.exec(normalized))) {
+    repeatType = 'monthly';
+    monthlyAnchorDayOfMonth = parseInt(m[1]!, 10);
+    consume(m);
   } else if ((m = recurrencePatterns.monthly.exec(normalized))) {
     repeatType = 'monthly'; consume(m);
+  } else if ((m = recurrencePatterns.weeklyOn.exec(normalized))) {
+    repeatType = 'weekly';
+    weeklyAnchorDay = koreanDayToJsDay(m[1]!);
+    consume(m);
   } else if ((m = recurrencePatterns.weekly.exec(normalized))) {
     repeatType = 'weekly'; consume(m);
   } else if ((m = recurrencePatterns.daily.exec(normalized))) {
@@ -232,10 +284,26 @@ export function parseLocally(text: string, contextDate: Date = new Date()): NLPa
   // would otherwise be misidentified as a location marker.
 
   if ((m = timePatterns.range.exec(normalized))) {
-    startHour = parseInt(m[1]!, 10);
-    startMin  = m[2] ? parseInt(m[2], 10) : 0;
-    endHour   = parseInt(m[3]!, 10);
-    endMin    = m[4] ? parseInt(m[4], 10) : 0;
+    // Build-50 audit (B1) — the range pattern now captures optional
+    // AM/PM prefixes for both ends. m[1] is the start prefix, m[4] the
+    // end prefix; either may be undefined. When start has a prefix and
+    // end doesn't, the end inherits it ("오후 2시부터 4시까지" → both PM).
+    const startPeriod = m[1] as string | undefined;
+    const endPeriod   = (m[4] ?? m[1]) as string | undefined;
+    let sh = parseInt(m[2]!, 10);
+    const sm = m[3] ? parseInt(m[3], 10) : 0;
+    let eh = parseInt(m[5]!, 10);
+    const em = m[6] ? parseInt(m[6], 10) : 0;
+    const applyPeriod = (h: number, period: string | undefined): number => {
+      if (!period) return h;
+      if (period === '새벽' || period === '오전') return h === 12 ? 0 : h;
+      // 오후 / 저녁 / 밤 → PM (12시는 정오 그대로)
+      return h !== 12 ? h + 12 : h;
+    };
+    startHour = applyPeriod(sh, startPeriod);
+    startMin  = sm;
+    endHour   = applyPeriod(eh, endPeriod);
+    endMin    = em;
     timeConf  = 'high';
     consume(m);
   }
@@ -249,6 +317,15 @@ export function parseLocally(text: string, contextDate: Date = new Date()): NLPa
   // "이번 주 X요일"
   if (!parsedDate && (m = datePatterns.thisWeekday.exec(wt3))) {
     parsedDate = getThisWeekdayDate(contextDate, koreanDayToJsDay(m[1]!));
+    dateConf = 'high'; consume(m);
+  }
+
+  // "다다음 주 X요일" — must run before nextWeekday because "다다음" contains
+  // "다음" and the simpler regex would otherwise match the tail.
+  if (!parsedDate && (m = datePatterns.afterNextWeekday.exec(wt3))) {
+    const nextWeek = getNextWeekdayDate(contextDate, koreanDayToJsDay(m[1]!));
+    nextWeek.setDate(nextWeek.getDate() + 7); // bump one more week
+    parsedDate = nextWeek;
     dateConf = 'high'; consume(m);
   }
 
@@ -392,6 +469,25 @@ export function parseLocally(text: string, contextDate: Date = new Date()): NLPa
     if (place) { location = place; consume(m); }
   }
 
+  // ── Step 5.5: Recurrence anchor → date  ───────────────────────────────────
+  // When the user wrote "매주 X요일" or "매월 N일" but didn't specify an
+  // explicit calendar date, anchor the first occurrence on the nearest
+  // upcoming match so the rendered event lands on the right day.
+  if (!parsedDate && weeklyAnchorDay !== null) {
+    parsedDate = getThisWeekdayDate(contextDate, weeklyAnchorDay);
+    dateConf = 'high';
+  }
+  if (!parsedDate && monthlyAnchorDayOfMonth !== null) {
+    const ctx0 = new Date(contextDate);
+    ctx0.setHours(0, 0, 0, 0);
+    let d = new Date(ctx0.getFullYear(), ctx0.getMonth(), monthlyAnchorDayOfMonth);
+    if (d < ctx0) {
+      d = new Date(ctx0.getFullYear(), ctx0.getMonth() + 1, monthlyAnchorDayOfMonth);
+    }
+    parsedDate = d;
+    dateConf = 'high';
+  }
+
   // ── Step 6: Title — remaining text after all extractions ──────────────────
 
   const titleRaw = workingText().replace(/\s+/g, ' ').trim();
@@ -471,4 +567,45 @@ export function parseLocally(text: string, contextDate: Date = new Date()): NLPa
     rawInput: text,
     processingMs: Date.now() - startMs,
   };
+}
+
+// ─── Multi-event parser ────────────────────────────────────────────────────
+
+/**
+ * Splits a free-form input by Korean enumeration markers (",", "그리고",
+ * "및", "+") and runs parseLocally on each segment, returning one result
+ * per detected event.
+ *
+ * Smart date inheritance: when a later segment has no date of its own
+ * (e.g. "내일 9시 회의, 12시 점심" → the second segment doesn't say "내일"
+ * again), we feed the previous segment's date in as `contextDate` so the
+ * inherited day is preserved.
+ *
+ * Always returns at least one element. Single-event inputs collapse to a
+ * one-item array, so callers can treat the array result uniformly.
+ */
+export function parseMultiple(text: string, contextDate: Date = new Date()): NLParseResult[] {
+  const splitter = /\s*(?:,|그리고|및|\+)\s*/;
+  const segments = text.split(splitter).map((s) => s.trim()).filter((s) => s.length > 0);
+
+  if (segments.length <= 1) {
+    return [parseLocally(text, contextDate)];
+  }
+
+  const results: NLParseResult[] = [];
+  let inheritedDate: Date = contextDate;
+
+  for (const seg of segments) {
+    let r = parseLocally(seg, inheritedDate);
+    // If this segment supplied an explicit date, propagate it as the
+    // context for following segments. We strip the time component so the
+    // inheritance only carries the calendar day, not the hour-of-day.
+    if (r.parsed.startAt?.value) {
+      const d = r.parsed.startAt.value;
+      inheritedDate = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0, 0);
+    }
+    results.push(r);
+  }
+
+  return results;
 }

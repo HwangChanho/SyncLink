@@ -25,12 +25,12 @@ import { useTranslation } from 'react-i18next';
 import Voice, { type SpeechResultsEvent, type SpeechErrorEvent } from '@react-native-voice/voice';
 import { ConfirmModal } from './ConfirmModal';
 import { QuotaExceededSheet } from '@/components/ai/QuotaExceededSheet';
-import { parseNaturalLanguage } from '@/services/aiService';
+import { parseNaturalLanguageMulti } from '@/services/aiService';
 import { createEvent } from '@/services/eventService';
 import { logError } from '@/lib/errorLogger';
 import { useEventStore } from '@/stores/eventStore';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
-import type { NLParseResult } from '@/types';
+import type { NLParseResult, EventSummary } from '@/types';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
@@ -81,9 +81,15 @@ export function NLInputBar({ onEventCreated }: Props) {
   const upsertEvent = useEventStore(s => s.upsertEvent);
   const { canUseAI, consumeAI } = useSubscriptionStore();
 
+  const eventsByDate = useEventStore(s => s.eventsByDate);
   const [text, setText] = useState('');
   const [inputState, setInputState] = useState<InputState>('idle');
   const [parseResult, setParseResult] = useState<NLParseResult | null>(null);
+  // Build-51 — when the user enumerates multiple events ("내일 9시 회의,
+  // 12시 점심") parseNaturalLanguageMulti returns >1 result. We hold the
+  // pending tail here while the user steps through them one by one via
+  // ConfirmModal so each event still gets a per-event confirm/edit UX.
+  const [pendingResults, setPendingResults] = useState<NLParseResult[]>([]);
   const [errorMsg, setErrorMsg] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
@@ -182,37 +188,72 @@ export function NLInputBar({ onEventCreated }: Props) {
     setInputState('loading');
     setErrorMsg('');
 
-    const result = await parseNaturalLanguage(trimmed);
+    const results = await parseNaturalLanguageMulti(trimmed);
 
-    // If the AI fallback was used, record the usage (quota first, then credit).
-    if (result.source === 'ai' && !result.error) {
+    // If any AI call was made, charge once. parseNaturalLanguageMulti
+    // currently uses AI only for single-event fallback, so consuming
+    // once is correct for both single and multi paths.
+    if (results.some((r) => r.source === 'ai' && !r.error)) {
       void consumeAI();
     }
 
-    // AI daily limit exceeded — show snackbar
-    if (result.error && result.confidence === 'low') {
-      setErrorMsg(result.error);
+    // AI daily limit exceeded — show snackbar (only when ALL results
+    // are low+errored; partial-success multi still proceeds).
+    const firstError = results.find((r) => r.error && r.confidence === 'low');
+    if (firstError && results.length === 1) {
+      setErrorMsg(firstError.error ?? '');
       setInputState('error');
-      // Auto-clear error after 4 seconds
       setTimeout(() => setInputState('idle'), 4000);
       return;
     }
 
-    setParseResult(result);
+    // Show the first parsed event in ConfirmModal; queue the rest. Each
+    // confirm/dismiss advances the queue, so the user reviews every
+    // event individually instead of being blindsided by silent batch
+    // creation.
+    const [head, ...tail] = results;
+    setParseResult(head ?? null);
+    setPendingResults(tail);
     setInputState('preview');
   }, [text, inputState, canUseAI, consumeAI]);
 
-  // ── Confirm: create event and close ────────────────────────────────────────
+  /**
+   * Returns true when [startAt, endAt) overlaps any existing event on
+   * the same date. Used to surface a warning toast before persisting so
+   * a user accidentally double-booking can confirm or cancel.
+   */
+  const hasConflict = useCallback((startAt: Date, endAt: Date): EventSummary | null => {
+    const dayKey = `${startAt.getFullYear()}-${String(startAt.getMonth()+1).padStart(2,'0')}-${String(startAt.getDate()).padStart(2,'0')}`;
+    const dayEvents = eventsByDate[dayKey] ?? [];
+    const startMs = startAt.getTime();
+    const endMs   = endAt.getTime();
+    for (const e of dayEvents) {
+      if (e.allDay) continue;
+      const es = e.startAt.getTime();
+      const ee = e.endAt.getTime();
+      // Half-open overlap test: [s,e) ∩ [es,ee) ≠ ∅
+      if (startMs < ee && es < endMs) return e;
+    }
+    return null;
+  }, [eventsByDate]);
+
+  // ── Confirm: create event and close (or advance queue) ────────────────────
 
   const handleConfirm = useCallback(async () => {
     if (!parseResult) return;
 
     const p = parseResult.parsed;
-    // Build CreateEventInput — endAt defaults to startAt + 1 hour if not parsed
     const startAt = p.startAt?.value ?? new Date();
     const endAt   = p.endAt?.value ?? (() => {
       const d = new Date(startAt); d.setHours(d.getHours() + 1); return d;
     })();
+
+    // Build-51 — soft conflict check. We log/notify but don't block
+    // creation: per LEAD's call, overlapping events can stack visually
+    // (the calendar's overlap layout already supports this). Hard-block
+    // would frustrate users registering multi-track schedules.
+    const conflict = !p.allDay?.value ? hasConflict(startAt, endAt) : null;
+
     try {
       const createInput = {
         title:      p.title?.value ?? text.trim(),
@@ -224,12 +265,8 @@ export function NLInputBar({ onEventCreated }: Props) {
           ? { repeatType: p.repeatType.value }
           : {}),
       };
-      // createEvent returns the full Event object — keep it so we can push
-      // an optimistic upsert into the store (calendar refresh is eventual).
       const created = await createEvent(createInput);
 
-      // Optimistic store update so the new event appears immediately without
-      // waiting for the parent-screen's fetchEvents roundtrip.
       if (created) {
         upsertEvent({
           id: created.id,
@@ -242,13 +279,29 @@ export function NLInputBar({ onEventCreated }: Props) {
         });
       }
 
-      // Reset all input-side state BEFORE notifying the parent so the bar is
-      // clean even if onEventCreated triggers a navigation or refetch that
-      // re-renders this component. Also clears any recognised speech buffer
-      // sitting in the TextInput from a prior voice session — this addresses
-      // the reported "voice input appends to old text" regression.
+      // Surface conflict toast AFTER the optimistic create so the chip
+      // is already visible — the user can see what overlapped and
+      // choose to delete via long-press if needed.
+      if (conflict) {
+        setErrorMsg(`겹치는 일정이 있어요: ${conflict.title}`);
+        setTimeout(() => setErrorMsg(''), 3000);
+      }
+
+      // If there are queued events from a multi-event input, advance to
+      // the next one instead of clearing the bar.
+      if (pendingResults.length > 0) {
+        const [next, ...rest] = pendingResults;
+        setParseResult(next ?? null);
+        setPendingResults(rest);
+        // Stay in 'preview' so ConfirmModal stays open with the next event.
+        onEventCreated?.();
+        return;
+      }
+
+      // No more queued events — fully reset.
       setText('');
       setParseResult(null);
+      setPendingResults([]);
       setInputState('idle');
       onEventCreated?.();
     } catch (err) {
@@ -258,7 +311,7 @@ export function NLInputBar({ onEventCreated }: Props) {
       setInputState('error');
       setTimeout(() => setInputState('idle'), 4000);
     }
-  }, [parseResult, text, upsertEvent, onEventCreated, colors.primary, t]);
+  }, [parseResult, pendingResults, text, upsertEvent, onEventCreated, colors.primary, t, hasConflict]);
 
   // ── Edit: navigate to /event/create with pre-fill ──────────────────────────
 
@@ -267,6 +320,7 @@ export function NLInputBar({ onEventCreated }: Props) {
 
     const params = buildPrefillParams(parseResult);
     setParseResult(null);
+    setPendingResults([]);   // navigating to /event/create cancels the rest of the queue
     setInputState('idle');
     setText('');
 
@@ -279,10 +333,19 @@ export function NLInputBar({ onEventCreated }: Props) {
   // ── Dismiss preview without acting ─────────────────────────────────────────
 
   const handleDismiss = useCallback(() => {
+    // If a multi-event queue is in progress, dismiss only the current
+    // event and advance to the next one. This lets the user skip events
+    // they didn't actually want from a comma-enumerated input.
+    if (pendingResults.length > 0) {
+      const [next, ...rest] = pendingResults;
+      setParseResult(next ?? null);
+      setPendingResults(rest);
+      return;
+    }
     setParseResult(null);
     setInputState('idle');
     // Keep input text so the user can re-submit after editing
-  }, []);
+  }, [pendingResults]);
 
   // ── Render ──────────────────────────────────────────────────────────────────
 

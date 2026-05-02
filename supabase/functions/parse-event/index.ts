@@ -62,7 +62,62 @@ interface AiParseResponse {
 
 // ─── Claude Haiku system prompt ───────────────────────────────────────────────
 
-const buildSystemPrompt = (contextDatetime: string): string => `
+/**
+ * Per-locale system prompt. Claude is multilingual, but a locale-tuned
+ * prompt produces noticeably more accurate output than a generic English
+ * prompt with mixed-language input. We default to Korean (the main
+ * audience) and fall through to English for any unknown locale code.
+ */
+const buildSystemPrompt = (contextDatetime: string, locale: string): string => {
+  const lang = (locale ?? '').slice(0, 2).toLowerCase();
+
+  if (lang === 'en') {
+    return `
+You parse natural-language event text into JSON.
+Current time: ${contextDatetime}
+
+Return format (one valid JSON line, no extra text):
+{"title":"string","startAt":"ISO8601","endAt":"ISO8601","location":null,"allDay":false,"repeatType":"none"}
+
+repeatType ∈ "none" | "daily" | "weekly" | "monthly" | "yearly"
+allDay: true when a date is given but no time
+If start/end are ambiguous, pick the nearest future moment.
+Return ONLY valid JSON. No explanation.
+`.trim();
+  }
+
+  if (lang === 'ja') {
+    return `
+あなたは日本語の予定テキストを JSON に変換するパーサーです。
+現在時刻: ${contextDatetime}
+
+返答形式 (必ず有効な JSON 1 行のみ):
+{"title":"string","startAt":"ISO8601","endAt":"ISO8601","location":null,"allDay":false,"repeatType":"none"}
+
+repeatType: "none" | "daily" | "weekly" | "monthly" | "yearly"
+allDay: 日付はあるが時刻が明示されていない場合 true
+不明確な場合は現在時刻基準で最も近い未来の時点を推定。
+必ず JSON のみを返してください。説明不要。
+`.trim();
+  }
+
+  if (lang === 'zh') {
+    return `
+你是一个将中文日程文本转换为 JSON 的解析器。
+当前时间: ${contextDatetime}
+
+返回格式 (必须是一行有效的 JSON):
+{"title":"string","startAt":"ISO8601","endAt":"ISO8601","location":null,"allDay":false,"repeatType":"none"}
+
+repeatType 取值: "none" | "daily" | "weekly" | "monthly" | "yearly"
+allDay: 有日期但未指定时间时为 true
+若开始/结束不明确,推定为当前时间之后最接近的未来时刻。
+仅返回 JSON,不要任何解释。
+`.trim();
+  }
+
+  // Default: Korean (primary audience)
+  return `
 당신은 한국어 일정 텍스트를 JSON으로 변환하는 파서입니다.
 현재 시각: ${contextDatetime}
 
@@ -74,6 +129,7 @@ allDay: 날짜는 있으나 시간이 명시되지 않으면 true
 startAt/endAt이 불분명하면 현재 시각 기준 가장 가까운 미래 시점으로 추정.
 반드시 valid JSON만 반환하세요. 설명 없음.
 `.trim();
+};
 
 // ─── JWT verification helper ──────────────────────────────────────────────────
 
@@ -118,7 +174,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     // 2. Parse request body
     const body: AiParseRequest = await req.json();
-    const { text, contextDatetime, locale: _locale } = body;
+    const { text, contextDatetime, locale } = body;
 
     if (!text?.trim()) {
       return new Response(JSON.stringify({ error: 'text is required' }), {
@@ -155,7 +211,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const message = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 150,
-      system: buildSystemPrompt(contextDatetime ?? new Date().toISOString()),
+      system: buildSystemPrompt(
+        contextDatetime ?? new Date().toISOString(),
+        locale ?? 'ko',
+      ),
       messages: [{ role: 'user', content: text }],
     });
 

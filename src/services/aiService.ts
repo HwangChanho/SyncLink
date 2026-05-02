@@ -17,7 +17,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { supabase } from '@/lib/supabase';
-import { parseLocally } from '@/lib/nlParser';
+import { parseLocally, parseMultiple } from '@/lib/nlParser';
 import { FREE_AI_DAILY_LIMIT, EDGE_FUNCTIONS } from '@/constants/config';
 import { getRuleBaseline } from '@/lib/activitySuggestions';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
@@ -89,6 +89,21 @@ interface EdgeFunctionResult {
  * @returns EdgeFunctionResult — NLParseResult + token count for usage tracking
  */
 async function callEdgeFunction(text: string): Promise<EdgeFunctionResult> {
+  // Build-51 — pull live i18n locale so the Edge Function picks the right
+  // system prompt instead of always using Korean. Fallback to 'ko' for
+  // safety if the i18n module hasn't been initialised yet.
+  let locale = 'ko';
+  try {
+    // Lazy import to avoid pulling i18next into every aiService caller's
+    // bundle (it's already loaded by the app shell so this is free).
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const i18nMod = require('@/lib/i18n');
+    const i18n = i18nMod?.default ?? i18nMod;
+    if (typeof i18n?.language === 'string') locale = i18n.language;
+  } catch {
+    // fall through with 'ko'
+  }
+
   try {
     const { data, error } = await supabase.functions.invoke<AiParseResponse>(
       EDGE_FUNCTIONS.PARSE_EVENT,
@@ -96,7 +111,7 @@ async function callEdgeFunction(text: string): Promise<EdgeFunctionResult> {
         body: {
           text,
           contextDatetime: new Date().toISOString(),
-          locale: 'ko-KR',
+          locale,
         },
       },
     );
@@ -161,6 +176,33 @@ async function callEdgeFunction(text: string): Promise<EdgeFunctionResult> {
  * @param text - Raw user input (e.g. "내일 오후 3시 카페 미팅")
  * @returns NLParseResult (always returns something; may have empty parsed fields)
  */
+/**
+ * Multi-event variant of parseNaturalLanguage.
+ *
+ * Tries the local multi-segment splitter first ("내일 9시 회의, 12시 점심"
+ * → 2 events). If the splitter found multiple segments and at least one
+ * resolved to high/medium confidence, returns the local list directly —
+ * cheap, no API call. Otherwise falls back to the existing single-event
+ * Edge Function path so simple Korean inputs still get AI help.
+ *
+ * Always returns at least one element. Quota / error cases mirror the
+ * single-event helper so callers can use either uniformly.
+ */
+export async function parseNaturalLanguageMulti(text: string): Promise<NLParseResult[]> {
+  const local = parseMultiple(text);
+  // If the splitter actually produced multiple segments and at least one
+  // is usable, return local results directly — even when individual
+  // segments are 'low', because the user explicitly enumerated events.
+  if (local.length > 1) {
+    const anyUsable = local.some((r) => r.confidence !== 'low');
+    if (anyUsable) return local;
+  }
+  // Single segment (or all-low multi) → use the AI fallback path.
+  // This still returns one event; multi-event AI parsing is a follow-up.
+  const single = await parseNaturalLanguage(text);
+  return [single];
+}
+
 export async function parseNaturalLanguage(text: string): Promise<NLParseResult> {
   // Step 1 & 2: local parse first
   const localResult = parseLocally(text);
