@@ -293,8 +293,16 @@ export default function EventCreateScreen() {
   // "저장 기준은 달력에 등록되어있는기준" behaviour requested in Sprint 14.
   const [titleSuggestions, setTitleSuggestions] = useState<EventAutocompleteSuggestion[]>([]);
   const [titleFocused, setTitleFocused]   = useState(false);
-  /** Selected category id — null = 카테고리 없음. Populated either by a
-   * title-autocomplete pick or by tapping the category chip below. */
+  /**
+   * Selected category id. Build-54: a new event is always assigned a
+   * category — the default is the system "기타" (other) so the chip
+   * always renders with a colour and the filter/dim flow works without
+   * a special "uncategorised" code path. The user can override before
+   * saving by tapping the chip.
+   *
+   * `null` only appears as a transient state while the categories are
+   * still loading (we backfill to 기타 in the effect below).
+   */
   const [categoryId, setCategoryId]       = useState<string | null>(null);
   /** Whether the inline category picker sheet is visible. */
   const [categoryPickerVisible, setCategoryPickerVisible] = useState(false);
@@ -306,7 +314,17 @@ export default function EventCreateScreen() {
   useEffect(() => {
     let cancelled = false;
     getCategories().then((list) => {
-      if (!cancelled) setCategoryMap(new Map(list.map((c) => [c.id, c])));
+      if (cancelled) return;
+      setCategoryMap(new Map(list.map((c) => [c.id, c])));
+      // Build-54 — backfill default to system "기타" if user hasn't
+      // explicitly chosen one yet. We match by exact name because the
+      // builtin three (개인/업무/기타) are seeded with user_id=NULL and
+      // shared across users.
+      setCategoryId((current) => {
+        if (current !== null) return current;
+        const other = list.find((c) => c.name === '기타');
+        return other?.id ?? null;
+      });
     }).catch(() => {
       // Non-fatal — chip just shows "없음" until list loads.
     });

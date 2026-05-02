@@ -24,6 +24,7 @@ import {
   View, PanResponder, Pressable, StyleSheet,
   Modal, TouchableOpacity, Text,
   Animated, Dimensions,
+  ActionSheetIOS, Platform, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -269,6 +270,54 @@ export default function CalendarScreen() {
   }, []);
 
   /**
+   * Build-50 follow-up — overflow menu (⋯) for the calendar header.
+   * Consolidates the three previous toolbar icons (filter / free-time /
+   * density) into a single ActionSheet so the period title can sit
+   * uncluttered in the screen centre. Density only appears in month
+   * view because compact/detailed only applies there.
+   *
+   * iOS uses ActionSheetIOS (native sheet); Android falls back to
+   * Alert.alert with buttons because we don't want to add a bottom-sheet
+   * dependency for v1.0. The Android sheet looks slightly different but
+   * the action set is identical.
+   */
+  const openCalendarOverflowMenu = useCallback(() => {
+    const items: { label: string; onPress: () => void }[] = [
+      {
+        label: dimmedCats.size > 0 ? '카테고리 필터 (활성)' : '카테고리 필터',
+        onPress: () => setCatFilterVisible(true),
+      },
+      {
+        label: freeTimeOn ? '빈 시간 끄기' : '빈 시간 켜기',
+        onPress: toggleFreeTime,
+      },
+    ];
+    if (viewMode === 'month') {
+      items.push({
+        label: monthDensity === 'detailed' ? '간략 보기 (점)' : '상세 보기 (제목)',
+        onPress: () => setMonthDensity((d) => (d === 'detailed' ? 'compact' : 'detailed')),
+      });
+    }
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: [...items.map((i) => i.label), '취소'],
+          cancelButtonIndex: items.length,
+        },
+        (idx) => {
+          if (idx >= 0 && idx < items.length) items[idx]!.onPress();
+        },
+      );
+    } else {
+      Alert.alert('더보기', undefined, [
+        ...items.map((i) => ({ text: i.label, onPress: i.onPress })),
+        { text: '취소', style: 'cancel' as const },
+      ]);
+    }
+  }, [dimmedCats, freeTimeOn, viewMode, monthDensity, toggleFreeTime]);
+
+  /**
    * Add or remove a space from the chip selector. The free-time fetcher
    * effect re-runs automatically once selectedSpaceIds changes.
    */
@@ -463,6 +512,15 @@ export default function CalendarScreen() {
   const viewModeRef = useRef(viewMode);
   useEffect(() => { viewModeRef.current = viewMode; }, [viewMode]);
 
+  // Build-49 — drag-mode lock. WeekView/DayView call back into us when
+  // their drag-to-reschedule enters/leaves edit mode; we keep the value
+  // in a ref so the outer swipe PanResponder (created once via useRef)
+  // can read the latest state without recreating the responder.
+  const isDraggingRef = useRef(false);
+  const handleChildDragModeChange = useCallback((dragging: boolean) => {
+    isDraggingRef.current = dragging;
+  }, []);
+
   // ─── Swipe transition animation ───────────────────────────────────────────
   // Animated.Value drives a horizontal translate on the calendar body so
   // pan motion is visible in real time, and a quick spring-back snaps the
@@ -502,6 +560,10 @@ export default function CalendarScreen() {
       // rest, vx ≈ 0). Without this check the PanResponder intercepts RNGH
       // drags and the event snaps back instead of moving.
       onMoveShouldSetPanResponder: (_, gs) =>
+        // Hard gate: while a child is dragging an event chip, never claim
+        // the gesture for week-navigation. Belt-and-suspenders with the
+        // child PanResponder's onPanResponderTerminationRequest=false.
+        !isDraggingRef.current &&
         Math.abs(gs.dx) > Math.abs(gs.dy) * SWIPE_RATIO &&
         Math.abs(gs.dx) > 10 &&
         Math.abs(gs.vx) > 0.3,
@@ -542,70 +604,12 @@ export default function CalendarScreen() {
     <SafeAreaView style={styles.safeArea} edges={[]}>
       <View style={styles.container}>
         {/*
-          Category filter button — top-left affordance that opens a modal
-          letting the user dim/undim events by category.  Positioned
-          absolutely so the existing CalendarHeader layout stays untouched.
+          Build-50 follow-up — single overflow menu (⋯) replaces the
+          three separate left-toolbar buttons. ActionSheet on iOS lists
+          filter / free-time / density options; the icon shows a small
+          accent dot when any toggle is currently active so the user can
+          see "something is on" at a glance without opening the sheet.
         */}
-        <TouchableOpacity
-          style={styles.catFilterBtn}
-          onPress={() => setCatFilterVisible(true)}
-          accessibilityLabel="카테고리 필터"
-        >
-          <Ionicons
-            name="funnel-outline"
-            size={18}
-            color={dimmedCats.size > 0 ? colors.primary : colors.textSecondary}
-          />
-          {dimmedCats.size > 0 && (
-            <View style={[styles.catFilterBadge, { backgroundColor: colors.primary }]} />
-          )}
-        </TouchableOpacity>
-
-        {/*
-          PRD 4.2 Tier 2 — Free time toggle button. Sits to the right of
-          the density toggle, mirrored from the category filter on the
-          left so the header's two-corner balance is preserved. testID is
-          consumed by the QA smoke test and Tier-2 unit test.
-        */}
-        <TouchableOpacity
-          style={styles.freeTimeBtn}
-          testID="calendar-button-free-time"
-          onPress={toggleFreeTime}
-          onLongPress={() => setSpacePickerVisible(true)}
-          accessibilityLabel={freeTimeOn ? t('calendar.free_time_hide') : t('calendar.free_time_show')}
-        >
-          <Ionicons
-            name={freeTimeOn ? 'time' : 'time-outline'}
-            size={18}
-            color={freeTimeOn ? colors.primary : colors.textSecondary}
-          />
-          {freeTimeOn && (
-            <View style={[styles.catFilterBadge, { backgroundColor: colors.primary }]} />
-          )}
-        </TouchableOpacity>
-
-        {/*
-          Month view only: toggle between detailed (title bars) and
-          compact (colour dots) density. Right-side companion to the
-          category filter button.
-        */}
-        {viewMode === 'month' && (
-          <TouchableOpacity
-            style={styles.densityBtn}
-            onPress={() =>
-              setMonthDensity((d) => (d === 'detailed' ? 'compact' : 'detailed'))
-            }
-            accessibilityLabel="월 뷰 밀도 전환"
-          >
-            <Ionicons
-              name={monthDensity === 'detailed' ? 'list' : 'apps-outline'}
-              size={18}
-              color={colors.textSecondary}
-            />
-          </TouchableOpacity>
-        )}
-
-        {/* Fixed header: period title + view mode tabs */}
         <CalendarHeader
           viewMode={viewMode}
           currentDate={selectedDate}
@@ -614,6 +618,22 @@ export default function CalendarScreen() {
           onToday={goToday}
           onYearMonthPress={handleYearMonthPress}
           onViewModeChange={setViewMode}
+          rightToolbar={(
+            <TouchableOpacity
+              style={styles.toolbarBtn}
+              onPress={openCalendarOverflowMenu}
+              accessibilityLabel="더보기"
+            >
+              <Ionicons
+                name="ellipsis-horizontal"
+                size={20}
+                color={colors.textSecondary}
+              />
+              {(dimmedCats.size > 0 || freeTimeOn) && (
+                <View style={[styles.catFilterBadge, { backgroundColor: colors.primary }]} />
+              )}
+            </TouchableOpacity>
+          )}
           onSearchPress={() => router.push('/search')}
         />
 
@@ -636,6 +656,7 @@ export default function CalendarScreen() {
               selectedDate={selectedDate}
               eventsByDate={displayEventsByDate}
               todosByDate={todosByDate}
+              onDragModeChange={handleChildDragModeChange}
               density={monthDensity}
               onDateSelect={handleDateSelect}
               onDateLongPress={handleDateLongPress}
@@ -652,6 +673,7 @@ export default function CalendarScreen() {
                 setViewMode('day');
               }}
               todosByDate={todosByDate}
+              onDragModeChange={handleChildDragModeChange}
               {...(freeTimeOn ? { freeSlots } : {})}
             />
           )}
@@ -662,6 +684,7 @@ export default function CalendarScreen() {
               events={todayEvents}
               onEventPress={handleEventPress}
               todos={todayTodos}
+              onDragModeChange={handleChildDragModeChange}
               {...(freeTimeOn ? { freeSlots } : {})}
             />
           )}
@@ -848,16 +871,15 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       flex: 1,
     },
     // Top-left category filter affordance.
-    catFilterBtn: {
-      position: 'absolute',
-      top: 12,
-      left: 12,
+    // Build-50 — single style for all left-toolbar overlay-toggle buttons
+    // (filter / free-time / density). Now flex children inside
+    // CalendarHeader's leftToolbar slot, so no more absolute positioning.
+    toolbarBtn: {
       width: 32,
       height: 32,
       borderRadius: 16,
       alignItems: 'center',
       justifyContent: 'center',
-      zIndex: 5,
     },
     catFilterBadge: {
       position: 'absolute',
@@ -867,33 +889,9 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       height: 8,
       borderRadius: 4,
     },
-    densityBtn: {
-      position: 'absolute',
-      top: 12,
-      left: 52,
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 5,
-    },
-    /**
-     * PRD 4.2 Tier 2 — free-time toggle button. Top-right pair to the
-     * top-left category filter so the header has visual symmetry.
-     * Long-press opens the Space picker modal.
-     */
-    freeTimeBtn: {
-      position: 'absolute',
-      top: 12,
-      right: 12,
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 5,
-    },
+    // Build-50 — densityBtn / freeTimeBtn replaced by shared toolbarBtn
+    // above. All three overlay-toggle buttons are now flex siblings
+    // inside CalendarHeader's leftToolbar slot.
     /**
      * PRD 4.2 Tier 2 — small banner above the calendar body shown only
      * while the toggle is on. Renders contextual hints

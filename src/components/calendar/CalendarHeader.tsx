@@ -71,6 +71,15 @@ interface CalendarHeaderProps {
   onViewModeChange: (mode: ViewMode) => void;
   /** Open the event search screen. */
   onSearchPress?: () => void;
+  /**
+   * Optional right-side toolbar slot rendered at the end of the nav row,
+   * just before the search button. Used by the parent to host an overflow
+   * menu (filter / free-time / density) so the period title stays
+   * visually centered on screen instead of being pushed off by left
+   * icons (Build-50 follow-up: per LEAD feedback, consolidated 3 icons
+   * into a single ⋯ menu button).
+   */
+  rightToolbar?: React.ReactNode;
 }
 
 const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
@@ -145,6 +154,7 @@ export function CalendarHeader({
   onYearMonthPress,
   onViewModeChange,
   onSearchPress,
+  rightToolbar,
 }: CalendarHeaderProps) {
   // Resolve active theme colors for dark mode support (TASK-700)
   const { t } = useTranslation();
@@ -175,30 +185,41 @@ export function CalendarHeader({
         "일"/"Sun" labels even after dimming. The swipe gesture is
         self-discoverable, so the hint added noise without value.
       */}
+      {/*
+        Build-50 follow-up — title is positioned absolutely so it lands
+        visually in the screen centre regardless of which buttons are
+        on the right. The right-side actions (overflow menu + search)
+        sit in their own flex row floated to the right edge.
+      */}
       <View style={styles.navRow}>
-        <TouchableOpacity
-          onPress={onYearMonthPress ?? onToday}
-          hitSlop={HIT_SLOP}
-          style={styles.titleWrap}
-          accessibilityLabel="년도/월 선택"
-          accessibilityHint="탭하면 년도와 월을 선택하는 피커가 열립니다"
-        >
-          <View style={styles.titleInner}>
-            <Text style={styles.title}>{buildTitle(viewMode, currentDate, t as unknown as (k: string, o?: Record<string, string | number>) => string)}</Text>
-            <Text style={styles.titleChevron}>▾</Text>
-          </View>
-        </TouchableOpacity>
-
-        {onSearchPress && (
+        <View style={styles.titleAbsolute} pointerEvents="box-none">
           <TouchableOpacity
-            onPress={onSearchPress}
+            onPress={onYearMonthPress ?? onToday}
             hitSlop={HIT_SLOP}
-            style={styles.searchButton}
-            accessibilityLabel="일정 검색"
+            style={styles.titleWrap}
+            accessibilityLabel="년도/월 선택"
+            accessibilityHint="탭하면 년도와 월을 선택하는 피커가 열립니다"
           >
-            <Ionicons name="search-outline" size={20} color={colors.textSecondary} />
+            <View style={styles.titleInner}>
+              <Text style={styles.title}>{buildTitle(viewMode, currentDate, t as unknown as (k: string, o?: Record<string, string | number>) => string)}</Text>
+              <Text style={styles.titleChevron}>▾</Text>
+            </View>
           </TouchableOpacity>
-        )}
+        </View>
+        <View style={styles.navRowSpacer} />
+        <View style={styles.rightActions}>
+          {rightToolbar}
+          {onSearchPress && (
+            <TouchableOpacity
+              onPress={onSearchPress}
+              hitSlop={HIT_SLOP}
+              style={styles.searchButton}
+              accessibilityLabel="일정 검색"
+            >
+              <Ionicons name="search-outline" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {/* ─── View mode tabs ─── */}
@@ -244,6 +265,28 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     paddingHorizontal: spacing[4],
     paddingTop: spacing[3],
     paddingBottom: spacing[2],
+  },
+  // Build-50 — absolute centring so the title is visually in the
+  // middle of the screen regardless of right-side actions. pointerEvents
+  // is 'box-none' on the parent so taps on empty centre space don't
+  // intercept; only the title TouchableOpacity itself receives presses.
+  titleAbsolute: {
+    position: 'absolute',
+    left: 0, right: 0, top: 0, bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Spacer pushes the right-side actions to the screen edge; navRow's
+  // 'space-between' alone wouldn't keep them aligned right because the
+  // absolute title isn't part of flex layout.
+  navRowSpacer: {
+    flex: 1,
+  },
+  // Right-side actions row — overflow menu + search.
+  rightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
   },
   arrowBtn: {
     width: 36,

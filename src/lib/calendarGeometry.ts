@@ -40,10 +40,12 @@ export const DEFAULT_PX_PER_MINUTE = 1;
 
 /**
  * Default snap granularity for minuteDelta.
- * Plan spec says 30 min for Day 2 (was 15 in EventBlock's SNAP_MINUTES).
- * Callers can override via `snapMinutes` option.
+ * Build-53 LEAD report — 30-minute snap felt too coarse for routine
+ * scheduling. 15 matches the industry default (Google Calendar, Apple
+ * Calendar) and lets users place events on quarter-hour boundaries with
+ * the same drag gesture. Callers can override via `snapMinutes` option.
  */
-export const DEFAULT_SNAP_MINUTES = 30;
+export const DEFAULT_SNAP_MINUTES = 15;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

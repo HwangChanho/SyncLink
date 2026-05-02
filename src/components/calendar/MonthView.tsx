@@ -17,13 +17,21 @@
  *  - Sundays: rose accent text
  */
 
-import { useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable } from 'react-native';
 import type { EventSummary } from '@/types';
 import { useColors } from '@/hooks/useColors';
 import { useTranslatedTitles } from '@/hooks/useTranslatedTitles';
 import { spacing } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import {
+  useMonthDragHandler,
+  type MonthCellLayout,
+  type MonthEventLayout,
+} from './useMonthDragHandler';
+import { useOptimisticReschedule } from './useOptimisticReschedule';
+import { UndoToast, useUndoToast } from './UndoToast';
+import { applyDelta } from '@/lib/calendarGeometry';
 
 /** Maximum bars to show per day cell before collapsing to "+N". */
 const MAX_BARS = 3;
@@ -70,6 +78,12 @@ interface MonthViewProps {
    * Parent can open a quick-create sheet pre-filled with that date.
    */
   onDateLongPress?: (date: Date) => void;
+  /**
+   * Mirrors WeekView/DayView — fires when drag-to-reschedule enters or
+   * leaves edit mode so calendar.tsx can suspend its outer left/right
+   * swipe-to-navigate gesture.
+   */
+  onDragModeChange?: (isDragging: boolean) => void;
 }
 
 // ─── Date utilities ────────────────────────────────────────────────────────────
@@ -139,6 +153,7 @@ export function MonthView({
   density = 'detailed',
   onDateSelect,
   onDateLongPress,
+  onDragModeChange,
 }: MonthViewProps) {
   // Resolve active theme colors for dark mode support (TASK-700)
   const colors = useColors();
@@ -177,6 +192,161 @@ export function MonthView({
   }, [weeks, eventsByDate]);
   const translatedTitles = useTranslatedTitles(visibleEventIds);
 
+  // ── Drag-to-reschedule (Build-51, month variant) ────────────────────────
+  // Layout strategy: we measure the page position of the weeks-grid View
+  // once on layout (and on width change) and compute every cell + chip
+  // rect analytically from that — no per-chip onLayout overhead. Cell
+  // width derives from the measured grid width / 7; cell height is the
+  // CELL_HEIGHT constant defined below.
+
+  const gridRef = useRef<View>(null);
+  const pageOffsetRef = useRef({ x: 0, y: 0 });
+  const [gridWidth, setGridWidth] = useState(0);
+  const measureGrid = useCallback(() => {
+    gridRef.current?.measureInWindow((x, y) => {
+      pageOffsetRef.current = { x, y };
+    });
+  }, []);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => measureGrid());
+    return () => cancelAnimationFrame(id);
+  }, [measureGrid]);
+
+  const cellWidth = gridWidth > 0 ? gridWidth / 7 : 0;
+
+  const cellLayouts = useMemo<MonthCellLayout[]>(() => {
+    if (cellWidth <= 0) return [];
+    const out: MonthCellLayout[] = [];
+    weeks.forEach((week, weekIdx) => {
+      week.forEach((d, dayIdx) => {
+        out.push({
+          date: d,
+          dateKey: toDateKey(d),
+          left:   dayIdx  * cellWidth,
+          top:    weekIdx * CELL_HEIGHT,
+          width:  cellWidth,
+          height: CELL_HEIGHT,
+        });
+      });
+    });
+    return out;
+  }, [weeks, cellWidth]);
+
+  // Chip-level rects: only for detailed-density; compact-density (dots)
+  // shows multiple events as a single dot row, so individual hit-test
+  // isn't meaningful — drag is disabled in compact mode.
+  const eventLayouts = useMemo<MonthEventLayout[]>(() => {
+    if (cellWidth <= 0 || density !== 'detailed') return [];
+    const out: MonthEventLayout[] = [];
+    weeks.forEach((week, weekIdx) => {
+      week.forEach((d, dayIdx) => {
+        const key = toDateKey(d);
+        const dayEvents = (eventsByDate[key] ?? []);
+        // Only the first MAX_BARS chips are visible in the cell; the rest
+        // collapse into "+N" overflow text and aren't draggable.
+        dayEvents.slice(0, MAX_BARS).forEach((e, chipIdx) => {
+          // Cell layout offsets: paddingTop(4) + DATE_CIRCLE(30) +
+          //   barStack.marginTop(2) = 36 → first chip top
+          // Each subsequent chip: itemBar.height(13) + barStack.gap(1) = 14
+          out.push({
+            event: e,
+            dateKey: key,
+            left:   dayIdx  * cellWidth + 2,           // barStack horizontal padding
+            top:    weekIdx * CELL_HEIGHT + 36 + chipIdx * 14,
+            width:  cellWidth - 4,                     // 2px padding each side
+            height: 13,
+          });
+        });
+      });
+    });
+    return out;
+  }, [weeks, eventsByDate, cellWidth, density]);
+
+  // ── Targeting (drop-target) state — Build-54 redesign ───────────────────
+  // After a long-press selects an event (single-event cell directly, or
+  // multi-event cell via the picker Modal), we enter "targeting" mode:
+  // every cell shows a dashed purple guide-line and the next cell tap
+  // commits the move. This replaces the fragile finger-drag flow.
+  const [targetEvent, setTargetEvent] = useState<EventSummary | null>(null);
+  const [pickerEvents, setPickerEvents] = useState<EventSummary[] | null>(null);
+
+  const { toast: undoToast, showUndo } = useUndoToast();
+  const handleRescheduleDrop = useOptimisticReschedule({ onMoved: showUndo });
+
+  const commitMove = useCallback(
+    (event: EventSummary, targetDate: Date) => {
+      const sourceDay = new Date(event.startAt);
+      sourceDay.setHours(0, 0, 0, 0);
+      const target0 = new Date(targetDate);
+      target0.setHours(0, 0, 0, 0);
+      const dayDelta = Math.round(
+        (target0.getTime() - sourceDay.getTime()) / 86_400_000,
+      );
+      if (dayDelta === 0) return;
+      const { newStartAt, newEndAt } = applyDelta(
+        event.startAt, event.endAt, dayDelta, /* minuteDelta */ 0,
+      );
+      handleRescheduleDrop({
+        event,
+        dayDelta,
+        minuteDelta: 0,
+        newStartAt,
+        newEndAt,
+      });
+    },
+    [handleRescheduleDrop],
+  );
+
+  const handleLongPressCell = useCallback(
+    (cellEvents: EventSummary[]) => {
+      if (cellEvents.length === 0) return;
+      if (cellEvents.length === 1) {
+        // Single event → enter targeting directly (skip popup noise).
+        setTargetEvent(cellEvents[0] ?? null);
+        return;
+      }
+      // Multi-event → show picker so the user can choose which one.
+      setPickerEvents(cellEvents);
+    },
+    [],
+  );
+
+  const handleChipTap = useCallback(
+    (event: EventSummary) => onDateSelect(event.startAt),
+    [onDateSelect],
+  );
+
+  const { panHandlers, candidateEvent } = useMonthDragHandler({
+    eventLayouts,
+    cellLayouts,
+    eventsByDate,
+    pageOffsetRef,
+    onLongPressCell: handleLongPressCell,
+    onChipTap: handleChipTap,
+  });
+
+  // Notify parent when targeting starts/stops so the outer swipe
+  // gesture can suspend (otherwise a sloppy finger could swipe months
+  // while picking a target cell).
+  useEffect(() => {
+    onDragModeChange?.(targetEvent !== null);
+  }, [targetEvent, onDragModeChange]);
+
+  // Cell-tap dispatcher — used by every TouchableOpacity in the grid.
+  // In targeting mode it commits the move; otherwise it's the regular
+  // drill-down to that day's view.
+  const handleCellPress = useCallback(
+    (date: Date) => {
+      if (targetEvent) {
+        commitMove(targetEvent, date);
+        setTargetEvent(null);
+        return;
+      }
+      onDateSelect(date);
+    },
+    [targetEvent, commitMove, onDateSelect],
+  );
+
   return (
     <View style={styles.container}>
       {/* Day-of-week header */}
@@ -190,7 +360,17 @@ export function MonthView({
         ))}
       </View>
 
-      {/* Date rows */}
+      {/* Date rows — wrapped in a measured View so the drag hook can
+          translate page touches into grid-local coordinates. */}
+      <View
+        ref={gridRef}
+        style={styles.gridRoot}
+        onLayout={(e) => {
+          setGridWidth(e.nativeEvent.layout.width);
+          measureGrid();
+        }}
+        {...panHandlers}
+      >
       {weeks.map((week, weekIdx) => (
         <View key={weekIdx} style={styles.weekRow}>
           {week.map((date, dayIdx) => {
@@ -219,8 +399,19 @@ export function MonthView({
             return (
               <TouchableOpacity
                 key={dateKey}
-                style={styles.dayCell}
-                onPress={() => onDateSelect(date)}
+                style={[
+                  styles.dayCell,
+                  // Build-54 — targeting guide. Every cell shows a dashed
+                  // purple border while the user is choosing where to drop
+                  // the selected event. The source cell (where the picked
+                  // event currently lives) gets a solid border instead so
+                  // the user can see "this is the event I'm moving".
+                  targetEvent && styles.targetCell,
+                  targetEvent && targetEvent.startAt &&
+                    toDateKey(targetEvent.startAt) === dateKey &&
+                    styles.targetSourceCell,
+                ]}
+                onPress={() => handleCellPress(date)}
                 onLongPress={onDateLongPress ? () => onDateLongPress(date) : undefined}
                 delayLongPress={400}
                 activeOpacity={0.7}
@@ -312,6 +503,96 @@ export function MonthView({
           })}
         </View>
       ))}
+
+      {/* Long-press in progress — bright ring around the candidate chip
+          so the user gets immediate feedback before the long-press fires. */}
+      {candidateEvent && !targetEvent && (() => {
+        const chip = eventLayouts.find((c) => c.event.id === candidateEvent.id);
+        if (!chip) return null;
+        return (
+          <View
+            pointerEvents="none"
+            style={[
+              styles.candidateRing,
+              {
+                left:   chip.left,
+                top:    chip.top,
+                width:  chip.width,
+                height: chip.height,
+              },
+            ]}
+          />
+        );
+      })()}
+      </View>
+
+      {/* Build-54 — targeting toolbar. Shown while the user is choosing
+          a destination cell. Title surfaces the picked event; the cancel
+          button bails out of the move without changes. */}
+      {targetEvent && (
+        <View style={styles.targetToolbar}>
+          <View style={[styles.targetToolbarDot, { backgroundColor: targetEvent.color }]} />
+          <View style={{ flex: 1, marginHorizontal: 8 }}>
+            <Text style={styles.targetToolbarTitle} numberOfLines={1}>
+              {translatedTitles.get(targetEvent.id) ?? targetEvent.title}
+            </Text>
+            <Text style={styles.targetToolbarHint}>옮길 날짜를 탭하세요</Text>
+          </View>
+          <Pressable
+            onPress={() => setTargetEvent(null)}
+            hitSlop={8}
+            style={styles.targetToolbarCancel}
+          >
+            <Text style={styles.targetToolbarCancelText}>취소</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* Build-54 — multi-event picker Modal. Long-pressing a cell with
+          2+ events opens this list; tapping an item enters targeting
+          mode with that event picked. Backdrop tap cancels. */}
+      <Modal
+        visible={pickerEvents !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPickerEvents(null)}
+      >
+        <Pressable style={styles.pickerBackdrop} onPress={() => setPickerEvents(null)}>
+          <Pressable style={styles.pickerCard} onPress={() => undefined}>
+            <Text style={styles.pickerHeaderText}>이동할 일정 선택</Text>
+            <Text style={styles.pickerHeaderHint}>탭하면 옮길 위치를 고를 수 있어요</Text>
+            {pickerEvents?.map((evt) => {
+              const startH = String(evt.startAt.getHours()).padStart(2, '0');
+              const startM = String(evt.startAt.getMinutes()).padStart(2, '0');
+              return (
+                <Pressable
+                  key={evt.id}
+                  style={({ pressed }) => [
+                    styles.pickerItem,
+                    pressed && styles.pickerItemHi,
+                  ]}
+                  onPress={() => {
+                    setTargetEvent(evt);
+                    setPickerEvents(null);
+                  }}
+                >
+                  <View style={[styles.pickerColorBar, { backgroundColor: evt.color }]} />
+                  <View style={{ flex: 1, marginLeft: 8 }}>
+                    <Text style={styles.pickerItemTitle} numberOfLines={1}>
+                      {translatedTitles.get(evt.id) ?? evt.title}
+                    </Text>
+                    <Text style={styles.pickerItemTime}>
+                      {evt.allDay ? '하루 종일' : `${startH}:${startM}`}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {undoToast && <UndoToast toast={undoToast} />}
     </View>
   );
 }
@@ -444,6 +725,131 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     borderWidth: 1.5,
     borderColor: '#FFFFFF00',
     opacity: 0.6,
+  },
+  // Build-51 — gridRoot is the measured wrapper around the weeks block.
+  // position:'relative' implied but stated so absolute children resolve
+  // against this container.
+  gridRoot: {
+    position: 'relative',
+  },
+  candidateRing: {
+    position: 'absolute',
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  // Build-54 — targeting guides drawn on every cell while the user is
+  // choosing where to drop the picked event. The source cell uses a
+  // solid border to distinguish it from candidate destinations.
+  targetCell: {
+    borderWidth: 1.5,
+    borderColor: colors.primary + '88',
+    borderStyle: 'dashed',
+    backgroundColor: colors.primary + '08',
+  },
+  targetSourceCell: {
+    borderStyle: 'solid',
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '14',
+  },
+  // Targeting toolbar pinned at the bottom of the calendar grid; surfaces
+  // which event is being moved + a cancel button.
+  targetToolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+  },
+  targetToolbarDot: {
+    width: 6,
+    height: 28,
+    borderRadius: 3,
+  },
+  targetToolbarTitle: {
+    ...textStyles.labelSm,
+    color: colors.textPrimary,
+    fontWeight: '600',
+  },
+  targetToolbarHint: {
+    ...textStyles.caption,
+    color: colors.textSecondary,
+    marginTop: 1,
+  },
+  targetToolbarCancel: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: colors.surfaceAlt,
+  },
+  targetToolbarCancelText: {
+    ...textStyles.labelSm,
+    color: colors.textPrimary,
+  },
+  // Build-54 — multi-event picker Modal. Backdrop dim + centred card.
+  pickerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing[4],
+  },
+  pickerCard: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: colors.background,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  pickerHeaderText: {
+    ...textStyles.labelLg,
+    color: colors.textPrimary,
+    fontWeight: '700',
+    paddingHorizontal: 8,
+  },
+  pickerHeaderHint: {
+    ...textStyles.caption,
+    color: colors.textSecondary,
+    paddingHorizontal: 8,
+    marginTop: 2,
+    marginBottom: 6,
+  },
+  pickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  pickerItemHi: {
+    backgroundColor: colors.primary + '18',
+  },
+  pickerColorBar: {
+    width: 4,
+    height: 32,
+    borderRadius: 2,
+  },
+  pickerItemTitle: {
+    ...textStyles.labelSm,
+    color: colors.textPrimary,
+  },
+  pickerItemTime: {
+    ...textStyles.caption,
+    color: colors.textSecondary,
+    marginTop: 1,
   },
   });
 }

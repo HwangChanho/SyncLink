@@ -195,14 +195,15 @@ export function CategoryPickerSheet({
               </View>
             ) : (
               <FlatList
-                data={[{ id: '__none__' } as Partial<Category>, ...categories]}
-                keyExtractor={(c) => c.id ?? '__none__'}
+                // Build-54 — "카테고리 없음" 항목 제거. 새 일정의 기본은
+                // 기타(builtin "other") 카테고리, 사용자가 명시적으로
+                // 다른 카테고리를 골라야만 변경됨. 모든 일정에 카테고리가
+                // 강제로 부여되므로 색/필터/뷰가 일관되게 동작함.
+                data={categories}
+                keyExtractor={(c) => c.id ?? ''}
                 keyboardShouldPersistTaps="handled"
                 renderItem={({ item }) => {
-                  const isNone = item.id === '__none__';
-                  const isSelected = isNone
-                    ? selectedId === null
-                    : selectedId === item.id;
+                  const isSelected = selectedId === item.id;
                   return (
                     <Pressable
                       style={({ pressed }) => [
@@ -210,7 +211,7 @@ export function CategoryPickerSheet({
                         pressed && styles.rowPressed,
                       ]}
                       onPress={() => {
-                        onSelect(isNone ? null : (item.id as string));
+                        onSelect(item.id as string);
                         onClose();
                       }}
                     >
@@ -218,14 +219,12 @@ export function CategoryPickerSheet({
                         style={[
                           styles.rowDot,
                           {
-                            backgroundColor: isNone
-                              ? colors.textTertiary
-                              : (item.color ?? colors.textTertiary),
+                            backgroundColor: item.color ?? colors.textTertiary,
                           },
                         ]}
                       />
                       <Text style={styles.rowName} numberOfLines={1}>
-                        {isNone ? t('planner.category_none') : item.name}
+                        {item.name}
                       </Text>
                       {isSelected && (
                         <Ionicons

@@ -18,7 +18,7 @@
  * UndoToast is rendered as an absolute overlay at the bottom of the view.
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { EventSummary } from '@/types';
@@ -83,6 +83,13 @@ interface DayViewProps {
    * @param slot - The FreeSlot the user tapped on
    */
   onFreeSlotPress?: (slot: FreeSlot) => void;
+
+  /**
+   * Mirrors WeekView.onDragModeChange — fires whenever drag-to-reschedule
+   * enters or leaves edit mode so calendar.tsx can suspend its outer
+   * left/right swipe-to-navigate gesture.
+   */
+  onDragModeChange?: (isDragging: boolean) => void;
 }
 
 /**
@@ -96,6 +103,7 @@ export function DayView({
   todos,
   freeSlots,
   onFreeSlotPress,
+  onDragModeChange,
 }: DayViewProps) {
   // Resolve active theme colors for dark mode support (TASK-700)
   const { t } = useTranslation();
@@ -200,14 +208,34 @@ export function DayView({
     }));
   }, [timedEvents, containerWidth]);
 
-  const { panHandlers: gridPanHandlers, dragState, candidateEvent, debugInfo } =
+  // Build-47 — eventsArea page-position ref so the drag hook can convert
+  // pageX/pageY to eventsArea-local coords (locationX/Y is unreliable; see
+  // useGridDragHandler.ts for the full rationale).
+  const eventsAreaRef = useRef<View>(null);
+  const pageOffsetRef = useRef({ x: 0, y: 0 });
+  const measureEventsArea = useCallback(() => {
+    eventsAreaRef.current?.measureInWindow((x, y) => {
+      pageOffsetRef.current = { x, y };
+    });
+  }, []);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => measureEventsArea());
+    return () => cancelAnimationFrame(id);
+  }, [measureEventsArea]);
+
+  const { panHandlers: gridPanHandlers, dragState, candidateEvent } =
     useGridDragHandler({
       layouts:    dragLayouts,
       columnWidth: 0,           // single column — no horizontal day shift
       viewMode:   'day',
       onDropped:  handleGridDrop,
       onTap:      onEventPress,
+      pageOffsetRef,
     });
+
+  useEffect(() => {
+    onDragModeChange?.(dragState !== null);
+  }, [dragState, onDragModeChange]);
 
   return (
     <View style={styles.container}>
@@ -261,6 +289,11 @@ export function DayView({
         onLayout={handleLayout}
         showsVerticalScrollIndicator={false}
         style={styles.scrollView}
+        onScroll={measureEventsArea}
+        scrollEventThrottle={16}
+        // Build-51 — freeze the grid scroll while drag is active. See
+        // matching comment in WeekView.tsx for full rationale.
+        scrollEnabled={dragState === null}
       >
         <View style={[styles.gridRow, { height: TOTAL_HEIGHT }]}>
           {/* Hour label column */}
@@ -287,17 +320,21 @@ export function DayView({
             // TASK-003 fix: 4 컬럼 이하일 때는 horizontal scroll 비활성 — 그래야
             // ScrollView가 inner EventBlock의 onPress를 swipe 제스처로 오인식
             // 하지 않음. 일정 적을 땐 단일 화면에 모두 fit하므로 스크롤 불필요.
-            scrollEnabled={maxOverlapColumns >= 4}
+            scrollEnabled={maxOverlapColumns >= 4 && dragState === null}
             showsHorizontalScrollIndicator={timedEvents.length > 0 && maxOverlapColumns >= 4}
             style={styles.eventsAreaScroll}
             contentContainerStyle={{ minWidth: '100%' }}
           >
             <View
+              ref={eventsAreaRef}
               style={[
                 styles.eventsArea,
                 { minWidth: Math.max(1, maxOverlapColumns) * MIN_COLUMN_WIDTH },
               ]}
-              onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+              onLayout={(e) => {
+                setContainerWidth(e.nativeEvent.layout.width);
+                measureEventsArea();
+              }}
               {...gridPanHandlers}
             >
               {/* Hour separator lines */}
@@ -395,10 +432,9 @@ export function DayView({
         while the 5-second window is open.
       */}
       {undoToast && <UndoToast toast={undoToast} />}
-      {/* Build-43 diagnostic overlay — same as WeekView. */}
-      <View pointerEvents="none" style={styles.debugOverlay}>
-        <Text style={styles.debugText} numberOfLines={1}>{debugInfo}</Text>
-      </View>
+      {dragState && (
+        <View pointerEvents="none" style={styles.editModeDim} />
+      )}
     </View>
   );
 }
@@ -482,7 +518,11 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     position: 'relative',
     borderLeftWidth: StyleSheet.hairlineWidth,
     borderLeftColor: colors.border,
-    paddingHorizontal: spacing[1],
+    // Build-54 — drop the inset so chips sit flush against the
+    // time-column divider (LEAD report: "왼쪽 라인보다 살짝 떨어져있어
+    // 불편하니 딱 붙여줘"). Right side is naturally bounded by the
+    // screen edge so symmetric 0 padding still reads OK.
+    paddingHorizontal: 0,
     height: TOTAL_HEIGHT,
   },
   hourLine: {
@@ -553,20 +593,10 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     elevation:      8,
     transform:      [{ scale: 1.02 }],
   },
-  debugOverlay: {
+  editModeDim: {
     position: 'absolute',
-    top:      4,
-    left:     4,
-    right:    4,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    paddingHorizontal: 6,
-    paddingVertical:   2,
-    borderRadius: 4,
-  },
-  debugText: {
-    color: 'white',
-    fontSize: 10,
-    fontFamily: 'Menlo',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.10)',
   },
   });
 }

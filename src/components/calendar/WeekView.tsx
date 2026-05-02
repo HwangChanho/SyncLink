@@ -20,7 +20,7 @@
  * the time grid, so they never occlude timed events.
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -97,6 +97,14 @@ interface WeekViewProps {
    * @param slot - The FreeSlot the user tapped on
    */
   onFreeSlotPress?: (slot: FreeSlot) => void;
+
+  /**
+   * Called whenever drag-to-reschedule enters or leaves "edit mode"
+   * (i.e. dragState transitions). The parent (calendar.tsx) gates its
+   * outer left/right swipe-to-navigate PanResponder on this so the two
+   * gestures can't fight while a card is being moved.
+   */
+  onDragModeChange?: (isDragging: boolean) => void;
 }
 
 // ─── Date utilities ────────────────────────────────────────────────────────
@@ -156,6 +164,7 @@ export function WeekView({
   todosByDate,
   freeSlots,
   onFreeSlotPress,
+  onDragModeChange,
 }: WeekViewProps) {
   // Resolve active theme colors for dark mode support (TASK-700)
   const colors = useColors();
@@ -168,6 +177,27 @@ export function WeekView({
   // column width passed to EventBlock for drag-to-reschedule snapping.
   const [gridWidth, setGridWidth] = useState(0);
   const columnWidth = gridWidth > 0 ? gridWidth / 7 : 0;
+
+  // Build-47 — ref to the eventsArea View so we can measure its on-screen
+  // page position. The drag hook subtracts this from pageX/pageY at touch
+  // time to get hit-test coords in the same space as `dragLayouts`. We
+  // re-measure on layout AND on every scroll because eventsArea sits
+  // inside a ScrollView, so its pageY shifts as the user scrolls.
+  const eventsAreaRef = useRef<View>(null);
+  const pageOffsetRef = useRef({ x: 0, y: 0 });
+  const measureEventsArea = useCallback(() => {
+    eventsAreaRef.current?.measureInWindow((x, y) => {
+      pageOffsetRef.current = { x, y };
+    });
+  }, []);
+  // Defer one frame after mount so the layout commit has settled before
+  // measureInWindow runs. Prevents pageOffsetRef from staying at {0,0}
+  // long enough for the first user touch to false-positive against the
+  // raw page coords (Build-47 regression).
+  useEffect(() => {
+    const id = requestAnimationFrame(() => measureEventsArea());
+    return () => cancelAnimationFrame(id);
+  }, [measureEventsArea]);
 
   /**
    * Phase 5 — drag-to-reschedule UI state.
@@ -222,14 +252,21 @@ export function WeekView({
     return out;
   }, [weekDays, eventsByDate, columnWidth]);
 
-  const { panHandlers: gridPanHandlers, dragState, candidateEvent, debugInfo } =
+  const { panHandlers: gridPanHandlers, dragState, candidateEvent } =
     useGridDragHandler({
       layouts:    dragLayouts,
       columnWidth,
       viewMode:   'week',
       onDropped:  handleGridDrop,
       onTap:      onEventPress,
+      pageOffsetRef,
     });
+
+  // Notify the parent screen when drag mode toggles so it can gate its
+  // outer left/right swipe-to-navigate gesture.
+  useEffect(() => {
+    onDragModeChange?.(dragState !== null);
+  }, [dragState, onDragModeChange]);
 
   // Scroll to 8 AM on mount so mornings are visible by default
   const handleLayout = () => {
@@ -436,6 +473,15 @@ export function WeekView({
         onLayout={handleLayout}
         showsVerticalScrollIndicator={false}
         style={styles.scrollView}
+        onScroll={measureEventsArea}
+        scrollEventThrottle={16}
+        // Build-51 — freeze the 24-hour grid scroll while a drag is in
+        // flight so the user's vertical finger movement only repositions
+        // the dragged ghost. Otherwise iOS's native UIScrollView would
+        // continue tracking and the grid would scroll out from under the
+        // chip even though our PanResponder owns the touch (LEAD report
+        // "여전히 주에서 일정옮길때 위아래 움직여").
+        scrollEnabled={dragState === null}
       >
         <View style={[styles.gridRow, { height: TOTAL_HEIGHT }]}>
           {/* Hour label column */}
@@ -457,8 +503,12 @@ export function WeekView({
             working without a single line of orchestration glue).
           */}
           <View
+            ref={eventsAreaRef}
             style={styles.eventsArea}
-            onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}
+            onLayout={(e) => {
+              setGridWidth(e.nativeEvent.layout.width);
+              measureEventsArea();
+            }}
             {...gridPanHandlers}
           >
             {/* Hour separator lines */}
@@ -596,11 +646,16 @@ export function WeekView({
         touches on the calendar grid (only the toast itself is touchable).
       */}
       {undoToast && <UndoToast toast={undoToast} />}
-      {/* Build-43 diagnostic overlay — visible on TestFlight too. Remove
-          once the drag flow is verified working on a real device. */}
-      <View pointerEvents="none" style={styles.debugOverlay}>
-        <Text style={styles.debugText} numberOfLines={1}>{debugInfo}</Text>
-      </View>
+      {/*
+        Edit-mode dim — light wash painted over the whole grid while a
+        drag is in flight. pointerEvents='none' so the active drag's
+        touch events still reach the granted PanResponder unchanged;
+        new taps on FAB/NL bar etc. are suppressed automatically by RN
+        responder semantics (the responder is already taken).
+      */}
+      {dragState && (
+        <View pointerEvents="none" style={styles.editModeDim} />
+      )}
     </View>
   );
 }
@@ -802,23 +857,12 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     elevation:      8,
     transform:      [{ scale: 1.02 }],
   },
-  // Build-43 diagnostic banner. Always-visible (not __DEV__) so it
-  // surfaces in TestFlight too. Top-left so it doesn't cover the
-  // calendar grid or the FAB.
-  debugOverlay: {
+  // Edit-mode visual cue — subtle dim wash so the user feels they're in
+  // a "moving" state without obscuring the calendar grid underneath.
+  editModeDim: {
     position: 'absolute',
-    top:      4,
-    left:     4,
-    right:    4,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    paddingHorizontal: 6,
-    paddingVertical:   2,
-    borderRadius: 4,
-  },
-  debugText: {
-    color: 'white',
-    fontSize: 10,
-    fontFamily: 'Menlo',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.10)',
   },
   });
 }

@@ -27,12 +27,18 @@ export interface LayoutEvent {
 /**
  * Compute positions for events within a single day column.
  *
- * Greedy algorithm:
+ * Two-pass algorithm:
  *  1. Sort by start time; on tie, longer events first.
- *  2. Maintain a list of "active sub-columns", each tracking its latest
- *     end time. Assign each event to the first column whose latest end
- *     ≤ event start, otherwise open a new column.
- *  3. Width fraction = 1 / totalColumns, left fraction = colIndex / totalColumns.
+ *  2. Group events into "overlap clusters" — each cluster is a maximal
+ *     run of events where every event overlaps at least one neighbour
+ *     (transitively). A 9–10am triple-booking and a separate 7–8am
+ *     single event live in two different clusters.
+ *  3. Within each cluster run a greedy column-assignment: each event
+ *     takes the first sub-column whose latest end-time is ≤ its start.
+ *  4. widthFraction = 1 / clusterCols, leftFraction = colIdx / clusterCols
+ *     **per cluster** so a non-overlapping event isn't squeezed by the
+ *     wider neighbour cluster (Build-52 LEAD report: dragging a chip
+ *     out of a 3-way pile-up should expand it to the full column).
  *
  * @param events     Events to lay out (typically already filtered to one day).
  * @param hourHeight Pixel height for one hour of the time grid (60 in WeekView/DayView).
@@ -48,39 +54,67 @@ export function computeEventLayout(
     return diff !== 0 ? diff : b.endAt.getTime() - a.endAt.getTime();
   });
 
-  const assignments: { event: EventSummary; colIndex: number }[] = [];
-  const colEndTimes: number[] = [];
+  const out: LayoutEvent[] = [];
+
+  // Buffer for the cluster currently being built. clusterEndMs tracks the
+  // furthest end-time seen so the "does this next event still overlap?"
+  // check can be done with a single comparison.
+  let cluster: EventSummary[] = [];
+  let clusterEndMs = 0;
+
+  const flushCluster = (): void => {
+    if (cluster.length === 0) return;
+    // Greedy column packing within the cluster
+    const colEndTimes: number[] = [];
+    const assignments: { event: EventSummary; colIndex: number }[] = [];
+    for (const evt of cluster) {
+      const startMs = evt.startAt.getTime();
+      let assigned = false;
+      for (let c = 0; c < colEndTimes.length; c++) {
+        if ((colEndTimes[c] ?? 0) <= startMs) {
+          assignments.push({ event: evt, colIndex: c });
+          colEndTimes[c] = evt.endAt.getTime();
+          assigned = true;
+          break;
+        }
+      }
+      if (!assigned) {
+        assignments.push({ event: evt, colIndex: colEndTimes.length });
+        colEndTimes.push(evt.endAt.getTime());
+      }
+    }
+    const totalCols = colEndTimes.length;
+    for (const { event, colIndex } of assignments) {
+      const startHour = event.startAt.getHours() + event.startAt.getMinutes() / 60;
+      const endHour   = event.endAt.getHours()   + event.endAt.getMinutes()   / 60;
+      const durationHours = Math.max(endHour - startHour, 0.25);
+      out.push({
+        event,
+        topOffset:     startHour * hourHeight,
+        height:        durationHours * hourHeight,
+        widthFraction: 1 / totalCols,
+        leftFraction:  colIndex / totalCols,
+      });
+    }
+    cluster = [];
+    clusterEndMs = 0;
+  };
 
   for (const evt of sorted) {
     const startMs = evt.startAt.getTime();
-    let assigned = false;
-    for (let c = 0; c < colEndTimes.length; c++) {
-      if ((colEndTimes[c] ?? 0) <= startMs) {
-        assignments.push({ event: evt, colIndex: c });
-        colEndTimes[c] = evt.endAt.getTime();
-        assigned = true;
-        break;
-      }
-    }
-    if (!assigned) {
-      assignments.push({ event: evt, colIndex: colEndTimes.length });
-      colEndTimes.push(evt.endAt.getTime());
+    // Half-open overlap test: a new event extends the cluster only when
+    // its start is strictly before the cluster's furthest end (touching
+    // edges count as "back to back" not overlap).
+    if (cluster.length > 0 && startMs < clusterEndMs) {
+      cluster.push(evt);
+      clusterEndMs = Math.max(clusterEndMs, evt.endAt.getTime());
+    } else {
+      flushCluster();
+      cluster.push(evt);
+      clusterEndMs = evt.endAt.getTime();
     }
   }
+  flushCluster();
 
-  const totalCols = colEndTimes.length;
-
-  return assignments.map(({ event, colIndex }) => {
-    const startHour = event.startAt.getHours() + event.startAt.getMinutes() / 60;
-    const endHour = event.endAt.getHours() + event.endAt.getMinutes() / 60;
-    const durationHours = Math.max(endHour - startHour, 0.25);
-
-    return {
-      event,
-      topOffset: startHour * hourHeight,
-      height: durationHours * hourHeight,
-      widthFraction: 1 / totalCols,
-      leftFraction: colIndex / totalCols,
-    };
-  });
+  return out;
 }

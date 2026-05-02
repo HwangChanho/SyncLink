@@ -78,24 +78,24 @@ describe('computeRescheduleDelta', () => {
       expect(minuteDelta).toBe(-60);
     });
 
-    it('dy = 45 px → snaps to 60 (closest 30-min boundary)', () => {
-      // 45 / 30 = 1.5 → Math.round(1.5) = 2 → 2 * 30 = 60
+    it('dy = 45 px → snaps to 45 (3 × 15-min boundary)', () => {
+      // Build-53 — DEFAULT_SNAP_MINUTES is now 15. 45 / 15 = 3 → 3 * 15 = 45
       const { minuteDelta } = computeRescheduleDelta({
         dx: 0,
         dy: 45,
         columnWidth: COLUMN_WIDTH,
       });
-      expect(minuteDelta).toBe(60);
+      expect(minuteDelta).toBe(45);
     });
 
-    it('dy = 14 px → snaps to 0 (below 15 px threshold for 30-min snap)', () => {
-      // 14 / 30 = 0.467 → Math.round = 0 → 0 * 30 = 0
+    it('dy = 14 px → snaps to 15 (rounds up to nearest 15-min boundary)', () => {
+      // 14 / 15 = 0.933 → Math.round = 1 → 1 * 15 = 15
       const { minuteDelta } = computeRescheduleDelta({
         dx: 0,
         dy: 14,
         columnWidth: COLUMN_WIDTH,
       });
-      expect(minuteDelta).toBe(0);
+      expect(minuteDelta).toBe(15);
     });
 
     it('custom snapMinutes=15: dy=14 → minuteDelta=15', () => {
@@ -190,28 +190,24 @@ describe('computeRescheduleDelta', () => {
   // ── Snap boundary at exactly half a snap step ────────────────────────────
 
   describe('exact snap boundaries', () => {
-    it('dy = 15 (exactly half a 30-min snap) snaps up to 30', () => {
-      // Math.round(0.5) = 1 in JavaScript (banker's rounding does NOT apply
-      // here — JS spec rounds half-to-even is NOT what Math.round does).
+    it('dy = 15 lands exactly on the 15-min snap boundary', () => {
+      // Build-53 — default snap is now 15. 15/15 = 1 → 1 * 15 = 15.
       const { minuteDelta } = computeRescheduleDelta({
         dx: 0,
         dy: 15,
         columnWidth: COLUMN_WIDTH,
       });
-      expect(minuteDelta).toBe(30);
+      expect(minuteDelta).toBe(15);
     });
 
-    it('dy = -15 with default 30-min snap rounds to 0 (no shift)', () => {
-      // JS quirk: Math.round(-0.5) === -0 (rounds toward +Infinity at .5).
-      // -0 multiplied by 30 stays -0, which is still numerically zero — the
-      // event position does not shift. We use toBeCloseTo to avoid Object.is
-      // strictness around the negative-zero edge case.
+    it('dy = -15 with default 15-min snap rounds to -15 (one slot back)', () => {
+      // -15 / 15 = -1 exactly → no half-rounding edge case.
       const { minuteDelta } = computeRescheduleDelta({
         dx: 0,
         dy: -15,
         columnWidth: COLUMN_WIDTH,
       });
-      expect(minuteDelta).toBeCloseTo(0);
+      expect(minuteDelta).toBeCloseTo(-15);
     });
   });
 });
@@ -336,15 +332,14 @@ describe('offsetToSnappedMinuteOfDay', () => {
     expect(offsetToSnappedMinuteOfDay(545)).toBe(540);
   });
 
-  it('555 px → snaps to 570 (closer to 570 than 540)', () => {
-    // 555 / 30 = 18.5 → round = 19 → 19 * 30 = 570
-    // Note: JS Math.round(0.5) = 1 (rounds up) — expected behaviour
-    expect(offsetToSnappedMinuteOfDay(555)).toBe(570);
+  it('555 px → snaps to 555 (already on a 15-min boundary)', () => {
+    // Build-53 — default snap is 15. 555 / 15 = 37 → 37 * 15 = 555.
+    expect(offsetToSnappedMinuteOfDay(555)).toBe(555);
   });
 
-  it('clamps to maxMinutes (1410 for snap=30): very large offset stays in range', () => {
-    // 9999 px (far beyond 24h)
-    expect(offsetToSnappedMinuteOfDay(9999)).toBe(1410); // 23:30
+  it('clamps to maxMinutes (1425 for snap=15): very large offset stays in range', () => {
+    // 9999 px (far beyond 24h) → max valid minute = 1440 - 15 = 1425 (23:45).
+    expect(offsetToSnappedMinuteOfDay(9999)).toBe(1425);
   });
 
   it('negative offset → clamps to 0', () => {

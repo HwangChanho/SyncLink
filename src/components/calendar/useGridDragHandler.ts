@@ -95,6 +95,16 @@ interface Options {
    * has swallowed the original Text.onPress.
    */
   onTap: (event: EventSummary) => void;
+  /**
+   * Live page position of the eventsArea container (top-left in screen pt).
+   * The hook subtracts this from pageX/pageY to get touch coords in the
+   * same space as `layouts`. Required because PanResponder's locationX/Y
+   * is relative to the *touched view* (often a deeper child like an
+   * EventBlock), not the responder view — making locationX/Y unusable for
+   * hit-testing against rects in the responder's coord space. The parent
+   * keeps this ref live by measuring on layout + scroll.
+   */
+  pageOffsetRef: { current: { x: number; y: number } };
 }
 
 // ─── Hit-test ────────────────────────────────────────────────────────────────
@@ -120,6 +130,7 @@ export function useGridDragHandler({
   viewMode,
   onDropped,
   onTap,
+  pageOffsetRef,
 }: Options): {
   panHandlers: PanResponderInstance['panHandlers'];
   dragState: DragState | null;
@@ -142,7 +153,7 @@ export function useGridDragHandler({
 } {
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [candidateEvent, setCandidateEvent] = useState<EventSummary | null>(null);
-  const [debugInfo, setDebugInfo] = useState<string>('idle');
+  const [debugInfo, setDebugInfo] = useState<string>('B50-ready');
 
   // Refs are needed inside the PanResponder closure because the responder is
   // memoised — re-creating it on every render would tear down active touches.
@@ -169,36 +180,49 @@ export function useGridDragHandler({
     () => PanResponder.create({
       // Hit-test on touch start. Yield (false) when the touch is on empty
       // space so the parent ScrollView keeps native scroll behaviour.
-      onStartShouldSetPanResponder: (e) => {
-        const { locationX, locationY, pageX, pageY } = e.nativeEvent;
+      // Capture phase — runs before children. Doing the hit-test here lets
+      // us claim touches that landed on event chips before any inner view
+      // (Text, EventBlock) becomes the touch target. If we return true we
+      // also persist the candidate so onPanResponderGrant can pick it up;
+      // otherwise grant gets called with an empty candidateRef and the
+      // long-press timer never starts (Build-47 regression).
+      //
+      // The debug bar is updated from BOTH capture (when we claim) and
+      // bubble (when no event was hit) so the user always sees the
+      // current touch result instead of the bar going stale.
+      onStartShouldSetPanResponderCapture: (e) => {
+        const { pageX, pageY } = e.nativeEvent;
+        const off = pageOffsetRef.current;
+        const localX = pageX - off.x;
+        const localY = pageY - off.y;
         const layoutsLen = layoutsRef.current.length;
-        const hit = hitTest(layoutsRef.current, locationX, locationY);
-        // Build-46: include pageY so we can tell if locationY is missing
-        // a ScrollView contentOffset adjustment (locationY - pageY would
-        // tell us the eventsArea's screen-Y, which combined with ScrollView
-        // scroll position lets us math out the correct hit-test offset).
+        const hit = hitTest(layoutsRef.current, localX, localY);
         const first = layoutsRef.current[0];
         const firstStr = first
           ? `L=${Math.round(first.left)} T=${Math.round(first.top)} W=${Math.round(first.width)} H=${Math.round(first.height)}`
           : 'no-rect';
-        const info = `loc(${Math.round(locationX)},${Math.round(locationY)}) page(${Math.round(pageX)},${Math.round(pageY)}) N=${layoutsLen} ${firstStr} hit=${hit ? 'OK' : 'MISS'}`;
+        const info = `${hit ? 'CAP' : 'cap'} local(${Math.round(localX)},${Math.round(localY)}) off(${Math.round(off.x)},${Math.round(off.y)}) page(${Math.round(pageX)},${Math.round(pageY)}) N=${layoutsLen} ${firstStr} hit=${hit ? 'OK' : 'MISS'}`;
         setDebugInfo(info);
-        if (__DEV__) {
-          // eslint-disable-next-line no-console
-          console.log('[Drag] onStartShould', info);
-        }
         if (!hit) return false;
         candidateRef.current = hit;
-        startXY.current = { x: locationX, y: locationY };
+        startXY.current = { x: localX, y: localY };
         setCandidateEvent(hit.event);
         return true;
       },
-      // Capture phase — without this the parent ScrollView can win
-      // some touches before our start-test runs. Returning the same
-      // hit-test result here makes ownership unambiguous.
-      onStartShouldSetPanResponderCapture: (e) => {
-        const { locationX, locationY } = e.nativeEvent;
-        return hitTest(layoutsRef.current, locationX, locationY) !== null;
+      // Bubble phase — only reached when capture didn't claim (no hit).
+      // Kept as a safety net + extra diagnostics so we can tell whether
+      // capture-phase numbers and bubble-phase numbers ever disagree.
+      onStartShouldSetPanResponder: (e) => {
+        const { pageX, pageY } = e.nativeEvent;
+        const off = pageOffsetRef.current;
+        const localX = pageX - off.x;
+        const localY = pageY - off.y;
+        const hit = hitTest(layoutsRef.current, localX, localY);
+        if (!hit) return false;
+        candidateRef.current = hit;
+        startXY.current = { x: localX, y: localY };
+        setCandidateEvent(hit.event);
+        return true;
       },
       // Don't try to take over once the gesture is already in flight —
       // the start-time decision above is the only chance.
@@ -223,7 +247,7 @@ export function useGridDragHandler({
             dx: 0,
             dy: 0,
           });
-        }, 500);
+        }, 280);
       },
 
       onPanResponderMove: (_, gs) => {
@@ -283,10 +307,11 @@ export function useGridDragHandler({
         if (dragStateRef.current) setDragState(null);
         candidateRef.current = null;
       },
-      // The native event system can ask us to release the responder when
-      // a parent gesture (e.g. modal backdrop) wants it; allowing the
-      // request prevents the screen from feeling stuck during a drag.
-      onPanResponderTerminationRequest: () => true,
+      // Refuse to release the responder while a drag is in progress so
+      // the outer calendar's left/right swipe-to-navigate gesture can't
+      // steal mid-drag (Build-49 user report). Before drag mode kicks
+      // in we still allow termination so a quick scroll is honoured.
+      onPanResponderTerminationRequest: () => dragStateRef.current === null,
     }),
     // The responder closure reads layouts/dragState via refs and reads the
     // numeric props directly — only the latter need to invalidate it.
