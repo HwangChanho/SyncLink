@@ -61,6 +61,7 @@ const en = {
     annual: 'Yearly',
     monthly: 'Monthly',
     weekly: 'Weekly',
+    weekly_custom: 'Custom days',
     daily: 'Daily',
     no_repeat: 'No repeat',
     /** DateTimeModal header label — shown when allDay=false. */
@@ -148,6 +149,7 @@ const en = {
     unknown: 'Unknown event',
     delete: 'Delete Event',
     delete_confirm: 'This action cannot be undone. Continue?',
+    drop_to_delete: 'Drop here to delete',
     save_failed: 'Failed to save the event. Please try again.',
     load_failed: 'Failed to load events.',
     not_found: 'Event not found.',
@@ -176,6 +178,7 @@ const en = {
       start: 'Start',
       end: 'End',
       repeat: 'Repeat',
+      repeat_weekdays: 'Repeat days',
       category: 'Category',
       location: 'Location',
       memo: 'Memo',

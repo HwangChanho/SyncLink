@@ -66,6 +66,7 @@ const ko = {
     annual: '매년',
     monthly: '매월',
     weekly: '매주',
+    weekly_custom: '특정 요일',
     daily: '매일',
     no_repeat: '반복 없음',
     /** DateTimeModal header label — shown when allDay=false (both date & time pickers visible). */
@@ -153,6 +154,7 @@ const ko = {
     unknown: '알 수 없는 일정',
     delete: '일정 삭제',
     delete_confirm: '이 작업은 되돌릴 수 없습니다. 계속하시겠습니까?',
+    drop_to_delete: '여기에 놓아 삭제',
     save_failed: '일정 저장에 실패했어요. 다시 시도해주세요.',
     load_failed: '일정을 불러오지 못했습니다.',
     not_found: '일정을 찾을 수 없습니다.',
@@ -186,6 +188,7 @@ const ko = {
       start: '시작',
       end: '종료',
       repeat: '반복',
+      repeat_weekdays: '반복 요일',
       category: '카테고리',
       location: '위치',
       memo: '메모',

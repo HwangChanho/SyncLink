@@ -157,11 +157,12 @@ export default function EventCreateScreen() {
 
   /** Repeat options built from i18n translations. */
   const REPEAT_OPTIONS: { value: RepeatType; label: string }[] = [
-    { value: 'none',    label: t('time.no_repeat') },
-    { value: 'daily',   label: t('time.daily') },
-    { value: 'weekly',  label: t('time.weekly') },
-    { value: 'monthly', label: t('time.monthly') },
-    { value: 'yearly',  label: t('time.annual') },
+    { value: 'none',          label: t('time.no_repeat') },
+    { value: 'daily',         label: t('time.daily') },
+    { value: 'weekly',        label: t('time.weekly') },
+    { value: 'custom_weekly', label: t('time.weekly_custom') },
+    { value: 'monthly',       label: t('time.monthly') },
+    { value: 'yearly',        label: t('time.annual') },
   ];
 
   // Build-55 — empty-slot quick-create deep link adds startHour/startMinute on
@@ -261,6 +262,8 @@ export default function EventCreateScreen() {
   });
 
   const [repeatType, setRepeatType] = useState<RepeatType>('none');
+  /** custom_weekly 일 때 선택된 요일들 (0=일 .. 6=토). 다른 type 일 때는 무시. */
+  const [repeatWeekdays, setRepeatWeekdays] = useState<number[]>([]);
   const [location, setLocation] = useState('');
   const [description, setDescription] = useState('');
   /** IDs of spaces the user has chosen to share this event to. */
@@ -537,6 +540,8 @@ export default function EventCreateScreen() {
         startAt,
         endAt: effectiveEndAt,
         repeatType,
+        // custom_weekly 가 아니면 빈 배열 보내봤자 service 에서 null 처리.
+        ...(repeatType === 'custom_weekly' ? { repeatWeekdays } : {}),
         ...(location.trim()     ? { location:    location.trim() }     : {}),
         ...(description.trim()  ? { description: description.trim() }  : {}),
         ...(categoryId          ? { categoryId }                       : {}),
@@ -879,7 +884,14 @@ export default function EventCreateScreen() {
                       styles.repeatChip,
                       repeatType === opt.value && styles.repeatChipSelected,
                     ]}
-                    onPress={() => setRepeatType(opt.value)}
+                    onPress={() => {
+                      setRepeatType(opt.value);
+                      // custom_weekly 첫 진입 시 시작일 요일을 기본 선택해
+                      // 사용자가 빈 배열로 저장하지 않게 한다.
+                      if (opt.value === 'custom_weekly' && repeatWeekdays.length === 0) {
+                        setRepeatWeekdays([startAt.getDay()]);
+                      }
+                    }}
                   >
                     <Text
                       style={[
@@ -894,6 +906,49 @@ export default function EventCreateScreen() {
               </View>
             </ScrollView>
           </FormRow>
+
+          {/* Build-57 — custom_weekly 일 때만 노출되는 요일 picker.
+              7개 요일 토글, 적어도 1개는 선택되도록 유지. */}
+          {repeatType === 'custom_weekly' && (
+            <FormRow label={t('event.form.repeat_weekdays')} rowStyle={rowStyle}>
+              <View style={styles.weekdayRow}>
+                {(t('time.week_days', { returnObjects: true }) as string[]).map((label, idx) => {
+                  const selected = repeatWeekdays.includes(idx);
+                  return (
+                    <Pressable
+                      key={idx}
+                      style={[
+                        styles.weekdayChip,
+                        selected && styles.weekdayChipSelected,
+                      ]}
+                      onPress={() => {
+                        setRepeatWeekdays((prev) => {
+                          if (prev.includes(idx)) {
+                            // 마지막 1개 남은 상태에서 해제는 무시 — 빈 배열 방지.
+                            if (prev.length === 1) return prev;
+                            return prev.filter((d) => d !== idx);
+                          }
+                          return [...prev, idx].sort((a, b) => a - b);
+                        });
+                      }}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: selected }}
+                      accessibilityLabel={label}
+                    >
+                      <Text
+                        style={[
+                          styles.weekdayChipText,
+                          selected && styles.weekdayChipTextSelected,
+                        ]}
+                      >
+                        {label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </FormRow>
+          )}
 
           {/*
             Category — inline chip; tap to open the picker.  When a category
@@ -1290,6 +1345,37 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   },
   repeatChipTextSelected: {
     color: colors.primary,
+  },
+  // Build-57 — custom_weekly 요일 picker. 7개 chip 한 줄 균등 배분.
+  weekdayRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 6,
+    paddingVertical: 4,
+  },
+  weekdayChip: {
+    flex: 1,
+    minHeight: 36,
+    paddingHorizontal: 4,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  weekdayChipSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
+  },
+  weekdayChipText: {
+    ...textStyles.labelSm,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  weekdayChipTextSelected: {
+    color: colors.primary,
+    fontWeight: '700',
   },
 
   // Inline text input

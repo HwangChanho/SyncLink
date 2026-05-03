@@ -69,6 +69,7 @@ function toEvent(
     endAt:        new Date(row.end_at),
     allDay:       row.all_day,
     repeatType:   row.repeat_type,
+    repeatWeekdays: row.repeat_weekdays ?? null,
     repeatUntil:  row.repeat_until ? new Date(row.repeat_until) : null,
     categoryId:   row.category_id,
     color:        row.color,
@@ -354,6 +355,11 @@ export async function createEvent(input: CreateEventInput): Promise<Event> {
         end_at:       input.endAt.toISOString(),
         all_day:      input.allDay ?? false,
         repeat_type:  input.repeatType ?? 'none',
+        // 'custom_weekly' 외에는 weekdays 가 의미 없음 — null 로 고정해
+        // 데이터 정합성 유지. CHECK 제약은 0..6 만 허용.
+        repeat_weekdays: input.repeatType === 'custom_weekly'
+          ? (input.repeatWeekdays ?? [])
+          : null,
         repeat_until: input.repeatUntil?.toISOString() ?? null,
         category_id:  input.categoryId ?? null,
         color:        input.color ?? null,
@@ -423,6 +429,14 @@ export async function updateEvent(eventId: string, updates: UpdateEventInput): P
     if (updates.endAt       !== undefined) patch.end_at       = updates.endAt.toISOString();
     if (updates.allDay      !== undefined) patch.all_day      = updates.allDay;
     if (updates.repeatType  !== undefined) patch.repeat_type  = updates.repeatType;
+    // weekdays 는 repeatType 변경과 동기화. repeatType 이 바뀌었거나
+    // weekdays 가 explicit 으로 들어왔을 때만 patch 에 포함.
+    if (updates.repeatType !== undefined || updates.repeatWeekdays !== undefined) {
+      const targetType = updates.repeatType ?? null;
+      patch.repeat_weekdays = targetType === 'custom_weekly'
+        ? (updates.repeatWeekdays ?? [])
+        : null;
+    }
     if (updates.repeatUntil !== undefined) patch.repeat_until = updates.repeatUntil?.toISOString() ?? null;
     if (updates.categoryId  !== undefined) patch.category_id  = updates.categoryId ?? null;
     if (updates.color       !== undefined) patch.color        = updates.color ?? null;
@@ -656,6 +670,7 @@ export async function forkSharedEvent(eventId: string): Promise<Event> {
       end_at:       source.endAt.toISOString(),
       all_day:      source.allDay,
       repeat_type:  source.repeatType,
+      repeat_weekdays: source.repeatWeekdays ?? null,
       repeat_until: source.repeatUntil?.toISOString() ?? null,
       category_id:  source.categoryId ?? null,
       color:        source.color ?? null,

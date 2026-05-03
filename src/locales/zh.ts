@@ -61,6 +61,7 @@ const zh = {
     annual: '每年',
     monthly: '每月',
     weekly: '每周',
+    weekly_custom: '特定星期',
     daily: '每天',
     no_repeat: '不重复',
     /** DateTimeModal 标题 — 当 allDay=false 时显示（同时显示日期和时间选择器）。 */
@@ -148,6 +149,7 @@ const zh = {
     unknown: '未知日程',
     delete: '删除日程',
     delete_confirm: '此操作无法撤销，是否继续？',
+    drop_to_delete: '拖到此处删除',
     save_failed: '日程保存失败，请重试。',
     load_failed: '无法加载日程。',
     not_found: '找不到该日程。',
@@ -176,6 +178,7 @@ const zh = {
       start: '开始',
       end: '结束',
       repeat: '重复',
+      repeat_weekdays: '重复星期',
       category: '分类',
       location: '位置',
       memo: '备注',

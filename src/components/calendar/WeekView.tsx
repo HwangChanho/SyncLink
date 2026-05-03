@@ -27,11 +27,14 @@ import {
   TouchableOpacity,
   StyleSheet,
   PanResponder,
+  Alert,
 } from 'react-native';
 // Phase 5 — pure React Native ScrollView. The drag system below uses
 // PanResponder hit-testing to claim touches that land on event chips and
 // yields all other touches to ScrollView so vertical scroll just works.
 import { ScrollView } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import type { EventSummary } from '@/types';
 import type { FreeSlot } from '@/types/freeTime';
 import { EventBlock } from './EventBlock';
@@ -39,6 +42,8 @@ import { UndoToast, useUndoToast } from './UndoToast';
 import { useOptimisticReschedule } from './useOptimisticReschedule';
 import { DragGhost } from './DragGhost';
 import { useGridDragHandler, type DragLayoutRect } from './useGridDragHandler';
+import { deleteEvent } from '@/services/eventService';
+import { useEventStore } from '@/stores/eventStore';
 import { applyDelta } from '@/lib/calendarGeometry';
 import { useColors } from '@/hooks/useColors';
 import { useTranslatedTitles } from '@/hooks/useTranslatedTitles';
@@ -181,6 +186,8 @@ export function WeekView({
   // Resolve active theme colors for dark mode support (TASK-700)
   const colors = useColors();
   const styles = makeStyles(colors);
+  const { t } = useTranslation();
+  const removeEvent = useEventStore((s) => s.removeEvent);
 
   const weekDays = getWeekDays(selectedDate);
   const today = new Date();
@@ -280,6 +287,33 @@ export function WeekView({
     onEmptySlotPress(day, Math.floor(snapped / 60), snapped % 60);
   }, [columnWidth, weekDays, onEmptySlotPress]);
 
+  // Build-57 — drag 중 위쪽으로 끌어 올리면 삭제. 임계값은 trash 버튼
+  // 영역에 맞춰 -28 (eventsArea 바로 위 약 28px) 으로 둠.
+  const handleDragDelete = useCallback((event: EventSummary) => {
+    Alert.alert(
+      t('event.delete'),
+      t('event.delete_confirm'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.delete'),
+          style: 'destructive',
+          onPress: async () => {
+            removeEvent(event.id);
+            try {
+              await deleteEvent(event.id);
+            } catch (err) {
+              Alert.alert(
+                t('common.error'),
+                err instanceof Error ? err.message : t('common.delete_failed'),
+              );
+            }
+          },
+        },
+      ],
+    );
+  }, [removeEvent, t]);
+
   const { panHandlers: gridPanHandlers, dragState, candidateEvent } =
     useGridDragHandler({
       layouts:    dragLayouts,
@@ -287,6 +321,8 @@ export function WeekView({
       viewMode:   'week',
       onDropped:  handleGridDrop,
       onTap:      onEventPress,
+      onDelete:   handleDragDelete,
+      deleteZoneThreshold: -28,
       ...(onEmptySlotPress ? { onEmptyTap: handleEmptyTap } : {}),
       pageOffsetRef,
     });
@@ -685,6 +721,20 @@ export function WeekView({
       {dragState && (
         <View pointerEvents="none" style={styles.editModeDim} />
       )}
+
+      {/*
+        Build-57 — drag 중에만 화면 상단에 trash 영역 노출. 사용자가
+        chip 을 위로 끌어 이 영역 위에서 손을 떼면 useGridDragHandler
+        의 onDelete 가 호출 (deleteZoneThreshold=-28 이므로 eventsArea
+        위로 28px 위 = 이 trash 영역). pointerEvents='none' — 이미
+        진행 중인 PanResponder 가 모든 touch 를 소유.
+      */}
+      {dragState && (
+        <View pointerEvents="none" style={styles.deleteZone}>
+          <Ionicons name="trash" size={20} color={colors.error} />
+          <Text style={styles.deleteZoneText}>{t('event.drop_to_delete')}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -892,6 +942,30 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.10)',
+  },
+  // Build-57 — drag 중 화면 상단에 표시되는 trash drop zone.
+  // header (DAY_HEADER_HEIGHT=56) 바로 위에 띄움 — chip 을 위로 끌면
+  // 자연스럽게 통과. 가운데 정렬 + 빨간 배경으로 위험성 강조.
+  deleteZone: {
+    position: 'absolute',
+    top: DAY_HEADER_HEIGHT,
+    left: 16,
+    right: 16,
+    height: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.error + '22',
+    borderWidth: 1.5,
+    borderColor: colors.error,
+    borderStyle: 'dashed',
+    borderRadius: 8,
+  },
+  deleteZoneText: {
+    ...textStyles.labelSm,
+    color: colors.error,
+    fontWeight: '700',
   },
   });
 }

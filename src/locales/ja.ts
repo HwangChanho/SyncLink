@@ -61,6 +61,7 @@ const ja = {
     annual: '毎年',
     monthly: '毎月',
     weekly: '毎週',
+    weekly_custom: '特定の曜日',
     daily: '毎日',
     no_repeat: '繰り返しなし',
     /** DateTimeModal のヘッダーラベル — allDay=false のとき表示（日付＋時刻両方のピッカー）。 */
@@ -148,6 +149,7 @@ const ja = {
     unknown: '不明なイベント',
     delete: 'イベントを削除',
     delete_confirm: 'この操作は元に戻せません。続けますか？',
+    drop_to_delete: 'ここに置いて削除',
     save_failed: 'イベントの保存に失敗しました。もう一度お試しください。',
     load_failed: 'イベントを読み込めませんでした。',
     not_found: 'イベントが見つかりません。',
@@ -176,6 +178,7 @@ const ja = {
       start: '開始',
       end: '終了',
       repeat: '繰り返し',
+      repeat_weekdays: '繰り返す曜日',
       category: 'カテゴリ',
       location: '場所',
       memo: 'メモ',

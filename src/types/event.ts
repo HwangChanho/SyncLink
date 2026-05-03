@@ -37,6 +37,8 @@ export interface Event {
   endAt: Date;
   allDay: boolean;
   repeatType: RepeatType;
+  /** 'custom_weekly' 일 때만 사용. 0=일, 1=월, … 6=토 (JS Date.getDay() 호환). */
+  repeatWeekdays: number[] | null;
   repeatUntil: Date | null;
   categoryId: string | null;
   /** Hex color for display. Falls back to user's space member color if null. */
@@ -77,6 +79,8 @@ export interface CreateEventInput {
   endAt: Date;
   allDay?: boolean;
   repeatType?: RepeatType;
+  /** repeatType === 'custom_weekly' 일 때 필수. 0..6 부분집합. */
+  repeatWeekdays?: number[];
   repeatUntil?: Date;
   categoryId?: string;
   /**

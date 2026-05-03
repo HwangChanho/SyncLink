@@ -124,11 +124,12 @@ export default function EventEditScreen() {
 
   /** Repeat options built from i18n translations. */
   const REPEAT_OPTIONS: { value: RepeatType; label: string }[] = [
-    { value: 'none',    label: t('time.no_repeat') },
-    { value: 'daily',   label: t('time.daily') },
-    { value: 'weekly',  label: t('time.weekly') },
-    { value: 'monthly', label: t('time.monthly') },
-    { value: 'yearly',  label: t('time.annual') },
+    { value: 'none',          label: t('time.no_repeat') },
+    { value: 'daily',         label: t('time.daily') },
+    { value: 'weekly',        label: t('time.weekly') },
+    { value: 'custom_weekly', label: t('time.weekly_custom') },
+    { value: 'monthly',       label: t('time.monthly') },
+    { value: 'yearly',        label: t('time.annual') },
   ];
 
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -148,6 +149,7 @@ export default function EventEditScreen() {
   const [startAt, setStartAt] = useState<Date>(new Date());
   const [endAt, setEndAt] = useState<Date>(new Date());
   const [repeatType, setRepeatType] = useState<RepeatType>('none');
+  const [repeatWeekdays, setRepeatWeekdays] = useState<number[]>([]);
   const [location, setLocation] = useState('');
   const [description, setDescription] = useState('');
   const [shareSpaceIds, setShareSpaceIds] = useState<string[]>([]);
@@ -198,6 +200,7 @@ export default function EventEditScreen() {
         setStartAt(ev.startAt);
         setEndAt(ev.endAt);
         setRepeatType(ev.repeatType);
+        setRepeatWeekdays(ev.repeatWeekdays ?? []);
         setLocation(ev.location ?? '');
         setDescription(ev.description ?? '');
         setShareSpaceIds(ev.sharedSpaceIds);
@@ -289,6 +292,7 @@ export default function EventEditScreen() {
         startAt,
         endAt: effectiveEndAt,
         repeatType,
+        ...(repeatType === 'custom_weekly' ? { repeatWeekdays } : {}),
         ...(location.trim()    ? { location:    location.trim() }    : {}),
         ...(description.trim() ? { description: description.trim() } : {}),
         // Always pass color so clearing the override (null) also persists
@@ -587,7 +591,12 @@ export default function EventEditScreen() {
                       styles.repeatChip,
                       repeatType === opt.value && styles.repeatChipSelected,
                     ]}
-                    onPress={() => setRepeatType(opt.value)}
+                    onPress={() => {
+                      setRepeatType(opt.value);
+                      if (opt.value === 'custom_weekly' && repeatWeekdays.length === 0) {
+                        setRepeatWeekdays([startAt.getDay()]);
+                      }
+                    }}
                   >
                     <Text style={[
                       styles.repeatChipText,
@@ -600,6 +609,41 @@ export default function EventEditScreen() {
               </View>
             </ScrollView>
           </FormRow>
+
+          {repeatType === 'custom_weekly' && (
+            <FormRow label={t('event.form.repeat_weekdays')} rowStyle={rowStyle}>
+              <View style={styles.weekdayRow}>
+                {(t('time.week_days', { returnObjects: true }) as string[]).map((label, idx) => {
+                  const selected = repeatWeekdays.includes(idx);
+                  return (
+                    <Pressable
+                      key={idx}
+                      style={[styles.weekdayChip, selected && styles.weekdayChipSelected]}
+                      onPress={() => {
+                        setRepeatWeekdays((prev) => {
+                          if (prev.includes(idx)) {
+                            if (prev.length === 1) return prev;
+                            return prev.filter((d) => d !== idx);
+                          }
+                          return [...prev, idx].sort((a, b) => a - b);
+                        });
+                      }}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: selected }}
+                      accessibilityLabel={label}
+                    >
+                      <Text style={[
+                        styles.weekdayChipText,
+                        selected && styles.weekdayChipTextSelected,
+                      ]}>
+                        {label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </FormRow>
+          )}
 
           {/* Color picker — user can override the default category/member color */}
           <FormRow label={t('event.form.color')} rowStyle={rowStyle}>
@@ -816,6 +860,36 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   },
   repeatChipTextSelected: {
     color: colors.primary,
+  },
+  weekdayRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 6,
+    paddingVertical: 4,
+  },
+  weekdayChip: {
+    flex: 1,
+    minHeight: 36,
+    paddingHorizontal: 4,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  weekdayChipSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
+  },
+  weekdayChipText: {
+    ...textStyles.labelSm,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  weekdayChipTextSelected: {
+    color: colors.primary,
+    fontWeight: '700',
   },
 
   inlineInput: {

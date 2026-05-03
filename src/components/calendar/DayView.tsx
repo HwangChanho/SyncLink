@@ -19,7 +19,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import type { EventSummary } from '@/types';
 import type { FreeSlot } from '@/types/freeTime';
@@ -29,6 +30,8 @@ import { useOptimisticReschedule } from './useOptimisticReschedule';
 import { DragGhost } from './DragGhost';
 import { useGridDragHandler, type DragLayoutRect } from './useGridDragHandler';
 import { applyDelta } from '@/lib/calendarGeometry';
+import { deleteEvent } from '@/services/eventService';
+import { useEventStore } from '@/stores/eventStore';
 import { useColors } from '@/hooks/useColors';
 import { useTranslatedTitles } from '@/hooks/useTranslatedTitles';
 import { spacing } from '@/constants/spacing';
@@ -115,6 +118,7 @@ export function DayView({
 }: DayViewProps) {
   // Resolve active theme colors for dark mode support (TASK-700)
   const { t } = useTranslation();
+  const removeEvent = useEventStore((s) => s.removeEvent);
   const colors = useColors();
   const styles = makeStyles(colors);
 
@@ -241,6 +245,31 @@ export function DayView({
     onEmptySlotPress(selectedDate, Math.floor(snapped / 60), snapped % 60);
   }, [selectedDate, onEmptySlotPress]);
 
+  const handleDragDelete = useCallback((event: EventSummary) => {
+    Alert.alert(
+      t('event.delete'),
+      t('event.delete_confirm'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.delete'),
+          style: 'destructive',
+          onPress: async () => {
+            removeEvent(event.id);
+            try {
+              await deleteEvent(event.id);
+            } catch (err) {
+              Alert.alert(
+                t('common.error'),
+                err instanceof Error ? err.message : t('common.delete_failed'),
+              );
+            }
+          },
+        },
+      ],
+    );
+  }, [removeEvent, t]);
+
   const { panHandlers: gridPanHandlers, dragState, candidateEvent } =
     useGridDragHandler({
       layouts:    dragLayouts,
@@ -248,6 +277,8 @@ export function DayView({
       viewMode:   'day',
       onDropped:  handleGridDrop,
       onTap:      onEventPress,
+      onDelete:   handleDragDelete,
+      deleteZoneThreshold: -28,
       ...(onEmptySlotPress ? { onEmptyTap: handleEmptyTap } : {}),
       pageOffsetRef,
     });
@@ -454,6 +485,13 @@ export function DayView({
       {dragState && (
         <View pointerEvents="none" style={styles.editModeDim} />
       )}
+      {/* Build-57 — drag 중 화면 상단 trash drop zone */}
+      {dragState && (
+        <View pointerEvents="none" style={styles.deleteZone}>
+          <Ionicons name="trash" size={20} color={colors.error} />
+          <Text style={styles.deleteZoneText}>{t('event.drop_to_delete')}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -616,6 +654,29 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.10)',
+  },
+  // Build-57 — drag 중 화면 상단 trash drop zone (DayView 는 dayHeader 가
+  // 없어 top: 0 부터 시작).
+  deleteZone: {
+    position: 'absolute',
+    top: 0,
+    left: 16,
+    right: 16,
+    height: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.error + '22',
+    borderWidth: 1.5,
+    borderColor: colors.error,
+    borderStyle: 'dashed',
+    borderRadius: 8,
+  },
+  deleteZoneText: {
+    ...textStyles.labelSm,
+    color: colors.error,
+    fontWeight: '700',
   },
   });
 }

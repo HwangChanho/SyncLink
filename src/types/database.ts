@@ -81,7 +81,9 @@ export type SpaceMemberInsert = Omit<SpaceMemberRow, 'id' | 'joined_at'>;
 
 // ─── EVENTS ───────────────────────────────────────────────────────────────────
 
-export type RepeatTypeDb = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly';
+// 'custom_weekly' = 특정 요일들만 반복 (예: 월/수/금). 이때 events.repeat_weekdays
+// 컬럼이 0..6 (일=0, 월=1, … 토=6) 의 부분집합을 보유. migration 024 참조.
+export type RepeatTypeDb = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom_weekly';
 export type EventColorDb = string; // hex color
 
 /** Raw DB row for the `events` table. Owned by a single user. */
@@ -95,6 +97,8 @@ export interface EventRow {
   end_at: string;           // ISO-8601
   all_day: boolean;
   repeat_type: RepeatTypeDb;
+  /** 'custom_weekly' 일 때만 의미. 0=일, 1=월, … 6=토. */
+  repeat_weekdays: number[] | null;
   repeat_until: string | null;
   category_id: string | null;
   color: EventColorDb | null;

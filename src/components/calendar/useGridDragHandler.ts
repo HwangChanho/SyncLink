@@ -109,6 +109,21 @@ interface Options {
    */
   onEmptyTap?: (localX: number, localY: number) => void;
   /**
+   * Build-57 — fires when the user drops a dragged event onto the
+   * "delete zone" (i.e. the finger lifts while above the eventsArea —
+   * fingerY < deleteZoneThreshold, default 0). Parent typically shows
+   * a trash button at the top of the calendar while dragState !== null
+   * and routes this callback to a delete-confirm dialog.
+   */
+  onDelete?: (event: EventSummary) => void;
+  /**
+   * Container-local Y threshold for the delete zone. Drops where
+   * fingerY < threshold are treated as deletes instead of moves.
+   * Default 0 — the area immediately above the time grid. Pass a
+   * larger negative number (e.g. -40) to match a taller trash button.
+   */
+  deleteZoneThreshold?: number;
+  /**
    * Live page position of the eventsArea container (top-left in screen pt).
    * The hook subtracts this from pageX/pageY to get touch coords in the
    * same space as `layouts`. Required because PanResponder's locationX/Y
@@ -144,6 +159,8 @@ export function useGridDragHandler({
   onDropped,
   onTap,
   onEmptyTap,
+  onDelete,
+  deleteZoneThreshold = 0,
   pageOffsetRef,
 }: Options): {
   panHandlers: PanResponderInstance['panHandlers'];
@@ -301,6 +318,16 @@ export function useGridDragHandler({
         setCandidateEvent(null);
         const drag = dragStateRef.current;
         if (drag) {
+          // Build-57 — delete zone check FIRST. Finger that ended above
+          // the eventsArea (fingerY < threshold) means the user dragged
+          // the chip up into the trash button at the top of the screen.
+          const finalFingerY = startXY.current.y + gs.dy;
+          if (onDelete && finalFingerY < deleteZoneThreshold) {
+            onDelete(drag.event);
+            setDragState(null);
+            candidateRef.current = null;
+            return;
+          }
           // Drop computed via the same helper that powered the prior
           // implementations — kept stable so existing tests still apply.
           const { dayDelta, minuteDelta } = computeRescheduleDelta({
@@ -353,7 +380,7 @@ export function useGridDragHandler({
     // The responder closure reads layouts/dragState via refs and reads the
     // numeric props directly — only the latter need to invalidate it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [columnWidth, pxPerMinute, snapMinutes, viewMode, onDropped, onTap, onEmptyTap],
+    [columnWidth, pxPerMinute, snapMinutes, viewMode, onDropped, onTap, onEmptyTap, onDelete, deleteZoneThreshold],
   );
 
   return { panHandlers: responder.panHandlers, dragState, candidateEvent, debugInfo };

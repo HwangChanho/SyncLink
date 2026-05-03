@@ -25,6 +25,7 @@ import { useTranslation } from 'react-i18next';
 import Voice, { type SpeechResultsEvent, type SpeechErrorEvent } from '@react-native-voice/voice';
 import { ConfirmModal } from './ConfirmModal';
 import { QuotaExceededSheet } from '@/components/ai/QuotaExceededSheet';
+import { FreeBannerAd } from '@/components/ads/FreeBannerAd';
 import { parseNaturalLanguageMulti } from '@/services/aiService';
 import { createEvent } from '@/services/eventService';
 import { logError } from '@/lib/errorLogger';
@@ -394,6 +395,11 @@ export function NLInputBar({ onEventCreated }: Props) {
         </View>
       ) : null}
 
+      {/* Free banner ad (LEAD 2026-05-03 — "기본 버전은 자연어 입력바
+          하단에 배너, 프로는 안나오게"). 컴포넌트 자체에 isPro 가드가
+          있어 Pro 면 null 반환. SDK 미설치/web 도 null 이라 안전. */}
+      <FreeBannerAd style={styles.adWrap} />
+
       {/* Input row */}
       <View style={styles.inputRow}>
         {/* Microphone button */}
@@ -501,6 +507,13 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     borderTopWidth: 1,
     borderTopColor: colors.border,
     gap: spacing[2],
+  },
+  // Free 배너 wrapper. ads/FreeBannerAd 가 자체적으로 isPro 가드를 하므로
+  // 여기 스타일은 항상 적용되더라도 Pro 사용자는 자식이 null 이라 보이지
+  // 않는다. 입력바와 분리되도록 작은 위쪽 마진만 둔다.
+  adWrap: {
+    alignItems: 'center',
+    minHeight: 0,
   },
   inputRow: {
     flexDirection: 'row',
