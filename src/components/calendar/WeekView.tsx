@@ -59,6 +59,21 @@ const HOUR_HEIGHT = 60;
 const TOTAL_HEIGHT = HOUR_HEIGHT * 24;
 /** Width of the hour-label column on the left. */
 const TIME_COL_WIDTH = 44;
+/**
+ * Build-67 — Plan 옵션 A: 진정한 day-by-day horizontal ScrollView.
+ *
+ * 7일 (이번 주 일~토) 만 화면에 보이고, 좌우로 ±7일 buffer 를 더 갖는
+ * 15-day window 를 horizontal ScrollView 안에 그린다. 사용자가 한 손가락
+ * scroll 만큼 자연스럽게 컬럼이 이동, snap 단위는 1day = columnWidth.
+ *
+ * 가장자리 (visible 첫 컬럼이 idx 0 또는 14 근접) 도달 시 onMomentumScrollEnd
+ * 가 selectedDate 를 7일 shift + scrollX 를 7*colW 로 reset → buffer 갱신.
+ * 사용자 시각상 jolt 없이 무한 스크롤 효과.
+ */
+const VISIBLE_DAYS = 7;
+const WINDOW_DAYS = 15;
+/** dayWindow[7] = 이번 주 일요일. visible 첫 컬럼이 idx 7 일 때 정상 상태. */
+const WINDOW_INITIAL_VISIBLE_IDX = 7;
 /** Height of each all-day event chip row in the strip. */
 const ALL_DAY_CHIP_HEIGHT = 20;
 /** Vertical padding inside the all-day strip. */
@@ -156,15 +171,19 @@ function isSameDay(a: Date, b: Date): boolean {
 }
 
 /**
- * Returns the 7 dates (Sun–Sat) for the week containing `date`.
- * Week starts on Sunday (index 0).
+ * Build-67 — 15-day window. dayWindow[7] = 이번 주 일요일 (즉 selectedDate
+ * 의 주 시작). idx 0..6 = 이전 주, 7..13 = 이번 주, 14 = 다음 주 일.
+ * 이번 주 일~토 가 visible 7-day 영역이며 horizontal scrollX = 7*colW 일
+ * 때 정상 상태.
  */
-function getWeekDays(date: Date): Date[] {
+function getDayWindow(date: Date): Date[] {
   const dow = date.getDay(); // 0 = Sunday
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(date);
-    d.setDate(date.getDate() - dow + i);
-    // Reset time component to midnight to avoid DST edge cases
+  const sunday = new Date(date);
+  sunday.setDate(date.getDate() - dow);
+  sunday.setHours(0, 0, 0, 0);
+  return Array.from({ length: WINDOW_DAYS }, (_, i) => {
+    const d = new Date(sunday);
+    d.setDate(sunday.getDate() + (i - WINDOW_INITIAL_VISIBLE_IDX));
     d.setHours(0, 0, 0, 0);
     return d;
   });
@@ -205,13 +224,24 @@ export function WeekView({
   const { t } = useTranslation();
   const removeEvent = useEventStore((s) => s.removeEvent);
 
-  const weekDays = getWeekDays(selectedDate);
+  // Build-67 — 15-day buffer window. selectedDate 가 어떤 일자든
+  // dayWindow[7..13] = "이번 주 일~토" 가 visible 영역이 되도록 일요일
+  // 기준으로 정렬.
+  const dayWindow = useMemo(() => getDayWindow(selectedDate), [selectedDate]);
   const today = new Date();
+  /** Vertical 24-hour grid scroll. */
   const scrollRef = useRef<ScrollView>(null);
-  // Measured width of the 7-day grid (total), used to compute a single
-  // column width passed to EventBlock for drag-to-reschedule snapping.
+  /** Build-67 — Outer horizontal day-by-day ScrollView. */
+  const hScrollRef = useRef<ScrollView>(null);
+  /** Build-67 — TimeCol 의 vertical ScrollView. grid 의 vertical scroll 과 sync. */
+  const timeColScrollRef = useRef<ScrollView>(null);
+  // Measured width of the visible 7-day grid (excluding TIME_COL_WIDTH).
+  // columnWidth 은 visible 영역 / VISIBLE_DAYS — dayWindow 가 15일이지만
+  // 한 컬럼 너비는 변하지 않음.
   const [gridWidth, setGridWidth] = useState(0);
-  const columnWidth = gridWidth > 0 ? gridWidth / 7 : 0;
+  const columnWidth = gridWidth > 0 ? gridWidth / VISIBLE_DAYS : 0;
+  /** 전체 horizontal content 너비 (15 * colW). */
+  const totalContentWidth = columnWidth * WINDOW_DAYS;
 
   // Build-47 — ref to the eventsArea View so we can measure its on-screen
   // page position. The drag hook subtracts this from pageX/pageY at touch
@@ -270,7 +300,7 @@ export function WeekView({
   const dragLayouts = useMemo<DragLayoutRect[]>(() => {
     if (columnWidth <= 0) return [];
     const out: DragLayoutRect[] = [];
-    weekDays.forEach((day, idx) => {
+    dayWindow.forEach((day, idx) => {
       const k = toDateKey(day);
       const timed = (eventsByDate[k] ?? []).filter((e) => !e.allDay);
       computeLayout(timed).forEach((lay) => {
@@ -285,7 +315,7 @@ export function WeekView({
       });
     });
     return out;
-  }, [weekDays, eventsByDate, columnWidth]);
+  }, [dayWindow, eventsByDate, columnWidth]);
 
   // Empty-area tap → resolve the touched (day, hour, minute) and forward
   // to the parent. Snap to the same step the drag-drop uses (15 min
@@ -294,14 +324,16 @@ export function WeekView({
   const handleEmptyTap = useCallback((localX: number, localY: number) => {
     if (!onEmptySlotPress) return;
     if (columnWidth <= 0) return;
-    const dayIndex = Math.max(0, Math.min(6, Math.floor(localX / columnWidth)));
-    const day = weekDays[dayIndex];
+    // Build-67 — eventsArea 너비 = WINDOW_DAYS * colW 이므로 dayIndex
+    // 범위도 0..(WINDOW_DAYS-1).
+    const dayIndex = Math.max(0, Math.min(WINDOW_DAYS - 1, Math.floor(localX / columnWidth)));
+    const day = dayWindow[dayIndex];
     if (!day) return;
     const totalMinutes = (localY / HOUR_HEIGHT) * 60;
     const snapped = Math.max(0, Math.min(24 * 60 - 15,
       Math.round(totalMinutes / 15) * 15));
     onEmptySlotPress(day, Math.floor(snapped / 60), snapped % 60);
-  }, [columnWidth, weekDays, onEmptySlotPress]);
+  }, [columnWidth, dayWindow, onEmptySlotPress]);
 
   // Build-57 — drag 중 위쪽으로 끌어 올리면 삭제. 임계값은 trash 버튼
   // 영역에 맞춰 -28 (eventsArea 바로 위 약 28px) 으로 둠.
@@ -348,7 +380,7 @@ export function WeekView({
   const { todoDragState, getPanHandlers: getTodoPanHandlers } = useTodoDragHandler({
     eventsAreaPageOffsetRef: pageOffsetRef,
     columnWidth,
-    weekDays,
+    weekDays: dayWindow,
     hourHeight: HOUR_HEIGHT,
     onDrop: (todoId, newDueAt) => onTodoDrop?.(todoId, newDueAt),
   });
@@ -358,6 +390,73 @@ export function WeekView({
   useEffect(() => {
     onDragModeChange?.(dragState !== null || todoDragState !== null);
   }, [dragState, todoDragState, onDragModeChange]);
+
+  /**
+   * Build-67 — selectedDate 가 외부 (MonthView drilldown, NL 등) 에서 변경
+   * 되거나 colWidth 가 처음 측정될 때 horizontal scroll 위치를
+   * WINDOW_INITIAL_VISIBLE_IDX 로 reset. 사용자가 좌우로 직접 scroll 한
+   * 경우는 onMomentumScrollEnd 가 이미 처리.
+   */
+  useEffect(() => {
+    if (columnWidth <= 0) return;
+    requestAnimationFrame(() => {
+      hScrollRef.current?.scrollTo({
+        x: WINDOW_INITIAL_VISIBLE_IDX * columnWidth,
+        y: 0,
+        animated: false,
+      });
+    });
+  }, [selectedDate, columnWidth]);
+
+  /**
+   * Build-67 — horizontal scroll 종료 시 가장자리 처리.
+   *
+   * visible 첫 컬럼 idx = scrollX / colW (snap 단위라 정수). idx 가
+   * 1 이하 또는 13 이상에 도달하면 selectedDate 를 ±7일 shift 해서
+   * dayWindow 를 재계산하고 scrollX 를 다시 7*colW 로 reposition.
+   * buffer 가 줄어들어도 사용자 시각상 jolt 없음 (그 자리의 일자 자체는
+   * 그대로 visible 영역에 머물러 있고, dayWindow 의 idx 만 갱신).
+   */
+  const handleHScrollEnd = useCallback(
+    (e: import('react-native').NativeSyntheticEvent<import('react-native').NativeScrollEvent>) => {
+      if (columnWidth <= 0) return;
+      const x = e.nativeEvent.contentOffset.x;
+      const visibleStartIdx = Math.round(x / columnWidth);
+      // 너무 왼쪽 가장자리 — 이전 주로 진입.
+      if (visibleStartIdx <= 0) {
+        const next = new Date(selectedDate);
+        next.setDate(next.getDate() - 7);
+        next.setHours(0, 0, 0, 0);
+        // selectedDate 갱신 → dayWindow 자동 재계산 (useMemo).
+        // 그 후 scrollX 를 7*colW 로 reset 해야 시각상 일자가 같은 위치에
+        // 머무름. setNativeProps 로 즉시 반영.
+        onDateSelect(next);
+        requestAnimationFrame(() => {
+          hScrollRef.current?.scrollTo({
+            x: WINDOW_INITIAL_VISIBLE_IDX * columnWidth,
+            y: 0,
+            animated: false,
+          });
+        });
+        return;
+      }
+      // 너무 오른쪽 가장자리 — 다음 주로 진입.
+      if (visibleStartIdx >= WINDOW_DAYS - VISIBLE_DAYS) {
+        const next = new Date(selectedDate);
+        next.setDate(next.getDate() + 7);
+        next.setHours(0, 0, 0, 0);
+        onDateSelect(next);
+        requestAnimationFrame(() => {
+          hScrollRef.current?.scrollTo({
+            x: WINDOW_INITIAL_VISIBLE_IDX * columnWidth,
+            y: 0,
+            animated: false,
+          });
+        });
+      }
+    },
+    [columnWidth, selectedDate, onDateSelect],
+  );
 
   // Scroll to 8 AM on mount so mornings are visible by default
   const handleLayout = () => {
@@ -413,14 +512,14 @@ export function WeekView({
   // view (Pro users on a non-default locale).
   const visibleEventIds = useMemo(() => {
     const ids: string[] = [];
-    for (const day of weekDays) {
+    for (const day of dayWindow) {
       const k = toDateKey(day);
       const list = eventsByDate[k];
       if (!list) continue;
       for (const e of list) ids.push(e.id);
     }
     return ids;
-  }, [weekDays, eventsByDate]);
+  }, [dayWindow, eventsByDate]);
   const translatedTitles = useTranslatedTitles(visibleEventIds);
 
   /**
@@ -437,7 +536,7 @@ export function WeekView({
     const map: Record<string, { topOffset: number; height: number; originalSlot: FreeSlot }[]> = {};
     if (!freeSlots || freeSlots.length === 0) return map;
 
-    for (const day of weekDays) {
+    for (const day of dayWindow) {
       const dayStart = new Date(day);
       dayStart.setHours(0, 0, 0, 0);
       const dayEndMs = dayStart.getTime() + 24 * 60 * 60_000;
@@ -460,12 +559,12 @@ export function WeekView({
       if (buckets.length > 0) map[toDateKey(day)] = buckets;
     }
     return map;
-  }, [freeSlots, weekDays]);
+  }, [freeSlots, dayWindow]);
 
   // Determine if any day this week has all-day events OR planner todos
   // (the strip now hosts both so the user sees every day-scoped item in
   // one place).
-  const hasAllDayEvents = weekDays.some((day) => {
+  const hasAllDayEvents = dayWindow.some((day) => {
     const key = toDateKey(day);
     const hasEvt = (eventsByDate[key] ?? []).some((e) => e.allDay);
     // 시간 없는 todo (all-day strip 노출) 만 카운트. 시간 있는 건 grid 에 그림.
@@ -475,53 +574,110 @@ export function WeekView({
 
   return (
     <View style={styles.container}>
-      {/* ─── Day header row (fixed; pannable for drag-to-scrub) ─── */}
-      <View style={styles.dayHeaderRow} {...headerPan.panHandlers}>
-        {/* Spacer aligning with the time label column */}
-        <View style={{ width: TIME_COL_WIDTH }} />
-        {weekDays.map((day, idx) => {
-          const isToday = isSameDay(day, today);
-          const isSelected = isSameDay(day, selectedDate);
-          return (
-            <TouchableOpacity
-              key={toDateKey(day)}
-              style={styles.dayHeaderCell}
-              onPress={() => onDateSelect(day)}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.dowLabel, isToday && styles.activeDowLabel]}>
-                {DOW_LABELS[idx]}
-              </Text>
-              <View style={[
-                styles.dayNumberWrap,
-                isToday && styles.todayCircle,
-                isSelected && !isToday && styles.selectedCircle,
-              ]}>
-                <Text style={[
-                  styles.dayNumber,
-                  isToday && styles.todayNumber,
-                  isSelected && !isToday && styles.selectedNumber,
-                ]}>
-                  {day.getDate()}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      {/* Build-67 — outer row: timeCol(left) + horizontal ScrollView(right). */}
+      <View style={styles.outerRow}>
+        {/* ── timeCol (fixed, horizontal scroll 영향 X) ── */}
+        <View style={styles.timeColFixed}>
+          {/* dayHeader 와 같은 높이 spacer */}
+          <View style={{ height: DAY_HEADER_HEIGHT }} />
+          {hasAllDayEvents && <View style={[styles.allDayStripSpacer]} />}
+          <ScrollView
+            ref={timeColScrollRef}
+            scrollEnabled={false}
+            showsVerticalScrollIndicator={false}
+            style={{ flex: 1 }}
+          >
+            <View style={[styles.timeCol, { height: TOTAL_HEIGHT }]}>
+              {HOURS.map((h) => (
+                <View key={h} style={[styles.hourLabelWrap, { top: h * HOUR_HEIGHT - 8 }]}>
+                  <Text style={styles.hourLabel}>
+                    {h === 0 ? '' : `${h}:00`}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
+        </View>
 
-      {/* ─── All-day strip (fixed, shown only when all-day events exist) ─── */}
-      {hasAllDayEvents && (
-        <View style={styles.allDayStrip}>
-          {/* Spacer aligning with the time label column */}
-          <View style={{ width: TIME_COL_WIDTH }} />
-          {weekDays.map((day) => {
+        {/* ── horizontal day-by-day ScrollView ── */}
+        <ScrollView
+          ref={hScrollRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          // snapToInterval = colW 로 1day 단위 paging.
+          snapToInterval={columnWidth > 0 ? columnWidth : undefined}
+          decelerationRate="fast"
+          // iOS 만 effective — 방향 잠금. vertical 손가락 움직임 시
+          // horizontal scroll 비활성, 반대도 마찬가지.
+          directionalLockEnabled
+          // chip drag 중일 때는 horizontal scroll 차단 — 회귀 방지.
+          scrollEnabled={dragState === null && todoDragState === null}
+          // 가운데 정렬: visible 첫 컬럼 = idx WINDOW_INITIAL_VISIBLE_IDX (이번 주 일).
+          contentOffset={{
+            x: WINDOW_INITIAL_VISIBLE_IDX * (columnWidth || 1),
+            y: 0,
+          }}
+          onMomentumScrollEnd={handleHScrollEnd}
+          // grid 너비 측정 — visible 7-day 영역.
+          onLayout={(e) => {
+            setGridWidth(e.nativeEvent.layout.width);
+            measureEventsArea();
+          }}
+          // horizontal scroll 시 measureInWindow 갱신 — drag hit-test 의
+          // pageOffsetRef 도 새로 measure 되어야 정확.
+          onScroll={measureEventsArea}
+          scrollEventThrottle={16}
+          style={styles.hScroll}
+        >
+          <View style={[styles.hContent, { width: totalContentWidth }]}>
+            {/* ─── Day header row (15 cells, absolute width=colW each) ─── */}
+            <View
+              style={[styles.dayHeaderRow, { width: totalContentWidth }]}
+              {...headerPan.panHandlers}
+            >
+              {dayWindow.map((day) => {
+                const isToday = isSameDay(day, today);
+                const isSelected = isSameDay(day, selectedDate);
+                return (
+                  <TouchableOpacity
+                    key={toDateKey(day)}
+                    style={[styles.dayHeaderCell, { width: columnWidth }]}
+                    onPress={() => onDateSelect(day)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.dowLabel, isToday && styles.activeDowLabel]}>
+                      {/* Build-67 — DOW 라벨이 동적: dayWindow 가 일~토 순서가
+                          아닐 수 있으니 day.getDay() 로 직접 매핑. */}
+                      {DOW_LABELS[day.getDay()]}
+                    </Text>
+                    <View style={[
+                      styles.dayNumberWrap,
+                      isToday && styles.todayCircle,
+                      isSelected && !isToday && styles.selectedCircle,
+                    ]}>
+                      <Text style={[
+                        styles.dayNumber,
+                        isToday && styles.todayNumber,
+                        isSelected && !isToday && styles.selectedNumber,
+                      ]}>
+                        {day.getDate()}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* ─── All-day strip (15 cells; same width as header) ─── */}
+            {hasAllDayEvents && (
+              <View style={[styles.allDayStrip, { width: totalContentWidth }]}>
+          {dayWindow.map((day) => {
             const dateKey = toDateKey(day);
             const allDayEvts = (eventsByDate[dateKey] ?? []).filter((e) => e.allDay);
             // 시간 없는 todo 만 strip 에. 시간 있는 건 아래 grid 에서 그린다.
             const dayTodos = (todosByDate?.[dateKey] ?? []).filter((td) => !td.dueAt);
             return (
-              <View key={dateKey} style={styles.allDayCol}>
+              <View key={dateKey} style={[styles.allDayCol, { width: columnWidth }]}>
                 {allDayEvts.map((evt) => (
                   <TouchableOpacity
                     key={evt.id}
@@ -568,50 +724,32 @@ export function WeekView({
         </View>
       )}
 
-      {/* ─── Scrollable time grid ─── */}
-      <ScrollView
-        ref={scrollRef}
-        onLayout={handleLayout}
-        showsVerticalScrollIndicator={false}
-        style={styles.scrollView}
-        onScroll={measureEventsArea}
-        scrollEventThrottle={16}
-        // Build-51 — freeze the 24-hour grid scroll while a drag is in
-        // flight so the user's vertical finger movement only repositions
-        // the dragged ghost. Otherwise iOS's native UIScrollView would
-        // continue tracking and the grid would scroll out from under the
-        // chip even though our PanResponder owns the touch (LEAD report
-        // "여전히 주에서 일정옮길때 위아래 움직여").
-        scrollEnabled={dragState === null}
-      >
-        <View style={[styles.gridRow, { height: TOTAL_HEIGHT }]}>
-          {/* Hour label column */}
-          <View style={[styles.timeCol, { height: TOTAL_HEIGHT }]}>
-            {HOURS.map((h) => (
-              <View key={h} style={[styles.hourLabelWrap, { top: h * HOUR_HEIGHT - 8 }]}>
-                <Text style={styles.hourLabel}>
-                  {h === 0 ? '' : `${h}:00`}
-                </Text>
-              </View>
-            ))}
-          </View>
-
-          {/*
-            Event grid area — onLayout measures one-day column width.
-            {...gridPanHandlers} attaches the root PanResponder. Touches
-            on event chips are claimed for drag; everything else falls
-            through to the parent ScrollView (vertical scroll keeps
-            working without a single line of orchestration glue).
-          */}
-          <View
-            ref={eventsAreaRef}
-            style={styles.eventsArea}
-            onLayout={(e) => {
-              setGridWidth(e.nativeEvent.layout.width);
-              measureEventsArea();
-            }}
-            {...gridPanHandlers}
-          >
+            {/* ─── Vertical scroll grid (timeCol 제외) ─── */}
+            <ScrollView
+              ref={scrollRef}
+              onLayout={handleLayout}
+              showsVerticalScrollIndicator={false}
+              style={styles.scrollView}
+              onScroll={(e) => {
+                measureEventsArea();
+                // Build-67 — timeCol 의 vertical scroll 을 grid 와 동기.
+                const y = e.nativeEvent.contentOffset.y;
+                timeColScrollRef.current?.scrollTo({ y, animated: false });
+              }}
+              scrollEventThrottle={16}
+              // Build-51 — freeze the 24-hour grid scroll while a drag is in
+              // flight so the user's vertical finger movement only repositions
+              // the dragged ghost. Otherwise iOS's native UIScrollView would
+              // continue tracking and the grid would scroll out from under the
+              // chip even though our PanResponder owns the touch (LEAD report
+              // "여전히 주에서 일정옮길때 위아래 움직여").
+              scrollEnabled={dragState === null}
+            >
+              <View
+                ref={eventsAreaRef}
+                style={[styles.eventsArea, { width: totalContentWidth, height: TOTAL_HEIGHT }]}
+                {...gridPanHandlers}
+              >
             {/* Hour separator lines */}
             {HOURS.map((h) => (
               <View
@@ -624,19 +762,20 @@ export function WeekView({
               />
             ))}
 
-            {/* Vertical column separators */}
-            {weekDays.map((_, idx) => (
+            {/* Vertical column separators — Build-67: 15일 모두 사이에 line.
+                idx 0..(WINDOW_DAYS-1) 매 컬럼 우측 line, left=(idx+1)*colW. */}
+            {dayWindow.slice(0, -1).map((_, idx) => (
               <View
                 key={idx}
                 style={[
                   styles.colSeparator,
-                  { left: `${((idx + 1) / 7) * 100}%` },
+                  { left: (idx + 1) * columnWidth },
                 ]}
               />
             ))}
 
             {/* Events for each day column — allDay events go to the strip above */}
-            {weekDays.map((day, idx) => {
+            {dayWindow.map((day, idx) => {
               const dateKey = toDateKey(day);
               const dayEvents = eventsByDate[dateKey] ?? [];
               // Exclude allDay events; those are rendered in the all-day strip
@@ -651,8 +790,9 @@ export function WeekView({
                   style={[
                     styles.dayCol,
                     {
-                      left: `${(idx / 7) * 100}%`,
-                      width: `${100 / 7}%`,
+                      // Build-67 — percent → absolute px (15-day window).
+                      left: idx * columnWidth,
+                      width: columnWidth,
                       height: TOTAL_HEIGHT,
                     },
                   ]}
@@ -773,9 +913,11 @@ export function WeekView({
               top) match the finger position 1:1.
             */}
             {dragState && <DragGhost drag={dragState} />}
+              </View>
+            </ScrollView>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </View>
 
       {/*
         TASK-009 Day 4 — Undo toast overlay.
@@ -799,7 +941,7 @@ export function WeekView({
       {/* Build-66 — todo drag ghost. page 좌표를 그대로 받아 floating
           chip 으로 finger 추적. dim overlay 와 같이 표시. */}
       {todoDragState && (() => {
-        const allTodos = weekDays.flatMap((d) => todosByDate?.[toDateKey(d)] ?? []);
+        const allTodos = dayWindow.flatMap((d) => todosByDate?.[toDateKey(d)] ?? []);
         const dragged = allTodos.find((td) => td.id === todoDragState.todoId);
         return (
           <>
@@ -856,6 +998,30 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     flex: 1,
     backgroundColor: colors.background,
   },
+  // Build-67 — outer row: timeCol(left, fixed) + horizontal ScrollView(right).
+  outerRow: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  timeColFixed: {
+    width: TIME_COL_WIDTH,
+    backgroundColor: colors.background,
+    // 우측 horizontal ScrollView 와 시각적으로 분리하지 않음 (border 제거).
+  },
+  hScroll: {
+    flex: 1,
+  },
+  hContent: {
+    // width 는 inline (totalContentWidth = WINDOW_DAYS * colW). 측정값
+    // 들어올 때까지 0 이지만 inner scroll 동작 영향 없음.
+    flexDirection: 'column',
+  },
+  /** Build-67 — allDayStrip 이 있을 때 timeCol 우측 spacer 높이 동기화. */
+  allDayStripSpacer: {
+    height: ALL_DAY_CHIP_HEIGHT + ALL_DAY_STRIP_V_PAD * 2,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
   dayHeaderRow: {
     flexDirection: 'row',
     height: DAY_HEADER_HEIGHT,
@@ -864,10 +1030,11 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     backgroundColor: colors.background,
   },
   dayHeaderCell: {
-    flex: 1,
+    // Build-67 — width 는 inline 으로 columnWidth (15-day window).
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
+    height: DAY_HEADER_HEIGHT,
   },
   dowLabel: {
     ...textStyles.labelSm,
@@ -923,10 +1090,8 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     color: colors.textTertiary,
   },
   eventsArea: {
-    flex: 1,
+    // Build-67 — width / height 는 inline (15*colW × 24h). flex 제거.
     position: 'relative',
-    borderLeftWidth: StyleSheet.hairlineWidth,
-    borderLeftColor: colors.border,
   },
   hourLine: {
     position: 'absolute',
@@ -962,9 +1127,8 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     borderBottomColor: colors.border,
     backgroundColor: colors.background,
   },
-  /** Per-day column inside the strip; flex: 1 so all 7 columns share equal width. */
+  /** Per-day column inside the strip — Build-67 width 는 inline columnWidth. */
   allDayCol: {
-    flex: 1,
     gap: 2,
     paddingHorizontal: 1,
   },

@@ -107,18 +107,22 @@ describe('WeekView', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('DOW 헤더', () => {
-    it('일 월 화 수 목 금 토 7개 요일 레이블 렌더링', () => {
-      const { getByText } = render(<WeekView {...defaultProps} />);
+    it('일 월 화 수 목 금 토 모든 요일 레이블 렌더링 (Build-67: 15-day window 라 각 ≥ 2번 등장)', () => {
+      const { getAllByText } = render(<WeekView {...defaultProps} />);
 
+      // Build-67: dayWindow 15일 = 이전주(7) + 이번주(7) + 다음주 일(1) = 일~토 2주 + 일 1.
+      // 일은 3번, 다른 요일은 2번 등장.
       ['일', '월', '화', '수', '목', '금', '토'].forEach((label) => {
-        expect(getByText(label)).toBeTruthy();
+        expect(getAllByText(label).length).toBeGreaterThanOrEqual(2);
       });
     });
 
-    it('주간 날짜 숫자 7개 렌더링 (Jan 11~17)', () => {
+    it('이번 주 날짜 숫자 (Jan 11~17) 모두 렌더링', () => {
       const { getByText } = render(<WeekView {...defaultProps} />);
 
-      // selectedDate=Jan12 → 주 = Sun Jan 11 ~ Sat Jan 17
+      // selectedDate=Jan12 → 이번 주 = Sun Jan 11 ~ Sat Jan 17.
+      // Build-67: 이전 주 (Jan 4~10), 이번 주 (Jan 11~17), 다음주 일 (Jan 18) 도 dayWindow 안.
+      // 이번 주 7일은 unique 하게 등장하므로 getByText 안전.
       [11, 12, 13, 14, 15, 16, 17].forEach((day) => {
         expect(getByText(String(day))).toBeTruthy();
       });
