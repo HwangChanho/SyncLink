@@ -19,11 +19,11 @@
  *  - TASK-302: NL input bar
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View, PanResponder, Pressable, StyleSheet,
+  View, Pressable, StyleSheet,
   Modal, TouchableOpacity, Text,
-  Animated, Dimensions,
+  Animated,
   ActionSheetIOS, Platform, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -40,92 +40,14 @@ import { useEventStore } from '@/stores/eventStore';
 import { subscribeToSharedEvents } from '@/services/eventRealtimeService';
 import { useTodoStore } from '@/stores/todoStore';
 import type { MonthViewItem } from '@/components/calendar/MonthView';
-import type { EventSummary, Category, SpaceSummary } from '@/types';
+import type { EventSummary } from '@/types';
 import { useColors } from '@/hooks/useColors';
-import { getCategories } from '@/services/categoryService';
-// PRD 4.2 Tier 2 — Free time finder UI integration.
 import { useTranslation } from 'react-i18next';
-import { findFreeSlots } from '@/services/freeTimeService';
-import { getMySpaces } from '@/services/spaceService';
-import type { FreeSlot } from '@/types/freeTime';
-
-// ─── Swipe detection thresholds ───────────────────────────────────────────────
-
-/** Minimum horizontal displacement (px) to trigger period navigation. */
-const SWIPE_THRESHOLD = 60;
-/**
- * Minimum horizontal-to-vertical ratio for a gesture to be treated as
- * a calendar swipe (avoids hijacking vertical scrolls).
- */
-const SWIPE_RATIO = 1.5;
-
-// ─── Date utilities ───────────────────────────────────────────────────────────
-
-/** Returns the ISO date key (YYYY-MM-DD) for a Date. */
-function toDateKey(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-/**
- * Returns the inclusive date range that should be fetched for the given
- * selectedDate and view mode:
- *  - month → first day of the month's display grid (up to 6 days before)
- *            to the last day of the grid (up to 6 days after)
- *  - week  → Sunday of the week containing selectedDate
- *            to the following Saturday
- *  - day   → just the selectedDate (start=00:00, end=23:59:59)
- */
-function getViewRange(date: Date, mode: ViewMode): { start: Date; end: Date } {
-  if (mode === 'month') {
-    // First Sunday of the display grid (may be in the previous month)
-    const firstOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
-    const start = new Date(firstOfMonth);
-    start.setDate(start.getDate() - firstOfMonth.getDay()); // back to Sunday
-    start.setHours(0, 0, 0, 0);
-    // Last Saturday of the display grid
-    const lastOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0);
-    const end = new Date(lastOfMonth);
-    end.setDate(end.getDate() + (6 - lastOfMonth.getDay())); // forward to Saturday
-    end.setHours(23, 59, 59, 999);
-    return { start, end };
-  }
-  if (mode === 'week') {
-    const start = new Date(date);
-    start.setDate(start.getDate() - start.getDay()); // back to Sunday
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 6); // forward to Saturday
-    end.setHours(23, 59, 59, 999);
-    return { start, end };
-  }
-  // day
-  const start = new Date(date);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(date);
-  end.setHours(23, 59, 59, 999);
-  return { start, end };
-}
-
-/**
- * Returns a new Date advanced by the appropriate period for the given view mode.
- * Positive `delta` = forward, negative = backward.
- */
-function shiftDate(date: Date, mode: ViewMode, delta: 1 | -1): Date {
-  const next = new Date(date);
-  if (mode === 'month') {
-    next.setMonth(next.getMonth() + delta);
-    // Clamp to last day of month if the month has fewer days
-    next.setDate(Math.min(date.getDate(), new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()));
-  } else if (mode === 'week') {
-    next.setDate(next.getDate() + delta * 7);
-  } else {
-    next.setDate(next.getDate() + delta);
-  }
-  return next;
-}
+// Phase 2.1 — date/range utils + 화면 hook 들로 분할.
+import { toDateKey, getViewRange, shiftDate } from '@/lib/calendarRange';
+import { useFreeTimeOverlay } from '@/hooks/useFreeTimeOverlay';
+import { useCalendarSwipe } from '@/hooks/useCalendarSwipe';
+import { useCategoryFilter } from '@/hooks/useCategoryFilter';
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -153,121 +75,30 @@ export default function CalendarScreen() {
    */
   const [pickerVisible, setPickerVisible] = useState(false);
 
-  // ── Category filter (TASK-1416) ────────────────────────────────────────────
-  /** All categories known for the user — used to render the toggle list. */
-  const [categories, setCategories] = useState<Category[]>([]);
-  /**
-   * Categories whose events should be rendered dimmed on the calendar.
-   * The sentinel string '__none__' represents events without a category.
-   * Default: empty set = everything fully visible.
-   */
-  const [dimmedCats, setDimmedCats] = useState<Set<string>>(new Set());
+  // ── Category filter (TASK-1416) — 분리된 hook ──────────────────────────────
+  const {
+    categories,
+    dimmedCats,
+    toggleCategoryDim,
+    displayEventsByDate,
+  } = useCategoryFilter(eventsByDate);
   /** Whether the category filter sheet is open. */
   const [catFilterVisible, setCatFilterVisible] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    getCategories().then((list) => {
-      if (!cancelled) setCategories(list);
-    }).catch(() => {/* non-fatal */});
-    return () => { cancelled = true; };
-  }, []);
 
   /** Density mode: detailed bars with titles, or compact colour dots. */
   const [monthDensity, setMonthDensity] = useState<'detailed' | 'compact'>('detailed');
 
-  // ── Free time finder (PRD 4.2 Tier 2) ─────────────────────────────────────
-  // State is declared first so the effects below can reference it without
-  // hitting the temporal dead zone.
-  /**
-   * Whether the "Show free time" overlay is enabled. When true we fetch
-   * common-free slots for the selected space(s) and the current view's
-   * date range, then pass them to WeekView/DayView for shaded rendering.
-   * Default OFF — opt-in feature.
-   */
-  const [freeTimeOn, setFreeTimeOn] = useState(false);
-  /** Cached list of spaces the current user belongs to. */
-  const [mySpaces, setMySpaces] = useState<SpaceSummary[]>([]);
-  /**
-   * IDs of spaces selected for the intersection. Default = all spaces
-   * (the most common "find time when everyone I share with is free"
-   * intent). Empty set means none selected → no slots fetched.
-   */
-  const [selectedSpaceIds, setSelectedSpaceIds] = useState<Set<string>>(new Set());
-  /** Free-time slots returned by the service for the current range. */
-  const [freeSlots, setFreeSlots] = useState<FreeSlot[]>([]);
-  /** Modal visibility for the Space chip-selector. */
+  // ── Free time finder (PRD 4.2 Tier 2) — 분리된 hook ───────────────────────
+  const {
+    isOn: freeTimeOn,
+    toggle: toggleFreeTime,
+    mySpaces,
+    selectedSpaceIds,
+    toggleSpaceSelection,
+    slots: freeSlots,
+    loaded: freeSlotsLoaded,
+  } = useFreeTimeOverlay({ selectedDate, viewMode });
   const [spacePickerVisible, setSpacePickerVisible] = useState(false);
-  /**
-   * Loaded flag — used to distinguish "no slots yet because we haven't
-   * fetched" from "fetched and got zero". Drives the empty-state hint.
-   */
-  const [freeSlotsLoaded, setFreeSlotsLoaded] = useState(false);
-
-  /**
-   * Load the user's spaces once on mount so the chip selector and the
-   * free-time fetcher both have the list. Failures are non-fatal (the UI
-   * just stays in the "no space" empty state).
-   */
-  useEffect(() => {
-    let cancelled = false;
-    getMySpaces().then((spaces) => {
-      if (cancelled) return;
-      setMySpaces(spaces);
-      // Default-select every space the first time we load — otherwise
-      // the toggle wouldn't show anything because selectedSpaceIds is
-      // empty.
-      setSelectedSpaceIds((prev) => prev.size === 0
-        ? new Set(spaces.map((s) => s.id))
-        : prev);
-    }).catch(() => {/* non-fatal */});
-    return () => { cancelled = true; };
-  }, []);
-
-  /**
-   * Fetch free-time slots whenever the toggle is on AND the visible
-   * range or selected spaces change. We run the finder per space and
-   * concatenate — multiple-space deduplication is a Tier 3 concern.
-   *
-   * When the toggle flips off we clear the loaded flag; the views ignore
-   * the cached slots because we pass `undefined` to them.
-   */
-  useEffect(() => {
-    if (!freeTimeOn) {
-      setFreeSlotsLoaded(false);
-      return;
-    }
-    if (selectedSpaceIds.size === 0) {
-      setFreeSlots([]);
-      setFreeSlotsLoaded(true);
-      return;
-    }
-    let cancelled = false;
-    const range = getViewRange(selectedDate, viewMode);
-    const ids = Array.from(selectedSpaceIds);
-    Promise.all(ids.map((spaceId) =>
-      findFreeSlots(spaceId, range, { minSlotMinutes: 30 }).catch(() => [] as FreeSlot[]),
-    ))
-      .then((perSpace) => {
-        if (cancelled) return;
-        setFreeSlots(perSpace.flat());
-        setFreeSlotsLoaded(true);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setFreeSlots([]);
-        setFreeSlotsLoaded(true);
-      });
-    return () => { cancelled = true; };
-  }, [freeTimeOn, selectedSpaceIds, selectedDate, viewMode]);
-
-  /**
-   * Toggle the free-time overlay. Side effects (fetching) are handled by
-   * the effect above so this stays a pure UI toggle.
-   */
-  const toggleFreeTime = useCallback(() => {
-    setFreeTimeOn((prev) => !prev);
-  }, []);
 
   /**
    * Build-50 follow-up — overflow menu (⋯) for the calendar header.
@@ -318,19 +149,6 @@ export default function CalendarScreen() {
   }, [dimmedCats, freeTimeOn, viewMode, monthDensity, toggleFreeTime]);
 
   /**
-   * Add or remove a space from the chip selector. The free-time fetcher
-   * effect re-runs automatically once selectedSpaceIds changes.
-   */
-  const toggleSpaceSelection = useCallback((spaceId: string) => {
-    setSelectedSpaceIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(spaceId)) next.delete(spaceId);
-      else next.add(spaceId);
-      return next;
-    });
-  }, []);
-
-  /**
    * Group todos by due-date key. Only todos with a due date and not yet
    * completed are surfaced on the calendar — completed items would add
    * noise. The colour is the category colour if we know it, otherwise
@@ -341,7 +159,7 @@ export default function CalendarScreen() {
     for (const t of todos) {
       if (!t.dueDate || t.isCompleted) continue;
       const d = t.dueDate;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const key = toDateKey(d);
       const bucket = map[key] ?? (map[key] = []);
       const cat = t.categoryId ? categories.find((c) => c.id === t.categoryId) : null;
       bucket.push({
@@ -354,41 +172,10 @@ export default function CalendarScreen() {
     return map;
   }, [todos, categories]);
 
-  /**
-   * Produce a new eventsByDate where events whose category the user has
-   * toggled off carry an 8-char hex color with a low alpha suffix. Views
-   * render the given `color` verbatim so this is enough to dim them — no
-   * view code needs to change. Sentinel '__none__' dims uncategorised.
-   */
-  const displayEventsByDate = useMemo(() => {
-    if (dimmedCats.size === 0) return eventsByDate;
-    const out: typeof eventsByDate = {};
-    for (const [key, events] of Object.entries(eventsByDate)) {
-      out[key] = events.map((e) => {
-        const bucket = e.categoryId ?? '__none__';
-        if (!dimmedCats.has(bucket)) return e;
-        // Append low-alpha (~19%) to the hex so RN renders it faded.
-        const c = e.color;
-        const dimmed = c.length === 7 ? `${c}30` : c;
-        return { ...e, color: dimmed };
-      });
-    }
-    return out;
-  }, [eventsByDate, dimmedCats]);
-
-  // Drag-to-reschedule lives entirely inside WeekView/DayView via
-  // useOptimisticReschedule (RNGH path). The calendar screen no longer
-  // needs to wire its own handler — keeps this file focused on swipe
-  // navigation + view-mode/state.
-
-  const toggleCategoryDim = useCallback((bucket: string) => {
-    setDimmedCats((prev) => {
-      const next = new Set(prev);
-      if (next.has(bucket)) next.delete(bucket);
-      else next.add(bucket);
-      return next;
-    });
-  }, []);
+  // displayEventsByDate / toggleCategoryDim / toggleSpaceSelection 모두
+  // useCategoryFilter / useFreeTimeOverlay 가 제공.
+  // Drag-to-reschedule 은 WeekView/DayView 가 useOptimisticReschedule 로
+  // 직접 처리 — 캘린더 화면은 swipe + 뷰 모드만 신경 쓴다.
 
   // ─── Navigation ─────────────────────────────────────────────────────────────
 
@@ -522,97 +309,20 @@ export default function CalendarScreen() {
     return unsubscribe;
   }, [upsertEvent, removeEvent]);
 
-  // ─── Swipe gesture ──────────────────────────────────────────────────────────
-
-  /**
-   * Keep the current viewMode in a ref so the PanResponder callbacks
-   * (created once via useRef) always read the latest value. Without this
-   * the closure captured 'month' at first render and swipes kept shifting
-   * by month even after the user switched to week/day mode.
-   */
-  const viewModeRef = useRef(viewMode);
-  useEffect(() => { viewModeRef.current = viewMode; }, [viewMode]);
-
-  // Build-49 — drag-mode lock. WeekView/DayView call back into us when
-  // their drag-to-reschedule enters/leaves edit mode; we keep the value
-  // in a ref so the outer swipe PanResponder (created once via useRef)
-  // can read the latest state without recreating the responder.
-  const isDraggingRef = useRef(false);
+  // ─── Swipe gesture (분리된 hook) ─────────────────────────────────────────
+  // WeekView/DayView 의 chip drag 시 navigation 차단을 위해 isDragging ref 유지.
+  const [isChildDragging, setIsChildDragging] = useState(false);
   const handleChildDragModeChange = useCallback((dragging: boolean) => {
-    isDraggingRef.current = dragging;
+    setIsChildDragging(dragging);
   }, []);
 
-  // ─── Swipe transition animation ───────────────────────────────────────────
-  // Animated.Value drives a horizontal translate on the calendar body so
-  // pan motion is visible in real time, and a quick spring-back snaps the
-  // committed period change. Uses native driver — no JS thread overhead.
-  const swipeX = useRef(new Animated.Value(0)).current;
-  const screenWidth = Dimensions.get('window').width;
-
-  const animateCommit = useCallback((direction: -1 | 1) => {
-    Animated.sequence([
-      // Fly the current view off the edge in the swipe direction.
-      Animated.timing(swipeX, {
-        toValue: -direction * screenWidth,
-        duration: 160,
-        useNativeDriver: true,
-      }),
-      // Reset instantly to opposite edge, ready for the new period to slide in.
-      Animated.timing(swipeX, {
-        toValue: direction * screenWidth,
-        duration: 0,
-        useNativeDriver: true,
-      }),
-      // Slide the new period in.
-      Animated.spring(swipeX, {
-        toValue: 0,
-        useNativeDriver: true,
-        bounciness: 6,
-        speed: 14,
-      }),
-    ]).start();
-  }, [swipeX, screenWidth]);
-
-  const panResponder = useRef(
-    PanResponder.create({
-      // Only claim the gesture if it's predominantly horizontal AND fast enough.
-      // The velocity check (vx > 0.3) distinguishes a quick swipe-to-navigate
-      // from a slow post-long-press drag (RNGH drag-to-reschedule starts from
-      // rest, vx ≈ 0). Without this check the PanResponder intercepts RNGH
-      // drags and the event snaps back instead of moving.
-      onMoveShouldSetPanResponder: (_, gs) =>
-        // Hard gate: while a child is dragging an event chip, never claim
-        // the gesture for week-navigation. Belt-and-suspenders with the
-        // child PanResponder's onPanResponderTerminationRequest=false.
-        !isDraggingRef.current &&
-        Math.abs(gs.dx) > Math.abs(gs.dy) * SWIPE_RATIO &&
-        Math.abs(gs.dx) > 10 &&
-        Math.abs(gs.vx) > 0.3,
-
-      onPanResponderMove: (_, gs) => {
-        // Follow the finger with mild rubber-banding so over-pull feels natural.
-        swipeX.setValue(gs.dx * 0.6);
-      },
-
-      onPanResponderRelease: (_, gs) => {
-        if (Math.abs(gs.dx) < SWIPE_THRESHOLD) {
-          // Below threshold — bounce back.
-          Animated.spring(swipeX, {
-            toValue: 0, useNativeDriver: true, bounciness: 4,
-          }).start();
-          return;
-        }
-        const mode = viewModeRef.current;
-        const direction: -1 | 1 = gs.dx < 0 ? 1 : -1;
-        if (direction === 1) {
-          setSelectedDate((prev) => shiftDate(prev, mode, 1));
-        } else {
-          setSelectedDate((prev) => shiftDate(prev, mode, -1));
-        }
-        animateCommit(direction);
-      },
-    }),
-  ).current;
+  const { panHandlers: swipePanHandlers, swipeX } = useCalendarSwipe({
+    viewMode,
+    isDragging: isChildDragging,
+    onShift: (direction) => {
+      setSelectedDate((prev) => shiftDate(prev, viewMode, direction));
+    },
+  });
 
   // ─── Events for current day (DayView) ────────────────────────────────────
 
@@ -669,7 +379,7 @@ export default function CalendarScreen() {
         {/* Swipe-enabled content area */}
         <Animated.View
           style={[styles.content, { transform: [{ translateX: swipeX }] }]}
-          {...panResponder.panHandlers}
+          {...swipePanHandlers}
         >
           {viewMode === 'month' && (
             <MonthView
