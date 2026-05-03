@@ -103,9 +103,46 @@ function koreanDayToJsDay(dayChar: string): number {
  * Returns the date of "이번 주 X요일" relative to contextDate.
  * If the weekday is today or already passed, advances to next week.
  * (Korean week runs Mon–Sun; Sunday is treated as end-of-week.)
+ *
+ * Build-63 LEAD: "다음주랑 이번주도 구분 잘 못하는 거 같다" — 이전엔
+ * 이미 지난 요일이면 자동으로 다음 주로 점프해서 "이번 주 화요일" 과
+ * "다음 주 화요일" 이 같은 결과가 나왔다. 이제는 캘린더 주(Mon-Sun) 안의
+ * 정확한 그 요일을 항상 반환 — 과거이면 과거 그대로, past-date guard 가
+ * confidence='low' 처리.
  */
+/**
+ * Strip Korean particles + intent verbs that surround the actual title token.
+ *
+ * Examples (input → output):
+ *  - "에 운동 등록할래"   → "운동"
+ *  - "에서 점심 약속"      → "점심 약속"   (의미 있는 명사 유지)
+ *  - "회의 잡아줘"         → "회의"
+ *  - "운동 예약 부탁"      → "운동"
+ *
+ * 보수적 — 너무 많이 자르면 의미 손실. 명확히 무의미한 leading 조사
+ * + trailing 의도 동사만 제거.
+ */
+function cleanTitle(s: string): string {
+  let t = s;
+  // Leading particles 가 단독 잔재로 남는 경우 (시간 패턴 직후 "에" 등)
+  t = t.replace(/^(?:에서|에|은|는|이|가|을|를)\s+/, '');
+  // Trailing 의도 동사 — "할래/할게/하자/할까/잡아/잡아줘/잡아주세요/등록해/
+  // 등록할래/등록해줘/등록부탁/예약해/예약부탁/부탁해/부탁드려" 등
+  const trailingIntent =
+    /\s*(?:등록\s*(?:할래|해줘|해|할게|하자|부탁(?:해|드려|드립니다)?))$/;
+  const trailingShort =
+    /\s*(?:잡아\s*(?:줘|주세요)?|예약(?:해(?:줘|주세요)?|부탁)?|할래|할게|하자|할까|부탁(?:해|드려|드립니다)?)$/;
+  // 두 번 적용 — "운동 등록 부탁해" 처럼 두 단어가 연속될 수 있음.
+  for (let i = 0; i < 3; i++) {
+    const before = t;
+    t = t.replace(trailingIntent, '').trim();
+    t = t.replace(trailingShort, '').trim();
+    if (t === before) break;
+  }
+  return t;
+}
+
 function getThisWeekdayDate(contextDate: Date, targetJsDay: number): Date {
-  // Treat Sunday as 7 so Mon=1 … Sun=7 for correct within-week ordering
   const toOrder = (d: number) => (d === 0 ? 7 : d);
   const diff = toOrder(targetJsDay) - toOrder(contextDate.getDay());
 
@@ -115,10 +152,9 @@ function getThisWeekdayDate(contextDate: Date, targetJsDay: number): Date {
   const target = new Date(ctx0);
   target.setDate(ctx0.getDate() + diff);
 
-  // If target is today or earlier → jump to next week
-  if (target <= ctx0) {
-    target.setDate(target.getDate() + 7);
-  }
+  // 이미 지난 요일이라도 다음 주로 점프하지 않음 — "이번 주" 의 의미를
+  // 그대로 유지. 사용자가 과거 일정을 등록하려 하면 past-date guard 가
+  // 별도로 confidence='low' 로 처리.
   return target;
 }
 
@@ -490,7 +526,12 @@ export function parseLocally(text: string, contextDate: Date = new Date()): NLPa
 
   // ── Step 6: Title — remaining text after all extractions ──────────────────
 
-  const titleRaw = workingText().replace(/\s+/g, ' ').trim();
+  let titleRaw = workingText().replace(/\s+/g, ' ').trim();
+
+  // Build-63 LEAD: "이번주 화요일 오후 7시에 운동 등록할래" → 결과가
+  // "에 운동 등록" 같은 잔재로 떴다. 시간 패턴 뒤 leading "에/에서",
+  // 그리고 trailing 의도 동사 ("등록할래/할래/잡아줘/예약" 등) 를 정리.
+  titleRaw = cleanTitle(titleRaw);
 
   // ── Step 7: Overall confidence ────────────────────────────────────────────
 
