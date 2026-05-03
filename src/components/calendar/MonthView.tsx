@@ -18,8 +18,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { Ionicons } from '@expo/vector-icons';
 import type { EventSummary } from '@/types';
 import { useColors } from '@/hooks/useColors';
 import { useTranslatedTitles } from '@/hooks/useTranslatedTitles';
@@ -33,6 +34,8 @@ import {
 import { useOptimisticReschedule } from './useOptimisticReschedule';
 import { UndoToast, useUndoToast } from './UndoToast';
 import { applyDelta } from '@/lib/calendarGeometry';
+import { deleteEvent } from '@/services/eventService';
+import { useEventStore } from '@/stores/eventStore';
 
 /** Maximum bars to show per day cell before collapsing to "+N". */
 const MAX_BARS = 3;
@@ -288,6 +291,45 @@ export function MonthView({
   const { t } = useTranslation();
   const { toast: undoToast, showUndo } = useUndoToast();
   const handleRescheduleDrop = useOptimisticReschedule({ onMoved: showUndo });
+  const removeEvent = useEventStore((s) => s.removeEvent);
+
+  /**
+   * Delete the picked event from the targeting toolbar. Shows the same
+   * confirm Alert the event-detail screen uses so users can't lose data
+   * by mis-tapping. On confirm we optimistically remove from the store
+   * (calendar redraws immediately) and call the API; the caller's Alert
+   * surfaces any failure.
+   */
+  const handleDeletePickedEvent = useCallback(() => {
+    const evt = targetEvent;
+    if (!evt) return;
+    Alert.alert(
+      t('event.delete'),
+      t('event.delete_confirm'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.delete'),
+          style: 'destructive',
+          onPress: async () => {
+            // Exit targeting mode FIRST so the toolbar disappears even if the
+            // network call slow-resolves — the user wanted to delete, not stay
+            // in move mode.
+            setTargetEvent(null);
+            removeEvent(evt.id);
+            try {
+              await deleteEvent(evt.id);
+            } catch (err) {
+              Alert.alert(
+                t('common.error'),
+                err instanceof Error ? err.message : t('common.delete_failed'),
+              );
+            }
+          },
+        },
+      ],
+    );
+  }, [targetEvent, removeEvent, t]);
 
   const commitMove = useCallback(
     (event: EventSummary, targetDate: Date) => {
@@ -565,6 +607,17 @@ export function MonthView({
             </Text>
             <Text style={styles.targetToolbarHint}>{t('calendar.targeting_hint')}</Text>
           </View>
+          {/* Build-56 — delete shortcut. Surfaces the same destructive action
+              the user would otherwise have to drill into the event detail
+              screen for. Confirm dialog prevents accidental loss. */}
+          <Pressable
+            onPress={handleDeletePickedEvent}
+            hitSlop={8}
+            style={styles.targetToolbarDelete}
+            accessibilityLabel={t('event.delete')}
+          >
+            <Ionicons name="trash-outline" size={18} color={colors.error} />
+          </Pressable>
           <Pressable
             onPress={() => setTargetEvent(null)}
             hitSlop={8}
@@ -818,6 +871,17 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  targetToolbarDelete: {
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: (colors.error) + '14',
+    borderWidth: 1,
+    borderColor: (colors.error) + '40',
+    marginRight: 6,
   },
   targetToolbarCancelText: {
     ...textStyles.labelSm,

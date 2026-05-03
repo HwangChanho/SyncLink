@@ -380,21 +380,27 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     },
 
     // ── Month grid ───────────────────────────────────────────────────────────
+    // LEAD 2026-05-03 — "월이 왼쪽에 align되어있는데 가운데로 오게": 이전엔
+    // gap + marginHorizontal 가 동시에 적용돼서 items 의 누적 폭이 100% 를
+    // 넘었다 (item 23% × 4 + gap × 3 + margin × 8). 결과적으로 마지막 줄이
+    // 좌측 정렬로 보였음. justifyContent: 'space-between' 로 4 items 를
+    // 양쪽 끝에 정렬 + 사이 간격 균등 분배. marginHorizontal 제거.
     monthGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      padding: spacing[4],
-      gap: spacing[2],
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing[4],
+      paddingVertical: spacing[3],
+      rowGap: spacing[2],
     },
     monthItem: {
-      // 4 columns: (100% - 3 gaps) / 4
-      width: '23%',
+      // 4 columns. 22% leaves room for ~3 × 4% gaps via space-between.
+      width: '22%',
       aspectRatio: 1.8,
       alignItems: 'center',
       justifyContent: 'center',
       borderRadius: radius.md,
       backgroundColor: colors.backgroundAlt,
-      marginHorizontal: '1%',
     },
     monthItemSelected: {
       backgroundColor: colors.primary,
