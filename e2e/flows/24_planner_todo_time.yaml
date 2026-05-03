@@ -1,0 +1,257 @@
+# 24_planner_todo_time — 시간 포함 todo 생성 → 캘린더 timed grid 노출 검증
+#
+# 목적:
+#   1. 로그인 → 플래너 탭 → FAB → 할일 생성 시트
+#   2. 제목 입력 → 날짜 chip → DateTimeModal 확인 → 시간 chip 노출 확인
+#   3. 시간 chip → DateTimeModal 확인
+#   4. 저장 → 캘린더 주뷰 이동 → todo-grid-chip-* 가 timed grid 에 노출 확인
+#
+# Build-66 — todo dueAt (시간 포함 마감) + WeekView/DayView timed grid render.
+#
+# 주의:
+#   - DateTimeModal 의 confirm 버튼 testID 가 별도 e2e 정의 안 되어 있을
+#     수 있음 — text 매칭("확인" / "Confirm" / "OK") 으로 대체.
+#   - 백엔드 migration 025 (todos.due_at) 미배포 환경에선 dueAt 가
+#     서버에 저장되지 않아 캘린더 노출 검증이 실패할 수 있음. 그 경우
+#     플래너 탭 todo-row-* 노출까지만으로 PASS 처리 (분기 예시는 주석).
+#
+# 실행:
+#   maestro --device <UDID> test \
+#     -e TEST_EMAIL=e2e-ios-sim-pro@synclink.test \
+#     -e TEST_PASSWORD=e2etest1234 \
+#     e2e/flows/24_planner_todo_time.yaml
+#
+# testID 참조 (Build-66 에서 신설된 것):
+#   todo-create-date-chip      — TodoCreateSheet 날짜 chip
+#   todo-create-time-chip      — TodoCreateSheet 시간 chip (날짜 set 후 노출)
+#   todo-grid-chip-{id}        — WeekView/DayView 의 timed todo chip
+#   todo-allday-chip-{id}      — WeekView/DayView 의 all-day strip todo chip
+
+appId: io.synclink.app
+env:
+  TEST_EMAIL: ${TEST_EMAIL}
+  TEST_PASSWORD: ${TEST_PASSWORD}
+---
+# ── 1. 앱 초기화 ───────────────────────────────────────────────────────────────
+- stopApp
+- clearState
+- launchApp:
+    permissions:
+      all: deny
+
+# Permission dialog 5회 dismiss
+- repeat:
+    times: 5
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "허용 안 함"
+          commands:
+            - tapOn:
+                text: "허용 안 함"
+            - waitForAnimationToEnd
+      - runFlow:
+          when:
+            visible:
+              text: "Don't Allow"
+          commands:
+            - tapOn:
+                text: "Don't Allow"
+            - waitForAnimationToEnd
+
+# ── 2. 로그인 ──────────────────────────────────────────────────────────────────
+- extendedWaitUntil:
+    visible:
+      id: "login-dev-submit"
+    timeout: 30000
+- tapOn:
+    id: "login-dev-email"
+- eraseText
+- inputText: ${TEST_EMAIL}
+- tapOn:
+    id: "login-dev-password"
+- eraseText
+- inputText: ${TEST_PASSWORD}
+- tapOn:
+    id: "login-dev-submit"
+- waitForAnimationToEnd
+
+# Post-login dialog dismiss
+- repeat:
+    times: 5
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "허용 안 함"
+          commands:
+            - tapOn:
+                text: "허용 안 함"
+            - waitForAnimationToEnd
+      - runFlow:
+          when:
+            visible:
+              text: "Don't Allow"
+          commands:
+            - tapOn:
+                text: "Don't Allow"
+            - waitForAnimationToEnd
+
+# Onboarding skip
+- runFlow:
+    when:
+      visible:
+        id: "onboarding-button-skip"
+    commands:
+      - tapOn:
+          id: "onboarding-button-skip"
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        id: "profile-onboarding-button-skip"
+    commands:
+      - tapOn:
+          id: "profile-onboarding-button-skip"
+      - waitForAnimationToEnd
+
+# 홈 탭 도달
+- extendedWaitUntil:
+    visible:
+      id: "tab-button-home"
+    timeout: 30000
+
+# ── 3. 플래너 탭 → todo 생성 시트 열기 ─────────────────────────────────────────
+- tapOn:
+    id: "tab-button-planner"
+- waitForAnimationToEnd
+- tapOn:
+    id: "planner-tab-todo"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/24_planner_open
+
+- tapOn:
+    id: "planner-fab-todo"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "todo-create-title-input"
+    timeout: 10000
+
+# ── 4. 제목 입력 ──────────────────────────────────────────────────────────────
+- tapOn:
+    id: "todo-create-title-input"
+- inputText: "시간 있는 할일 E2E"
+- takeScreenshot: screenshots/24_title_entered
+
+# ── 5. 날짜 chip 탭 → DateTimeModal 확인 ─────────────────────────────────────
+# 시간 chip 은 날짜가 없으면 미노출 — Build-66 의 conditional render.
+- assertNotVisible:
+    id: "todo-create-time-chip"
+- tapOn:
+    id: "todo-create-date-chip"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/24_date_modal_open
+
+# DateTimeModal 의 확인 버튼 — testID 표준화 전이라 text 로 매칭.
+# (i18n 'common.confirm' / 'common.ok' 등 환경에 따라 분기)
+- runFlow:
+    when:
+      visible:
+        text: "확인"
+    commands:
+      - tapOn:
+          text: "확인"
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        text: "Confirm"
+    commands:
+      - tapOn:
+          text: "Confirm"
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        text: "OK"
+    commands:
+      - tapOn:
+          text: "OK"
+      - waitForAnimationToEnd
+
+# ── 6. 시간 chip 노출 확인 → 시간 입력 ───────────────────────────────────────
+- extendedWaitUntil:
+    visible:
+      id: "todo-create-time-chip"
+    timeout: 5000
+- takeScreenshot: screenshots/24_time_chip_visible
+
+- tapOn:
+    id: "todo-create-time-chip"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/24_time_modal_open
+
+# 시간 modal 도 확인 버튼 매칭으로 닫기.
+- runFlow:
+    when:
+      visible:
+        text: "확인"
+    commands:
+      - tapOn:
+          text: "확인"
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        text: "Confirm"
+    commands:
+      - tapOn:
+          text: "Confirm"
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        text: "OK"
+    commands:
+      - tapOn:
+          text: "OK"
+      - waitForAnimationToEnd
+
+# ── 7. 저장 ───────────────────────────────────────────────────────────────────
+- tapOn:
+    id: "todo-create-save"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/24_todo_saved
+
+# 플래너 목록에 등장 (백엔드 dueAt 미반영이어도 client 는 표시됨)
+- assertVisible:
+    text: "시간 있는 할일 E2E"
+- takeScreenshot: screenshots/24_in_planner_list
+
+# ── 8. 캘린더 주뷰 이동 → timed todo chip 노출 ───────────────────────────────
+# Build-66: dueAt 가 set 된 todo 는 WeekView 의 timed grid 에 chip 으로
+# 노출됨 (testID="todo-grid-chip-{id}"). all-day strip 에는 노출 안 됨.
+- tapOn:
+    id: "tab-button-calendar"
+- waitForAnimationToEnd
+
+# 주뷰로 전환 — CalendarHeader 의 viewMode 토글 (week 버튼). text 매칭.
+- runFlow:
+    when:
+      visible:
+        text: "주"
+    commands:
+      - tapOn:
+          text: "주"
+      - waitForAnimationToEnd
+
+- takeScreenshot: screenshots/24_week_view
+
+# todo-grid-chip-{id} 패턴 매칭 — id 는 동적 UUID 이므로 정규식 사용.
+# migration 025 미배포 시 dueAt 이 client 메모리에만 존재, 캘린더 표시는
+# todoStore (메모리) 기반이라 동작. supabase 재로드 시 사라질 수 있음.
+- assertVisible:
+    id: "todo-grid-chip-.*"
+- takeScreenshot: screenshots/24_grid_chip_visible

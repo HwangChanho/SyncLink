@@ -541,6 +541,7 @@ export function WeekView({
                   return (
                     <View
                       key={td.id}
+                      testID={`todo-allday-chip-${td.id}`}
                       {...panHandlers}
                       style={[
                         styles.allDayChip,
@@ -705,6 +706,7 @@ export function WeekView({
                       return (
                         <ChipWrap
                           key={`todo-${td.id}`}
+                          testID={`todo-grid-chip-${td.id}`}
                           {...(onTodoPress
                             ? { onPress: () => onTodoPress(td.id), activeOpacity: 0.8 }
                             : {})}
