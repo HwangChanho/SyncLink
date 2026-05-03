@@ -261,6 +261,11 @@ const ja = {
     activity_removed: '"{{title}}"の共有が取り消されました',
     live: 'リアルタイム',
     activity_empty: 'Space アクティビティはありません',
+    shared_badge: '共有',
+    relative_just_now: 'たった今',
+    relative_minutes_ago: '{{count}} 分前',
+    relative_hours_ago: '{{count}} 時間前',
+    relative_days_ago: '{{count}} 日前',
     // IDEA-014 — Web 招待 UX 強化
     invite_email: 'メールで招待を送る',
     invite_qr: 'QR コードを表示',
@@ -424,6 +429,7 @@ const ja = {
     voice_start: '音声で入力',
     voice_stop: '音声入力を停止',
     voice_error: '音声認識に失敗しました。',
+    conflict_with: '予定が重なっています: {{title}}',
   },
 
   review: {
@@ -468,6 +474,7 @@ const ja = {
     grade_moderate: '普通',
     grade_poor: '悪い',
     grade_very_poor: '非常に悪い',
+    refresh_a11y: '天気を更新',
   },
 
   calendar: {

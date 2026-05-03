@@ -283,7 +283,7 @@ export function NLInputBar({ onEventCreated }: Props) {
       // is already visible — the user can see what overlapped and
       // choose to delete via long-press if needed.
       if (conflict) {
-        setErrorMsg(`겹치는 일정이 있어요: ${conflict.title}`);
+        setErrorMsg(t('nl.conflict_with', { title: conflict.title }));
         setTimeout(() => setErrorMsg(''), 3000);
       }
 

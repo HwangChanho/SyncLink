@@ -47,15 +47,23 @@ function useActivityLabel() {
   };
 }
 
-/** Formats timestamp as relative string (방금, N분 전, etc.) */
-function formatRelative(date: Date): string {
-  const diffMs  = Date.now() - date.getTime();
-  const diffMin = Math.floor(diffMs / 60_000);
-  if (diffMin < 1)  return '방금';
-  if (diffMin < 60) return `${diffMin}분 전`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24)  return `${diffHr}시간 전`;
-  return `${Math.floor(diffHr / 24)}일 전`;
+/**
+ * Hook returning a locale-aware "relative time" formatter.
+ * The thresholds match Apple/Google Calendar feeds: 방금 (<1min) → N분 전
+ * (<1h) → N시간 전 (<1d) → N일 전. i18n keys live under `space.relative_*`
+ * so en/ja/zh degrade gracefully (e.g. "5 min ago", "5 分前").
+ */
+function useRelativeTimeFormatter(): (date: Date) => string {
+  const { t } = useTranslation();
+  return (date: Date): string => {
+    const diffMs  = Date.now() - date.getTime();
+    const diffMin = Math.floor(diffMs / 60_000);
+    if (diffMin < 1)  return t('space.relative_just_now');
+    if (diffMin < 60) return t('space.relative_minutes_ago', { count: diffMin });
+    const diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24)  return t('space.relative_hours_ago', { count: diffHr });
+    return t('space.relative_days_ago', { count: Math.floor(diffHr / 24) });
+  };
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -70,6 +78,7 @@ export function SpaceActivityFeed() {
   const router = useRouter();
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const getActivityLabel = useActivityLabel();
+  const formatRelative = useRelativeTimeFormatter();
 
   // ── Add item to feed (newest first, capped at MAX_ITEMS) ──────────────────
   const addActivity = useCallback((

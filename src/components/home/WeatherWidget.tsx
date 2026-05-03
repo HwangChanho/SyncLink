@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -117,10 +117,18 @@ export function WeatherWidget() {
   // ─── Render ──────────────────────────────────────────────────────────────
 
   if (isLoading) {
+    // Skeleton — mimic the loaded layout (icon dot + temp pill + city pill +
+    // description pill) so the card height doesn't jump when data arrives.
+    // Build-54 — replaces the centered spinner that didn't communicate
+    // *what* was loading.
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="small" color={colors.primary} />
-        <Text style={styles.loadingText}>{t('weather.loading')}</Text>
+        <View style={styles.row}>
+          <View style={styles.skelIcon} />
+          <View style={styles.skelTemp} />
+          <View style={styles.skelCity} />
+          <View style={styles.skelDesc} />
+        </View>
       </View>
     );
   }
@@ -141,7 +149,7 @@ export function WeatherWidget() {
     <Pressable
       style={styles.container}
       onPress={() => void fetchWeather()}
-      accessibilityLabel="날씨 새로고침"
+      accessibilityLabel={t('weather.refresh_a11y')}
     >
       {/* Row 1 — temperature + current conditions */}
       <View style={styles.row}>
@@ -247,6 +255,32 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     loadingText: {
       ...textStyles.caption,
       color: colors.textTertiary,
+    },
+    // Skeleton placeholders — sized to match the loaded layout so the
+    // card height stays stable across loading → loaded transition.
+    skelIcon: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      backgroundColor: colors.surfaceAlt,
+    },
+    skelTemp: {
+      width: 36,
+      height: 18,
+      borderRadius: 4,
+      backgroundColor: colors.surfaceAlt,
+    },
+    skelCity: {
+      flex: 1,
+      height: 14,
+      borderRadius: 4,
+      backgroundColor: colors.surfaceAlt,
+    },
+    skelDesc: {
+      width: 80,
+      height: 12,
+      borderRadius: 4,
+      backgroundColor: colors.surfaceAlt,
     },
     unavailableText: {
       ...textStyles.caption,

@@ -882,12 +882,17 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       justifyContent: 'center',
     },
     catFilterBadge: {
+      // Build-54 — 8px dot was too easy to miss; LEAD report flagged users
+      // not noticing a category filter was active. 11px + white ring lifts
+      // it off the icon background without crowding the toolbar.
       position: 'absolute',
-      top: 4,
-      right: 4,
-      width: 8,
-      height: 8,
-      borderRadius: 4,
+      top: 2,
+      right: 2,
+      width: 11,
+      height: 11,
+      borderRadius: 6,
+      borderWidth: 1.5,
+      borderColor: colors.surface,
     },
     // Build-50 — densityBtn / freeTimeBtn replaced by shared toolbarBtn
     // above. All three overlay-toggle buttons are now flex siblings

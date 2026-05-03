@@ -259,6 +259,11 @@ const zh = {
     activity_removed: '"{{title}}"的共享已取消',
     live: '实时',
     activity_empty: '暂无Space动态',
+    shared_badge: '共享',
+    relative_just_now: '刚刚',
+    relative_minutes_ago: '{{count}} 分钟前',
+    relative_hours_ago: '{{count}} 小时前',
+    relative_days_ago: '{{count}} 天前',
     // IDEA-014 — Web 邀请 UX 增强
     invite_email: '通过邮件邀请',
     invite_qr: '显示二维码',
@@ -427,6 +432,7 @@ const zh = {
     voice_start: '语音输入',
     voice_stop: '停止语音输入',
     voice_error: '语音识别失败。',
+    conflict_with: '与现有日程冲突: {{title}}',
   },
 
   review: {
@@ -471,6 +477,7 @@ const zh = {
     grade_moderate: '一般',
     grade_poor: '较差',
     grade_very_poor: '非常差',
+    refresh_a11y: '刷新天气',
   },
 
   calendar: {

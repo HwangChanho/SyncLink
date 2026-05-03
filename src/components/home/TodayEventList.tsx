@@ -60,7 +60,7 @@ function EventRow({ event, onPress, colors, styles }: EventRowProps) {
       {/* Shared indicator */}
       {!event.isOwn && (
         <View style={styles.sharedBadge}>
-          <Text style={styles.sharedBadgeText}>공유</Text>
+          <Text style={styles.sharedBadgeText}>{t('space.shared_badge')}</Text>
         </View>
       )}
     </TouchableOpacity>

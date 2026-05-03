@@ -269,6 +269,12 @@ const ko = {
     activity_removed: '"{{title}}" 일정 공유가 취소되었습니다',
     live: '실시간',
     activity_empty: 'Space 활동이 없습니다',
+    shared_badge: '공유',
+    // SpaceActivityFeed timestamp 라벨 (formatRelative)
+    relative_just_now: '방금',
+    relative_minutes_ago: '{{count}}분 전',
+    relative_hours_ago: '{{count}}시간 전',
+    relative_days_ago: '{{count}}일 전',
     // IDEA-014 — Web 초대 UX 보강
     invite_email: '이메일로 초대 보내기',
     invite_qr: 'QR 코드 보기',
@@ -437,6 +443,7 @@ const ko = {
     voice_stop: '음성 입력 중지',
     voice_error: '음성 인식에 실패했습니다.',
     voice_permission: '마이크 권한이 필요합니다.',
+    conflict_with: '겹치는 일정이 있어요: {{title}}',
   },
 
   review: {
@@ -481,6 +488,7 @@ const ko = {
     grade_moderate: '보통',
     grade_poor: '나쁨',
     grade_very_poor: '매우 나쁨',
+    refresh_a11y: '날씨 새로고침',
   },
 
   date_suggest: {

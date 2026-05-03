@@ -259,6 +259,11 @@ const en = {
     activity_removed: 'Sharing "{{title}}" was removed',
     live: 'Live',
     activity_empty: 'No Space activity',
+    shared_badge: 'Shared',
+    relative_just_now: 'just now',
+    relative_minutes_ago: '{{count}} min ago',
+    relative_hours_ago: '{{count}} h ago',
+    relative_days_ago: '{{count}} d ago',
     // IDEA-014 — Web invite UX enhancement
     invite_email: 'Send Email Invite',
     invite_qr: 'Show QR Code',
@@ -428,6 +433,7 @@ const en = {
     voice_stop: 'Stop voice input',
     voice_error: 'Speech recognition failed.',
     voice_permission: 'Microphone permission is required.',
+    conflict_with: 'Overlaps with: {{title}}',
   },
 
   review: {
@@ -472,6 +478,7 @@ const en = {
     grade_moderate: 'Moderate',
     grade_poor: 'Poor',
     grade_very_poor: 'Very Poor',
+    refresh_a11y: 'Refresh weather',
   },
 
   date_suggest: {
