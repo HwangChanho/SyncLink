@@ -128,8 +128,10 @@ env:
 
 # ── 4. Space 생성 화면 진입 ────────────────────────────────────────────────────
 # my.tsx에 Space가 없으면 my-button-create-space, 있으면 my-button-add-space로 표시.
-# 두 분기를 모두 커버하기 위해 스크롤 후 조건부 탭.
-- scrollToBottom
+# 두 분기를 모두 커버하기 위해 스크롤 후 조건부 탭. Maestro 2.5는 scrollToBottom 미지원
+# 이라 일반 scroll 을 두 번 반복해 ScrollView 끝까지 내려간다.
+- scroll
+- scroll
 - runFlow:
     when:
       visible:

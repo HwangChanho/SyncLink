@@ -131,7 +131,9 @@ env:
 # ── 4. 언어 설정 진입 ──────────────────────────────────────────────────────────
 # SettingsSection.tsx의 언어 메뉴 항목은 스크롤해야 보일 수 있음.
 # testID: settings-button-language
-- scrollToBottom
+# Maestro 2.5는 scrollToBottom 미지원 — scroll 두 번으로 끝까지 내림.
+- scroll
+- scroll
 - extendedWaitUntil:
     visible:
       id: "settings-button-language"
@@ -181,7 +183,8 @@ env:
 - tapOn:
     id: "tab-button-my"
 - waitForAnimationToEnd
-- scrollToBottom
+- scroll
+- scroll
 - tapOn:
     id: "settings-button-language"
 - waitForAnimationToEnd
