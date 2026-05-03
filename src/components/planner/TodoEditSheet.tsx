@@ -226,6 +226,7 @@ export function TodoEditSheet({
                     onPress={() => setCategoryPickerOpen(true)}
                   />
                   <Pressable
+                    testID="todo-edit-date-chip"
                     style={[
                       styles.inlineChip,
                       (dueAt || dueDate) && { borderColor: colors.primary },
@@ -265,6 +266,7 @@ export function TodoEditSheet({
 
                   {(dueAt || dueDate) && (
                     <Pressable
+                      testID="todo-edit-time-chip"
                       style={[
                         styles.inlineChip,
                         dueAt && { borderColor: colors.primary },

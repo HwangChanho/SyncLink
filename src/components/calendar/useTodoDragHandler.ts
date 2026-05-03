@@ -29,6 +29,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { PanResponder, type PanResponderInstance } from 'react-native';
+import { computeTodoDropTarget } from '@/lib/calendarGeometry';
 
 /** 살아 있는 todo drag 상태. ghost 렌더에 사용. */
 export interface TodoDragState {
@@ -142,34 +143,17 @@ export function useTodoDragHandler({
 
           const { pageX, pageY } = evt.nativeEvent;
           const offset = eventsAreaPageOffsetRef.current;
-          const localX = pageX - offset.x;
-          const localY = pageY - offset.y;
-
-          // grid 영역 밖에 떨어뜨리면 변경 없음.
-          if (
-            localX < 0 ||
-            localY < 0 ||
-            columnWidth <= 0 ||
-            localX > columnWidth * Math.max(1, weekDays.length)
-          ) {
-            return;
-          }
-
-          const dayIdx = Math.max(
-            0,
-            Math.min(weekDays.length - 1, Math.floor(localX / columnWidth)),
-          );
-          const day = weekDays[dayIdx];
-          if (!day) return;
-
-          // px → 분 변환 + snap.
-          const rawMinutes = (localY / hourHeight) * 60;
-          const clamped = Math.max(0, Math.min(24 * 60 - snapMinutes, rawMinutes));
-          const snapped = Math.round(clamped / snapMinutes) * snapMinutes;
-
-          const newDueAt = new Date(day);
-          newDueAt.setHours(Math.floor(snapped / 60), snapped % 60, 0, 0);
-          onDrop(todoId, newDueAt);
+          // hit-test + snap 은 순수 함수에 위임 (단위 테스트 가능).
+          const newDueAt = computeTodoDropTarget({
+            pageX, pageY,
+            eventsAreaPageX: offset.x,
+            eventsAreaPageY: offset.y,
+            columnWidth,
+            weekDays,
+            hourHeight,
+            snapMinutes,
+          });
+          if (newDueAt) onDrop(todoId, newDueAt);
         },
 
         onPanResponderTerminate: () => {

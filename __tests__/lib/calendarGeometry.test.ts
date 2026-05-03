@@ -19,6 +19,7 @@ import {
   applyDelta,
   minuteOfDayToOffset,
   offsetToSnappedMinuteOfDay,
+  computeTodoDropTarget,
   DEFAULT_SNAP_MINUTES,
   DEFAULT_PX_PER_MINUTE,
 } from '@/lib/calendarGeometry';
@@ -355,5 +356,139 @@ describe('offsetToSnappedMinuteOfDay', () => {
       DEFAULT_SNAP_MINUTES,
     );
     expect(recovered).toBe(original);
+  });
+});
+
+// ─── computeTodoDropTarget (Build-66) ─────────────────────────────────────────
+
+describe('computeTodoDropTarget', () => {
+  // 7-day week, 컬럼 너비 50px, hourHeight=60 (default 1px/min), snap 30분.
+  const baseDay = (idx: number) => {
+    // 2026-05-04 (Mon) 시작 + idx 일.
+    const d = new Date(2026, 4, 4 + idx);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+  const weekDays = Array.from({ length: 7 }, (_, i) => baseDay(i));
+
+  const baseArgs = {
+    eventsAreaPageX: 100,
+    eventsAreaPageY: 200,
+    columnWidth: 50,
+    weekDays,
+    hourHeight: 60,
+    // useTodoDragHandler 의 기본값과 동일 — 30분 snap.
+    snapMinutes: 30,
+  };
+
+  it('grid 영역 밖 (왼쪽) → null', () => {
+    expect(computeTodoDropTarget({
+      ...baseArgs,
+      pageX: 50, pageY: 300,
+    })).toBeNull();
+  });
+
+  it('grid 영역 밖 (위쪽) → null', () => {
+    expect(computeTodoDropTarget({
+      ...baseArgs,
+      pageX: 150, pageY: 100,
+    })).toBeNull();
+  });
+
+  it('grid 영역 밖 (오른쪽 — 7컬럼 너머) → null', () => {
+    // 7 * 50 = 350 px 너비. localX = 360 → null.
+    expect(computeTodoDropTarget({
+      ...baseArgs,
+      pageX: 100 + 360, pageY: 300,
+    })).toBeNull();
+  });
+
+  it('첫 컬럼 09:00 정확히 떨어뜨림', () => {
+    // localX = 25 (col 0), localY = 540 (9시간 * 60px) → 09:00.
+    const result = computeTodoDropTarget({
+      ...baseArgs,
+      pageX: 100 + 25,
+      pageY: 200 + 540,
+    });
+    expect(result).not.toBeNull();
+    expect(result!.getHours()).toBe(9);
+    expect(result!.getMinutes()).toBe(0);
+    // Day = baseDay(0).
+    expect(result!.getDate()).toBe(weekDays[0]!.getDate());
+  });
+
+  it('세 번째 컬럼 14:30 정확히 떨어뜨림', () => {
+    // localX = 50*2 + 25 = 125 (col 2), localY = 14.5*60 = 870.
+    const result = computeTodoDropTarget({
+      ...baseArgs,
+      pageX: 100 + 125,
+      pageY: 200 + 870,
+    });
+    expect(result).not.toBeNull();
+    expect(result!.getHours()).toBe(14);
+    expect(result!.getMinutes()).toBe(30);
+    expect(result!.getDate()).toBe(weekDays[2]!.getDate());
+  });
+
+  it('30분 snap — 14:14 입력은 14:00 으로 (round)', () => {
+    // 14*60 + 14 = 854 → /30 = 28.466 → round 28 → 840 = 14:00.
+    const result = computeTodoDropTarget({
+      ...baseArgs,
+      pageX: 100 + 25,
+      pageY: 200 + 854,
+    });
+    expect(result!.getHours()).toBe(14);
+    expect(result!.getMinutes()).toBe(0);
+  });
+
+  it('30분 snap — 14:16 입력은 14:30 으로 (round up)', () => {
+    // 14*60 + 16 = 856 → /30 = 28.533 → round 29 → 870 = 14:30.
+    const result = computeTodoDropTarget({
+      ...baseArgs,
+      pageX: 100 + 25,
+      pageY: 200 + 856,
+    });
+    expect(result!.getHours()).toBe(14);
+    expect(result!.getMinutes()).toBe(30);
+  });
+
+  it('자정 직전 clamp — Y 가 매우 크면 23:30 으로', () => {
+    const result = computeTodoDropTarget({
+      ...baseArgs,
+      pageX: 100 + 25,
+      pageY: 200 + 99999,
+    });
+    expect(result!.getHours()).toBe(23);
+    expect(result!.getMinutes()).toBe(30);
+  });
+
+  it('단일 컬럼 (DayView 시나리오) — 컬럼 인덱스 항상 0', () => {
+    const single = [weekDays[3]!];
+    const result = computeTodoDropTarget({
+      ...baseArgs,
+      weekDays: single,
+      columnWidth: 350, // 전체 너비 = 한 컬럼.
+      pageX: 100 + 200, // 컬럼 안 어디든 OK.
+      pageY: 200 + 480, // 8시간.
+    });
+    expect(result).not.toBeNull();
+    expect(result!.getHours()).toBe(8);
+    expect(result!.getDate()).toBe(weekDays[3]!.getDate());
+  });
+
+  it('columnWidth=0 (측정 전) → null (무효 drop)', () => {
+    expect(computeTodoDropTarget({
+      ...baseArgs,
+      columnWidth: 0,
+      pageX: 150, pageY: 300,
+    })).toBeNull();
+  });
+
+  it('빈 weekDays → null', () => {
+    expect(computeTodoDropTarget({
+      ...baseArgs,
+      weekDays: [],
+      pageX: 150, pageY: 300,
+    })).toBeNull();
   });
 });

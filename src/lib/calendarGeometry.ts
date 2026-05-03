@@ -230,3 +230,65 @@ export function offsetToSnappedMinuteOfDay(
   const clamped = Math.max(0, Math.min(rawMinutes, maxMinutes));
   return Math.round(clamped / snapMinutes) * snapMinutes;
 }
+
+// ─── Todo drag drop-target ────────────────────────────────────────────────────
+
+/**
+ * Build-66 — todo drag-to-reschedule 의 release 시점 hit-test + snap.
+ *
+ * 페이지 좌표(pageX/pageY) 와 eventsArea 의 페이지 오프셋, 컬럼 너비,
+ * 보이는 날짜 배열, hourHeight 를 받아 "사용자가 드롭한 (날짜+시각)"
+ * 의 Date 를 반환. grid 영역 밖이거나 컬럼 너비가 0 이면 null.
+ *
+ * useTodoDragHandler 의 onPanResponderRelease 에서 호출하는 핵심 로직을
+ * 순수 함수로 분리해 단위 테스트가 가능하도록 한다.
+ *
+ * @param pageX             - 손가락 page X 좌표
+ * @param pageY             - 손가락 page Y 좌표
+ * @param eventsAreaPageX   - eventsArea top-left page X
+ * @param eventsAreaPageY   - eventsArea top-left page Y
+ * @param columnWidth       - 한 컬럼의 px 너비 (week=screen/7, day=screen)
+ * @param weekDays          - 컬럼 인덱스 → 날짜 매핑 (week=7개, day=1개)
+ * @param hourHeight        - 한 시간이 차지하는 픽셀 (보통 60)
+ * @param snapMinutes       - snap 단위, 기본 30
+ * @returns drop 위치의 Date, grid 외부면 null
+ */
+export function computeTodoDropTarget(args: {
+  pageX: number;
+  pageY: number;
+  eventsAreaPageX: number;
+  eventsAreaPageY: number;
+  columnWidth: number;
+  weekDays: Date[];
+  hourHeight: number;
+  snapMinutes?: number;
+}): Date | null {
+  const {
+    pageX, pageY,
+    eventsAreaPageX, eventsAreaPageY,
+    columnWidth, weekDays, hourHeight,
+    snapMinutes = DEFAULT_SNAP_MINUTES,
+  } = args;
+
+  if (columnWidth <= 0 || weekDays.length === 0) return null;
+
+  const localX = pageX - eventsAreaPageX;
+  const localY = pageY - eventsAreaPageY;
+
+  // grid 영역 밖이면 drop 무효.
+  if (localX < 0 || localY < 0) return null;
+  if (localX > columnWidth * weekDays.length) return null;
+
+  const dayIdx = Math.max(
+    0,
+    Math.min(weekDays.length - 1, Math.floor(localX / columnWidth)),
+  );
+  const day = weekDays[dayIdx];
+  if (!day) return null;
+
+  const minutes = offsetToSnappedMinuteOfDay(localY, hourHeight / 60, snapMinutes);
+
+  const dropAt = new Date(day);
+  dropAt.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+  return dropAt;
+}

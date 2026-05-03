@@ -173,6 +173,7 @@ export function TodoCreateSheet({
                     onPress={() => setCategoryPickerOpen(true)}
                   />
                   <Pressable
+                    testID="todo-create-date-chip"
                     style={[
                       styles.inlineChip,
                       (dueAt || dueDate) && { borderColor: colors.primary },
@@ -201,6 +202,7 @@ export function TodoCreateSheet({
                       표시 (날짜 없이 시간만 있는 todo 는 의미 없음). */}
                   {(dueAt || dueDate) && (
                     <Pressable
+                      testID="todo-create-time-chip"
                       style={[
                         styles.inlineChip,
                         dueAt && { borderColor: colors.primary },

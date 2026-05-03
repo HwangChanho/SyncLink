@@ -197,6 +197,55 @@ describe('useTodoStore — 확장 커버리지', () => {
       // id가 없으면 todos 배열 변화 없이 서버만 호출됨
       expect(useTodoStore.getState().todos[0].id).toBe('todo-1');
     });
+
+    // ── Build-66 — dueAt (시간 포함 마감) 시나리오 ────────────────────────
+
+    it('dueAt 설정 시 낙관적 todos 갱신 + service 인자에 dueAt 전달', async () => {
+      const newDueAt = new Date('2026-05-04T14:30:00.000Z');
+      const serverResponse: Todo = { ...mockTodo, dueAt: newDueAt };
+      (updateTodo as jest.Mock).mockResolvedValue(serverResponse);
+
+      await useTodoStore.getState().editTodo('todo-1', { dueAt: newDueAt });
+
+      // service 가 dueAt patch 와 함께 호출되어야 함.
+      expect(updateTodo).toHaveBeenCalledWith(
+        'todo-1',
+        expect.objectContaining({ dueAt: newDueAt }),
+      );
+      expect(useTodoStore.getState().todos[0].dueAt).toEqual(newDueAt);
+    });
+
+    it('dueAt: null 으로 시간 제거 — service 에 null 전달', async () => {
+      // 시작 상태: 시간 있는 todo.
+      const todoWithTime: Todo = {
+        ...mockTodo,
+        dueAt: new Date('2026-05-04T14:30:00.000Z'),
+      };
+      useTodoStore.setState({ todos: [todoWithTime] });
+      (updateTodo as jest.Mock).mockResolvedValue({ ...todoWithTime, dueAt: null });
+
+      await useTodoStore.getState().editTodo('todo-1', { dueAt: null });
+
+      expect(updateTodo).toHaveBeenCalledWith(
+        'todo-1',
+        expect.objectContaining({ dueAt: null }),
+      );
+      expect(useTodoStore.getState().todos[0].dueAt).toBeNull();
+    });
+
+    it('dueAt 변경 실패 시 원래 dueAt 으로 롤백', async () => {
+      const original = new Date('2026-05-04T09:00:00.000Z');
+      const todoWithTime: Todo = { ...mockTodo, dueAt: original };
+      useTodoStore.setState({ todos: [todoWithTime] });
+      (updateTodo as jest.Mock).mockRejectedValue(new Error('네트워크 실패'));
+
+      const newDueAt = new Date('2026-05-04T18:00:00.000Z');
+      await useTodoStore.getState().editTodo('todo-1', { dueAt: newDueAt });
+
+      // 롤백 — 원래 시각 유지.
+      expect(useTodoStore.getState().todos[0].dueAt).toEqual(original);
+      expect(useTodoStore.getState().error).toBe('네트워크 실패');
+    });
   });
 
   // ══════════════════════════════════════════════════════════════════════════
