@@ -41,6 +41,7 @@ import { UndoToast, useUndoToast } from './UndoToast';
 import { useOptimisticReschedule } from './useOptimisticReschedule';
 import { DragGhost } from './DragGhost';
 import { useGridDragHandler, type DragLayoutRect } from './useGridDragHandler';
+import { useTodoDragHandler } from './useTodoDragHandler';
 import { deleteEvent } from '@/services/eventService';
 import { useEventStore } from '@/stores/eventStore';
 import { applyDelta } from '@/lib/calendarGeometry';
@@ -85,7 +86,14 @@ interface WeekViewProps {
    * outlined chips in the all-day strip so a user glancing at a week
    * sees both events and due tasks on the same timeline.
    */
-  todosByDate?: Record<string, { id: string; title: string; color: string }[]>;
+  todosByDate?: Record<string, { id: string; title: string; color: string; dueAt?: Date | null }[]>;
+  /** Build-66 — timed todo chip 클릭. v1.0 에선 선택사항 (display only 가능). */
+  onTodoPress?: (id: string) => void;
+  /**
+   * Build-66 — drag-to-reschedule for todos. all-day strip 의 todo chip 을
+   * 길게 눌러 grid 로 드래그하면 호출. dueAt 을 set 하는 책임은 caller.
+   */
+  onTodoDrop?: (todoId: string, newDueAt: Date) => void;
   /**
    * PRD 4.2 Tier 2 — optional free-time slots to overlay on the time grid.
    * Each slot is rendered as a translucent shaded band positioned by start
@@ -183,6 +191,8 @@ export function WeekView({
   onEventPress,
   onDateSelect,
   todosByDate,
+  onTodoPress,
+  onTodoDrop,
   freeSlots,
   onFreeSlotPress,
   onDragModeChange,
@@ -333,11 +343,21 @@ export function WeekView({
       pageOffsetRef,
     });
 
+  // Build-66 — todo drag (all-day strip → grid). 별도 PanResponder 가
+  // chip 자체에 부착되어 grid 의 useGridDragHandler 와 충돌하지 않음.
+  const { todoDragState, getPanHandlers: getTodoPanHandlers } = useTodoDragHandler({
+    eventsAreaPageOffsetRef: pageOffsetRef,
+    columnWidth,
+    weekDays,
+    hourHeight: HOUR_HEIGHT,
+    onDrop: (todoId, newDueAt) => onTodoDrop?.(todoId, newDueAt),
+  });
+
   // Notify the parent screen when drag mode toggles so it can gate its
-  // outer left/right swipe-to-navigate gesture.
+  // outer left/right swipe-to-navigate gesture. todo drag 도 동일 처리.
   useEffect(() => {
-    onDragModeChange?.(dragState !== null);
-  }, [dragState, onDragModeChange]);
+    onDragModeChange?.(dragState !== null || todoDragState !== null);
+  }, [dragState, todoDragState, onDragModeChange]);
 
   // Scroll to 8 AM on mount so mornings are visible by default
   const handleLayout = () => {
@@ -448,7 +468,8 @@ export function WeekView({
   const hasAllDayEvents = weekDays.some((day) => {
     const key = toDateKey(day);
     const hasEvt = (eventsByDate[key] ?? []).some((e) => e.allDay);
-    const hasTodo = (todosByDate?.[key]?.length ?? 0) > 0;
+    // 시간 없는 todo (all-day strip 노출) 만 카운트. 시간 있는 건 grid 에 그림.
+    const hasTodo = (todosByDate?.[key] ?? []).some((td) => !td.dueAt);
     return hasEvt || hasTodo;
   });
 
@@ -497,7 +518,8 @@ export function WeekView({
           {weekDays.map((day) => {
             const dateKey = toDateKey(day);
             const allDayEvts = (eventsByDate[dateKey] ?? []).filter((e) => e.allDay);
-            const dayTodos = todosByDate?.[dateKey] ?? [];
+            // 시간 없는 todo 만 strip 에. 시간 있는 건 아래 grid 에서 그린다.
+            const dayTodos = (todosByDate?.[dateKey] ?? []).filter((td) => !td.dueAt);
             return (
               <View key={dateKey} style={styles.allDayCol}>
                 {allDayEvts.map((evt) => (
@@ -512,26 +534,33 @@ export function WeekView({
                     </Text>
                   </TouchableOpacity>
                 ))}
-                {dayTodos.map((td) => (
-                  <View
-                    key={td.id}
-                    style={[
-                      styles.allDayChip,
-                      {
-                        backgroundColor: td.color + '22',
-                        borderLeftWidth: 3,
-                        borderLeftColor: td.color,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[styles.allDayChipText, { color: td.color }]}
-                      numberOfLines={1}
+                {dayTodos.map((td) => {
+                  const isDragging =
+                    todoDragState !== null && todoDragState.todoId === td.id;
+                  const panHandlers = onTodoDrop ? getTodoPanHandlers(td.id) : {};
+                  return (
+                    <View
+                      key={td.id}
+                      {...panHandlers}
+                      style={[
+                        styles.allDayChip,
+                        {
+                          backgroundColor: td.color + '22',
+                          borderLeftWidth: 3,
+                          borderLeftColor: td.color,
+                        },
+                        isDragging && { opacity: 0.4 },
+                      ]}
                     >
-                      ✓ {td.title}
-                    </Text>
-                  </View>
-                ))}
+                      <Text
+                        style={[styles.allDayChipText, { color: td.color }]}
+                        numberOfLines={1}
+                      >
+                        ✓ {td.title}
+                      </Text>
+                    </View>
+                  );
+                })}
               </View>
             );
           })}
@@ -662,6 +691,43 @@ export function WeekView({
                     ),
                   )}
 
+                  {/* Build-66 — 시간 있는 todo chip. event 와 grid 좌표
+                      공유하지만 자체 drag/edit 는 v1.0 에서 미지원
+                      (별도 useTodoDrag 가 step 7 에서 구현 예정). */}
+                  {(todosByDate?.[dateKey] ?? [])
+                    .filter((td): td is typeof td & { dueAt: Date } => !!td.dueAt)
+                    .map((td) => {
+                      const minutes = td.dueAt.getHours() * 60 + td.dueAt.getMinutes();
+                      const top = (minutes / 60) * HOUR_HEIGHT;
+                      // 기본 1시간 chunk — clamp 해서 자정 넘김 방지.
+                      const height = Math.min(HOUR_HEIGHT, TOTAL_HEIGHT - top);
+                      const ChipWrap = onTodoPress ? TouchableOpacity : View;
+                      return (
+                        <ChipWrap
+                          key={`todo-${td.id}`}
+                          {...(onTodoPress
+                            ? { onPress: () => onTodoPress(td.id), activeOpacity: 0.8 }
+                            : {})}
+                          style={[
+                            styles.timedTodoChip,
+                            {
+                              top,
+                              height,
+                              backgroundColor: td.color + '22',
+                              borderLeftColor: td.color,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[styles.timedTodoText, { color: td.color }]}
+                            numberOfLines={1}
+                          >
+                            ✓ {td.title}
+                          </Text>
+                        </ChipWrap>
+                      );
+                    })}
+
                   {layouts.map((lay) => {
                     const tt = translatedTitles.get(lay.event.id);
                     // Dim the original chip while it's the active drag
@@ -727,6 +793,37 @@ export function WeekView({
       {dragState && (
         <View pointerEvents="none" style={styles.editModeDim} />
       )}
+
+      {/* Build-66 — todo drag ghost. page 좌표를 그대로 받아 floating
+          chip 으로 finger 추적. dim overlay 와 같이 표시. */}
+      {todoDragState && (() => {
+        const allTodos = weekDays.flatMap((d) => todosByDate?.[toDateKey(d)] ?? []);
+        const dragged = allTodos.find((td) => td.id === todoDragState.todoId);
+        return (
+          <>
+            <View pointerEvents="none" style={styles.editModeDim} />
+            <View
+              pointerEvents="none"
+              style={[
+                styles.todoDragGhost,
+                {
+                  left: todoDragState.pageX - 60,
+                  top: todoDragState.pageY - 14,
+                  borderLeftColor: dragged?.color ?? colors.primary,
+                  backgroundColor: (dragged?.color ?? colors.primary) + '33',
+                },
+              ]}
+            >
+              <Text
+                style={[styles.todoDragGhostText, { color: dragged?.color ?? colors.primary }]}
+                numberOfLines={1}
+              >
+                ✓ {dragged?.title ?? ''}
+              </Text>
+            </View>
+          </>
+        );
+      })()}
 
       {/*
         Build-57 — drag 중에만 화면 상단에 trash 영역 노출. 사용자가
@@ -884,6 +981,39 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   allDayChipText: {
     ...textStyles.caption,
     color: colors.textInverse,
+    fontWeight: '600',
+  },
+  /** Build-66 — grid 안에 노출되는 시간 있는 todo chip. */
+  timedTodoChip: {
+    position: 'absolute',
+    left: 1,
+    right: 1,
+    borderRadius: radius.sm,
+    borderLeftWidth: 3,
+    paddingHorizontal: spacing[1],
+    justifyContent: 'center',
+  },
+  timedTodoText: {
+    ...textStyles.caption,
+    fontWeight: '600',
+  },
+  /** Build-66 — todo drag 중 손가락을 따라가는 floating chip. */
+  todoDragGhost: {
+    position: 'absolute',
+    width: 120,
+    height: 28,
+    borderRadius: radius.sm,
+    borderLeftWidth: 3,
+    paddingHorizontal: spacing[2],
+    justifyContent: 'center',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  todoDragGhostText: {
+    ...textStyles.caption,
     fontWeight: '600',
   },
   /**

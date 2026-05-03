@@ -35,6 +35,7 @@ import { textStyles } from '@/constants/typography';
 import type { Category, Todo, TodoPriority, UpdateTodoInput } from '@/types';
 import { CategoryChip } from './CategoryChip';
 import { CategoryPickerSheet } from './CategoryPickerSheet';
+import { DateTimeModal } from '@/components/common/DateTimeModal';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -81,10 +82,15 @@ export function TodoEditSheet({
   const [memo, setMemo] = useState('');
   const [priority, setPriority] = useState<TodoPriority>('medium');
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  /** Build-66 — 마감일/시간. dueAt 우선 (시간 포함 시 dueDate 자동 동기). */
+  const [dueDate, setDueDate] = useState<Date | null>(null);
+  const [dueAt, setDueAt] = useState<Date | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   /** Sub-sheet visibility for category picker. */
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
+  const [timeOpen, setTimeOpen] = useState(false);
   /** Imperative keyboard height — Modal-hosted KeyboardAvoidingView is
    * unreliable on iOS, so we lift the sheet by the keyboard amount. */
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -103,6 +109,8 @@ export function TodoEditSheet({
     setMemo(todo.content ?? '');
     setPriority(todo.priority);
     setCategoryId(todo.categoryId);
+    setDueDate(todo.dueDate);
+    setDueAt(todo.dueAt);
   }, [todo]);
 
   // Title input autofocus — done imperatively because <TextInput autoFocus> in
@@ -128,13 +136,17 @@ export function TodoEditSheet({
         content: memo.trim(),
         priority,
         categoryId,
+        // 시간 있는 경우 dueAt 우선, 없으면 dueDate. null 도 명시적으로
+        // 전달해 시간/날짜 제거 가능.
+        dueDate,
+        dueAt,
       });
       onClose();
     } catch {
       // Parent already surfaces errors via its own UI; just release spinner.
       setIsSaving(false);
     }
-  }, [todo, title, memo, priority, categoryId, onSave, onClose, isSaving]);
+  }, [todo, title, memo, priority, categoryId, dueDate, dueAt, onSave, onClose, isSaving]);
 
   /**
    * Auto-save on close — user asked to drop the explicit Save button so
@@ -146,17 +158,21 @@ export function TodoEditSheet({
     if (!todo) { onClose(); return; }
     const trimmed = title.trim();
     const memoTrim = memo.trim();
+    const sameTime = (a: Date | null, b: Date | null) =>
+      (a?.getTime() ?? null) === (b?.getTime() ?? null);
     const dirty =
       trimmed !== todo.title ||
       memoTrim !== (todo.content ?? '') ||
       priority !== todo.priority ||
-      categoryId !== todo.categoryId;
+      categoryId !== todo.categoryId ||
+      !sameTime(dueDate, todo.dueDate) ||
+      !sameTime(dueAt, todo.dueAt);
     if (trimmed.length === 0 || !dirty) {
       onClose();
       return;
     }
     void handleSave();
-  }, [todo, title, memo, priority, categoryId, handleSave, onClose]);
+  }, [todo, title, memo, priority, categoryId, dueDate, dueAt, handleSave, onClose]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -203,12 +219,87 @@ export function TodoEditSheet({
                 keyboardShouldPersistTaps="handled"
                 contentContainerStyle={styles.scrollContent}
               >
-                {/* Category chip row */}
+                {/* Category + 날짜 + 시간 chip 행 */}
                 <View style={styles.chipRow}>
                   <CategoryChip
                     category={resolvedCategory}
                     onPress={() => setCategoryPickerOpen(true)}
                   />
+                  <Pressable
+                    style={[
+                      styles.inlineChip,
+                      (dueAt || dueDate) && { borderColor: colors.primary },
+                    ]}
+                    onPress={() => setDateOpen(true)}
+                  >
+                    <Ionicons
+                      name="calendar-outline"
+                      size={14}
+                      color={(dueAt || dueDate) ? colors.primary : colors.textSecondary}
+                    />
+                    <Text
+                      style={[
+                        styles.inlineChipText,
+                        (dueAt || dueDate) && { color: colors.primary },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {(dueAt ?? dueDate)
+                        ? `${(dueAt ?? dueDate)!.getMonth() + 1}/${(dueAt ?? dueDate)!.getDate()}`
+                        : t('time.date')}
+                    </Text>
+                    {/* 날짜 clear */}
+                    {(dueAt || dueDate) && (
+                      <Pressable
+                        hitSlop={8}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setDueDate(null);
+                          setDueAt(null);
+                        }}
+                      >
+                        <Ionicons name="close" size={12} color={colors.primary} />
+                      </Pressable>
+                    )}
+                  </Pressable>
+
+                  {(dueAt || dueDate) && (
+                    <Pressable
+                      style={[
+                        styles.inlineChip,
+                        dueAt && { borderColor: colors.primary },
+                      ]}
+                      onPress={() => setTimeOpen(true)}
+                    >
+                      <Ionicons
+                        name="time-outline"
+                        size={14}
+                        color={dueAt ? colors.primary : colors.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          styles.inlineChipText,
+                          dueAt && { color: colors.primary },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {dueAt
+                          ? `${String(dueAt.getHours()).padStart(2, '0')}:${String(dueAt.getMinutes()).padStart(2, '0')}`
+                          : t('time.time')}
+                      </Text>
+                      {dueAt && (
+                        <Pressable
+                          hitSlop={8}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            setDueAt(null);
+                          }}
+                        >
+                          <Ionicons name="close" size={12} color={colors.primary} />
+                        </Pressable>
+                      )}
+                    </Pressable>
+                  )}
                 </View>
 
                 {/* Title */}
@@ -274,6 +365,59 @@ export function TodoEditSheet({
         onClose={() => setCategoryPickerOpen(false)}
         onSelect={(id) => setCategoryId(id)}
       />
+      {dateOpen && (
+        <DateTimeModal
+          visible={dateOpen}
+          initialValue={
+            dueAt ??
+            dueDate ??
+            (() => {
+              const d = new Date();
+              const m = d.getMinutes();
+              const round = m < 30 ? 30 : 0;
+              const off = m < 30 ? 0 : 1;
+              d.setHours(d.getHours() + off, round, 0, 0);
+              return d;
+            })()
+          }
+          allDay={true}
+          onCancel={() => setDateOpen(false)}
+          onConfirm={(d) => {
+            // 날짜만 변경. dueAt 이 있으면 Y/M/D 만 갱신해 시간 보존.
+            setDueDate(d);
+            if (dueAt) {
+              const merged = new Date(d);
+              merged.setHours(dueAt.getHours(), dueAt.getMinutes(), 0, 0);
+              setDueAt(merged);
+            }
+            setDateOpen(false);
+          }}
+        />
+      )}
+      {timeOpen && (
+        <DateTimeModal
+          visible={timeOpen}
+          initialValue={(() => {
+            const base = dueAt ?? new Date(dueDate ?? Date.now());
+            if (!dueAt) {
+              const now = new Date();
+              const m = now.getMinutes();
+              const round = m < 30 ? 30 : 0;
+              const off = m < 30 ? 0 : 1;
+              base.setHours(now.getHours() + off, round, 0, 0);
+            }
+            return base;
+          })()}
+          allDay={false}
+          onCancel={() => setTimeOpen(false)}
+          onConfirm={(d) => {
+            const merged = new Date(dueDate ?? d);
+            merged.setHours(d.getHours(), d.getMinutes(), 0, 0);
+            setDueAt(merged);
+            setTimeOpen(false);
+          }}
+        />
+      )}
     </>
   );
 }
@@ -334,8 +478,23 @@ function makeStyles(colors: ColorTokens) {
       paddingBottom: spacing[4],
     },
     chipRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing[2],
       marginBottom: spacing[1],
     },
+    inlineChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: spacing[3],
+      height: 32,
+      borderRadius: radius.full,
+      borderWidth: 1,
+      borderColor: colors.inputBorder,
+      backgroundColor: colors.inputBackground,
+    },
+    inlineChipText: { ...textStyles.caption, color: colors.textSecondary },
     titleInput: {
       ...textStyles.h4,
       color: colors.textPrimary,

@@ -28,12 +28,13 @@ import { UndoToast, useUndoToast } from './UndoToast';
 import { useOptimisticReschedule } from './useOptimisticReschedule';
 import { DragGhost } from './DragGhost';
 import { useGridDragHandler, type DragLayoutRect } from './useGridDragHandler';
+import { useTodoDragHandler } from './useTodoDragHandler';
 import { applyDelta } from '@/lib/calendarGeometry';
 import { deleteEvent } from '@/services/eventService';
 import { useEventStore } from '@/stores/eventStore';
 import { useColors } from '@/hooks/useColors';
 import { useTranslatedTitles } from '@/hooks/useTranslatedTitles';
-import { spacing } from '@/constants/spacing';
+import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { computeEventLayout } from '@/lib/calendarLayout';
 
@@ -71,7 +72,11 @@ interface DayViewProps {
    * outlined chips in the all-day banner so the user sees day-scoped
    * items alongside all-day events.
    */
-  todos?: { id: string; title: string; color: string }[];
+  todos?: { id: string; title: string; color: string; dueAt?: Date | null }[];
+  /** Build-66 — timed todo chip 클릭 (선택). v1.0 에서는 미사용 가능. */
+  onTodoPress?: (id: string) => void;
+  /** Build-66 — banner 의 시간 없는 todo 를 grid 로 drag → dueAt 설정. */
+  onTodoDrop?: (todoId: string, newDueAt: Date) => void;
   /**
    * PRD 4.2 Tier 2 — optional free-time slots to overlay on the time
    * grid. Slots outside the displayed day are clipped automatically.
@@ -111,6 +116,8 @@ export function DayView({
   events,
   onEventPress,
   todos,
+  onTodoPress,
+  onTodoDrop,
   freeSlots,
   onFreeSlotPress,
   onDragModeChange,
@@ -142,6 +149,11 @@ export function DayView({
   // All-day events (endAt === startAt or allDay flag)
   const allDayEvents = events.filter((e) => e.allDay);
   const timedEvents = layouts.filter((l) => !l.event.allDay);
+  // Build-66 — 시간 없는 todo = banner, 시간 있는 todo = grid 안 chip.
+  const allDayTodos = (todos ?? []).filter((td) => !td.dueAt);
+  const timedTodos = (todos ?? []).filter(
+    (td): td is typeof td & { dueAt: Date } => !!td.dueAt,
+  );
 
   /**
    * PRD 4.2 Tier 2 — clip provided freeSlots to the visible day's
@@ -284,15 +296,25 @@ export function DayView({
       pageOffsetRef,
     });
 
+  // Build-66 — todo drag (banner → grid). 단일 컬럼이므로 weekDays =
+  // [selectedDate] 한 개. columnWidth 는 containerWidth 가 그대로.
+  const { todoDragState, getPanHandlers: getTodoPanHandlers } = useTodoDragHandler({
+    eventsAreaPageOffsetRef: pageOffsetRef,
+    columnWidth: containerWidth || 1,
+    weekDays: [selectedDate],
+    hourHeight: HOUR_HEIGHT,
+    onDrop: (todoId, newDueAt) => onTodoDrop?.(todoId, newDueAt),
+  });
+
   useEffect(() => {
-    onDragModeChange?.(dragState !== null);
-  }, [dragState, onDragModeChange]);
+    onDragModeChange?.(dragState !== null || todoDragState !== null);
+  }, [dragState, todoDragState, onDragModeChange]);
 
   return (
     <View style={styles.container}>
       {/* All-day events banner (shown when there are all-day events or
           planner todos due today). */}
-      {(allDayEvents.length > 0 || (todos && todos.length > 0)) && (
+      {(allDayEvents.length > 0 || allDayTodos.length > 0) && (
         <View style={styles.allDayBanner}>
           <Text style={styles.allDayLabel}>{t('time.all_day')}</Text>
           <View style={styles.allDayEvents}>
@@ -310,26 +332,33 @@ export function DayView({
                 </Text>
               </View>
             ))}
-            {todos?.map((td) => (
-              <View
-                key={td.id}
-                style={[
-                  styles.allDayChip,
-                  {
-                    backgroundColor: td.color + '1A',
-                    borderLeftWidth: 3,
-                    borderLeftColor: td.color,
-                  },
-                ]}
-              >
-                <Text
-                  style={[styles.allDayTitle, { color: td.color }]}
-                  numberOfLines={1}
+            {allDayTodos.map((td) => {
+              const isDragging =
+                todoDragState !== null && todoDragState.todoId === td.id;
+              const panHandlers = onTodoDrop ? getTodoPanHandlers(td.id) : {};
+              return (
+                <View
+                  key={td.id}
+                  {...panHandlers}
+                  style={[
+                    styles.allDayChip,
+                    {
+                      backgroundColor: td.color + '1A',
+                      borderLeftWidth: 3,
+                      borderLeftColor: td.color,
+                    },
+                    isDragging && { opacity: 0.4 },
+                  ]}
                 >
-                  ✓ {td.title}
-                </Text>
-              </View>
-            ))}
+                  <Text
+                    style={[styles.allDayTitle, { color: td.color }]}
+                    numberOfLines={1}
+                  >
+                    ✓ {td.title}
+                  </Text>
+                </View>
+              );
+            })}
           </View>
         </View>
       )}
@@ -464,6 +493,38 @@ export function DayView({
                 );
               })}
 
+              {/* Build-66 — 시간 있는 todo chip. event 와 좌표 공유. */}
+              {timedTodos.map((td) => {
+                const minutes = td.dueAt.getHours() * 60 + td.dueAt.getMinutes();
+                const top = (minutes / 60) * HOUR_HEIGHT;
+                const height = Math.min(HOUR_HEIGHT, TOTAL_HEIGHT - top);
+                const ChipWrap = onTodoPress ? TouchableOpacity : View;
+                return (
+                  <ChipWrap
+                    key={`todo-${td.id}`}
+                    {...(onTodoPress
+                      ? { onPress: () => onTodoPress(td.id), activeOpacity: 0.8 }
+                      : {})}
+                    style={[
+                      styles.timedTodoChip,
+                      {
+                        top,
+                        height,
+                        backgroundColor: td.color + '22',
+                        borderLeftColor: td.color,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[styles.timedTodoText, { color: td.color }]}
+                      numberOfLines={1}
+                    >
+                      ✓ {td.title}
+                    </Text>
+                  </ChipWrap>
+                );
+              })}
+
               {/* Floating ghost — same coordinate system as hit-test. */}
               {dragState && <DragGhost drag={dragState} />}
             </View>
@@ -486,6 +547,35 @@ export function DayView({
       {dragState && (
         <View pointerEvents="none" style={styles.editModeDim} />
       )}
+
+      {/* Build-66 — todo drag ghost. */}
+      {todoDragState && (() => {
+        const dragged = (todos ?? []).find((td) => td.id === todoDragState.todoId);
+        return (
+          <>
+            <View pointerEvents="none" style={styles.editModeDim} />
+            <View
+              pointerEvents="none"
+              style={[
+                styles.todoDragGhost,
+                {
+                  left: todoDragState.pageX - 60,
+                  top: todoDragState.pageY - 14,
+                  borderLeftColor: dragged?.color ?? colors.primary,
+                  backgroundColor: (dragged?.color ?? colors.primary) + '33',
+                },
+              ]}
+            >
+              <Text
+                style={[styles.todoDragGhostText, { color: dragged?.color ?? colors.primary }]}
+                numberOfLines={1}
+              >
+                ✓ {dragged?.title ?? ''}
+              </Text>
+            </View>
+          </>
+        );
+      })()}
       {/* Build-64 — drop zone overlay 제거. FAB 가 trash 역할. */}
     </View>
   );
@@ -541,6 +631,39 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   },
   allDayTitle: {
     ...textStyles.labelSm,
+  },
+  /** Build-66 — grid 안 시간 있는 todo chip. */
+  timedTodoChip: {
+    position: 'absolute',
+    left: 2,
+    right: 2,
+    borderRadius: radius.sm,
+    borderLeftWidth: 3,
+    paddingHorizontal: spacing[1],
+    justifyContent: 'center',
+  },
+  timedTodoText: {
+    ...textStyles.caption,
+    fontWeight: '600',
+  },
+  /** Build-66 — todo drag ghost (단일 컬럼). */
+  todoDragGhost: {
+    position: 'absolute',
+    width: 120,
+    height: 28,
+    borderRadius: radius.sm,
+    borderLeftWidth: 3,
+    paddingHorizontal: spacing[2],
+    justifyContent: 'center',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  todoDragGhostText: {
+    ...textStyles.caption,
+    fontWeight: '600',
   },
   scrollView: {
     flex: 1,

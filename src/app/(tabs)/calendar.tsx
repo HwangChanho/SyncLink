@@ -59,8 +59,17 @@ export default function CalendarScreen() {
   const { t } = useTranslation();
   const { eventsByDate, fetchEvents, upsertEvent, removeEvent } = useEventStore();
   // Todos with a due date should surface on the calendar alongside events.
-  const { todos, fetchTodos } = useTodoStore();
+  const { todos, fetchTodos, editTodo } = useTodoStore();
   useEffect(() => { void fetchTodos(); }, [fetchTodos]);
+  /**
+   * Build-66 — drag-to-reschedule from the all-day strip onto the timed
+   * grid. WeekView/DayView call this with the snapped (date+time) the
+   * user dropped at; we patch the todo with the new dueAt. dueDate column
+   * is auto-synced server-side (todoService updateTodo).
+   */
+  const handleTodoDrop = useCallback((todoId: string, newDueAt: Date) => {
+    void editTodo(todoId, { dueAt: newDueAt });
+  }, [editTodo]);
 
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
@@ -153,10 +162,15 @@ export default function CalendarScreen() {
    * a neutral grey so the bar is still visible.
    */
   const todosByDate = useMemo(() => {
-    const map: Record<string, MonthViewItem[]> = {};
+    // Build-66 — `dueAt` (시간 포함) 도 함께 노출. WeekView/DayView 가 시간
+    // 있는 todo 를 grid chip 으로 그릴 때 사용. MonthView 는 dueAt 무시
+    // (월 셀에는 점/요약만 띄움).
+    const map: Record<string, (MonthViewItem & { dueAt?: Date | null })[]> = {};
     for (const t of todos) {
-      if (!t.dueDate || t.isCompleted) continue;
-      const d = t.dueDate;
+      if (t.isCompleted) continue;
+      // dueAt 우선 — 시간 있으면 그 일자, 없으면 dueDate.
+      const d = t.dueAt ?? t.dueDate;
+      if (!d) continue;
       const key = toDateKey(d);
       const bucket = map[key] ?? (map[key] = []);
       const cat = t.categoryId ? categories.find((c) => c.id === t.categoryId) : null;
@@ -165,6 +179,7 @@ export default function CalendarScreen() {
         title: t.title,
         color: cat?.color ?? '#64748B',
         kind: 'todo',
+        dueAt: t.dueAt,
       });
     }
     return map;
@@ -438,6 +453,7 @@ export default function CalendarScreen() {
                 setViewMode('day');
               }}
               todosByDate={todosByDate}
+              onTodoDrop={handleTodoDrop}
               onDragModeChange={handleChildDragModeChange}
               deleteZonePageRectRef={fabRectRef}
               {...(freeTimeOn ? { freeSlots } : {})}
@@ -450,6 +466,7 @@ export default function CalendarScreen() {
               events={todayEvents}
               onEventPress={handleEventPress}
               todos={todayTodos}
+              onTodoDrop={handleTodoDrop}
               onDragModeChange={handleChildDragModeChange}
               deleteZonePageRectRef={fabRectRef}
               {...(freeTimeOn ? { freeSlots } : {})}
