@@ -126,10 +126,20 @@ const TodoRow = memo(function TodoRow({
 
         <Text
           style={[styles.todoTitle, todo.isCompleted && styles.todoTitleCompleted]}
-          numberOfLines={2}
+          numberOfLines={1}
+          ellipsizeMode="tail"
         >
           {todo.title}
         </Text>
+
+        {/* Build-64 LEAD: "할일 리스트에서 요일이 오른쪽에 노출, 제목
+            길어지면 ... 요일 작게, 요일 칸은 안 건드리게". dueDate 가
+            있으면 우측에 작은 요일 라벨 표시. 우선순위 배지 옆 자리. */}
+        {todo.dueDate && (
+          <Text style={styles.todoDow} numberOfLines={1}>
+            {(t('time.week_days', { returnObjects: true }) as string[])[todo.dueDate.getDay()]}
+          </Text>
+        )}
 
         <View style={[styles.priorityBadge, { backgroundColor: priorityColor + '22' }]}>
           <Text style={[styles.priorityText, { color: priorityColor }]}>
