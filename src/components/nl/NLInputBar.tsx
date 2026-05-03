@@ -441,7 +441,7 @@ export function NLInputBar({ onEventCreated }: Props) {
           onPress={handleSubmit}
           disabled={!text.trim() || inputState === 'loading'}
           accessibilityRole="button"
-          accessibilityLabel="일정 파싱"
+          accessibilityLabel={t('common.a11y_parse_event')}
         >
           {inputState === 'loading' ? (
             <ActivityIndicator size="small" color={colors.textInverse} />

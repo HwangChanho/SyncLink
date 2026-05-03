@@ -114,7 +114,7 @@ export default function OnboardingScreen() {
               autoFocus
               returnKeyType="done"
               onSubmitEditing={handleConfirm}
-              accessibilityLabel="닉네임 입력 필드"
+              accessibilityLabel={t('common.a11y_nickname_input')}
             />
             {/* Character counter */}
             <Text style={styles.charCount}>
@@ -137,7 +137,7 @@ export default function OnboardingScreen() {
               ]}
               onPress={handleConfirm}
               disabled={isSaving}
-              accessibilityLabel="닉네임 설정 완료"
+              accessibilityLabel={t('common.a11y_nickname_done')}
               accessibilityRole="button"
             >
               {isSaving ? (

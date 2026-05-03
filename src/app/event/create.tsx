@@ -406,7 +406,11 @@ export default function EventCreateScreen() {
       // If end is now before start, bump end to start + 1h for consistency
       setEndAt((prev) => (prev <= selected ? new Date(selected.getTime() + 60 * 60 * 1000) : prev));
     } else {
+      // Symmetric guard for the end side: if the user sets end before the
+      // current start, snap start back to (end - 1h) instead of saving an
+      // invalid range that the server would reject after a round trip.
       setEndAt(selected);
+      setStartAt((prev) => (selected <= prev ? new Date(selected.getTime() - 60 * 60 * 1000) : prev));
     }
     setPickerTarget(null);
   }, [pickerTarget]);
@@ -430,8 +434,13 @@ export default function EventCreateScreen() {
     if (!isoStr) return;
     const parsed = new Date(isoStr);
     if (isNaN(parsed.getTime())) return;
-    const setter = field === 'start' ? setStartAt : setEndAt;
-    setter(parsed);
+    if (field === 'start') {
+      setStartAt(parsed);
+      setEndAt((prev) => (prev <= parsed ? new Date(parsed.getTime() + 60 * 60 * 1000) : prev));
+    } else {
+      setEndAt(parsed);
+      setStartAt((prev) => (parsed <= prev ? new Date(parsed.getTime() - 60 * 60 * 1000) : prev));
+    }
   }, []);
 
   /**

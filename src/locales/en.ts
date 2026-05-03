@@ -38,6 +38,15 @@ const en = {
     a11y_search_event: 'Search events',
     a11y_select_month: 'Select year and month',
     a11y_confirm_selection: 'Confirm selection',
+    a11y_confirm: 'Confirm',
+    a11y_default_color: 'Default color',
+    a11y_parse_event: 'Parse event',
+    a11y_manual_input: 'Enter manually',
+    a11y_skip_onboarding: 'Skip onboarding',
+    a11y_onboarding_page: 'Onboarding page',
+    a11y_nickname_input: 'Nickname input',
+    a11y_nickname_done: 'Confirm nickname',
+    a11y_login_kakao: 'Sign in with Kakao',
   },
 
   time: {

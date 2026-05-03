@@ -62,7 +62,7 @@ export function ConfirmModal({ visible, result, onConfirm, onEdit, onDismiss }: 
               style={[styles.button, styles.editButton]}
               onPress={onEdit}
               accessibilityRole="button"
-              accessibilityLabel="직접 입력"
+              accessibilityLabel={t('common.a11y_manual_input')}
             >
               <Text style={styles.editButtonText}>{t('common.edit')}</Text>
             </Pressable>
@@ -70,7 +70,7 @@ export function ConfirmModal({ visible, result, onConfirm, onEdit, onDismiss }: 
               style={[styles.button, styles.confirmButton]}
               onPress={onConfirm}
               accessibilityRole="button"
-              accessibilityLabel="확인"
+              accessibilityLabel={t('common.a11y_confirm')}
             >
               <Text style={styles.confirmButtonText}>{t('common.ok')}</Text>
             </Pressable>

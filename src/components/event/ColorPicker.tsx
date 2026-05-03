@@ -23,6 +23,7 @@
 import React, { useCallback } from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 
@@ -70,6 +71,7 @@ interface ColorPickerProps {
 
 export function ColorPicker({ value, onChange }: ColorPickerProps): React.ReactElement {
   const colors = useColors();
+  const { t } = useTranslation();
 
   /**
    * Handle a swatch tap:
@@ -104,7 +106,7 @@ export function ColorPicker({ value, onChange }: ColorPickerProps): React.ReactE
         ]}
         onPress={() => handlePress(null)}
         accessibilityRole="radio"
-        accessibilityLabel="기본 색상"
+        accessibilityLabel={t('common.a11y_default_color')}
         accessibilityState={{ checked: value === null }}
       >
         {/* Dash icon signals "inherit from category / member" */}

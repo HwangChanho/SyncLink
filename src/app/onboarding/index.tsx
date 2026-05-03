@@ -144,7 +144,7 @@ export default function OnboardingScreen() {
           style={styles.skipBtn}
           onPress={handleFinish}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityLabel="온보딩 건너뛰기"
+          accessibilityLabel={t('common.a11y_skip_onboarding')}
           accessibilityRole="button"
           testID="onboarding-button-skip"
         >
@@ -162,7 +162,7 @@ export default function OnboardingScreen() {
         scrollEventThrottle={16}
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
-        accessibilityLabel="온보딩 페이지"
+        accessibilityLabel={t('common.a11y_onboarding_page')}
       >
         {pages.map((page, index) => (
           <OnboardingPage

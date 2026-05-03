@@ -152,7 +152,7 @@ export default function LoginScreen() {
             onPress={() => handleSignIn('kakao')}
             disabled={isLoading}
             testID="login-button-kakao"
-            accessibilityLabel="카카오로 로그인"
+            accessibilityLabel={t('common.a11y_login_kakao')}
           >
             {loading === 'kakao'
               ? <ActivityIndicator color="#3A1D1D" />

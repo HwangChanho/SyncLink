@@ -38,6 +38,15 @@ const zh = {
     a11y_search_event: '搜索日程',
     a11y_select_month: '选择年份和月份',
     a11y_confirm_selection: '确认选择',
+    a11y_confirm: '确认',
+    a11y_default_color: '默认颜色',
+    a11y_parse_event: '解析日程',
+    a11y_manual_input: '手动输入',
+    a11y_skip_onboarding: '跳过引导',
+    a11y_onboarding_page: '引导页',
+    a11y_nickname_input: '昵称输入',
+    a11y_nickname_done: '完成昵称',
+    a11y_login_kakao: '使用 Kakao 登录',
   },
 
   time: {

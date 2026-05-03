@@ -38,6 +38,15 @@ const ja = {
     a11y_search_event: '予定を検索',
     a11y_select_month: '年月を選択',
     a11y_confirm_selection: '選択を確定',
+    a11y_confirm: '確定',
+    a11y_default_color: 'デフォルト色',
+    a11y_parse_event: '予定を解析',
+    a11y_manual_input: '手動で入力',
+    a11y_skip_onboarding: 'オンボーディングをスキップ',
+    a11y_onboarding_page: 'オンボーディングページ',
+    a11y_nickname_input: 'ニックネーム入力',
+    a11y_nickname_done: 'ニックネームを確定',
+    a11y_login_kakao: 'Kakao でログイン',
   },
 
   time: {

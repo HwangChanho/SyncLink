@@ -43,6 +43,15 @@ const ko = {
     a11y_search_event: '일정 검색',
     a11y_select_month: '년도/월 선택',
     a11y_confirm_selection: '선택 확인',
+    a11y_confirm: '확인',
+    a11y_default_color: '기본 색상',
+    a11y_parse_event: '일정 파싱',
+    a11y_manual_input: '직접 입력',
+    a11y_skip_onboarding: '온보딩 건너뛰기',
+    a11y_onboarding_page: '온보딩 페이지',
+    a11y_nickname_input: '닉네임 입력 필드',
+    a11y_nickname_done: '닉네임 설정 완료',
+    a11y_login_kakao: '카카오로 로그인',
   },
 
   time: {

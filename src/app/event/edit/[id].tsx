@@ -251,6 +251,8 @@ export default function EventEditScreen() {
       setEndAt((prev) => (prev <= selected ? new Date(selected.getTime() + 60 * 60 * 1000) : prev));
     } else {
       setEndAt(selected);
+      // Symmetric guard — keep start before end. Same logic mirrors create.tsx.
+      setStartAt((prev) => (selected <= prev ? new Date(selected.getTime() - 60 * 60 * 1000) : prev));
     }
     setPickerTarget(null);
   }, [pickerTarget]);
