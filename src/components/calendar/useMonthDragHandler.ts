@@ -73,6 +73,16 @@ interface Options {
    * tap-on-chip UX stays in line with cell-tap UX.
    */
   onChipTap?: (event: EventSummary) => void;
+  /**
+   * Build-55+ — when true the responder yields ALL touches (returns false
+   * from capture) so the underlying TouchableOpacity cells handle every
+   * tap. The parent flips this on while in "targeting" mode so the user
+   * can drop the picked event on cells that already contain other events
+   * (LEAD report: "기존에 등록되어있는 일정에는 이동이 안돼"). Without
+   * this, the chip's hit-test would intercept the touch and either fire
+   * onChipTap or open a new picker mid-rescheduling.
+   */
+  disabled?: boolean;
 }
 
 // ─── Hit-test helpers ──────────────────────────────────────────────────────
@@ -106,6 +116,7 @@ export function useMonthDragHandler({
   pageOffsetRef,
   onLongPressCell,
   onChipTap,
+  disabled = false,
 }: Options): {
   panHandlers: PanResponderInstance['panHandlers'];
   candidateEvent: EventSummary | null;
@@ -118,6 +129,12 @@ export function useMonthDragHandler({
   cellLayoutsRef.current = cellLayouts;
   const eventsByDateRef = useRef(eventsByDate);
   eventsByDateRef.current = eventsByDate;
+
+  // Mirror `disabled` into a ref so the memoised PanResponder closure
+  // sees the latest value without having to invalidate (re-creating it
+  // mid-touch tears down the gesture).
+  const disabledRef = useRef(disabled);
+  disabledRef.current = disabled;
 
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Initial touch context: which chip (if any) and which cell the touch
@@ -141,6 +158,11 @@ export function useMonthDragHandler({
       // Empty cells fall through to the parent's TouchableOpacity so
       // tap-to-drill-down + onLongPress quick-create still work.
       onStartShouldSetPanResponderCapture: (e) => {
+        // While the parent is in targeting mode (a previously-picked event
+        // is waiting for a drop cell), let every tap fall through to the
+        // cell's TouchableOpacity so the user can choose any cell —
+        // including ones that already contain events.
+        if (disabledRef.current) return false;
         const { pageX, pageY } = e.nativeEvent;
         const off = pageOffsetRef.current;
         const localX = pageX - off.x;

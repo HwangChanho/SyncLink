@@ -446,20 +446,11 @@ export default function CalendarScreen() {
     router.push(`/event/create?date=${y}-${m}-${d}`);
   }, [router]);
 
-  /**
-   * Build-55 — Week/Day view 의 빈 시간대를 짧게 탭하면 호출된다. 탭한 (date,
-   * hour, minute) 으로 create 화면을 미리 채워 띄운다. Apple Calendar /
-   * Google Calendar 와 동일한 패턴 — 매일 마주치는 "빈 슬롯에 일정 만들기"
-   * 동작을 두 번의 탭(좌측 시간 → +) 대신 한 번의 탭으로 단축.
-   */
-  const handleEmptySlotPress = useCallback((date: Date, hour: number, minute: number) => {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    const hh = String(hour).padStart(2, '0');
-    const mm = String(minute).padStart(2, '0');
-    router.push(`/event/create?date=${y}-${m}-${d}&startHour=${hh}&startMinute=${mm}`);
-  }, [router]);
+  // Build-55 의 handleEmptySlotPress / WeekView+DayView 의 onEmptySlotPress
+  // 연결은 LEAD 보고로 일시 비활성화 — capture 단계에서 항상 claim 하던
+  // 변경이 chip longpress drag 와 race 를 일으켜 "주 이동이 안 된다" 회귀
+  // 발생. hook 자체의 onEmptyTap 코드는 남아 있고 prop 만 미전달.
+  // 향후 Pressable wrapper 로 재구현 예정 (AUTONOMOUS_IMPROVEMENTS.md 참조).
 
   /** Tapping an event opens the event detail screen. */
   const handleEventPress = useCallback((event: EventSummary) => {
@@ -689,7 +680,6 @@ export default function CalendarScreen() {
               }}
               todosByDate={todosByDate}
               onDragModeChange={handleChildDragModeChange}
-              onEmptySlotPress={handleEmptySlotPress}
               {...(freeTimeOn ? { freeSlots } : {})}
             />
           )}
@@ -701,7 +691,6 @@ export default function CalendarScreen() {
               onEventPress={handleEventPress}
               todos={todayTodos}
               onDragModeChange={handleChildDragModeChange}
-              onEmptySlotPress={handleEmptySlotPress}
               {...(freeTimeOn ? { freeSlots } : {})}
             />
           )}

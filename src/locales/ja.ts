@@ -537,6 +537,7 @@ const ja = {
     cat_filter_title: 'カテゴリフィルター',
     cat_filter_hint: 'チェックを外したカテゴリはカレンダー上で薄く表示されます。',
     cat_filter_uncategorised: 'カテゴリなし',
+    targeting_hint: '移動先の日をタップ',
     // PRD 4.2 Tier 2 — Free time finder UI strings
     free_time_show:      '空き時間を表示',
     free_time_hide:      '空き時間を非表示',

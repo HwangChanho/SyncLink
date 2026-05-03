@@ -561,6 +561,7 @@ const ko = {
     cat_filter_title: '카테고리 필터',
     cat_filter_hint: '체크 해제한 카테고리는 달력에서 연하게 표시됩니다.',
     cat_filter_uncategorised: '카테고리 없음',
+    targeting_hint: '옮길 날짜를 탭하세요',
     // PRD 4.2 Tier 2 — Free time finder UI strings
     free_time_show:      '빈 시간 보기',
     free_time_hide:      '빈 시간 숨기기',

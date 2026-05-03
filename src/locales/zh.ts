@@ -540,6 +540,7 @@ const zh = {
     cat_filter_title: '分类筛选',
     cat_filter_hint: '未勾选的分类会在日历上显示为浅色。',
     cat_filter_uncategorised: '无分类',
+    targeting_hint: '点击目标日期完成移动',
     // PRD 4.2 Tier 2 — Free time finder UI strings
     free_time_show:      '查看空闲时间',
     free_time_hide:      '隐藏空闲时间',

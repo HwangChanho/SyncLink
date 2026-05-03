@@ -548,6 +548,7 @@ const en = {
     cat_filter_title: 'Category filter',
     cat_filter_hint: 'Unchecked categories appear dimmed on the calendar.',
     cat_filter_uncategorised: 'No category',
+    targeting_hint: 'Tap a day to move',
     // PRD 4.2 Tier 2 — Free time finder UI strings
     free_time_show:      'Show free time',
     free_time_hide:      'Hide free time',

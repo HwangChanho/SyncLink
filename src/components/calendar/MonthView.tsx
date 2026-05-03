@@ -19,6 +19,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import type { EventSummary } from '@/types';
 import { useColors } from '@/hooks/useColors';
 import { useTranslatedTitles } from '@/hooks/useTranslatedTitles';
@@ -270,6 +271,7 @@ export function MonthView({
   const [targetEvent, setTargetEvent] = useState<EventSummary | null>(null);
   const [pickerEvents, setPickerEvents] = useState<EventSummary[] | null>(null);
 
+  const { t } = useTranslation();
   const { toast: undoToast, showUndo } = useUndoToast();
   const handleRescheduleDrop = useOptimisticReschedule({ onMoved: showUndo });
 
@@ -323,6 +325,9 @@ export function MonthView({
     pageOffsetRef,
     onLongPressCell: handleLongPressCell,
     onChipTap: handleChipTap,
+    // While we're waiting for a drop cell, yield ALL touches to the cell
+    // grid so the user can land on cells that already contain events.
+    disabled: targetEvent !== null,
   });
 
   // Notify parent when targeting starts/stops so the outer swipe
@@ -536,14 +541,14 @@ export function MonthView({
             <Text style={styles.targetToolbarTitle} numberOfLines={1}>
               {translatedTitles.get(targetEvent.id) ?? targetEvent.title}
             </Text>
-            <Text style={styles.targetToolbarHint}>옮길 날짜를 탭하세요</Text>
+            <Text style={styles.targetToolbarHint}>{t('calendar.targeting_hint')}</Text>
           </View>
           <Pressable
             onPress={() => setTargetEvent(null)}
             hitSlop={8}
             style={styles.targetToolbarCancel}
           >
-            <Text style={styles.targetToolbarCancelText}>취소</Text>
+            <Text style={styles.targetToolbarCancelText}>{t('common.cancel')}</Text>
           </Pressable>
         </View>
       )}
@@ -743,55 +748,64 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     shadowRadius: 6,
     elevation: 6,
   },
-  // Build-54 — targeting guides drawn on every cell while the user is
-  // choosing where to drop the picked event. The source cell uses a
-  // solid border to distinguish it from candidate destinations.
+  // Build-54 + LEAD 2026-05-03 — targeting guides drawn on every cell
+  // while the user is choosing where to drop the picked event.
+  // 가시성 강화: 1.5→2.5px border, 8%→18% bg, primary alpha 88→FF.
+  // 이전 버전은 day number 가 더 강해서 사용자가 "이동 가능 상태인지
+  // 알 수 없다" 보고. 이제 드롭 모드라는 게 한눈에 보이도록 강화.
   targetCell: {
-    borderWidth: 1.5,
-    borderColor: colors.primary + '88',
+    borderWidth: 2.5,
+    borderColor: colors.primary,
     borderStyle: 'dashed',
-    backgroundColor: colors.primary + '08',
+    backgroundColor: colors.primary + '18',
   },
   targetSourceCell: {
     borderStyle: 'solid',
     borderColor: colors.primary,
-    backgroundColor: colors.primary + '14',
+    backgroundColor: colors.primary + '28',
   },
   // Targeting toolbar pinned at the bottom of the calendar grid; surfaces
   // which event is being moved + a cancel button.
+  // LEAD 2026-05-03 — primary tinted background + 진한 border 로 "이동
+  // 모드" 라는 게 한눈에 보이도록 강조. 이전엔 surface 배경이라 화면
+  // 전반과 섞여 모드 진입을 놓치는 사용자 보고가 있었음.
   targetToolbar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.background,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    backgroundColor: colors.primary + '14',
+    borderTopWidth: 2,
+    borderTopColor: colors.primary,
     paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
+    paddingVertical: spacing[3],
   },
   targetToolbarDot: {
     width: 6,
-    height: 28,
+    height: 32,
     borderRadius: 3,
   },
   targetToolbarTitle: {
     ...textStyles.labelSm,
     color: colors.textPrimary,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   targetToolbarHint: {
     ...textStyles.caption,
-    color: colors.textSecondary,
-    marginTop: 1,
+    color: colors.primary,
+    fontWeight: '600',
+    marginTop: 2,
   },
   targetToolbarCancel: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 6,
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   targetToolbarCancelText: {
     ...textStyles.labelSm,
     color: colors.textPrimary,
+    fontWeight: '600',
   },
   // Build-54 — multi-event picker Modal. Backdrop dim + centred card.
   pickerBackdrop: {
