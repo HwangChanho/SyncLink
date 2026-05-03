@@ -344,26 +344,29 @@ export async function createEvent(input: CreateEventInput): Promise<Event> {
   if (!userId) throw new Error('로그인이 필요합니다.');
 
   try {
+    // Build-57 — repeat_weekdays 는 migration 024 가 적용된 환경에서만
+    // 컬럼이 존재. 적용 안 된 환경에서 항상 INSERT payload 에 포함하면
+    // PG 가 unknown column 으로 거부 → "일정을 저장하지 못했습니다"
+    // 회귀가 발생한다 (LEAD 보고). custom_weekly 일 때만 키를 추가.
+    const insertPayload: Record<string, unknown> = {
+      user_id:      userId,
+      title:        input.title,
+      description:  input.description ?? null,
+      location:     input.location ?? null,
+      start_at:     input.startAt.toISOString(),
+      end_at:       input.endAt.toISOString(),
+      all_day:      input.allDay ?? false,
+      repeat_type:  input.repeatType ?? 'none',
+      repeat_until: input.repeatUntil?.toISOString() ?? null,
+      category_id:  input.categoryId ?? null,
+      color:        input.color ?? null,
+    };
+    if (input.repeatType === 'custom_weekly') {
+      insertPayload.repeat_weekdays = input.repeatWeekdays ?? [];
+    }
     const { data: row, error } = await supa
       .from('events')
-      .insert({
-        user_id:      userId,
-        title:        input.title,
-        description:  input.description ?? null,
-        location:     input.location ?? null,
-        start_at:     input.startAt.toISOString(),
-        end_at:       input.endAt.toISOString(),
-        all_day:      input.allDay ?? false,
-        repeat_type:  input.repeatType ?? 'none',
-        // 'custom_weekly' 외에는 weekdays 가 의미 없음 — null 로 고정해
-        // 데이터 정합성 유지. CHECK 제약은 0..6 만 허용.
-        repeat_weekdays: input.repeatType === 'custom_weekly'
-          ? (input.repeatWeekdays ?? [])
-          : null,
-        repeat_until: input.repeatUntil?.toISOString() ?? null,
-        category_id:  input.categoryId ?? null,
-        color:        input.color ?? null,
-      })
+      .insert(insertPayload)
       .select()
       .single() as { data: EventRow | null; error: Error | null };
 
@@ -429,13 +432,16 @@ export async function updateEvent(eventId: string, updates: UpdateEventInput): P
     if (updates.endAt       !== undefined) patch.end_at       = updates.endAt.toISOString();
     if (updates.allDay      !== undefined) patch.all_day      = updates.allDay;
     if (updates.repeatType  !== undefined) patch.repeat_type  = updates.repeatType;
-    // weekdays 는 repeatType 변경과 동기화. repeatType 이 바뀌었거나
-    // weekdays 가 explicit 으로 들어왔을 때만 patch 에 포함.
-    if (updates.repeatType !== undefined || updates.repeatWeekdays !== undefined) {
-      const targetType = updates.repeatType ?? null;
-      patch.repeat_weekdays = targetType === 'custom_weekly'
-        ? (updates.repeatWeekdays ?? [])
-        : null;
+    // Build-57 — repeat_weekdays 는 migration 024 적용 환경에서만 컬럼이
+    // 존재한다. 'custom_weekly' 로 바뀌거나 weekdays 자체가 들어왔을
+    // 때만 patch 에 포함 — 컬럼 없는 환경에서도 다른 update 흐름은 깨지지
+    // 않게 한다 (LEAD 보고: "일정을 저장하지 못했다" 회귀).
+    const targetType = updates.repeatType ?? null;
+    if (targetType === 'custom_weekly') {
+      patch.repeat_weekdays = updates.repeatWeekdays ?? [];
+    } else if (updates.repeatWeekdays !== undefined) {
+      // 명시적으로 빈 배열/특정 값 들어온 경우만 set. 그 외엔 컬럼 미언급.
+      patch.repeat_weekdays = updates.repeatWeekdays;
     }
     if (updates.repeatUntil !== undefined) patch.repeat_until = updates.repeatUntil?.toISOString() ?? null;
     if (updates.categoryId  !== undefined) patch.category_id  = updates.categoryId ?? null;
@@ -661,21 +667,28 @@ export async function forkSharedEvent(eventId: string): Promise<Event> {
   // ─── 2. INSERT the forked event row for the current user ─────────────────
   const { data: newRow, error } = await supa
     .from('events')
-    .insert({
-      user_id:      userId,
-      title:        source.title,
-      description:  source.description ?? null,
-      location:     source.location ?? null,
-      start_at:     source.startAt.toISOString(),
-      end_at:       source.endAt.toISOString(),
-      all_day:      source.allDay,
-      repeat_type:  source.repeatType,
-      repeat_weekdays: source.repeatWeekdays ?? null,
-      repeat_until: source.repeatUntil?.toISOString() ?? null,
-      category_id:  source.categoryId ?? null,
-      color:        source.color ?? null,
-      // space_id: null → not shared to any Space; fully private copy
-    })
+    .insert((() => {
+      // Build-57 — fork payload 도 migration 024 미적용 환경 호환을 위해
+      // repeat_weekdays 는 'custom_weekly' 일 때만 포함.
+      const payload: Record<string, unknown> = {
+        user_id:      userId,
+        title:        source.title,
+        description:  source.description ?? null,
+        location:     source.location ?? null,
+        start_at:     source.startAt.toISOString(),
+        end_at:       source.endAt.toISOString(),
+        all_day:      source.allDay,
+        repeat_type:  source.repeatType,
+        repeat_until: source.repeatUntil?.toISOString() ?? null,
+        category_id:  source.categoryId ?? null,
+        color:        source.color ?? null,
+        // space_id: null → not shared to any Space; fully private copy
+      };
+      if (source.repeatType === 'custom_weekly' && source.repeatWeekdays) {
+        payload.repeat_weekdays = source.repeatWeekdays;
+      }
+      return payload;
+    })())
     .select()
     .single() as { data: EventRow | null; error: Error | null };
 
