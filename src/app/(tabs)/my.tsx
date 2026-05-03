@@ -437,7 +437,7 @@ export default function MyScreen() {
                   onPress={() => router.push('/space/join')}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.joinSpaceButtonText}>초대 코드로 참여</Text>
+                  <Text style={styles.joinSpaceButtonText}>{t('space.join_with_code')}</Text>
                 </TouchableOpacity>
               </View>
             </View>

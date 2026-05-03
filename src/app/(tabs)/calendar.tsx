@@ -750,13 +750,13 @@ export default function CalendarScreen() {
               style={styles.catModalSheet}
               onPress={(e) => e.stopPropagation()}
             >
-              <Text style={styles.catModalTitle}>카테고리 필터</Text>
+              <Text style={styles.catModalTitle}>{t('calendar.cat_filter_title')}</Text>
               <Text style={styles.catModalHint}>
-                체크 해제한 카테고리는 달력에서 연하게 표시됩니다.
+                {t('calendar.cat_filter_hint')}
               </Text>
 
               {/* Row: "카테고리 없음" first so uncategorised events can be toggled. */}
-              {[{ id: '__none__', name: '카테고리 없음', color: colors.textSecondary } as const,
+              {[{ id: '__none__', name: t('calendar.cat_filter_uncategorised'), color: colors.textSecondary } as const,
                 ...categories.map((c) => ({ id: c.id, name: c.name, color: c.color }))]
                 .map((row) => {
                   const active = !dimmedCats.has(row.id);

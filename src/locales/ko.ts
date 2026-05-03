@@ -308,6 +308,7 @@ const ko = {
     join_description: '초대받은 Space의 코드를 입력하세요.',
     join_description_sub: '코드는 영문 대소문자와 숫자 6자리입니다.',
     join_button: '참여하기',
+    join_with_code: '초대 코드로 참여',
     invite_title: 'Space 초대',
     invite_code_section: '초대 코드',
     invite_share_button: '공유',
@@ -537,6 +538,10 @@ const ko = {
     weekday: {
       sun: '일', mon: '월', tue: '화', wed: '수', thu: '목', fri: '금', sat: '토',
     },
+    // 카테고리 필터 모달 (calendar 화면 우상단 더보기 버튼)
+    cat_filter_title: '카테고리 필터',
+    cat_filter_hint: '체크 해제한 카테고리는 달력에서 연하게 표시됩니다.',
+    cat_filter_uncategorised: '카테고리 없음',
     // PRD 4.2 Tier 2 — Free time finder UI strings
     free_time_show:      '빈 시간 보기',
     free_time_hide:      '빈 시간 숨기기',

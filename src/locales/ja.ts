@@ -294,6 +294,7 @@ const ja = {
     join_description: '招待された Space のコードを入力してください。',
     join_description_sub: 'コードは英数字6文字です。',
     join_button: '参加',
+    join_with_code: '招待コードで参加',
     invite_title: 'Space への招待',
     invite_code_section: '招待コード',
     invite_share_button: '共有',
@@ -514,6 +515,9 @@ const ja = {
     weekday: {
       sun: '日', mon: '月', tue: '火', wed: '水', thu: '木', fri: '金', sat: '土',
     },
+    cat_filter_title: 'カテゴリフィルター',
+    cat_filter_hint: 'チェックを外したカテゴリはカレンダー上で薄く表示されます。',
+    cat_filter_uncategorised: 'カテゴリなし',
     // PRD 4.2 Tier 2 — Free time finder UI strings
     free_time_show:      '空き時間を表示',
     free_time_hide:      '空き時間を非表示',

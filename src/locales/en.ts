@@ -297,6 +297,7 @@ const en = {
     join_description: 'Enter the code for the Space you were invited to.',
     join_description_sub: 'The code is 6 alphanumeric characters.',
     join_button: 'Join',
+    join_with_code: 'Join with invite code',
     invite_title: 'Space Invite',
     invite_code_section: 'Invite Code',
     invite_share_button: 'Share',
@@ -525,6 +526,9 @@ const en = {
     weekday: {
       sun: 'Sun', mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat',
     },
+    cat_filter_title: 'Category filter',
+    cat_filter_hint: 'Unchecked categories appear dimmed on the calendar.',
+    cat_filter_uncategorised: 'No category',
     // PRD 4.2 Tier 2 — Free time finder UI strings
     free_time_show:      'Show free time',
     free_time_hide:      'Hide free time',

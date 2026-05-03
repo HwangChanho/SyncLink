@@ -297,6 +297,7 @@ const zh = {
     join_description: '请输入您收到邀请的 Space 代码。',
     join_description_sub: '代码由6位英文字母和数字组成。',
     join_button: '加入',
+    join_with_code: '使用邀请码加入',
     invite_title: 'Space 邀请',
     invite_code_section: '邀请码',
     invite_share_button: '分享',
@@ -517,6 +518,9 @@ const zh = {
     weekday: {
       sun: '日', mon: '一', tue: '二', wed: '三', thu: '四', fri: '五', sat: '六',
     },
+    cat_filter_title: '分类筛选',
+    cat_filter_hint: '未勾选的分类会在日历上显示为浅色。',
+    cat_filter_uncategorised: '无分类',
     // PRD 4.2 Tier 2 — Free time finder UI strings
     free_time_show:      '查看空闲时间',
     free_time_hide:      '隐藏空闲时间',
