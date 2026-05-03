@@ -188,7 +188,7 @@ function CategoryFormModal({
           />
 
           {/* Color picker */}
-          <Text style={[styles.fieldLabel, { marginTop: spacing[4] }]}>색상</Text>
+          <Text style={[styles.fieldLabel, { marginTop: spacing[4] }]}>{tForm('settings.cat_color_label')}</Text>
           <View style={styles.colorGrid}>
             {PRESET_COLORS.map(c => (
               <TouchableOpacity
@@ -352,7 +352,7 @@ export default function CategoriesScreen() {
           }
           ListEmptyComponent={
             <View style={styles.centered}>
-              <Text style={styles.emptyText}>카테고리가 없습니다.</Text>
+              <Text style={styles.emptyText}>{t('settings.cat_empty')}</Text>
             </View>
           }
         />

@@ -198,7 +198,7 @@ export default function NotificationsSettingsScreen() {
         >
           <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.navTitle}>알림 설정</Text>
+        <Text style={styles.navTitle}>{t('settings.notif_title')}</Text>
         {/* Spacer to keep title centered */}
         <View style={styles.backButton} />
       </View>
@@ -209,10 +209,8 @@ export default function NotificationsSettingsScreen() {
       >
         {/* Section header */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>알림 설정</Text>
-          <Text style={styles.sectionSubtitle}>
-            받고 싶은 알림 유형을 선택하세요.
-          </Text>
+          <Text style={styles.sectionTitle}>{t('settings.notif_title')}</Text>
+          <Text style={styles.sectionSubtitle}>{t('settings.notif_subtitle')}</Text>
         </View>
 
         {/* Toggle card */}
@@ -264,22 +262,21 @@ export default function NotificationsSettingsScreen() {
               ? <ActivityIndicator color={colors.textInverse} />
               : (
                 <Text style={styles.webPushCtaText}>
-                  {webPushPerm === 'denied' ? '브라우저에서 알림 차단됨' : '이 브라우저에 알림 활성화'}
+                  {webPushPerm === 'denied'
+                    ? t('settings.notif_web_blocked')
+                    : t('settings.notif_web_enable')}
                 </Text>
               )}
           </TouchableOpacity>
         )}
         {Platform.OS === 'web' && webPushPerm === 'granted' && (
           <Text style={[styles.note, { color: colors.success ?? colors.primary }]}>
-            ✓ 이 브라우저는 알림이 활성화되어 있습니다.
+            {t('settings.notif_web_enabled')}
           </Text>
         )}
 
         {/* Info note */}
-        <Text style={styles.note}>
-          알림을 받으려면 기기의 알림 권한이 허용되어 있어야 합니다.
-          설정 앱에서 SyncLink의 알림을 허용해 주세요.
-        </Text>
+        <Text style={styles.note}>{t('settings.notif_device_note')}</Text>
       </ScrollView>
     </SafeAreaView>
   );
