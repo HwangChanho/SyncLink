@@ -8,6 +8,7 @@ import { ScrollView, View, Text, Pressable, StyleSheet, Linking } from 'react-na
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import type { ColorTokens } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
@@ -42,6 +43,7 @@ const LICENSES: LicenseEntry[] = [
 export default function LicensesScreen() {
   const colors = useColors();
   const styles = makeStyles(colors);
+  const { t } = useTranslation();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -49,15 +51,12 @@ export default function LicensesScreen() {
         <Pressable style={styles.back} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>오픈소스 라이선스</Text>
+        <Text style={styles.headerTitle}>{t('settings.licenses_title')}</Text>
         <View style={styles.back} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.intro}>
-          이 앱은 다음 오픈소스 및 외부 라이브러리를 사용합니다. 각 라이선스의
-          전문은 해당 프로젝트 저장소에서 확인할 수 있습니다.
-        </Text>
+        <Text style={styles.intro}>{t('settings.licenses_intro')}</Text>
         {LICENSES.map((item) => (
           <Pressable
             key={item.name}

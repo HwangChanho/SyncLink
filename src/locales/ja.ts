@@ -476,6 +476,7 @@ const ja = {
     notif_web_enabled: '✓ このブラウザで通知が有効になっています。',
     notif_device_note: '通知を受け取るには端末の通知権限が許可されている必要があります。\n設定アプリで SyncLink の通知を許可してください。',
     licenses_title: 'オープンソースライセンス',
+    licenses_intro: 'このアプリは以下のオープンソースおよび外部ライブラリを使用しています。各ライセンスの全文は該当プロジェクトのリポジトリで確認できます。',
     cat_color_label: 'カラー',
     cat_empty: 'カテゴリがありません。',
     color_mode: 'カラーモード',

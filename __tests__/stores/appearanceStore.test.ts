@@ -31,22 +31,22 @@
  * 팩토리 외부 변수를 참조하지 않으므로 TDZ 문제 없음.
  * 내부에서 생성한 함수를 __getColorScheme으로 export해 테스트에서 제어합니다.
  */
-jest.mock('react-native', () => {
-  const getColorSchemeFn = jest.fn().mockReturnValue('light');
-  const addChangeListenerFn = jest.fn().mockReturnValue({ remove: jest.fn() });
-
-  return {
-    Appearance: {
-      getColorScheme:    getColorSchemeFn,
-      addChangeListener: addChangeListenerFn,
-    },
-    StyleSheet: { create: (s: unknown) => s },
-    Platform:   { OS: 'ios', select: (obj: Record<string, unknown>) => obj.ios },
-    // 테스트에서 mock 함수에 접근하기 위한 내부 참조
-    __getColorScheme:    getColorSchemeFn,
-    __addChangeListener: addChangeListenerFn,
-  };
-});
+// Appearance 만 모킹. jest-expo preset 의 react-native 전체 export 를 그대로 두고
+// Libraries 경로만 override 한다. 이전 시도에서 react-native 통째 mock + requireActual
+// 둘 다 jest-expo 의 babel transform 단계에서 깨졌다 — Libraries 경로 mock 이 가장
+// 안정적.
+// jest-expo preset 의 react-native 는 Appearance 객체는 노출하지만
+// getColorScheme 함수 자체가 비어있다. spyOn 으로 직접 설치해 호출 가능하게
+// 만든다. mockGetColorScheme 이름은 jest hoist 규칙 때문에 그대로 둔다.
+const mockGetColorSchemeFn = jest.fn().mockReturnValue('light');
+const mockAddChangeListenerFn = jest.fn().mockReturnValue({ remove: jest.fn() });
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const _rn = require('react-native');
+if (!_rn.Appearance || typeof _rn.Appearance !== 'object') {
+  _rn.Appearance = {};
+}
+_rn.Appearance.getColorScheme = mockGetColorSchemeFn;
+_rn.Appearance.addChangeListener = mockAddChangeListenerFn;
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   // 공식 jest mock: 인메모리 구현으로 실제 AsyncStorage 동작을 흉내냄
@@ -67,9 +67,7 @@ import {
  * react-native mock 모듈에서 팩토리 내부에 생성한 jest.fn()을 꺼냅니다.
  * __getColorScheme을 통해 테스트별로 반환값을 제어합니다.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const rnMock = require('react-native') as any;
-const mockGetColorScheme = rnMock.__getColorScheme as jest.Mock;
+const mockGetColorScheme = mockGetColorSchemeFn;
 
 // ─── 상수 ─────────────────────────────────────────────────────────────────────
 

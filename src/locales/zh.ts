@@ -479,6 +479,7 @@ const zh = {
     notif_web_enabled: '✓ 此浏览器已启用通知。',
     notif_device_note: '要接收通知，需要在设备端授予通知权限。\n请在系统设置中允许 SyncLink 的通知。',
     licenses_title: '开源许可证',
+    licenses_intro: '本应用使用以下开源和第三方库。各许可证全文可在对应项目仓库查看。',
     cat_color_label: '颜色',
     cat_empty: '暂无分类。',
     color_mode: '颜色模式',

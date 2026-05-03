@@ -29,10 +29,17 @@
  * Platform.OS = 'web' 설정.
  * authService.ts의 모듈 레벨 if(Platform.OS !== 'web') 블록이
  * 이 파일에서 로드될 때 스킵되도록 보장.
+ *
+ * jest-expo preset 의 react-native module 을 통째로 교체하면 다른 internal
+ * (StyleSheet 등) 이 사라져서 같이 import 되는 supabase 클라이언트가 깨진다.
+ * 따라서 require() 해서 Platform.OS 만 직접 덮어쓴다.
  */
-jest.mock('react-native', () => ({
-  Platform: { OS: 'web' },
-}));
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const _rn = require('react-native');
+if (!_rn.Platform || typeof _rn.Platform !== 'object') {
+  _rn.Platform = {};
+}
+_rn.Platform.OS = 'web';
 
 // GoogleSignin: 웹에서 호출 여부를 검증하기 위해 spy 가능하게 mock
 jest.mock('@react-native-google-signin/google-signin', () => ({

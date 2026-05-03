@@ -480,6 +480,7 @@ const en = {
     notif_web_enabled: '✓ Notifications are enabled in this browser.',
     notif_device_note: 'Device-level notification permission must be granted.\nAllow SyncLink notifications in the system Settings app.',
     licenses_title: 'Open-source licenses',
+    licenses_intro: 'This app uses the following open-source and third-party libraries. Full license texts are available in each project repository.',
     cat_color_label: 'Color',
     cat_empty: 'No categories yet.',
     color_mode: 'Color mode',

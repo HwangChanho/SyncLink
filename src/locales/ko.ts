@@ -492,6 +492,7 @@ const ko = {
     notif_web_enabled: '✓ 이 브라우저는 알림이 활성화되어 있습니다.',
     notif_device_note: '알림을 받으려면 기기의 알림 권한이 허용되어 있어야 합니다.\n설정 앱에서 SyncLink의 알림을 허용해 주세요.',
     licenses_title: '오픈소스 라이선스',
+    licenses_intro: '이 앱은 다음 오픈소스 및 외부 라이브러리를 사용합니다. 각 라이선스의 전문은 해당 프로젝트 저장소에서 확인할 수 있습니다.',
     cat_color_label: '색상',
     cat_empty: '카테고리가 없습니다.',
     color_mode: '색 모드',
