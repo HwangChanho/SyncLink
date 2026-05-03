@@ -320,6 +320,17 @@ export default function CalendarScreen() {
     viewMode,
     isDragging: isChildDragging,
     onShift: (direction) => {
+      // LEAD 2026-05-03 — "주에서 좌우 이동할 때 한 주씩 넘어가지 않고
+      // 하루씩". 주 모드에서만 1일 단위 시프트로 변경 (기존: 7일).
+      // 월/일 모드는 기존 한 단위 (한 달 / 하루) 유지.
+      if (viewMode === 'week') {
+        setSelectedDate((prev) => {
+          const next = new Date(prev);
+          next.setDate(next.getDate() + direction);
+          return next;
+        });
+        return;
+      }
       setSelectedDate((prev) => shiftDate(prev, viewMode, direction));
     },
   });
