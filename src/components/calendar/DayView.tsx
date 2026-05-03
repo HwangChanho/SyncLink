@@ -485,11 +485,13 @@ export function DayView({
       {dragState && (
         <View pointerEvents="none" style={styles.editModeDim} />
       )}
-      {/* Build-57 — drag 중 화면 상단 trash drop zone */}
+      {/* Build-57 → Build-62 — drag 중 화면 상단 trash drop zone */}
       {dragState && (
-        <View pointerEvents="none" style={styles.deleteZone}>
-          <Ionicons name="trash" size={20} color={colors.error} />
-          <Text style={styles.deleteZoneText}>{t('event.drop_to_delete')}</Text>
+        <View pointerEvents="none" style={styles.deleteZoneWrap}>
+          <View style={styles.deleteZone}>
+            <Ionicons name="trash" size={18} color={colors.error} />
+            <Text style={styles.deleteZoneText}>{t('event.drop_to_delete')}</Text>
+          </View>
         </View>
       )}
     </View>
@@ -655,12 +657,16 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.10)',
   },
-  // Build-57 → Build-61 — drag 중 trash drop zone (작은 둥근 chip 형태).
-  // LEAD 보고로 "긴 막대" 가 시각 노이즈라 작게 변경.
-  deleteZone: {
+  // Build-57 → Build-62 — drag 중 trash drop zone.
+  // RN 에서 absolute + alignSelf 무시 회귀 → wrapper 패턴 적용.
+  deleteZoneWrap: {
     position: 'absolute',
     top: 6,
-    alignSelf: 'center',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  deleteZone: {
     paddingHorizontal: 14,
     paddingVertical: 6,
     flexDirection: 'row',

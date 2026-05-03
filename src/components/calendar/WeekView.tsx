@@ -730,9 +730,11 @@ export function WeekView({
         진행 중인 PanResponder 가 모든 touch 를 소유.
       */}
       {dragState && (
-        <View pointerEvents="none" style={styles.deleteZone}>
-          <Ionicons name="trash" size={20} color={colors.error} />
-          <Text style={styles.deleteZoneText}>{t('event.drop_to_delete')}</Text>
+        <View pointerEvents="none" style={styles.deleteZoneWrap}>
+          <View style={styles.deleteZone}>
+            <Ionicons name="trash" size={18} color={colors.error} />
+            <Text style={styles.deleteZoneText}>{t('event.drop_to_delete')}</Text>
+          </View>
         </View>
       )}
     </View>
@@ -943,15 +945,18 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.10)',
   },
-  // Build-57 → Build-61 — drag 중 trash drop zone.
-  // LEAD 보고: "주에서 일정 이동할 때 위에 일정 막대가 길게 뜬다" — 이전엔
-  // dayHeader 바로 아래에 가로 full-width 빨간 dashed 막대라 사용자에게
-  // 새 일정 chip 처럼 보였다. 작은 둥근 chip 으로 축소 + 화면 상단 가운데
-  // 고정 + 색도 연하게.
-  deleteZone: {
+  // Build-57 → Build-61 → Build-62 — drag 중 trash drop zone.
+  // LEAD 재보고로 chip 이 여전히 가로로 stretch 되는 회귀 — RN 에서
+  // position:'absolute' + alignSelf:'center' 가 무시되기 때문. wrapper
+  // 로 분리: outer 가 absolute + alignItems:center, inner 만 chip.
+  deleteZoneWrap: {
     position: 'absolute',
     top: 6,
-    alignSelf: 'center',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  deleteZone: {
     paddingHorizontal: 14,
     paddingVertical: 6,
     flexDirection: 'row',
