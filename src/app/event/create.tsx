@@ -164,7 +164,14 @@ export default function EventCreateScreen() {
     { value: 'yearly',  label: t('time.annual') },
   ];
 
-  const { date: dateParam } = useLocalSearchParams<{ date?: string }>();
+  // Build-55 — empty-slot quick-create deep link adds startHour/startMinute on
+  // top of the existing date param so the form lands directly on the tapped
+  // time. Both fields are optional; omitted = "round-up-to-next-30min" path.
+  const {
+    date: dateParam,
+    startHour: startHourParam,
+    startMinute: startMinuteParam,
+  } = useLocalSearchParams<{ date?: string; startHour?: string; startMinute?: string }>();
   const router = useRouter();
   const { upsertEvent } = useEventStore();
   const { spaces, fetchMySpaces } = useSpaceStore();
@@ -213,11 +220,19 @@ export default function EventCreateScreen() {
   const [allDay, setAllDay] = useState(false);
 
   /** Start date — pre-filled from route param.
+   *  - date 만 있을 때: 현재 시각 기준 다음 30분 슬롯 (기존 동작).
+   *  - date + startHour/startMinute (Build-55 deep link): 정확히 그 시각.
    *  LEAD 2026-04-28: 시작 시간을 현재 시간 기준으로 (이전엔 09:00 고정).
    *  분(minute)은 다음 30분 단위로 round (시각적 가독성 + 슬롯 align).
    */
   const [startAt, setStartAt] = useState<Date>(() => {
     const base = parseDateParam(dateParam);
+    if (startHourParam !== undefined) {
+      const h = Math.max(0, Math.min(23, parseInt(startHourParam, 10) || 0));
+      const m = Math.max(0, Math.min(59, parseInt(startMinuteParam ?? '0', 10) || 0));
+      base.setHours(h, m, 0, 0);
+      return base;
+    }
     const now = new Date();
     const minutes = now.getMinutes();
     const roundedMinutes = minutes < 30 ? 30 : 0;
@@ -229,6 +244,14 @@ export default function EventCreateScreen() {
   /** End date — defaults to start + 1 hour. */
   const [endAt, setEndAt] = useState<Date>(() => {
     const base = parseDateParam(dateParam);
+    if (startHourParam !== undefined) {
+      const h = Math.max(0, Math.min(23, parseInt(startHourParam, 10) || 0));
+      const m = Math.max(0, Math.min(59, parseInt(startMinuteParam ?? '0', 10) || 0));
+      base.setHours(h, m, 0, 0);
+      // +1h end
+      base.setTime(base.getTime() + 60 * 60 * 1000);
+      return base;
+    }
     const now = new Date();
     const minutes = now.getMinutes();
     const roundedMinutes = minutes < 30 ? 30 : 0;

@@ -90,6 +90,13 @@ interface DayViewProps {
    * left/right swipe-to-navigate gesture.
    */
   onDragModeChange?: (isDragging: boolean) => void;
+
+  /**
+   * Build-55 — empty-slot quick create. Mirrors WeekView prop. Receives
+   * the displayed day + tapped hour/minute (snapped to 15 min). Skipped
+   * during scrolls (gesture hook yields control to ScrollView first).
+   */
+  onEmptySlotPress?: (date: Date, hour: number, minute: number) => void;
 }
 
 /**
@@ -104,6 +111,7 @@ export function DayView({
   freeSlots,
   onFreeSlotPress,
   onDragModeChange,
+  onEmptySlotPress,
 }: DayViewProps) {
   // Resolve active theme colors for dark mode support (TASK-700)
   const { t } = useTranslation();
@@ -223,6 +231,16 @@ export function DayView({
     return () => cancelAnimationFrame(id);
   }, [measureEventsArea]);
 
+  // Empty-area tap → resolve hour/minute from y-coord (no day shift in
+  // single-day view) and forward to parent.
+  const handleEmptyTap = useCallback((_localX: number, localY: number) => {
+    if (!onEmptySlotPress) return;
+    const totalMinutes = (localY / HOUR_HEIGHT) * 60;
+    const snapped = Math.max(0, Math.min(24 * 60 - 15,
+      Math.round(totalMinutes / 15) * 15));
+    onEmptySlotPress(selectedDate, Math.floor(snapped / 60), snapped % 60);
+  }, [selectedDate, onEmptySlotPress]);
+
   const { panHandlers: gridPanHandlers, dragState, candidateEvent } =
     useGridDragHandler({
       layouts:    dragLayouts,
@@ -230,6 +248,7 @@ export function DayView({
       viewMode:   'day',
       onDropped:  handleGridDrop,
       onTap:      onEventPress,
+      ...(onEmptySlotPress ? { onEmptyTap: handleEmptyTap } : {}),
       pageOffsetRef,
     });
 

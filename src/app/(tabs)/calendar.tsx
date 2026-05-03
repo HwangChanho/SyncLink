@@ -446,6 +446,21 @@ export default function CalendarScreen() {
     router.push(`/event/create?date=${y}-${m}-${d}`);
   }, [router]);
 
+  /**
+   * Build-55 — Week/Day view 의 빈 시간대를 짧게 탭하면 호출된다. 탭한 (date,
+   * hour, minute) 으로 create 화면을 미리 채워 띄운다. Apple Calendar /
+   * Google Calendar 와 동일한 패턴 — 매일 마주치는 "빈 슬롯에 일정 만들기"
+   * 동작을 두 번의 탭(좌측 시간 → +) 대신 한 번의 탭으로 단축.
+   */
+  const handleEmptySlotPress = useCallback((date: Date, hour: number, minute: number) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    const hh = String(hour).padStart(2, '0');
+    const mm = String(minute).padStart(2, '0');
+    router.push(`/event/create?date=${y}-${m}-${d}&startHour=${hh}&startMinute=${mm}`);
+  }, [router]);
+
   /** Tapping an event opens the event detail screen. */
   const handleEventPress = useCallback((event: EventSummary) => {
     router.push(`/event/${event.id}`);
@@ -674,6 +689,7 @@ export default function CalendarScreen() {
               }}
               todosByDate={todosByDate}
               onDragModeChange={handleChildDragModeChange}
+              onEmptySlotPress={handleEmptySlotPress}
               {...(freeTimeOn ? { freeSlots } : {})}
             />
           )}
@@ -685,6 +701,7 @@ export default function CalendarScreen() {
               onEventPress={handleEventPress}
               todos={todayTodos}
               onDragModeChange={handleChildDragModeChange}
+              onEmptySlotPress={handleEmptySlotPress}
               {...(freeTimeOn ? { freeSlots } : {})}
             />
           )}

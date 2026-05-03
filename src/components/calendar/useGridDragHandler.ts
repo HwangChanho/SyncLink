@@ -96,6 +96,19 @@ interface Options {
    */
   onTap: (event: EventSummary) => void;
   /**
+   * Build-55 — fires when the user briefly taps an EMPTY area of the grid
+   * (no chip hit, no drag, finger lifts within 350 ms with <8 px move).
+   * Parent uses this to open the event-create screen pre-filled with the
+   * tapped date + time. Skipped when the user is scrolling because the
+   * responder yields via onPanResponderTerminationRequest as soon as
+   * UIScrollView asks for control.
+   *
+   * Coordinates are container-local (same space as `layouts`) so the
+   * parent can convert (x → dayIndex, y → hour:minute) using its own
+   * columnWidth + pxPerMinute.
+   */
+  onEmptyTap?: (localX: number, localY: number) => void;
+  /**
    * Live page position of the eventsArea container (top-left in screen pt).
    * The hook subtracts this from pageX/pageY to get touch coords in the
    * same space as `layouts`. Required because PanResponder's locationX/Y
@@ -130,6 +143,7 @@ export function useGridDragHandler({
   viewMode,
   onDropped,
   onTap,
+  onEmptyTap,
   pageOffsetRef,
 }: Options): {
   panHandlers: PanResponderInstance['panHandlers'];
@@ -203,9 +217,21 @@ export function useGridDragHandler({
           : 'no-rect';
         const info = `${hit ? 'CAP' : 'cap'} local(${Math.round(localX)},${Math.round(localY)}) off(${Math.round(off.x)},${Math.round(off.y)}) page(${Math.round(pageX)},${Math.round(pageY)}) N=${layoutsLen} ${firstStr} hit=${hit ? 'OK' : 'MISS'}`;
         setDebugInfo(info);
-        if (!hit) return false;
-        candidateRef.current = hit;
+        // Always remember the touch start coords — needed for
+        // empty-area tap detection on release. Even if no chip was hit
+        // we may still want to fire onEmptyTap.
         startXY.current = { x: localX, y: localY };
+        if (!hit) {
+          // Empty area — only claim when the parent actually wants tap
+          // events. Otherwise yield (preserves vertical scroll exactly
+          // as before this change shipped).
+          candidateRef.current = null;
+          if (!onEmptyTap) return false;
+          // Claim, but yield instantly to ScrollView the moment it asks
+          // for control (see onPanResponderTerminationRequest below).
+          return true;
+        }
+        candidateRef.current = hit;
         setCandidateEvent(hit.event);
         return true;
       },
@@ -295,8 +321,15 @@ export function useGridDragHandler({
         // No drag → was it a tap? (short, no movement)
         const dt    = Date.now() - grantTime.current;
         const moved = Math.abs(gs.dx) > 8 || Math.abs(gs.dy) > 8;
-        if (dt < 350 && !moved && candidateRef.current) {
-          onTap(candidateRef.current.event);
+        if (dt < 350 && !moved) {
+          if (candidateRef.current) {
+            onTap(candidateRef.current.event);
+          } else if (onEmptyTap) {
+            // Empty-area quick tap — open create screen with date/time
+            // pre-fill computed from the touch coords (parent decides
+            // how to translate localX/Y → date + hour).
+            onEmptyTap(startXY.current.x, startXY.current.y);
+          }
         }
         candidateRef.current = null;
       },
@@ -310,13 +343,17 @@ export function useGridDragHandler({
       // Refuse to release the responder while a drag is in progress so
       // the outer calendar's left/right swipe-to-navigate gesture can't
       // steal mid-drag (Build-49 user report). Before drag mode kicks
-      // in we still allow termination so a quick scroll is honoured.
+      // in we still allow termination so a quick scroll is honoured —
+      // critical for the empty-area claim path: UIScrollView grabs
+      // control as soon as the user starts a vertical pan and the
+      // empty-tap callback never fires (which is the desired behaviour
+      // — taps and scrolls stay disambiguated).
       onPanResponderTerminationRequest: () => dragStateRef.current === null,
     }),
     // The responder closure reads layouts/dragState via refs and reads the
     // numeric props directly — only the latter need to invalidate it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [columnWidth, pxPerMinute, snapMinutes, viewMode, onDropped, onTap],
+    [columnWidth, pxPerMinute, snapMinutes, viewMode, onDropped, onTap, onEmptyTap],
   );
 
   return { panHandlers: responder.panHandlers, dragState, candidateEvent, debugInfo };

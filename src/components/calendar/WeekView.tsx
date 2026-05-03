@@ -105,6 +105,17 @@ interface WeekViewProps {
    * gestures can't fight while a card is being moved.
    */
   onDragModeChange?: (isDragging: boolean) => void;
+
+  /**
+   * Build-55 — empty-slot quick create. Fires on a short tap on an empty
+   * area of the time grid. Receives the touched date + start hour/minute
+   * (snapped to `snapMinutes`). Parent typically routes this to
+   * `/event/create?date=YYYY-MM-DD&startHour=H&startMinute=M`.
+   *
+   * Skipped when the user is scrolling (the gesture hook yields control
+   * to the underlying ScrollView before the tap callback fires).
+   */
+  onEmptySlotPress?: (date: Date, hour: number, minute: number) => void;
 }
 
 // ─── Date utilities ────────────────────────────────────────────────────────
@@ -165,6 +176,7 @@ export function WeekView({
   freeSlots,
   onFreeSlotPress,
   onDragModeChange,
+  onEmptySlotPress,
 }: WeekViewProps) {
   // Resolve active theme colors for dark mode support (TASK-700)
   const colors = useColors();
@@ -252,6 +264,22 @@ export function WeekView({
     return out;
   }, [weekDays, eventsByDate, columnWidth]);
 
+  // Empty-area tap → resolve the touched (day, hour, minute) and forward
+  // to the parent. Snap to the same step the drag-drop uses (15 min
+  // default) so the create-screen pre-fill matches what the user sees in
+  // the grid.
+  const handleEmptyTap = useCallback((localX: number, localY: number) => {
+    if (!onEmptySlotPress) return;
+    if (columnWidth <= 0) return;
+    const dayIndex = Math.max(0, Math.min(6, Math.floor(localX / columnWidth)));
+    const day = weekDays[dayIndex];
+    if (!day) return;
+    const totalMinutes = (localY / HOUR_HEIGHT) * 60;
+    const snapped = Math.max(0, Math.min(24 * 60 - 15,
+      Math.round(totalMinutes / 15) * 15));
+    onEmptySlotPress(day, Math.floor(snapped / 60), snapped % 60);
+  }, [columnWidth, weekDays, onEmptySlotPress]);
+
   const { panHandlers: gridPanHandlers, dragState, candidateEvent } =
     useGridDragHandler({
       layouts:    dragLayouts,
@@ -259,6 +287,7 @@ export function WeekView({
       viewMode:   'week',
       onDropped:  handleGridDrop,
       onTap:      onEventPress,
+      ...(onEmptySlotPress ? { onEmptyTap: handleEmptyTap } : {}),
       pageOffsetRef,
     });
 
