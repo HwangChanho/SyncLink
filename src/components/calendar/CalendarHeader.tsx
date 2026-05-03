@@ -315,11 +315,12 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     ...textStyles.h4,
     color: colors.textPrimary,
   },
-  /** Small downward chevron shown next to the title to indicate interactivity. */
+  /** Downward chevron shown next to the title — Build-63 LEAD: 더 크게 */
   titleChevron: {
-    fontSize: 12,
+    fontSize: 18,
     color: colors.textSecondary,
     marginTop: 2,
+    fontWeight: '700',
   },
   searchButton: {
     width:  36,

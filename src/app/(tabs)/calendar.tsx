@@ -91,7 +91,6 @@ export default function CalendarScreen() {
   // ── Free time finder (PRD 4.2 Tier 2) — 분리된 hook ───────────────────────
   const {
     isOn: freeTimeOn,
-    toggle: toggleFreeTime,
     mySpaces,
     selectedSpaceIds,
     toggleSpaceSelection,
@@ -113,14 +112,13 @@ export default function CalendarScreen() {
    * the action set is identical.
    */
   const openCalendarOverflowMenu = useCallback(() => {
+    // Build-63 LEAD: "빈 시간 켜기 액션은 비활성화" — 메뉴에서 제외.
+    // freeTimeOn 토글 hook 자체는 유지 (UI 만 노출 차단). 추후 재활성
+    // 시 한 줄만 다시 추가하면 됨.
     const items: { label: string; onPress: () => void }[] = [
       {
         label: dimmedCats.size > 0 ? '카테고리 필터 (활성)' : '카테고리 필터',
         onPress: () => setCatFilterVisible(true),
-      },
-      {
-        label: freeTimeOn ? '빈 시간 끄기' : '빈 시간 켜기',
-        onPress: toggleFreeTime,
       },
     ];
     if (viewMode === 'month') {
@@ -146,7 +144,7 @@ export default function CalendarScreen() {
         { text: '취소', style: 'cancel' as const },
       ]);
     }
-  }, [dimmedCats, freeTimeOn, viewMode, monthDensity, toggleFreeTime]);
+  }, [dimmedCats, viewMode, monthDensity]);
 
   /**
    * Group todos by due-date key. Only todos with a due date and not yet
