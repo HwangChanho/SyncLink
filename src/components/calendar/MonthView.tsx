@@ -72,11 +72,24 @@ interface MonthViewProps {
    *   'compact'  → small colour dots only (simplified overview)
    */
   density?: 'detailed' | 'compact';
-  /** Called when the user taps a day cell. */
+  /**
+   * Called when the user taps a day cell that has at least one event or
+   * todo. Parent typically updates `selectedDate` (no view-mode change —
+   * LEAD 2026-05-03: "월에서 일자 눌렀을 때 일로 넘어가지 않게").
+   */
   onDateSelect: (date: Date) => void;
+  /**
+   * Build-56 — fired when the user taps a day cell that has NO events or
+   * todos. Parent routes this to /event/create with the date pre-filled.
+   * Provides the "click empty cell → new event" shortcut without forcing
+   * the user to long-press first.
+   */
+  onEmptyDatePress?: (date: Date) => void;
   /**
    * Optional: called when the user long-presses an empty area of a day cell.
    * Parent can open a quick-create sheet pre-filled with that date.
+   * (Build-56 부터는 빈 셀 짧은 탭이 같은 동작을 해서 long-press 의존도는
+   *  낮아짐 — onEmptyDatePress 가 우선이고 long-press 는 fallback.)
    */
   onDateLongPress?: (date: Date) => void;
   /**
@@ -153,6 +166,7 @@ export function MonthView({
   todosByDate,
   density = 'detailed',
   onDateSelect,
+  onEmptyDatePress,
   onDateLongPress,
   onDragModeChange,
 }: MonthViewProps) {
@@ -338,18 +352,26 @@ export function MonthView({
   }, [targetEvent, onDragModeChange]);
 
   // Cell-tap dispatcher — used by every TouchableOpacity in the grid.
-  // In targeting mode it commits the move; otherwise it's the regular
-  // drill-down to that day's view.
+  // Three modes:
+  //   1. Targeting mode → commit the picked event to this cell.
+  //   2. Cell with events/todos → onDateSelect (parent updates
+  //      selectedDate; LEAD 2026-05-03 wants NO automatic switch to day
+  //      view — that turned a one-tap browse into a forced drill-down).
+  //   3. Empty cell → onEmptyDatePress → /event/create?date=...
   const handleCellPress = useCallback(
-    (date: Date) => {
+    (date: Date, hasItems: boolean) => {
       if (targetEvent) {
         commitMove(targetEvent, date);
         setTargetEvent(null);
         return;
       }
+      if (!hasItems && onEmptyDatePress) {
+        onEmptyDatePress(date);
+        return;
+      }
       onDateSelect(date);
     },
-    [targetEvent, commitMove, onDateSelect],
+    [targetEvent, commitMove, onDateSelect, onEmptyDatePress],
   );
 
   return (
@@ -416,7 +438,7 @@ export function MonthView({
                     toDateKey(targetEvent.startAt) === dateKey &&
                     styles.targetSourceCell,
                 ]}
-                onPress={() => handleCellPress(date)}
+                onPress={() => handleCellPress(date, dayItems.length > 0)}
                 onLongPress={onDateLongPress ? () => onDateLongPress(date) : undefined}
                 delayLongPress={400}
                 activeOpacity={0.7}
@@ -748,21 +770,16 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     shadowRadius: 6,
     elevation: 6,
   },
-  // Build-54 + LEAD 2026-05-03 — targeting guides drawn on every cell
-  // while the user is choosing where to drop the picked event.
-  // 가시성 강화: 1.5→2.5px border, 8%→18% bg, primary alpha 88→FF.
-  // 이전 버전은 day number 가 더 강해서 사용자가 "이동 가능 상태인지
-  // 알 수 없다" 보고. 이제 드롭 모드라는 게 한눈에 보이도록 강화.
+  // Build-56 — color-only targeting guide.
+  // 이전 버전 (Build-54/55) 은 borderWidth 2.5px 를 더해서 셀 box 가
+  // 커지고 안의 dayNumber/itemBar 가 모두 작게 재배치돼 LEAD 가
+  // "일정칸이 작아진다" 보고. border 를 모두 빼고 배경색만으로 모드
+  // 표시 — 셀 크기 변화 0.
   targetCell: {
-    borderWidth: 2.5,
-    borderColor: colors.primary,
-    borderStyle: 'dashed',
-    backgroundColor: colors.primary + '18',
+    backgroundColor: colors.primary + '22',
   },
   targetSourceCell: {
-    borderStyle: 'solid',
-    borderColor: colors.primary,
-    backgroundColor: colors.primary + '28',
+    backgroundColor: colors.primary + '40',
   },
   // Targeting toolbar pinned at the bottom of the calendar grid; surfaces
   // which event is being moved + a cancel button.

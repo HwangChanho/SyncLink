@@ -425,14 +425,29 @@ export default function CalendarScreen() {
     setPickerVisible(false);
   }, []);
 
-  /** Tapping a date in MonthView switches to DayView for that date. */
+  /**
+   * Tapping a date in MonthView updates the selected date.
+   * LEAD 2026-05-03 — "월에서 일자 눌렀을 때 일로 넘어가지 않게": just
+   * highlight the selection. View-mode change still happens through the
+   * mode-toggle pill, not as a side effect of cell taps.
+   */
   const handleDateSelect = useCallback((date: Date) => {
     setSelectedDate(date);
-    // Only drill into day view when in month mode to avoid unexpected mode changes
-    if (viewMode === 'month') {
-      setViewMode('day');
-    }
-  }, [viewMode]);
+  }, []);
+
+  /**
+   * Build-56 — tapping an EMPTY day cell (no events, no todos) jumps
+   * straight to the create-event screen with that date pre-filled.
+   * Replaces the old "tap → enter day view → press +" flow for empty
+   * days. Cells with content still go through handleDateSelect (just
+   * select, no navigation).
+   */
+  const handleEmptyDatePress = useCallback((date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    router.push(`/event/create?date=${y}-${m}-${d}`);
+  }, [router]);
 
   /**
    * Long-pressing a date in MonthView jumps straight to event/create
@@ -658,6 +673,7 @@ export default function CalendarScreen() {
         >
           {viewMode === 'month' && (
             <MonthView
+              onEmptyDatePress={handleEmptyDatePress}
               currentMonth={selectedDate}
               selectedDate={selectedDate}
               eventsByDate={displayEventsByDate}
