@@ -22,6 +22,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import type { ColorTokens } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
@@ -37,24 +38,23 @@ import { buildPalette } from '@/lib/themePalette';
 // ─── 액센트 프리셋 UI 정의 ────────────────────────────────────────────────────
 
 /**
- * 6개 프리셋 목록.
- * hue 값은 ACCENT_PRESETS 에서 참조하므로 여기서는 key + label만 관리.
+ * 6개 프리셋 목록. label 은 i18n key 로 보관해 컴포넌트에서 t() 로 해석한다.
  */
-const ACCENT_OPTIONS: { key: AccentPresetKey; label: string }[] = [
-  { key: 'default',  label: '기본 (바이올렛)' },
-  { key: 'primary',  label: '인디고' },
-  { key: 'rose',     label: '로즈' },
-  { key: 'emerald',  label: '에메랄드' },
-  { key: 'amber',    label: '앰버' },
-  { key: 'violet',   label: '바이올렛' },
+const ACCENT_OPTIONS: { key: AccentPresetKey; labelKey: string }[] = [
+  { key: 'default',  labelKey: 'settings.accent_default' },
+  { key: 'primary',  labelKey: 'settings.accent_indigo' },
+  { key: 'rose',     labelKey: 'settings.accent_rose' },
+  { key: 'emerald',  labelKey: 'settings.accent_emerald' },
+  { key: 'amber',    labelKey: 'settings.accent_amber' },
+  { key: 'violet',   labelKey: 'settings.accent_violet' },
 ];
 
 // ─── 색 모드(라이트/다크/시스템) UI 정의 ──────────────────────────────────────
 
-const SCHEME_OPTIONS: { key: ColorSchemePreference; label: string; icon: string }[] = [
-  { key: 'light',  label: '라이트',  icon: 'sunny-outline' },
-  { key: 'dark',   label: '다크',    icon: 'moon-outline' },
-  { key: 'system', label: '시스템',  icon: 'phone-portrait-outline' },
+const SCHEME_OPTIONS: { key: ColorSchemePreference; labelKey: string; icon: string }[] = [
+  { key: 'light',  labelKey: 'settings.color_mode_light',  icon: 'sunny-outline' },
+  { key: 'dark',   labelKey: 'settings.color_mode_dark',   icon: 'moon-outline' },
+  { key: 'system', labelKey: 'settings.color_mode_system', icon: 'phone-portrait-outline' },
 ];
 
 // ─── 컴포넌트 ─────────────────────────────────────────────────────────────────
@@ -62,6 +62,7 @@ const SCHEME_OPTIONS: { key: ColorSchemePreference; label: string; icon: string 
 export default function AppearanceSettingsScreen() {
   const colors = useColors();
   const styles = makeStyles(colors);
+  const { t } = useTranslation();
 
   // Store 상태 구독
   const accentPreset   = useAppearanceStore((s) => s.accentPreset);
@@ -79,14 +80,14 @@ export default function AppearanceSettingsScreen() {
         <Pressable style={styles.back} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>화면 설정</Text>
+        <Text style={styles.headerTitle}>{t('settings.appearance_title')}</Text>
         <View style={styles.back} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
 
         {/* ── 색 모드 선택 ── */}
-        <Text style={styles.sectionLabel}>색 모드</Text>
+        <Text style={styles.sectionLabel}>{t('settings.color_mode')}</Text>
         <View style={styles.schemeRow}>
           {SCHEME_OPTIONS.map((opt) => {
             const active = colorScheme === opt.key;
@@ -102,7 +103,7 @@ export default function AppearanceSettingsScreen() {
                   color={active ? colors.primary : colors.textSecondary}
                 />
                 <Text style={[styles.schemeLabel, active && { color: colors.primary, fontWeight: '700' }]}>
-                  {opt.label}
+                  {t(opt.labelKey)}
                 </Text>
               </Pressable>
             );
@@ -112,10 +113,8 @@ export default function AppearanceSettingsScreen() {
         <View style={styles.divider} />
 
         {/* ── 앱 색상 테마 선택 ── */}
-        <Text style={styles.sectionLabel}>앱 색상 테마</Text>
-        <Text style={styles.sectionHelp}>
-          선택한 색상이 배경·버튼·탭바 등 앱 전체에 자연스럽게 적용됩니다.
-        </Text>
+        <Text style={styles.sectionLabel}>{t('settings.accent_theme')}</Text>
+        <Text style={styles.sectionHelp}>{t('settings.accent_theme_help')}</Text>
 
         <View style={styles.colorGrid}>
           {ACCENT_OPTIONS.map((opt) => {
@@ -142,7 +141,7 @@ export default function AppearanceSettingsScreen() {
                   { color: selected ? samplePrimary : colors.textSecondary },
                   selected && { fontWeight: '700' },
                 ]}>
-                  {opt.label}
+                  {t(opt.labelKey)}
                 </Text>
               </Pressable>
             );
@@ -152,9 +151,14 @@ export default function AppearanceSettingsScreen() {
         <View style={styles.divider} />
 
         {/* ── 미리보기 ── */}
-        <Text style={styles.sectionLabel}>미리보기</Text>
+        <Text style={styles.sectionLabel}>{t('settings.preview_title')}</Text>
         <Text style={styles.sectionHelp}>
-          현재 선택한 테마({resolvedScheme === 'dark' ? '다크' : '라이트'} · hue {Math.round(accentHue)}°)가 아래와 같이 적용됩니다.
+          {t('settings.preview_help', {
+            mode: resolvedScheme === 'dark'
+              ? t('settings.color_mode_dark')
+              : t('settings.color_mode_light'),
+            hue: Math.round(accentHue),
+          })}
         </Text>
         <PreviewCard colors={colors} />
 
@@ -173,11 +177,20 @@ export default function AppearanceSettingsScreen() {
  */
 function PreviewCard({ colors }: { colors: ColorTokens }) {
   const s = previewStyles(colors);
+  const { t } = useTranslation();
+  // Tab labels reuse the same i18n keys the real tab bar uses, so any
+  // future relabeling stays in sync automatically.
+  const tabs = [
+    t('settings.preview_home'),
+    t('tabs.calendar'),
+    t('tabs.planner'),
+    t('tabs.my'),
+  ] as const;
   return (
     <View style={s.card}>
       {/* 가짜 헤더 */}
       <View style={s.fakeHeader}>
-        <Text style={s.fakeHeaderTitle}>홈</Text>
+        <Text style={s.fakeHeaderTitle}>{t('settings.preview_home')}</Text>
         <View style={s.fakeHeaderDot} />
       </View>
 
@@ -185,24 +198,24 @@ function PreviewCard({ colors }: { colors: ColorTokens }) {
       <View style={s.fakeEvent}>
         <View style={s.fakeEventDot} />
         <View style={s.fakeEventText}>
-          <Text style={s.fakeEventTitle}>오늘 일정 예시</Text>
-          <Text style={s.fakeEventSub}>오전 10:00 · 스페이스</Text>
+          <Text style={s.fakeEventTitle}>{t('settings.preview_event_title')}</Text>
+          <Text style={s.fakeEventSub}>{t('settings.preview_event_sub')}</Text>
         </View>
       </View>
 
       {/* 가짜 버튼 */}
       <View style={s.fakeButtonRow}>
         <View style={s.fakeBtnPrimary}>
-          <Text style={s.fakeBtnPrimaryText}>일정 추가</Text>
+          <Text style={s.fakeBtnPrimaryText}>{t('settings.preview_btn_primary')}</Text>
         </View>
         <View style={s.fakeBtnSecondary}>
-          <Text style={s.fakeBtnSecondaryText}>자세히</Text>
+          <Text style={s.fakeBtnSecondaryText}>{t('settings.preview_btn_secondary')}</Text>
         </View>
       </View>
 
       {/* 가짜 탭바 */}
       <View style={s.fakeTabBar}>
-        {(['홈', '캘린더', '플래너', '내 정보'] as const).map((tab, i) => (
+        {tabs.map((tab, i) => (
           <View key={tab} style={s.fakeTab}>
             <View style={[s.fakeTabDot, i === 0 && s.fakeTabDotActive]} />
             <Text style={[s.fakeTabLabel, i === 0 && s.fakeTabLabelActive]}>{tab}</Text>

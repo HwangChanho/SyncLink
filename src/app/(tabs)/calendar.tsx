@@ -622,7 +622,7 @@ export default function CalendarScreen() {
             <TouchableOpacity
               style={styles.toolbarBtn}
               onPress={openCalendarOverflowMenu}
-              accessibilityLabel="더보기"
+              accessibilityLabel={t('common.a11y_more')}
             >
               <Ionicons
                 name="ellipsis-horizontal"
@@ -729,7 +729,7 @@ export default function CalendarScreen() {
               params: { date: toDateKey(selectedDate) },
             });
           }}
-          accessibilityLabel="새 일정 만들기"
+          accessibilityLabel={t('common.a11y_create_event')}
           accessibilityRole="button"
         >
           <Ionicons name="add" size={28} color="#ffffff" />

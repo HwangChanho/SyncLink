@@ -27,6 +27,7 @@ import {
   Pressable,
 } from 'react-native';
 import { useRef, useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles, fontWeight } from '@/constants/typography';
@@ -92,6 +93,7 @@ export function YearMonthPicker({
 }: YearMonthPickerProps) {
   const colors = useColors();
   const styles = makeStyles(colors);
+  const { t } = useTranslation();
 
   // Today's reference for highlighting
   const today = new Date();
@@ -192,11 +194,11 @@ export function YearMonthPicker({
 
           {/* ─── Header ──────────────────────────────────────────────────── */}
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>년도 / 월 선택</Text>
+            <Text style={styles.headerTitle}>{t('common.a11y_select_month')}</Text>
             <TouchableOpacity
               onPress={onClose}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              accessibilityLabel="닫기"
+              accessibilityLabel={t('common.a11y_close')}
               accessibilityRole="button"
             >
               <Text style={styles.closeText}>✕</Text>
@@ -262,17 +264,17 @@ export function YearMonthPicker({
                 setSelectedMonth(todayMonth);
                 scrollToYear(todayYear);
               }}
-              accessibilityLabel="오늘로 이동"
+              accessibilityLabel={t('common.a11y_today')}
             >
-              <Text style={styles.todayBtnText}>오늘</Text>
+              <Text style={styles.todayBtnText}>{t('time.today')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.confirmBtn}
               onPress={handleConfirm}
-              accessibilityLabel="선택 확인"
+              accessibilityLabel={t('common.a11y_confirm_selection')}
             >
-              <Text style={styles.confirmBtnText}>확인</Text>
+              <Text style={styles.confirmBtnText}>{t('common.ok')}</Text>
             </TouchableOpacity>
           </View>
 

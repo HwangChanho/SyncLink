@@ -197,7 +197,7 @@ export function CalendarHeader({
             onPress={onYearMonthPress ?? onToday}
             hitSlop={HIT_SLOP}
             style={styles.titleWrap}
-            accessibilityLabel="년도/월 선택"
+            accessibilityLabel={t('common.a11y_select_month')}
             accessibilityHint="탭하면 년도와 월을 선택하는 피커가 열립니다"
           >
             <View style={styles.titleInner}>
@@ -214,7 +214,7 @@ export function CalendarHeader({
               onPress={onSearchPress}
               hitSlop={HIT_SLOP}
               style={styles.searchButton}
-              accessibilityLabel="일정 검색"
+              accessibilityLabel={t('common.a11y_search_event')}
             >
               <Ionicons name="search-outline" size={20} color={colors.textSecondary} />
             </TouchableOpacity>

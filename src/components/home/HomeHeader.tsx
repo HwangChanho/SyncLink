@@ -85,7 +85,7 @@ export function HomeHeader() {
       <TouchableOpacity
         activeOpacity={0.6}
         onPress={() => router.push('/(tabs)')}
-        accessibilityLabel="오늘로 이동"
+        accessibilityLabel={t('common.a11y_today')}
       >
         <Text style={styles.date}>{dateLabel}</Text>
       </TouchableOpacity>

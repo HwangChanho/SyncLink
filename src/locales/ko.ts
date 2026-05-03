@@ -34,6 +34,15 @@ const ko = {
     system: '시스템',
     group: '그룹',
     add: '추가',
+    // a11y 공통 라벨 — 여러 화면에서 반복되는 것만. 화면 전용 a11y 는 화면 namespace에.
+    a11y_more: '더보기',
+    a11y_close: '닫기',
+    a11y_back: '뒤로 가기',
+    a11y_today: '오늘로 이동',
+    a11y_create_event: '새 일정 만들기',
+    a11y_search_event: '일정 검색',
+    a11y_select_month: '년도/월 선택',
+    a11y_confirm_selection: '선택 확인',
   },
 
   time: {
@@ -464,6 +473,27 @@ const ko = {
     authenticate: '인증하기',
     language: '언어',
     language_help: '선택 즉시 앱 전체 텍스트가 전환됩니다.',
+    // AppearanceSettingsScreen — Build 54 i18n
+    appearance_title: '화면 설정',
+    color_mode: '색 모드',
+    color_mode_light: '라이트',
+    color_mode_dark: '다크',
+    color_mode_system: '시스템',
+    accent_theme: '앱 색상 테마',
+    accent_theme_help: '선택한 색상이 배경·버튼·탭바 등 앱 전체에 자연스럽게 적용됩니다.',
+    accent_default: '기본 (바이올렛)',
+    accent_indigo: '인디고',
+    accent_rose: '로즈',
+    accent_emerald: '에메랄드',
+    accent_amber: '앰버',
+    accent_violet: '바이올렛',
+    preview_title: '미리보기',
+    preview_help: '현재 선택한 테마({{mode}} · hue {{hue}}°)가 아래와 같이 적용됩니다.',
+    preview_event_title: '오늘 일정 예시',
+    preview_event_sub: '오전 10:00 · 스페이스',
+    preview_btn_primary: '일정 추가',
+    preview_btn_secondary: '자세히',
+    preview_home: '홈',
   },
 
   event_search: {
