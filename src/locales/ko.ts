@@ -73,6 +73,7 @@ const ko = {
     datetime: '날짜 및 시간',
     /** DateTimeModal header label — shown when allDay=true (date-only picker). */
     date: '날짜',
+    time: '시간',
     repeat_annual: ' · 매년 반복',
     capacity_full: ' · 정원 마감',
     /** Calendar view-mode tab labels (short form for the tab strip). */

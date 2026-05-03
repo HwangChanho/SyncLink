@@ -68,6 +68,7 @@ const ja = {
     datetime: '日付と時刻',
     /** DateTimeModal のヘッダーラベル — allDay=true のとき表示（日付のみ）。 */
     date: '日付',
+    time: '時間',
     repeat_annual: ' · 毎年繰り返し',
     capacity_full: ' · 満員',
     /** Calendar view-mode tab labels (short form for the tab strip). */

@@ -68,6 +68,7 @@ const zh = {
     datetime: '日期和时间',
     /** DateTimeModal 标题 — 当 allDay=true 时显示（仅日期选择器）。 */
     date: '日期',
+    time: '时间',
     repeat_annual: ' · 每年重复',
     capacity_full: ' · 已满',
     /** Calendar view-mode tab labels (short form for the tab strip). */

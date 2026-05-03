@@ -132,7 +132,9 @@ export interface TodoRow {
   space_id: string | null;  // null = private todo
   title: string;
   description: string | null;
-  due_date: string | null;  // ISO-8601 date
+  due_date: string | null;  // ISO-8601 date (시간 없을 때만 사용)
+  /** Build-65 — 시간 포함 due_at (timestamptz). 있으면 우선 사용. */
+  due_at: string | null;
   priority: TodoPriorityDb;
   is_completed: boolean;
   completed_at: string | null;

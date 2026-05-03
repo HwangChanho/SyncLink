@@ -43,6 +43,7 @@ function toTodo(row: TodoRow): Todo {
     content:      row.description,
     contentType:  (row.content_type ?? 'todo') as ContentType,
     dueDate:      row.due_date    ? new Date(row.due_date)    : null,
+    dueAt:        row.due_at       ? new Date(row.due_at)       : null,
     priority:     row.priority,
     isCompleted:  row.is_completed,
     completedAt:  row.completed_at ? new Date(row.completed_at) : null,
@@ -62,6 +63,7 @@ function toTodoSummary(row: TodoRow): TodoSummary {
     id:          row.id,
     title:       row.title,
     dueDate:     row.due_date ? new Date(row.due_date) : null,
+    dueAt:       row.due_at   ? new Date(row.due_at)   : null,
     priority:    row.priority,
     isCompleted: row.is_completed,
     contentType: (row.content_type ?? 'todo') as ContentType,
@@ -165,21 +167,30 @@ export async function createTodo(input: CreateTodoInput): Promise<Todo> {
   const userId = await getCurrentUserId();
   if (!userId) throw new Error('로그인이 필요합니다.');
 
+  // Build-65 — due_at 컬럼은 migration 025 적용 환경에서만 존재. conditional
+  // spread 로 컬럼 없는 환경 호환 (Build-57 repeat_weekdays 동일 패턴).
+  // dueAt 우선 — 시간 있는 todo 면 due_date 도 자동으로 그 날짜 (날짜 기반
+  // 쿼리 호환).
+  const insertPayload: Record<string, unknown> = {
+    user_id:      userId,
+    title:        input.title,
+    description:  input.content ?? null,
+    content_type: input.contentType ?? 'todo',
+    due_date:     (input.dueAt ?? input.dueDate)?.toISOString().split('T')[0] ?? null,
+    priority:     input.priority ?? 'medium',
+    space_id:     input.spaceId ?? null,
+    category_id:  input.categoryId ?? null,
+    event_id:     input.eventId ?? null,
+    is_completed: false,
+    sort_order:   0,
+  };
+  if (input.dueAt) {
+    insertPayload.due_at = input.dueAt.toISOString();
+  }
+
   const { data, error } = await supa
     .from('todos')
-    .insert({
-      user_id:      userId,
-      title:        input.title,
-      description:  input.content ?? null,       // domain 'content' → DB 'description'
-      content_type: input.contentType ?? 'todo',
-      due_date:     input.dueDate?.toISOString().split('T')[0] ?? null,
-      priority:     input.priority ?? 'medium',
-      space_id:     input.spaceId ?? null,
-      category_id:  input.categoryId ?? null,
-      event_id:     input.eventId ?? null,
-      is_completed: false,
-      sort_order:   0,
-    })
+    .insert(insertPayload)
     .select()
     .single() as { data: TodoRow | null; error: Error | null };
 
@@ -206,6 +217,15 @@ export async function updateTodo(todoId: string, updates: UpdateTodoInput): Prom
   if (updates.title       !== undefined) patch.title        = updates.title;
   if (updates.content     !== undefined) patch.description  = updates.content ?? null;
   if (updates.dueDate     !== undefined) patch.due_date     = updates.dueDate?.toISOString().split('T')[0] ?? null;
+  // Build-65 — dueAt explicit 변경 시만 set. 컬럼 없는 환경 호환을 위해
+  // null 일 때만 명시적으로 null 보내고, undefined 면 키 자체 미포함.
+  if (updates.dueAt !== undefined) {
+    patch.due_at = updates.dueAt?.toISOString() ?? null;
+    // dueAt set/clear 시 due_date 도 동기화 (날짜 기반 쿼리 호환).
+    if (updates.dueAt) {
+      patch.due_date = updates.dueAt.toISOString().split('T')[0];
+    }
+  }
   if (updates.priority    !== undefined) patch.priority     = updates.priority;
   if (updates.categoryId  !== undefined) patch.category_id  = updates.categoryId ?? null;
   if (updates.isCompleted !== undefined) patch.is_completed = updates.isCompleted;

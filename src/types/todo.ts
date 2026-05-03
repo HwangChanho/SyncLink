@@ -31,6 +31,9 @@ export interface Todo {
   /** 'todo' = regular checklist item; 'note' = free-form markdown note. */
   contentType: ContentType;
   dueDate: Date | null;
+  /** Build-65 — 시간 포함 due_at. 있으면 캘린더의 시간 grid 에 chip 으로
+   *  렌더, 없으면 all-day strip 에 표시. dueDate 와 공존 (DB 호환). */
+  dueAt: Date | null;
   priority: TodoPriority;
   isCompleted: boolean;
   completedAt: Date | null;
@@ -48,6 +51,7 @@ export interface TodoSummary {
   id: string;
   title: string;
   dueDate: Date | null;
+  dueAt: Date | null;
   priority: TodoPriority;
   isCompleted: boolean;
   contentType: ContentType;
@@ -84,6 +88,8 @@ export interface CreateTodoInput {
   /** Defaults to 'todo' if not provided. */
   contentType?: ContentType;
   dueDate?: Date;
+  /** Build-65 — 시간 포함. 있으면 dueDate 무시되고 due_at::date 가 자동. */
+  dueAt?: Date;
   priority?: TodoPriority;
   spaceId?: string;
   categoryId?: string;
@@ -94,6 +100,8 @@ export interface UpdateTodoInput {
   title?: string;
   content?: string;
   dueDate?: Date | null;
+  /** Build-65 — null 로 set 하면 시간 제거. */
+  dueAt?: Date | null;
   priority?: TodoPriority;
   categoryId?: string | null;
   isCompleted?: boolean;

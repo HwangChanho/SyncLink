@@ -68,6 +68,7 @@ const en = {
     datetime: 'Date & Time',
     /** DateTimeModal header label — shown when allDay=true. */
     date: 'Date',
+    time: 'Time',
     repeat_annual: ' · Repeats yearly',
     capacity_full: ' · Full',
     /** Calendar view-mode tab labels (short form for the tab strip). */

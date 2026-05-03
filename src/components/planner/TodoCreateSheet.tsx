@@ -61,10 +61,14 @@ export function TodoCreateSheet({
   const [priority, setPriority] = useState<TodoPriority>('medium');
   const [categoryId, setCategoryId] = useState<string | null>(defaultCategoryId);
   const [dueDate, setDueDate] = useState<Date | null>(null);
+  /** Build-65 — 시간 포함 마감 (있으면 dueDate 무시되고 dueAt 우선). */
+  const [dueAt, setDueAt] = useState<Date | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
+  /** 시간 picker — dueAt 입력. allDay=false (DateTimeModal). */
+  const [timeOpen, setTimeOpen] = useState(false);
   /**
    * Live keyboard height. Modal-hosted KeyboardAvoidingView is unreliable
    * on iOS — the inputs stayed under the keyboard. Tracking the height
@@ -88,6 +92,7 @@ export function TodoCreateSheet({
       setPriority('medium');
       setCategoryId(defaultCategoryId);
       setDueDate(null);
+      setDueAt(null);
       setIsSaving(false);
     }
   }, [visible, defaultCategoryId]);
@@ -111,13 +116,15 @@ export function TodoCreateSheet({
         priority,
         ...(memo.trim() ? { content: memo.trim() } : {}),
         ...(categoryId ? { categoryId } : {}),
-        ...(dueDate ? { dueDate } : {}),
+        // dueAt 우선 — 시간 있으면 그것만 (service 가 due_date 도 자동 채움).
+        // 시간 없으면 dueDate.
+        ...(dueAt ? { dueAt } : (dueDate ? { dueDate } : {})),
       });
       onClose();
     } catch {
       setIsSaving(false);
     }
-  }, [title, memo, priority, categoryId, dueDate, onCreate, onClose, isSaving]);
+  }, [title, memo, priority, categoryId, dueDate, dueAt, onCreate, onClose, isSaving]);
 
   const resolvedCategory = categoryId ? (categoryMap.get(categoryId) ?? null) : null;
 
@@ -168,27 +175,56 @@ export function TodoCreateSheet({
                   <Pressable
                     style={[
                       styles.inlineChip,
-                      dueDate && { borderColor: colors.primary },
+                      (dueAt || dueDate) && { borderColor: colors.primary },
                     ]}
                     onPress={() => setDateOpen(true)}
                   >
                     <Ionicons
                       name="calendar-outline"
                       size={14}
-                      color={dueDate ? colors.primary : colors.textSecondary}
+                      color={(dueAt || dueDate) ? colors.primary : colors.textSecondary}
                     />
                     <Text
                       style={[
                         styles.inlineChipText,
-                        dueDate && { color: colors.primary },
+                        (dueAt || dueDate) && { color: colors.primary },
                       ]}
                       numberOfLines={1}
                     >
-                      {dueDate
-                        ? `${dueDate.getMonth() + 1}/${dueDate.getDate()}`
+                      {(dueAt ?? dueDate)
+                        ? `${(dueAt ?? dueDate)!.getMonth() + 1}/${(dueAt ?? dueDate)!.getDate()}`
                         : t('time.date')}
                     </Text>
                   </Pressable>
+
+                  {/* Build-65 — 시간 입력 chip. dueDate 또는 dueAt 가 있을 때만
+                      표시 (날짜 없이 시간만 있는 todo 는 의미 없음). */}
+                  {(dueAt || dueDate) && (
+                    <Pressable
+                      style={[
+                        styles.inlineChip,
+                        dueAt && { borderColor: colors.primary },
+                      ]}
+                      onPress={() => setTimeOpen(true)}
+                    >
+                      <Ionicons
+                        name="time-outline"
+                        size={14}
+                        color={dueAt ? colors.primary : colors.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          styles.inlineChipText,
+                          dueAt && { color: colors.primary },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {dueAt
+                          ? `${String(dueAt.getHours()).padStart(2, '0')}:${String(dueAt.getMinutes()).padStart(2, '0')}`
+                          : t('time.time') /* fallback to existing key if defined */}
+                      </Text>
+                    </Pressable>
+                  )}
                 </View>
 
                 <TextInput
@@ -270,6 +306,34 @@ export function TodoCreateSheet({
           onConfirm={(d) => {
             setDueDate(d);
             setDateOpen(false);
+          }}
+        />
+      )}
+      {/* Build-65 — 시간 picker. dueAt = 날짜(dueDate) + 선택한 시간. */}
+      {timeOpen && (
+        <DateTimeModal
+          visible={timeOpen}
+          initialValue={(() => {
+            // 기존 dueAt 있으면 그것, 없으면 dueDate 의 일자 + 현재 시각 다음 30분.
+            const base = dueAt ?? new Date(dueDate ?? Date.now());
+            if (!dueAt) {
+              const now = new Date();
+              const m = now.getMinutes();
+              const round = m < 30 ? 30 : 0;
+              const off = m < 30 ? 0 : 1;
+              base.setHours(now.getHours() + off, round, 0, 0);
+            }
+            return base;
+          })()}
+          allDay={false}
+          onCancel={() => setTimeOpen(false)}
+          onConfirm={(d) => {
+            // dueAt 의 날짜 부분은 dueDate 와 같게 유지 (이미 picker 가 같은 일자
+            // 기준으로 시간만 골랐을 가능성 높음). 안전하게 dueDate 의 Y/M/D 로 덮음.
+            const merged = new Date(dueDate ?? d);
+            merged.setHours(d.getHours(), d.getMinutes(), 0, 0);
+            setDueAt(merged);
+            setTimeOpen(false);
           }}
         />
       )}
