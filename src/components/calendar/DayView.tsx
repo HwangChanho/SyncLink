@@ -20,7 +20,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import type { EventSummary } from '@/types';
 import type { FreeSlot } from '@/types/freeTime';
@@ -95,11 +94,12 @@ interface DayViewProps {
   onDragModeChange?: (isDragging: boolean) => void;
 
   /**
-   * Build-55 — empty-slot quick create. Mirrors WeekView prop. Receives
-   * the displayed day + tapped hour/minute (snapped to 15 min). Skipped
-   * during scrolls (gesture hook yields control to ScrollView first).
+   * Build-55 — empty-slot quick create. Mirrors WeekView prop.
    */
   onEmptySlotPress?: (date: Date, hour: number, minute: number) => void;
+
+  /** Build-64 — drop on FAB-area = delete. parent 가 측정한 page rect. */
+  deleteZonePageRectRef?: { current: { left: number; top: number; right: number; bottom: number } | null };
 }
 
 /**
@@ -115,6 +115,7 @@ export function DayView({
   onFreeSlotPress,
   onDragModeChange,
   onEmptySlotPress,
+  deleteZonePageRectRef,
 }: DayViewProps) {
   // Resolve active theme colors for dark mode support (TASK-700)
   const { t } = useTranslation();
@@ -278,7 +279,7 @@ export function DayView({
       onDropped:  handleGridDrop,
       onTap:      onEventPress,
       onDelete:   handleDragDelete,
-      deleteZoneThreshold: -28,
+      ...(deleteZonePageRectRef ? { deleteZonePageRectRef } : {}),
       ...(onEmptySlotPress ? { onEmptyTap: handleEmptyTap } : {}),
       pageOffsetRef,
     });
@@ -485,15 +486,7 @@ export function DayView({
       {dragState && (
         <View pointerEvents="none" style={styles.editModeDim} />
       )}
-      {/* Build-57 → Build-63 — drag 중 화면 상단 trash drop zone */}
-      {dragState && (
-        <View pointerEvents="none" style={styles.deleteZoneWrap}>
-          <View style={styles.deleteZone}>
-            <Ionicons name="trash" size={22} color="#FFFFFF" />
-            <Text style={styles.deleteZoneText}>{t('event.drop_to_delete')}</Text>
-          </View>
-        </View>
-      )}
+      {/* Build-64 — drop zone overlay 제거. FAB 가 trash 역할. */}
     </View>
   );
 }

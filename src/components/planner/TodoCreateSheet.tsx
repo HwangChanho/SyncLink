@@ -186,7 +186,7 @@ export function TodoCreateSheet({
                     >
                       {dueDate
                         ? `${dueDate.getMonth() + 1}/${dueDate.getDate()}`
-                        : t('event.title_placeholder', '날짜')}
+                        : t('time.date')}
                     </Text>
                   </Pressable>
                 </View>

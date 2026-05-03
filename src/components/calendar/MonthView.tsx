@@ -20,7 +20,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Ionicons } from '@expo/vector-icons';
 import type { EventSummary } from '@/types';
 import { useColors } from '@/hooks/useColors';
 import { useTranslatedTitles } from '@/hooks/useTranslatedTitles';
@@ -101,6 +100,17 @@ interface MonthViewProps {
    * swipe-to-navigate gesture.
    */
   onDragModeChange?: (isDragging: boolean) => void;
+
+  /**
+   * Build-64 — targeting (move) 모드 진입/이탈 시 부모에 알림. 부모는
+   * 그 사이 FAB 를 trash 아이콘으로 변경 + 클릭 시 삭제.
+   */
+  onTargetingChange?: (event: EventSummary | null) => void;
+  /**
+   * Build-64 — MonthView 가 자체 삭제 함수를 부모에 publish. 부모의
+   * FAB 가 호출. 컴포넌트 unmount 시 부모가 ref 정리.
+   */
+  registerDeleteHandler?: (fn: (() => void) | null) => void;
 }
 
 // ─── Date utilities ────────────────────────────────────────────────────────────
@@ -171,6 +181,8 @@ export function MonthView({
   onDateSelect,
   onEmptyDatePress,
   onDateLongPress,
+  onTargetingChange,
+  registerDeleteHandler,
   onDragModeChange,
 }: MonthViewProps) {
   // Resolve active theme colors for dark mode support (TASK-700)
@@ -391,7 +403,15 @@ export function MonthView({
   // while picking a target cell).
   useEffect(() => {
     onDragModeChange?.(targetEvent !== null);
-  }, [targetEvent, onDragModeChange]);
+    onTargetingChange?.(targetEvent);
+  }, [targetEvent, onDragModeChange, onTargetingChange]);
+
+  // Build-64 — publish/clear delete handler ref so the parent FAB can
+  // call it (FAB acts as both create + month delete).
+  useEffect(() => {
+    registerDeleteHandler?.(handleDeletePickedEvent);
+    return () => { registerDeleteHandler?.(null); };
+  }, [registerDeleteHandler, handleDeletePickedEvent]);
 
   // Cell-tap dispatcher — used by every TouchableOpacity in the grid.
   // Three modes:
@@ -607,20 +627,8 @@ export function MonthView({
             </Text>
             <Text style={styles.targetToolbarHint}>{t('calendar.targeting_hint')}</Text>
           </View>
-          {/* Build-56 → Build-63 — delete shortcut. LEAD 보고: "월에도
-              삭제 추가, 이동 로직에 맞게 클릭". 작은 trash 아이콘만
-              있어서 못 봤다는 피드백 → solid red FAB 스타일 + "삭제"
-              텍스트 명시 (drag chip 과 동일 디자인 언어). Confirm
-              dialog 가 실수 방지. */}
-          <Pressable
-            onPress={handleDeletePickedEvent}
-            hitSlop={8}
-            style={styles.targetToolbarDelete}
-            accessibilityLabel={t('event.delete')}
-          >
-            <Ionicons name="trash" size={16} color="#FFFFFF" />
-            <Text style={styles.targetToolbarDeleteText}>{t('common.delete')}</Text>
-          </Pressable>
+          {/* Build-64 — toolbar 의 inline 삭제 버튼 제거. 부모 FAB 가
+              targetEvent !== null 일 때 trash 아이콘 + 클릭 시 삭제. */}
           <Pressable
             onPress={() => setTargetEvent(null)}
             hitSlop={8}

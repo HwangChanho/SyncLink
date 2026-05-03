@@ -19,7 +19,7 @@
  *  - TASK-302: NL input bar
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Pressable, StyleSheet,
   Modal, TouchableOpacity, Text,
@@ -314,6 +314,28 @@ export default function CalendarScreen() {
     setIsChildDragging(dragging);
   }, []);
 
+  // Build-64 — drag drop zone = FAB rect. ref 로 측정해 자식 hook 에 전달.
+  const fabRef = useRef<View>(null);
+  const fabRectRef = useRef<{ left: number; top: number; right: number; bottom: number } | null>(null);
+  const measureFabRect = useCallback(() => {
+    fabRef.current?.measureInWindow((x, y, w, h) => {
+      // FAB 영역 + 외곽 hit-tolerance 16px (drag 끝 근처에서 살짝 벗어나도 인정)
+      const tol = 16;
+      fabRectRef.current = {
+        left:   x - tol,
+        top:    y - tol,
+        right:  x + w + tol,
+        bottom: y + h + tol,
+      };
+    });
+  }, []);
+
+  // Build-64 — month targeting 모드를 부모가 알기 위한 state + 삭제 핸들러 ref.
+  // MonthView 가 onMonthTargetingChange 콜백으로 set, 자기 handleDelete 함수를
+  // ref 로 publish (FAB onPress 가 호출).
+  const [monthTargetEvent, setMonthTargetEvent] = useState<EventSummary | null>(null);
+  const monthDeleteRef = useRef<(() => void) | null>(null);
+
   const { panHandlers: swipePanHandlers, swipeX } = useCalendarSwipe({
     viewMode,
     isDragging: isChildDragging,
@@ -401,6 +423,8 @@ export default function CalendarScreen() {
               density={monthDensity}
               onDateSelect={handleDateSelect}
               onDateLongPress={handleDateLongPress}
+              onTargetingChange={setMonthTargetEvent}
+              registerDeleteHandler={(fn) => { monthDeleteRef.current = fn; }}
             />
           )}
 
@@ -415,6 +439,7 @@ export default function CalendarScreen() {
               }}
               todosByDate={todosByDate}
               onDragModeChange={handleChildDragModeChange}
+              deleteZonePageRectRef={fabRectRef}
               {...(freeTimeOn ? { freeSlots } : {})}
             />
           )}
@@ -426,6 +451,7 @@ export default function CalendarScreen() {
               onEventPress={handleEventPress}
               todos={todayTodos}
               onDragModeChange={handleChildDragModeChange}
+              deleteZonePageRectRef={fabRectRef}
               {...(freeTimeOn ? { freeSlots } : {})}
             />
           )}
@@ -460,20 +486,40 @@ export default function CalendarScreen() {
           }}
         />
 
-        {/* FAB: quick create pre-filled with selectedDate (kept alongside NLInputBar) */}
+        {/* FAB — Build-64 LEAD: drag/move 모드면 trash 아이콘으로 변경.
+            week/day: drag 중일 때 trash + 그 위에 drop 시 onDelete (자식 hook).
+            month: targeting 모드일 때 trash + 클릭으로 삭제. */}
         <Pressable
+          ref={fabRef}
           testID="calendar-fab-create"
-          style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
+          onLayout={measureFabRect}
+          style={({ pressed }) => [
+            styles.fab,
+            (isChildDragging || monthTargetEvent) && styles.fabDelete,
+            pressed && styles.fabPressed,
+          ]}
           onPress={() => {
+            if (monthTargetEvent && monthDeleteRef.current) {
+              monthDeleteRef.current();
+              return;
+            }
             router.push({
               pathname: '/event/create',
               params: { date: toDateKey(selectedDate) },
             });
           }}
-          accessibilityLabel={t('common.a11y_create_event')}
+          accessibilityLabel={
+            (isChildDragging || monthTargetEvent)
+              ? t('event.delete')
+              : t('common.a11y_create_event')
+          }
           accessibilityRole="button"
         >
-          <Ionicons name="add" size={28} color="#ffffff" />
+          <Ionicons
+            name={(isChildDragging || monthTargetEvent) ? 'trash' : 'add'}
+            size={(isChildDragging || monthTargetEvent) ? 24 : 28}
+            color="#ffffff"
+          />
         </Pressable>
 
         {/* Category dim filter modal */}
@@ -699,6 +745,10 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       flex: 1,
       fontSize: 15,
       color: colors.textPrimary,
+    },
+    /** Build-64 — drag/targeting 모드일 때 FAB 가 빨간 trash 로 변경. */
+    fabDelete: {
+      backgroundColor: colors.error,
     },
     /** Floating action button — bottom-right, positioned above NLInputBar to avoid blocking its send button. */
     fab: {

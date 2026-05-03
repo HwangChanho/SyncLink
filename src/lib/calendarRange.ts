@@ -70,7 +70,10 @@ export function shiftDate(date: Date, mode: ViewMode, delta: 1 | -1): Date {
       new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate(),
     ));
   } else if (mode === 'week') {
-    next.setDate(next.getDate() + delta * 7);
+    // Build-63 LEAD: "주에서 좌우 이동할 때 한 주씩 넘어가지 않고 하루씩".
+    // 7일 단위 jump → 1일 단위 shift. 일간 grid 가 fade-in/slide-in 으로
+    // 보이며 주 타이틀도 7일 누적 시점에 다음 주로 자연 갱신.
+    next.setDate(next.getDate() + delta);
   } else {
     next.setDate(next.getDate() + delta);
   }

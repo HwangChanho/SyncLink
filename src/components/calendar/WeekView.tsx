@@ -33,7 +33,6 @@ import {
 // PanResponder hit-testing to claim touches that land on event chips and
 // yields all other touches to ScrollView so vertical scroll just works.
 import { ScrollView } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import type { EventSummary } from '@/types';
 import type { FreeSlot } from '@/types/freeTime';
@@ -121,6 +120,12 @@ interface WeekViewProps {
    * to the underlying ScrollView before the tap callback fires).
    */
   onEmptySlotPress?: (date: Date, hour: number, minute: number) => void;
+
+  /**
+   * Build-64 — drop on FAB-area = delete. 부모(calendar.tsx)가 FAB 의
+   * page rect 를 측정해 ref 로 전달. drag release 시 hit-test.
+   */
+  deleteZonePageRectRef?: { current: { left: number; top: number; right: number; bottom: number } | null };
 }
 
 // ─── Date utilities ────────────────────────────────────────────────────────
@@ -182,6 +187,7 @@ export function WeekView({
   onFreeSlotPress,
   onDragModeChange,
   onEmptySlotPress,
+  deleteZonePageRectRef,
 }: WeekViewProps) {
   // Resolve active theme colors for dark mode support (TASK-700)
   const colors = useColors();
@@ -322,7 +328,7 @@ export function WeekView({
       onDropped:  handleGridDrop,
       onTap:      onEventPress,
       onDelete:   handleDragDelete,
-      deleteZoneThreshold: -28,
+      ...(deleteZonePageRectRef ? { deleteZonePageRectRef } : {}),
       ...(onEmptySlotPress ? { onEmptyTap: handleEmptyTap } : {}),
       pageOffsetRef,
     });
@@ -729,14 +735,7 @@ export function WeekView({
         위로 28px 위 = 이 trash 영역). pointerEvents='none' — 이미
         진행 중인 PanResponder 가 모든 touch 를 소유.
       */}
-      {dragState && (
-        <View pointerEvents="none" style={styles.deleteZoneWrap}>
-          <View style={styles.deleteZone}>
-            <Ionicons name="trash" size={22} color="#FFFFFF" />
-            <Text style={styles.deleteZoneText}>{t('event.drop_to_delete')}</Text>
-          </View>
-        </View>
-      )}
+      {/* Build-64 LEAD: "여기에 놓아 삭제 버튼 없애고 + 버튼을 drag 모드에서 쓰레기통으로". calendar.tsx 의 FAB 가 dragState !== null 일 때 trash 아이콘. drop 위치가 FAB rect 안 (page coords) 이면 onDelete 호출. 자식 (WeekView) 은 deleteZone overlay 미렌더 — chip 자체 제거. */}
     </View>
   );
 }

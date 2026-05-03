@@ -109,20 +109,16 @@ interface Options {
    */
   onEmptyTap?: (localX: number, localY: number) => void;
   /**
-   * Build-57 — fires when the user drops a dragged event onto the
-   * "delete zone" (i.e. the finger lifts while above the eventsArea —
-   * fingerY < deleteZoneThreshold, default 0). Parent typically shows
-   * a trash button at the top of the calendar while dragState !== null
-   * and routes this callback to a delete-confirm dialog.
+   * Build-57 → Build-64 — drop 시 page-coords 가 deleteZonePageRect 안이면
+   * delete 처리. LEAD 보고로 별도 chip overlay 제거 후 FAB 가 trash 역할
+   * → FAB 의 page rect 를 그대로 hit-test 영역으로.
    */
   onDelete?: (event: EventSummary) => void;
   /**
-   * Container-local Y threshold for the delete zone. Drops where
-   * fingerY < threshold are treated as deletes instead of moves.
-   * Default 0 — the area immediately above the time grid. Pass a
-   * larger negative number (e.g. -40) to match a taller trash button.
+   * Page coordinates of the trash drop zone (FAB). 부모가 측정해 ref 로
+   * 전달. fingerX/Y 가 이 사각형 안에 있을 때 onDelete 발화.
    */
-  deleteZoneThreshold?: number;
+  deleteZonePageRectRef?: { current: { left: number; top: number; right: number; bottom: number } | null };
   /**
    * Live page position of the eventsArea container (top-left in screen pt).
    * The hook subtracts this from pageX/pageY to get touch coords in the
@@ -160,7 +156,7 @@ export function useGridDragHandler({
   onTap,
   onEmptyTap,
   onDelete,
-  deleteZoneThreshold = 0,
+  deleteZonePageRectRef,
   pageOffsetRef,
 }: Options): {
   panHandlers: PanResponderInstance['panHandlers'];
@@ -313,20 +309,23 @@ export function useGridDragHandler({
         }
       },
 
-      onPanResponderRelease: (_, gs) => {
+      onPanResponderRelease: (e, gs) => {
         cancelLongPress();
         setCandidateEvent(null);
         const drag = dragStateRef.current;
         if (drag) {
-          // Build-57 — delete zone check FIRST. Finger that ended above
-          // the eventsArea (fingerY < threshold) means the user dragged
-          // the chip up into the trash button at the top of the screen.
-          const finalFingerY = startXY.current.y + gs.dy;
-          if (onDelete && finalFingerY < deleteZoneThreshold) {
-            onDelete(drag.event);
-            setDragState(null);
-            candidateRef.current = null;
-            return;
+          // Build-64 — page rect hit-test. release 시점 손가락이 부모가
+          // 측정해 둔 trash drop rect (FAB 영역) 안에 있으면 onDelete.
+          const rect = deleteZonePageRectRef?.current;
+          if (onDelete && rect) {
+            const px = e.nativeEvent.pageX;
+            const py = e.nativeEvent.pageY;
+            if (px >= rect.left && px <= rect.right && py >= rect.top && py <= rect.bottom) {
+              onDelete(drag.event);
+              setDragState(null);
+              candidateRef.current = null;
+              return;
+            }
           }
           // Drop computed via the same helper that powered the prior
           // implementations — kept stable so existing tests still apply.
@@ -380,7 +379,7 @@ export function useGridDragHandler({
     // The responder closure reads layouts/dragState via refs and reads the
     // numeric props directly — only the latter need to invalidate it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [columnWidth, pxPerMinute, snapMinutes, viewMode, onDropped, onTap, onEmptyTap, onDelete, deleteZoneThreshold],
+    [columnWidth, pxPerMinute, snapMinutes, viewMode, onDropped, onTap, onEmptyTap, onDelete, deleteZonePageRectRef],
   );
 
   return { panHandlers: responder.panHandlers, dragState, candidateEvent, debugInfo };
