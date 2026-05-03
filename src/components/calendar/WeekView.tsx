@@ -732,7 +732,7 @@ export function WeekView({
       {dragState && (
         <View pointerEvents="none" style={styles.deleteZoneWrap}>
           <View style={styles.deleteZone}>
-            <Ionicons name="trash" size={18} color={colors.error} />
+            <Ionicons name="trash" size={22} color="#FFFFFF" />
             <Text style={styles.deleteZoneText}>{t('event.drop_to_delete')}</Text>
           </View>
         </View>
@@ -945,32 +945,38 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.10)',
   },
-  // Build-57 → Build-61 → Build-62 — drag 중 trash drop zone.
-  // LEAD 재보고로 chip 이 여전히 가로로 stretch 되는 회귀 — RN 에서
-  // position:'absolute' + alignSelf:'center' 가 무시되기 때문. wrapper
-  // 로 분리: outer 가 absolute + alignItems:center, inner 만 chip.
+  // Build-57 → Build-63 — drag 중 trash drop zone.
+  // LEAD 재보고: "저게 삭제였냐 알아볼 수도 없다" — 연한 색 + 작은
+  // 글씨라 의미 불명. solid red fill + 흰색 trash icon + "여기에 놓아
+  // 삭제" 텍스트 흰색 + bold + drop shadow 로 floating action button
+  // 느낌. 삭제 = 위험 = 강한 빨강. wrapper 패턴 유지.
   deleteZoneWrap: {
     position: 'absolute',
-    top: 6,
+    top: 8,
     left: 0,
     right: 0,
     alignItems: 'center',
+    zIndex: 10,
   },
   deleteZone: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.error + '18',
-    borderWidth: 1,
-    borderColor: colors.error + '55',
+    gap: 8,
+    backgroundColor: colors.error,
     borderRadius: 999,
+    // iOS shadow + Android elevation 으로 떠있는 느낌
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 6,
   },
   deleteZoneText: {
-    ...textStyles.labelSm,
-    color: colors.error,
-    fontWeight: '600',
+    ...textStyles.label,
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   });
 }

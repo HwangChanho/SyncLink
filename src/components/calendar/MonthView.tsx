@@ -607,16 +607,19 @@ export function MonthView({
             </Text>
             <Text style={styles.targetToolbarHint}>{t('calendar.targeting_hint')}</Text>
           </View>
-          {/* Build-56 — delete shortcut. Surfaces the same destructive action
-              the user would otherwise have to drill into the event detail
-              screen for. Confirm dialog prevents accidental loss. */}
+          {/* Build-56 → Build-63 — delete shortcut. LEAD 보고: "월에도
+              삭제 추가, 이동 로직에 맞게 클릭". 작은 trash 아이콘만
+              있어서 못 봤다는 피드백 → solid red FAB 스타일 + "삭제"
+              텍스트 명시 (drag chip 과 동일 디자인 언어). Confirm
+              dialog 가 실수 방지. */}
           <Pressable
             onPress={handleDeletePickedEvent}
             hitSlop={8}
             style={styles.targetToolbarDelete}
             accessibilityLabel={t('event.delete')}
           >
-            <Ionicons name="trash-outline" size={18} color={colors.error} />
+            <Ionicons name="trash" size={16} color="#FFFFFF" />
+            <Text style={styles.targetToolbarDeleteText}>{t('common.delete')}</Text>
           </Pressable>
           <Pressable
             onPress={() => setTargetEvent(null)}
@@ -879,16 +882,22 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     borderWidth: 1,
     borderColor: colors.border,
   },
+  // Build-63 — solid red FAB 스타일로 강화. trash 아이콘 + "삭제" 텍스트.
+  // drag chip 과 동일 디자인 언어 → 사용자가 어디서든 "빨간 = 삭제" 인지.
   targetToolbarDelete: {
-    width: 36,
-    height: 36,
-    borderRadius: 6,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: (colors.error) + '14',
-    borderWidth: 1,
-    borderColor: (colors.error) + '40',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 6,
+    backgroundColor: colors.error,
     marginRight: 6,
+  },
+  targetToolbarDeleteText: {
+    ...textStyles.labelSm,
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   targetToolbarCancelText: {
     ...textStyles.labelSm,
