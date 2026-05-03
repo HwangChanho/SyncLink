@@ -500,17 +500,21 @@ export default function MyScreen() {
 
         <SettingsSection />
 
-        {/* ── Dev-only AI cost dashboard ───────────────────────────── */}
-        {/* Rendered only in local development; never visible in production */}
-        {process.env.EXPO_PUBLIC_APP_ENV === 'development' && <DevDashboard />}
-
-        <ServiceInfoSection />
-
+        {/* Build-60 LEAD: "My탭은 시스템 하위에 유저 넣고 거기에 로그아웃
+            이랑 계정삭제 넣어놔" → 시스템(SettingsSection) 바로 아래에
+            유저(AccountSection) 가 오도록 순서 변경. ServiceInfoSection /
+            DevDashboard 는 그 아래로 이동. */}
         <AccountSection
           isLoggingOut={isLoggingOut}
           onLogout={handleLogout}
           onDeleteAccount={handleDeleteAccount}
         />
+
+        {/* ── Dev-only AI cost dashboard ───────────────────────────── */}
+        {/* Rendered only in local development; never visible in production */}
+        {process.env.EXPO_PUBLIC_APP_ENV === 'development' && <DevDashboard />}
+
+        <ServiceInfoSection />
       </ScrollView>
     </SafeAreaView>
   );

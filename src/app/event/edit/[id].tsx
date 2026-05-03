@@ -877,10 +877,10 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     textAlignVertical: 'top',
   },
 
+  // Build-60 — Reminder FormRow borderBottom + sharingSection borderTop
+  // 인접해서 두 줄 보임 회귀. borderTop 제거 (create.tsx 와 동일).
   sharingSection: {
     marginTop: spacing[6],
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
     paddingTop: spacing[4],
   },
   sharingLabel: {

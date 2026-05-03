@@ -1353,10 +1353,11 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   },
 
   // Space sharing
+  // Build-60 LEAD: "reminder 밑에 줄이 두 개" 회귀 — Reminder FormRow 의
+  // borderBottomWidth:1 + sharingSection borderTopWidth:1 이 인접해서
+  // 두 줄로 보였음. borderTop 제거 (FormRow 의 borderBottom 이 구분 역할).
   sharingSection: {
     marginTop: spacing[6],
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
     paddingTop: spacing[4],
   },
   sharingLabel: {

@@ -731,12 +731,16 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // Build-60 LEAD: "셀렉 색상이 보라색인데 색이 너무 진해 더 연하게
+  // 하고 알파값도 좀 낮춰". today/selected 모두 primary 100% 였던 것을
+  // 연하게 + alpha. today 는 fill 이라 알파 0.7, selected 는 border
+  // 라서 alpha 0.55 + 두께 살짝 줄임.
   todayCircle: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primary + 'B0',
   },
   selectedCircle: {
-    borderWidth: 1.5,
-    borderColor: colors.primary,
+    borderWidth: 1,
+    borderColor: colors.primary + '8C',
   },
   dateText: {
     ...textStyles.labelLg,
@@ -823,16 +827,16 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     shadowRadius: 6,
     elevation: 6,
   },
-  // Build-56 — color-only targeting guide.
-  // 이전 버전 (Build-54/55) 은 borderWidth 2.5px 를 더해서 셀 box 가
-  // 커지고 안의 dayNumber/itemBar 가 모두 작게 재배치돼 LEAD 가
-  // "일정칸이 작아진다" 보고. border 를 모두 빼고 배경색만으로 모드
-  // 표시 — 셀 크기 변화 0.
+  // Build-56 → Build-60 — color-only targeting guide.
+  // 셀 box 크기 변화 0 (border 사용 안 함). 배경색만으로 표시.
+  // LEAD 2026-05-03 — "더 연한 반투명 하늘색". rgba light blue
+  // (#60A5FA, Tailwind blue-400) 기반. alpha 0.35 (더 연하게 재조정).
   targetCell: {
-    backgroundColor: colors.primary + '22',
+    backgroundColor: 'rgba(96, 165, 250, 0.35)',
   },
+  // source 셀 — 옮기는 원본임을 살짝 더 강조하되 여전히 연하게.
   targetSourceCell: {
-    backgroundColor: colors.primary + '40',
+    backgroundColor: 'rgba(59, 130, 246, 0.5)',
   },
   // Targeting toolbar pinned at the bottom of the calendar grid; surfaces
   // which event is being moved + a cancel button.

@@ -36,6 +36,14 @@ export function useCalendarSwipe({ viewMode, isDragging, onShift }: Args) {
   const isDraggingRef = useRef(isDragging);
   useEffect(() => { isDraggingRef.current = isDragging; }, [isDragging]);
 
+  // Build-60 fix — PanResponder 가 useRef 로 한 번만 생성되므로 onShift
+  // closure 도 mount 시점 값으로 고정된다. parent 의 onShift 가 viewMode
+  // 를 보고 분기하는데, 옛 closure 는 옛 viewMode 만 알기 때문에 "주
+  // 모드에서 1일 이동" 같은 변경이 적용되지 않는다 (LEAD 보고 "주 이동
+  // 적용 안됐는데"). onShift 도 ref 로 관리해서 항상 최신 콜백을 호출.
+  const onShiftRef = useRef(onShift);
+  useEffect(() => { onShiftRef.current = onShift; }, [onShift]);
+
   const swipeX = useRef(new Animated.Value(0)).current;
   const screenWidth = Dimensions.get('window').width;
 
@@ -82,7 +90,7 @@ export function useCalendarSwipe({ viewMode, isDragging, onShift }: Args) {
           return;
         }
         const direction: -1 | 1 = gs.dx < 0 ? 1 : -1;
-        onShift(direction);
+        onShiftRef.current(direction);
         animateCommit(direction);
       },
     }),

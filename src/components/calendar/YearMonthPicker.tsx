@@ -382,21 +382,22 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     // ── Month grid ───────────────────────────────────────────────────────────
     // LEAD 2026-05-03 — "월이 왼쪽에 align되어있는데 가운데로 오게": 이전엔
     // gap + marginHorizontal 가 동시에 적용돼서 items 의 누적 폭이 100% 를
-    // 넘었다 (item 23% × 4 + gap × 3 + margin × 8). 결과적으로 마지막 줄이
-    // 좌측 정렬로 보였음. justifyContent: 'space-between' 로 4 items 를
-    // 양쪽 끝에 정렬 + 사이 간격 균등 분배. marginHorizontal 제거.
+    // 넘었다 → space-between + paddingHorizontal 만 사용해 4 items 균등 분포.
+    // Build-60 LEAD: "버튼 몇월 이렇게 뜨는게 한가운데없고 아래로 쏠려있어"
+    // → paddingVertical 을 위아래 동일하게 spacing[4] 로 늘리고 monthItem
+    // aspectRatio 1.8→1.5 로 키워 그리드 자체가 카드 안 가운데 비중을
+    // 차지하게 한다.
     monthGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       justifyContent: 'space-between',
       paddingHorizontal: spacing[4],
-      paddingVertical: spacing[3],
+      paddingVertical: spacing[4],
       rowGap: spacing[2],
     },
     monthItem: {
-      // 4 columns. 22% leaves room for ~3 × 4% gaps via space-between.
       width: '22%',
-      aspectRatio: 1.8,
+      aspectRatio: 1.5,
       alignItems: 'center',
       justifyContent: 'center',
       borderRadius: radius.md,
@@ -426,14 +427,20 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     },
 
     // ── Footer ───────────────────────────────────────────────────────────────
+    // Build-60 LEAD: "아래 공간이 너무 크다, 확인 버튼 위 년도 칸 아래 기준
+    // 으로 맞추라" → paddingBottom spacing[5]→spacing[3]. paddingTop 도
+    // 살짝 줄여 (spacing[2]→0 가까이) 카드 하단 빈 공간 제거.
+    // justifyContent: 'space-between' — 좌측 "오늘", 우측 "확인" 양 끝.
     footer: {
       flexDirection: 'row',
-      justifyContent: 'flex-end',
+      justifyContent: 'space-between',
       alignItems: 'center',
       gap: spacing[3],
       paddingHorizontal: spacing[5],
-      paddingBottom: spacing[5],
-      paddingTop: spacing[2],
+      paddingBottom: spacing[3],
+      paddingTop: spacing[3],
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
     },
     todayBtn: {
       paddingHorizontal: spacing[4],
