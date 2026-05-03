@@ -154,13 +154,14 @@ export function makeStyles(colors: ColorTokens) {
       textDecorationLine: 'line-through',
       color: colors.textTertiary,
     },
-    // Build-64 — 할일 리스트 우측에 dueDate 요일 라벨. priorityBadge
-    // 옆에 작게 — 요일 칸 차지는 8px 정도로 minimal.
+    // Build-64 — 할일 리스트 우측 요일 라벨. Build-67 — 요일 + 날짜 + (시간) 동시.
     todoDow: {
       ...textStyles.caption,
       color: colors.textTertiary,
-      minWidth: 14,
-      textAlign: 'center',
+      // 요일+날짜+시간 = "화 5/4 14:30" 약 60px. 충분한 폭 확보.
+      minWidth: 60,
+      textAlign: 'right',
+      marginRight: 4,
     },
     priorityBadge: {
       paddingHorizontal: spacing[2],

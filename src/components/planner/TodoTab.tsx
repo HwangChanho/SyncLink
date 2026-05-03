@@ -133,13 +133,21 @@ const TodoRow = memo(function TodoRow({
         </Text>
 
         {/* Build-64 LEAD: "할일 리스트에서 요일이 오른쪽에 노출, 제목
-            길어지면 ... 요일 작게, 요일 칸은 안 건드리게". dueDate 가
-            있으면 우측에 작은 요일 라벨 표시. 우선순위 배지 옆 자리. */}
-        {todo.dueDate && (
-          <Text style={styles.todoDow} numberOfLines={1}>
-            {(t('time.week_days', { returnObjects: true }) as string[])[todo.dueDate.getDay()]}
-          </Text>
-        )}
+            길어지면 ... 요일 작게". Build-67 — 요일 + 날짜 동시 표시
+            (예: "화 5/4"). dueAt 가 있으면 시간도 (예: "화 5/4 14:30"). */}
+        {(todo.dueDate || todo.dueAt) && (() => {
+          const d = todo.dueAt ?? todo.dueDate!;
+          const dow = (t('time.week_days', { returnObjects: true }) as string[])[d.getDay()];
+          const date = `${d.getMonth() + 1}/${d.getDate()}`;
+          const time = todo.dueAt
+            ? ` ${String(todo.dueAt.getHours()).padStart(2, '0')}:${String(todo.dueAt.getMinutes()).padStart(2, '0')}`
+            : '';
+          return (
+            <Text style={styles.todoDow} numberOfLines={1}>
+              {dow} {date}{time}
+            </Text>
+          );
+        })()}
 
         <View style={[styles.priorityBadge, { backgroundColor: priorityColor + '22' }]}>
           <Text style={[styles.priorityText, { color: priorityColor }]}>
