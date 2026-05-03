@@ -16,7 +16,8 @@
  * Route: /event/create?date=YYYY-MM-DD
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEventForm } from '@/hooks/useEventForm';
 import {
   View, Text, TextInput, ScrollView, Switch, Pressable,
   ActivityIndicator, StyleSheet, Platform, KeyboardAvoidingView,
@@ -215,66 +216,48 @@ export default function EventCreateScreen() {
     }
   }, [spaces]);
 
-  // ── Form state ─────────────────────────────────────────────────────────────
-
-  const [title, setTitle] = useState('');
-  const [allDay, setAllDay] = useState(false);
-
-  /** Start date — pre-filled from route param.
-   *  - date 만 있을 때: 현재 시각 기준 다음 30분 슬롯 (기존 동작).
-   *  - date + startHour/startMinute (Build-55 deep link): 정확히 그 시각.
-   *  LEAD 2026-04-28: 시작 시간을 현재 시간 기준으로 (이전엔 09:00 고정).
-   *  분(minute)은 다음 30분 단위로 round (시각적 가독성 + 슬롯 align).
-   */
-  const [startAt, setStartAt] = useState<Date>(() => {
-    const base = parseDateParam(dateParam);
-    if (startHourParam !== undefined) {
-      const h = Math.max(0, Math.min(23, parseInt(startHourParam, 10) || 0));
-      const m = Math.max(0, Math.min(59, parseInt(startMinuteParam ?? '0', 10) || 0));
-      base.setHours(h, m, 0, 0);
-      return base;
-    }
-    const now = new Date();
-    const minutes = now.getMinutes();
-    const roundedMinutes = minutes < 30 ? 30 : 0;
-    const hourOffset = minutes < 30 ? 0 : 1;
-    base.setHours(now.getHours() + hourOffset, roundedMinutes, 0, 0);
-    return base;
-  });
-
-  /** End date — defaults to start + 1 hour. */
-  const [endAt, setEndAt] = useState<Date>(() => {
-    const base = parseDateParam(dateParam);
-    if (startHourParam !== undefined) {
-      const h = Math.max(0, Math.min(23, parseInt(startHourParam, 10) || 0));
-      const m = Math.max(0, Math.min(59, parseInt(startMinuteParam ?? '0', 10) || 0));
-      base.setHours(h, m, 0, 0);
-      // +1h end
-      base.setTime(base.getTime() + 60 * 60 * 1000);
-      return base;
-    }
-    const now = new Date();
-    const minutes = now.getMinutes();
-    const roundedMinutes = minutes < 30 ? 30 : 0;
-    const hourOffset = minutes < 30 ? 1 : 2;
-    base.setHours(now.getHours() + hourOffset, roundedMinutes, 0, 0);
-    return base;
-  });
-
-  const [repeatType, setRepeatType] = useState<RepeatType>('none');
-  /** custom_weekly 일 때 선택된 요일들 (0=일 .. 6=토). 다른 type 일 때는 무시. */
-  const [repeatWeekdays, setRepeatWeekdays] = useState<number[]>([]);
-  const [location, setLocation] = useState('');
-  const [description, setDescription] = useState('');
-  /** IDs of spaces the user has chosen to share this event to. */
-  const [shareSpaceIds, setShareSpaceIds] = useState<string[]>([]);
+  // ── Form state — Phase 2.2 useEventForm hook 으로 이전 ────────────────────
 
   /**
-   * Selected reminder offsets (minutes before event start).
-   * Starts empty — the user adds reminders explicitly via ReminderPicker.
-   * Default was 30 min but is now user-controlled (TASK-1304).
+   * 초기 startAt/endAt 계산.
+   *  - date + startHour/startMinute (Build-55 deep link): 정확히 그 시각.
+   *  - date 만: 현재 시각 기준 다음 30분 슬롯 (LEAD 2026-04-28).
+   * useMemo 로 한 번만 계산 — useEventForm 의 initial 인자로만 사용.
    */
-  const [reminderMinutes, setReminderMinutes] = useState<number[]>([]);
+  const { initialStart, initialEnd } = useMemo(() => {
+    const base = parseDateParam(dateParam);
+    if (startHourParam !== undefined) {
+      const h = Math.max(0, Math.min(23, parseInt(startHourParam, 10) || 0));
+      const m = Math.max(0, Math.min(59, parseInt(startMinuteParam ?? '0', 10) || 0));
+      const start = new Date(base);
+      start.setHours(h, m, 0, 0);
+      const end = new Date(start.getTime() + 60 * 60 * 1000);
+      return { initialStart: start, initialEnd: end };
+    }
+    const now = new Date();
+    const minutes = now.getMinutes();
+    const roundedMinutes = minutes < 30 ? 30 : 0;
+    const startHourOffset = minutes < 30 ? 0 : 1;
+    const start = new Date(base);
+    start.setHours(now.getHours() + startHourOffset, roundedMinutes, 0, 0);
+    const end = new Date(base);
+    end.setHours(now.getHours() + startHourOffset + 1, roundedMinutes, 0, 0);
+    return { initialStart: start, initialEnd: end };
+  }, [dateParam, startHourParam, startMinuteParam]);
+
+  const { state: form, setters, helpers } = useEventForm({
+    startAt: initialStart,
+    endAt:   initialEnd,
+  });
+  const {
+    title, allDay, startAt, endAt, repeatType, repeatWeekdays,
+    location, description, shareSpaceIds, reminderMinutes, eventColor, categoryId,
+  } = form;
+  const {
+    setTitle, setAllDay, setStartAt, setEndAt, setRepeatType, setRepeatWeekdays,
+    setLocation, setDescription, setShareSpaceIds, setReminderMinutes,
+    setEventColor, setCategoryId,
+  } = setters;
 
   const [isSaving, setIsSaving] = useState(false);
 
@@ -304,12 +287,7 @@ export default function EventCreateScreen() {
   /** Whether a GPS reverse-geocode is in progress. */
   const [isGettingLocation, setIsGettingLocation] = useState(false);
 
-  /**
-   * User-selected event color override.
-   * null = use category color or member color as fallback (default behaviour).
-   * Non-null = persist to events.color column and render with this color.
-   */
-  const [eventColor, setEventColor] = useState<string | null>(null);
+  // eventColor / categoryId 모두 useEventForm 안에 있음 — 위 destructure 사용.
 
   // ── Title autocomplete ─────────────────────────────────────────────────────
   // As the user types, suggest prior calendar events with matching titles.
@@ -319,17 +297,6 @@ export default function EventCreateScreen() {
   // "저장 기준은 달력에 등록되어있는기준" behaviour requested in Sprint 14.
   const [titleSuggestions, setTitleSuggestions] = useState<EventAutocompleteSuggestion[]>([]);
   const [titleFocused, setTitleFocused]   = useState(false);
-  /**
-   * Selected category id. Build-54: a new event is always assigned a
-   * category — the default is the system "기타" (other) so the chip
-   * always renders with a colour and the filter/dim flow works without
-   * a special "uncategorised" code path. The user can override before
-   * saving by tapping the chip.
-   *
-   * `null` only appears as a transient state while the categories are
-   * still loading (we backfill to 기타 in the effect below).
-   */
-  const [categoryId, setCategoryId]       = useState<string | null>(null);
   /** Whether the inline category picker sheet is visible. */
   const [categoryPickerVisible, setCategoryPickerVisible] = useState(false);
   /** Cached categories for chip color/name lookup. Refreshed when the
@@ -425,49 +392,24 @@ export default function EventCreateScreen() {
    *
    * @param selected - The final Date chosen in the modal
    */
+  // DateTimeModal commit + web datetime-local 입력은 모두 useEventForm 의
+  // applyPickerValue / applyWebDateChange 가 양방향 일관성 보장.
   const handlePickerConfirm = useCallback((selected: Date) => {
     if (!pickerTarget) return;
-    if (pickerTarget === 'start') {
-      setStartAt(selected);
-      // If end is now before start, bump end to start + 1h for consistency
-      setEndAt((prev) => (prev <= selected ? new Date(selected.getTime() + 60 * 60 * 1000) : prev));
-    } else {
-      // Symmetric guard for the end side: if the user sets end before the
-      // current start, snap start back to (end - 1h) instead of saving an
-      // invalid range that the server would reject after a round trip.
-      setEndAt(selected);
-      setStartAt((prev) => (selected <= prev ? new Date(selected.getTime() - 60 * 60 * 1000) : prev));
-    }
+    helpers.applyPickerValue(pickerTarget, selected);
     setPickerTarget(null);
-  }, [pickerTarget]);
+  }, [pickerTarget, helpers]);
 
-  /** Dismiss the DateTimeModal without persisting changes. */
   const handlePickerCancel = useCallback(() => {
     setPickerTarget(null);
   }, []);
 
-  /**
-   * Handle a web <input type="datetime-local"> change event.
-   * The value is a string like "2026-04-23T14:30".
-   *
-   * @param field   - Which date field to update
-   * @param isoStr  - The datetime-local input value string
-   */
   const handleWebDateChange = useCallback((
     field: 'start' | 'end',
     isoStr: string,
   ) => {
-    if (!isoStr) return;
-    const parsed = new Date(isoStr);
-    if (isNaN(parsed.getTime())) return;
-    if (field === 'start') {
-      setStartAt(parsed);
-      setEndAt((prev) => (prev <= parsed ? new Date(parsed.getTime() + 60 * 60 * 1000) : prev));
-    } else {
-      setEndAt(parsed);
-      setStartAt((prev) => (parsed <= prev ? new Date(parsed.getTime() - 60 * 60 * 1000) : prev));
-    }
-  }, []);
+    helpers.applyWebDateChange(field, isoStr);
+  }, [helpers]);
 
   /**
    * Get the current GPS position and reverse-geocode it to an address string.

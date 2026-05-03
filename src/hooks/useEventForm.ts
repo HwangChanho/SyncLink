@@ -53,19 +53,21 @@ export interface EventFormState {
   categoryId: string | null;
 }
 
+// 모든 setter 를 React.Dispatch 로 노출 — 호출자가 prev 기반 함수형
+// 업데이트도 자유롭게 쓸 수 있도록 (useState 와 100% 호환).
 export interface EventFormSetters {
-  setTitle: (v: string) => void;
-  setAllDay: (v: boolean) => void;
+  setTitle: React.Dispatch<React.SetStateAction<string>>;
+  setAllDay: React.Dispatch<React.SetStateAction<boolean>>;
   setStartAt: React.Dispatch<React.SetStateAction<Date>>;
   setEndAt: React.Dispatch<React.SetStateAction<Date>>;
-  setRepeatType: (v: RepeatType) => void;
+  setRepeatType: React.Dispatch<React.SetStateAction<RepeatType>>;
   setRepeatWeekdays: React.Dispatch<React.SetStateAction<number[]>>;
-  setLocation: (v: string) => void;
-  setDescription: (v: string) => void;
+  setLocation: React.Dispatch<React.SetStateAction<string>>;
+  setDescription: React.Dispatch<React.SetStateAction<string>>;
   setShareSpaceIds: React.Dispatch<React.SetStateAction<string[]>>;
   setReminderMinutes: React.Dispatch<React.SetStateAction<number[]>>;
-  setEventColor: (v: string | null) => void;
-  setCategoryId: (v: string | null) => void;
+  setEventColor: React.Dispatch<React.SetStateAction<string | null>>;
+  setCategoryId: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
 export interface EventFormHelpers {

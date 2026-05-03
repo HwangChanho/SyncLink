@@ -13,6 +13,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { useEventForm } from '@/hooks/useEventForm';
 import {
   View, Text, TextInput, ScrollView, Switch, Pressable,
   ActivityIndicator, Alert, StyleSheet, Platform, KeyboardAvoidingView,
@@ -142,29 +143,19 @@ export default function EventEditScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // ── Form state — initialised empty, filled once the event loads ────────────
-
-  const [title, setTitle] = useState('');
-  const [allDay, setAllDay] = useState(false);
-  const [startAt, setStartAt] = useState<Date>(new Date());
-  const [endAt, setEndAt] = useState<Date>(new Date());
-  const [repeatType, setRepeatType] = useState<RepeatType>('none');
-  const [repeatWeekdays, setRepeatWeekdays] = useState<number[]>([]);
-  const [location, setLocation] = useState('');
-  const [description, setDescription] = useState('');
-  const [shareSpaceIds, setShareSpaceIds] = useState<string[]>([]);
-
-  /**
-   * User-selected event color override.
-   * Pre-filled from event.color on load. null = use category/member color fallback.
-   */
-  const [eventColor, setEventColor] = useState<string | null>(null);
-
-  /**
-   * Current reminder offsets (minutes before event start).
-   * Pre-loaded from `event_reminders` table on mount (TASK-1304).
-   */
-  const [reminderMinutes, setReminderMinutes] = useState<number[]>([]);
+  // ── Form state — Phase 2.2: useEventForm hook 으로 통합 ────────────────────
+  // edit 화면은 mount 시 getEventById 로 폼을 채우므로 hook initial 은 비워둠.
+  // 로드된 event 값은 setters 로 일괄 주입한다.
+  const { state: form, setters, helpers } = useEventForm();
+  const {
+    title, allDay, startAt, endAt, repeatType, repeatWeekdays,
+    location, description, shareSpaceIds, reminderMinutes, eventColor,
+  } = form;
+  const {
+    setTitle, setAllDay, setStartAt, setEndAt, setRepeatType, setRepeatWeekdays,
+    setLocation, setDescription, setShareSpaceIds, setReminderMinutes,
+    setEventColor,
+  } = setters;
 
   /** Original event kept for diffing shares on save. */
   const [originalEvent, setOriginalEvent] = useState<Event | null>(null);
@@ -230,37 +221,20 @@ export default function EventEditScreen() {
     );
   }, []);
 
-  const shiftTime = useCallback((field: 'start' | 'end', deltaMinutes: number) => {
-    const setter = field === 'start' ? setStartAt : setEndAt;
-    setter((prev) => {
-      const next = new Date(prev);
-      next.setMinutes(next.getMinutes() + deltaMinutes);
-      return next;
-    });
-  }, []);
+  // shiftTime / picker confirm / web datetime-local 모두 useEventForm helpers 가
+  // 양방향 일관성 보장. 화면 wrapper 는 pickerTarget 만 관리.
+  const shiftTime = helpers.shiftTime;
 
-  /** Open the DateTimeModal for the start/end field. */
   const openPicker = useCallback((field: 'start' | 'end') => {
     setPickerTarget(field);
   }, []);
 
-  /**
-   * Commit the value chosen in DateTimeModal. Ensures end stays after start.
-   */
   const handlePickerConfirm = useCallback((selected: Date) => {
     if (!pickerTarget) return;
-    if (pickerTarget === 'start') {
-      setStartAt(selected);
-      setEndAt((prev) => (prev <= selected ? new Date(selected.getTime() + 60 * 60 * 1000) : prev));
-    } else {
-      setEndAt(selected);
-      // Symmetric guard — keep start before end. Same logic mirrors create.tsx.
-      setStartAt((prev) => (selected <= prev ? new Date(selected.getTime() - 60 * 60 * 1000) : prev));
-    }
+    helpers.applyPickerValue(pickerTarget, selected);
     setPickerTarget(null);
-  }, [pickerTarget]);
+  }, [pickerTarget, helpers]);
 
-  /** Close the DateTimeModal without saving. */
   const handlePickerCancel = useCallback(() => {
     setPickerTarget(null);
   }, []);
