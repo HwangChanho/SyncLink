@@ -943,29 +943,29 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.10)',
   },
-  // Build-57 — drag 중 화면 상단에 표시되는 trash drop zone.
-  // header (DAY_HEADER_HEIGHT=56) 바로 위에 띄움 — chip 을 위로 끌면
-  // 자연스럽게 통과. 가운데 정렬 + 빨간 배경으로 위험성 강조.
+  // Build-57 → Build-61 — drag 중 trash drop zone.
+  // LEAD 보고: "주에서 일정 이동할 때 위에 일정 막대가 길게 뜬다" — 이전엔
+  // dayHeader 바로 아래에 가로 full-width 빨간 dashed 막대라 사용자에게
+  // 새 일정 chip 처럼 보였다. 작은 둥근 chip 으로 축소 + 화면 상단 가운데
+  // 고정 + 색도 연하게.
   deleteZone: {
     position: 'absolute',
-    top: DAY_HEADER_HEIGHT,
-    left: 16,
-    right: 16,
-    height: 36,
+    top: 6,
+    alignSelf: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.error + '22',
-    borderWidth: 1.5,
-    borderColor: colors.error,
-    borderStyle: 'dashed',
-    borderRadius: 8,
+    gap: 6,
+    backgroundColor: colors.error + '18',
+    borderWidth: 1,
+    borderColor: colors.error + '55',
+    borderRadius: 999,
   },
   deleteZoneText: {
     ...textStyles.labelSm,
     color: colors.error,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   });
 }

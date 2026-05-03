@@ -372,20 +372,66 @@ export async function createEvent(input: CreateEventInput): Promise<Event> {
 
     if (error || !row) throw error ?? new Error('일정 생성에 실패했습니다.');
 
-    // Share to requested spaces (in parallel for speed)
+    // Build-60 fix — LEAD 보고: "일정 등록하면 실패했다고 뜨는데 등록은 돼".
+    // INSERT 가 성공한 시점에서 사용자 입장에선 "일정이 만들어졌다". 후속
+    // share / getEventById 가 RLS / 네트워크 등으로 throw 해도 INSERT 결과
+    // 자체는 살아 있으므로 caller 에 에러를 surface 하면 사용자가 "실패"
+    // 알림을 본 뒤 캘린더에는 일정이 떠 있는 모순이 생긴다. share + 재조회
+    // 는 모두 best-effort 로 격리하고, 둘 다 fail 해도 INSERT row 로 합성한
+    // Event 를 반환한다.
+
     if (input.shareToSpaceIds && input.shareToSpaceIds.length > 0) {
-      await Promise.all(
-        input.shareToSpaceIds.map(spaceId => shareEventToSpace(row.id, spaceId)),
-      );
+      try {
+        await Promise.all(
+          input.shareToSpaceIds.map(spaceId => shareEventToSpace(row.id, spaceId)),
+        );
+      } catch (shareErr) {
+        void logError({
+          context: 'event.create.share',
+          error:   shareErr,
+          userId,
+          details: { eventId: row.id, spaceIds: input.shareToSpaceIds },
+        });
+        // share 실패해도 caller 에 throw 하지 않음 — 일정은 이미 저장.
+      }
     }
 
-    const event = await getEventById(row.id);
+    // NOTE: Reminder scheduling 은 reminderService (TASK-1304) 가 caller 에서
+    // 호출. 여기는 events 행만 책임.
 
-    // NOTE: Reminder scheduling is now handled by reminderService (TASK-1304).
-    // The caller (create.tsx / edit screen) is responsible for calling
-    // reminderService.updateReminders() after createEvent() returns.
-
-    return event;
+    try {
+      return await getEventById(row.id);
+    } catch (refetchErr) {
+      void logError({
+        context: 'event.create.refetch',
+        error:   refetchErr,
+        userId,
+        details: { eventId: row.id },
+      });
+      // 재조회 실패 시 INSERT row 로 partial Event 합성 — 캘린더 화면이
+      // upsertEvent 로 쓰는 필드 (id/title/start/end/allDay/color/isOwn) 만
+      // 있으면 충분.
+      return {
+        id:            row.id,
+        userId:        userId,
+        title:         row.title,
+        description:   row.description,
+        location:      row.location,
+        startAt:       new Date(row.start_at),
+        endAt:         new Date(row.end_at),
+        allDay:        row.all_day,
+        repeatType:    row.repeat_type,
+        repeatWeekdays: row.repeat_weekdays ?? null,
+        repeatUntil:   row.repeat_until ? new Date(row.repeat_until) : null,
+        categoryId:    row.category_id,
+        color:         row.color,
+        sharedSpaceIds: input.shareToSpaceIds ?? [],
+        ownerNickname: '',
+        isOwn:         true,
+        createdAt:     new Date(row.created_at),
+        updatedAt:     new Date(row.updated_at),
+      };
+    }
   } catch (err) {
     // 생성 실패를 중앙 로그로 보내 LEAD가 어떤 필드/RLS 위반인지 즉시 파악 가능
     const pgErr = err as { code?: string; hint?: string; details?: string; message?: string };

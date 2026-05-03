@@ -731,16 +731,19 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Build-60 LEAD: "셀렉 색상이 보라색인데 색이 너무 진해 더 연하게
-  // 하고 알파값도 좀 낮춰". today/selected 모두 primary 100% 였던 것을
-  // 연하게 + alpha. today 는 fill 이라 알파 0.7, selected 는 border
-  // 라서 alpha 0.55 + 두께 살짝 줄임.
+  // Build-60 → Build-61 — colors.primary 가 hsl() 함수 형식이라 8-자리
+  // hex alpha 'B0' / '8C' 를 그냥 붙이면 RN 이 "Invalid style property of
+  // borderColor" 콘솔 에러 (Web QA 발견). hsla() 로 대체.
   todayCircle: {
-    backgroundColor: colors.primary + 'B0',
+    backgroundColor: colors.primary.startsWith('hsl(')
+      ? colors.primary.replace('hsl(', 'hsla(').replace(')', ', 0.7)')
+      : colors.primary + 'B0',
   },
   selectedCircle: {
     borderWidth: 1,
-    borderColor: colors.primary + '8C',
+    borderColor: colors.primary.startsWith('hsl(')
+      ? colors.primary.replace('hsl(', 'hsla(').replace(')', ', 0.55)')
+      : colors.primary + '8C',
   },
   dateText: {
     ...textStyles.labelLg,

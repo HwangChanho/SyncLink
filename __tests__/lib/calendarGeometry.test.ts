@@ -85,17 +85,18 @@ describe('computeRescheduleDelta', () => {
         dy: 45,
         columnWidth: COLUMN_WIDTH,
       });
-      expect(minuteDelta).toBe(45);
+      // Build-61 — DEFAULT_SNAP_MINUTES 15→10 → 45 분 (1px=1min, 45/10=4.5→round 5×10=50)
+      expect(minuteDelta).toBe(50);
     });
 
-    it('dy = 14 px → snaps to 15 (rounds up to nearest 15-min boundary)', () => {
-      // 14 / 15 = 0.933 → Math.round = 1 → 1 * 15 = 15
+    it('dy = 14 px → snaps to 10 (DEFAULT_SNAP_MINUTES=10)', () => {
+      // Build-61 — 14 / 10 = 1.4 → Math.round = 1 → 1 * 10 = 10
       const { minuteDelta } = computeRescheduleDelta({
         dx: 0,
         dy: 14,
         columnWidth: COLUMN_WIDTH,
       });
-      expect(minuteDelta).toBe(15);
+      expect(minuteDelta).toBe(10);
     });
 
     it('custom snapMinutes=15: dy=14 → minuteDelta=15', () => {
@@ -190,24 +191,24 @@ describe('computeRescheduleDelta', () => {
   // ── Snap boundary at exactly half a snap step ────────────────────────────
 
   describe('exact snap boundaries', () => {
-    it('dy = 15 lands exactly on the 15-min snap boundary', () => {
-      // Build-53 — default snap is now 15. 15/15 = 1 → 1 * 15 = 15.
+    it('dy = 20 lands exactly on the 10-min × 2 snap boundary', () => {
+      // Build-61 — DEFAULT_SNAP_MINUTES 15→10. 20/10 = 2 → 2 * 10 = 20.
       const { minuteDelta } = computeRescheduleDelta({
         dx: 0,
-        dy: 15,
+        dy: 20,
         columnWidth: COLUMN_WIDTH,
       });
-      expect(minuteDelta).toBe(15);
+      expect(minuteDelta).toBe(20);
     });
 
-    it('dy = -15 with default 15-min snap rounds to -15 (one slot back)', () => {
-      // -15 / 15 = -1 exactly → no half-rounding edge case.
+    it('dy = -10 with default 10-min snap rounds to -10 (one slot back)', () => {
+      // Build-61 — -10/10 = -1 exactly.
       const { minuteDelta } = computeRescheduleDelta({
         dx: 0,
-        dy: -15,
+        dy: -10,
         columnWidth: COLUMN_WIDTH,
       });
-      expect(minuteDelta).toBeCloseTo(-15);
+      expect(minuteDelta).toBeCloseTo(-10);
     });
   });
 });
@@ -327,19 +328,18 @@ describe('offsetToSnappedMinuteOfDay', () => {
     expect(offsetToSnappedMinuteOfDay(540)).toBe(540);
   });
 
-  it('545 px → snaps to 540 (closer to 540 than 570)', () => {
-    // 545 / 30 = 18.167 → round = 18 → 18 * 30 = 540
-    expect(offsetToSnappedMinuteOfDay(545)).toBe(540);
+  it('545 px → snaps to 550 (Build-61 snap=10: 545/10=54.5→round 55×10)', () => {
+    expect(offsetToSnappedMinuteOfDay(545)).toBe(550);
   });
 
-  it('555 px → snaps to 555 (already on a 15-min boundary)', () => {
-    // Build-53 — default snap is 15. 555 / 15 = 37 → 37 * 15 = 555.
-    expect(offsetToSnappedMinuteOfDay(555)).toBe(555);
+  it('555 px → snaps to 560 (closer to 560 than 550 with snap=10)', () => {
+    // Build-61 — DEFAULT_SNAP_MINUTES 15→10. 555/10 = 55.5 → round 56×10 = 560.
+    expect(offsetToSnappedMinuteOfDay(555)).toBe(560);
   });
 
-  it('clamps to maxMinutes (1425 for snap=15): very large offset stays in range', () => {
-    // 9999 px (far beyond 24h) → max valid minute = 1440 - 15 = 1425 (23:45).
-    expect(offsetToSnappedMinuteOfDay(9999)).toBe(1425);
+  it('clamps to maxMinutes (1430 for snap=10): very large offset stays in range', () => {
+    // Build-61 — max valid minute = 1440 - 10 = 1430 (23:50).
+    expect(offsetToSnappedMinuteOfDay(9999)).toBe(1430);
   });
 
   it('negative offset → clamps to 0', () => {

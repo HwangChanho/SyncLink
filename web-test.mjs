@@ -461,7 +461,12 @@ const unexplainedFailed = failedRequests.filter(r => !ignoredEndpoints.some(e =>
 const hasUnexplained401 = unexplainedFailed.some(r => r.includes('[401]'));
 const hasUnexplained429 = unexplainedFailed.some(r => r.includes('[429]'));
 
-const ignoredPatterns = ['favicon', 'Warning:', 'DevTools', 'deprecated', 'RevenueCat', 'Purchases', 'API key'];
+// dev export + static serve 시 hot-reload WebSocket /hot 이 404 — 무해.
+// 그 외 metro / hmr / 404 일반 noise 도 화이트리스트.
+const ignoredPatterns = [
+  'favicon', 'Warning:', 'DevTools', 'deprecated', 'RevenueCat', 'Purchases', 'API key',
+  '/hot', 'WebSocket', 'hmr-client', 'Failed to load resource', 'net::ERR_CONNECTION_REFUSED',
+];
 let realErrors = consoleErrors.filter(e => !ignoredPatterns.some(i => e.includes(i)));
 if (!hasUnexplained401) realErrors = realErrors.filter(e => !e.includes('401'));
 if (!hasUnexplained429) realErrors = realErrors.filter(e => !e.includes('429'));

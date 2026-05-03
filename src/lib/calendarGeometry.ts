@@ -40,12 +40,12 @@ export const DEFAULT_PX_PER_MINUTE = 1;
 
 /**
  * Default snap granularity for minuteDelta.
- * Build-53 LEAD report — 30-minute snap felt too coarse for routine
- * scheduling. 15 matches the industry default (Google Calendar, Apple
- * Calendar) and lets users place events on quarter-hour boundaries with
- * the same drag gesture. Callers can override via `snapMinutes` option.
+ * Build-53 → Build-61 — 30 → 15 → 10 분. LEAD 보고: "주랑 일에서 이동이
+ * 좀 딱딱한 거 같아 분 단위로도 이동이 됐으면, 기본 10분 단위를 최소로".
+ * 작은 snap 일수록 drag 가 부드러워 보임 (한 칸 = 60min / (60/10) = 10min).
+ * 기존 calendarGeometry test 들이 이 값에 의존하므로 변경 시 같이 갱신.
  */
-export const DEFAULT_SNAP_MINUTES = 15;
+export const DEFAULT_SNAP_MINUTES = 10;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

@@ -655,28 +655,26 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.10)',
   },
-  // Build-57 — drag 중 화면 상단 trash drop zone (DayView 는 dayHeader 가
-  // 없어 top: 0 부터 시작).
+  // Build-57 → Build-61 — drag 중 trash drop zone (작은 둥근 chip 형태).
+  // LEAD 보고로 "긴 막대" 가 시각 노이즈라 작게 변경.
   deleteZone: {
     position: 'absolute',
-    top: 0,
-    left: 16,
-    right: 16,
-    height: 36,
+    top: 6,
+    alignSelf: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.error + '22',
-    borderWidth: 1.5,
-    borderColor: colors.error,
-    borderStyle: 'dashed',
-    borderRadius: 8,
+    gap: 6,
+    backgroundColor: colors.error + '18',
+    borderWidth: 1,
+    borderColor: colors.error + '55',
+    borderRadius: 999,
   },
   deleteZoneText: {
     ...textStyles.labelSm,
     color: colors.error,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   });
 }
