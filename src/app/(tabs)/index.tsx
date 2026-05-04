@@ -24,6 +24,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useEventStore } from '@/stores/eventStore';
 import { useTodoStore } from '@/stores/todoStore';
+import { getViewRange } from '@/lib/calendarRange';
 import { NLInputBar } from '@/components/nl/NLInputBar';
 import { HomeHeader }         from '@/components/home/HomeHeader';
 import { TodayEventList }     from '@/components/home/TodayEventList';
@@ -67,13 +68,22 @@ export default function HomeScreen() {
   const isRefreshing = isFetchingEvents || isFetchingTodos;
 
   // ── Load today's data on mount ─────────────────────────────────────────
+  // Build-75 LEAD: "캘린더 처음 진입할때 일정이 너무 늦게떠 미리 홈에서
+  // 해당월껀 로드 해놔야 할꺼같은데". 홈 진입 시 캘린더가 사용할 범위
+  // (week 35일 + month 42일) 까지 prefetch 해서 eventStore.fetchedDateKeys
+  // 캐시에 미리 채움. 캘린더 진입 시점엔 fetchedDateKeys hit → fetchEvents
+  // skip → events 즉시 표시.
   const loadTodayData = () => {
-    const range = homeRange();
-    void fetchEvents(range);
+    const today = new Date();
+    const homeRangeVal = homeRange(); // 오늘 ±7일 (TodayEventList / Upcoming)
+    void fetchEvents(homeRangeVal);
+    // 캘린더 첫 진입 캐싱: week 모드 (35일) + month 모드 (~42일).
+    void fetchEvents(getViewRange(today, 'week'));
+    void fetchEvents(getViewRange(today, 'month'));
     void fetchTodos({
       contentType: 'todo',
-      dueAfter:  range.start,
-      dueBefore: range.end,
+      dueAfter:  homeRangeVal.start,
+      dueBefore: homeRangeVal.end,
     });
   };
 

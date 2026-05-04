@@ -30,13 +30,21 @@ interface Props {
  * AdMob 배너 unit ID 해석.
  *  - DEV 빌드: SDK TestIds.BANNER (실 노출 차단)
  *  - PROD: EXPO_PUBLIC_ADMOB_BANNER_ID_{platform}
- *  - 둘 다 없으면 undefined → 컴포넌트 미렌더
+ *  - PROD 인데 unit ID 미설정: TestIds.BANNER 로 fallback (LEAD Build 75
+ *    보고: TestFlight 에서 free 계정 배너 미노출 → AdMob 콘솔에서 banner
+ *    ad unit 발급 후 .env 에 추가하기 전까지는 test 배너로 검증).
+ *  - SDK TestIds 도 없으면 undefined → 컴포넌트 미렌더.
  */
 function resolveBannerUnitId(testIdBanner?: string): string | undefined {
   if (__DEV__ && testIdBanner) return testIdBanner;
-  if (Platform.OS === 'ios') return process.env.EXPO_PUBLIC_ADMOB_BANNER_ID_IOS;
-  if (Platform.OS === 'android') return process.env.EXPO_PUBLIC_ADMOB_BANNER_ID_ANDROID;
-  return undefined;
+  const platformId =
+    Platform.OS === 'ios' ? process.env.EXPO_PUBLIC_ADMOB_BANNER_ID_IOS :
+    Platform.OS === 'android' ? process.env.EXPO_PUBLIC_ADMOB_BANNER_ID_ANDROID :
+    undefined;
+  if (platformId) return platformId;
+  // Fallback: PROD 인데 banner unit 미설정. test 배너라도 표시해 검증.
+  // App Store 출시 전엔 반드시 real banner unit ID 를 .env 에 넣을 것.
+  return testIdBanner;
 }
 
 export function FreeBannerAd({ style }: Props) {
