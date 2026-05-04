@@ -57,18 +57,10 @@ export default function CalendarScreen() {
   // PRD 4.2 Tier 2 — i18n for free-time UI strings.
   const { t } = useTranslation();
   const { eventsByDate, fetchEvents, upsertEvent, removeEvent } = useEventStore();
-  // Todos with a due date should surface on the calendar alongside events.
-  const { todos, fetchTodos, editTodo } = useTodoStore();
+  // Todos with a due date should surface on the calendar (MonthView only).
+  // Build-74 — week/day view 에선 todo 미노출. drag-to-reschedule 도 X.
+  const { todos, fetchTodos } = useTodoStore();
   useEffect(() => { void fetchTodos(); }, [fetchTodos]);
-  /**
-   * Build-66 — drag-to-reschedule from the all-day strip onto the timed
-   * grid. WeekView/DayView call this with the snapped (date+time) the
-   * user dropped at; we patch the todo with the new dueAt. dueDate column
-   * is auto-synced server-side (todoService updateTodo).
-   */
-  const handleTodoDrop = useCallback((todoId: string, newDueAt: Date) => {
-    void editTodo(todoId, { dueAt: newDueAt });
-  }, [editTodo]);
 
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
@@ -351,7 +343,6 @@ export default function CalendarScreen() {
   // ─── Events for current day (DayView) ────────────────────────────────────
 
   const todayEvents: EventSummary[] = displayEventsByDate[toDateKey(selectedDate)] ?? [];
-  const todayTodos = todosByDate[toDateKey(selectedDate)] ?? [];
 
   // ─── Render ──────────────────────────────────────────────────────────────────
 
@@ -434,8 +425,8 @@ export default function CalendarScreen() {
               // 일자 row pan-to-scrub / horizontal scroll edge-week-shift
               // 시 selectedDate 만 갱신, viewMode='week' 유지.
               onSelectedDateChange={setSelectedDate}
-              todosByDate={todosByDate}
-              onTodoDrop={handleTodoDrop}
+              // Build-74 LEAD: todo 는 월 달력에서만 노출. week/day 에선
+              // todosByDate / onTodoDrop 전달 X (strip 정리, grid 깔끔).
               onDragModeChange={handleChildDragModeChange}
               deleteZonePageRectRef={fabRectRef}
               {...(freeTimeOn ? { freeSlots } : {})}
@@ -447,8 +438,7 @@ export default function CalendarScreen() {
               selectedDate={selectedDate}
               events={todayEvents}
               onEventPress={handleEventPress}
-              todos={todayTodos}
-              onTodoDrop={handleTodoDrop}
+              // Build-74 LEAD: todo 는 월에서만. day view 도 todos prop X.
               onDragModeChange={handleChildDragModeChange}
               deleteZonePageRectRef={fabRectRef}
               {...(freeTimeOn ? { freeSlots } : {})}
