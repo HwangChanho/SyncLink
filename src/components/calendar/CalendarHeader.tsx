@@ -193,6 +193,19 @@ export function CalendarHeader({
         sit in their own flex row floated to the right edge.
       */}
       <View style={styles.navRow}>
+        {/* Build-73 LEAD: 검색 라인 좌측 끝 = 오늘로 가기 버튼. 현재
+            viewMode 유지하며 selectedDate = 오늘로 점프. */}
+        <View style={styles.leftActions}>
+          <TouchableOpacity
+            onPress={onToday}
+            hitSlop={HIT_SLOP}
+            style={styles.todayButton}
+            accessibilityLabel={t('common.a11y_today')}
+            accessibilityRole="button"
+          >
+            <Ionicons name="today-outline" size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
         <View style={styles.titleAbsolute} pointerEvents="box-none">
           <TouchableOpacity
             onPress={onYearMonthPress ?? onToday}
@@ -288,6 +301,18 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[2],
+  },
+  // Build-73 — Left-side actions row. 현재 = 오늘로 가기 버튼 1개.
+  leftActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  todayButton: {
+    width:  36,
+    height: 36,
+    alignItems:     'center',
+    justifyContent: 'center',
   },
   arrowBtn: {
     width: 36,
