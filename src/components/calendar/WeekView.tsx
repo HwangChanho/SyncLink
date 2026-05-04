@@ -60,20 +60,21 @@ const TOTAL_HEIGHT = HOUR_HEIGHT * 24;
 /** Width of the hour-label column on the left. */
 const TIME_COL_WIDTH = 44;
 /**
- * Build-67 — Plan 옵션 A: 진정한 day-by-day horizontal ScrollView.
+ * Build-71 — horizontal scroll buffer 확대.
  *
- * 7일 (이번 주 일~토) 만 화면에 보이고, 좌우로 ±7일 buffer 를 더 갖는
- * 15-day window 를 horizontal ScrollView 안에 그린다. 사용자가 한 손가락
- * scroll 만큼 자연스럽게 컬럼이 이동, snap 단위는 1day = columnWidth.
+ * 7일 (이번 주 일~토) 만 화면에 보이고, 좌우로 ±14일 buffer 를 더 갖는
+ * 35-day window. 사용자가 좌우로 빠르게 스와이프해도 14일 (2주) 까지는
+ * inner ScrollView 가 native 만으로 처리 → React 개입 0.
  *
- * 가장자리 (visible 첫 컬럼이 idx 0 또는 14 근접) 도달 시 onMomentumScrollEnd
- * 가 selectedDate 를 7일 shift + scrollX 를 7*colW 로 reset → buffer 갱신.
- * 사용자 시각상 jolt 없이 무한 스크롤 효과.
+ * 가장자리 (visible 첫 컬럼이 idx 0 또는 28 도달) 도달 시
+ * onMomentumScrollEnd 가 selectedDate 를 ±7일 shift + scrollX 를 idx 14
+ * 로 reset → buffer 재집중. 캐시된 events 가 ±2주이므로 shift 후에도
+ * fetchEvents skip (store-level fetchedDateKeys 로 dedup).
  */
 const VISIBLE_DAYS = 7;
-const WINDOW_DAYS = 15;
-/** Build-69 — dayWindow[7] = 선택된 주의 일요일. visible 영역 첫 컬럼 idx 7. */
-const WINDOW_INITIAL_VISIBLE_IDX = 7;
+const WINDOW_DAYS = 35;
+/** Build-71 — dayWindow[14] = 선택된 주의 일요일. visible 영역 첫 컬럼 idx 14. */
+const WINDOW_INITIAL_VISIBLE_IDX = 14;
 /** Height of each all-day event chip row in the strip. */
 const ALL_DAY_CHIP_HEIGHT = 20;
 /** Vertical padding inside the all-day strip. */
