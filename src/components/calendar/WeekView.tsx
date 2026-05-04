@@ -20,7 +20,7 @@
  * the time grid, so they never occlude timed events.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -795,136 +795,39 @@ export function WeekView({
               />
             ))}
 
-            {/* Events for each day column — allDay events go to the strip above */}
+            {/* Build-71 perf — DayColumn 추출 + React.memo. dayWindow shift
+                 시 7일 overlap 은 props 동일 → re-render skip. dragState/
+                 candidateEvent 은 매칭되는 dayCol 에만 active id 전달 →
+                 무관 col 은 prop 변화 X. */}
             {dayWindow.map((day, idx) => {
               const dateKey = toDateKey(day);
-              const dayEvents = eventsByDate[dateKey] ?? [];
-              // Exclude allDay events; those are rendered in the all-day strip
-              const timedEvents = dayEvents.filter((e) => !e.allDay);
-              const layouts = computeLayout(timedEvents);
-
-              const slotsForDay = freeSlotsByDayKey[dateKey] ?? [];
-
               return (
-                <View
+                <DayColumn
                   key={dateKey}
-                  style={[
-                    styles.dayCol,
-                    {
-                      // Build-67 — percent → absolute px (15-day window).
-                      left: idx * columnWidth,
-                      width: columnWidth,
-                      height: TOTAL_HEIGHT,
-                    },
-                  ]}
-                >
-                  {/*
-                    PRD 4.2 Tier 2 — free-time overlay: rendered before
-                    EventBlocks so events sit on top. testID lets the QA
-                    smoke test assert visibility per day.
-
-                    PRD 4.2 Tier 3 (Day 4): onFreeSlotPress가 제공될 때
-                    TouchableOpacity로 감싸서 탭 이벤트 전달.
-                    onFreeSlotPress 없으면 기존 pointerEvents="none" 유지.
-                  */}
-                  {slotsForDay.map((s, i) =>
-                    onFreeSlotPress ? (
-                      <TouchableOpacity
-                        key={`free-${i}`}
-                        activeOpacity={0.7}
-                        onPress={() => onFreeSlotPress(s.originalSlot)}
-                        testID={`week-free-slot-${dateKey}`}
-                        accessibilityRole="button"
-                        style={[
-                          styles.freeSlotOverlay,
-                          { top: s.topOffset, height: s.height },
-                        ]}
-                      />
-                    ) : (
-                      <View
-                        key={`free-${i}`}
-                        pointerEvents="none"
-                        testID={`week-free-slot-${dateKey}`}
-                        style={[
-                          styles.freeSlotOverlay,
-                          { top: s.topOffset, height: s.height },
-                        ]}
-                      />
-                    ),
-                  )}
-
-                  {/* Build-66 — 시간 있는 todo chip. event 와 grid 좌표
-                      공유하지만 자체 drag/edit 는 v1.0 에서 미지원
-                      (별도 useTodoDrag 가 step 7 에서 구현 예정). */}
-                  {(todosByDate?.[dateKey] ?? [])
-                    .filter((td): td is typeof td & { dueAt: Date } => !!td.dueAt)
-                    .map((td) => {
-                      const minutes = td.dueAt.getHours() * 60 + td.dueAt.getMinutes();
-                      const top = (minutes / 60) * HOUR_HEIGHT;
-                      // 기본 1시간 chunk — clamp 해서 자정 넘김 방지.
-                      const height = Math.min(HOUR_HEIGHT, TOTAL_HEIGHT - top);
-                      const ChipWrap = onTodoPress ? TouchableOpacity : View;
-                      return (
-                        <ChipWrap
-                          key={`todo-${td.id}`}
-                          testID={`todo-grid-chip-${td.id}`}
-                          {...(onTodoPress
-                            ? { onPress: () => onTodoPress(td.id), activeOpacity: 0.8 }
-                            : {})}
-                          style={[
-                            styles.timedTodoChip,
-                            {
-                              top,
-                              height,
-                              backgroundColor: td.color + '22',
-                              borderLeftColor: td.color,
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={[styles.timedTodoText, { color: td.color }]}
-                            numberOfLines={1}
-                          >
-                            ✓ {td.title}
-                          </Text>
-                        </ChipWrap>
-                      );
-                    })}
-
-                  {layouts.map((lay) => {
-                    const tt = translatedTitles.get(lay.event.id);
-                    // Dim the original chip while it's the active drag
-                    // source — visual cue that the floating ghost is the
-                    // "live" copy.
-                    const isDragSource =
-                      dragState !== null && dragState.event.id === lay.event.id;
-                    // Long-press in progress (touched but timer not yet
-                    // fired). Renders a ring so the user gets immediate
-                    // feedback the touch was received — also serves as
-                    // diagnostics if drag misbehaves.
-                    const isCandidate =
-                      candidateEvent !== null && candidateEvent.id === lay.event.id;
-                    return (
-                      <View
-                        key={lay.event.id}
-                        style={[
-                          isDragSource && styles.draggingSource,
-                          isCandidate && styles.candidateChip,
-                        ]}
-                      >
-                        <EventBlock
-                          event={lay.event}
-                          topOffset={lay.topOffset}
-                          height={lay.height}
-                          widthFraction={lay.widthFraction}
-                          leftFraction={lay.leftFraction}
-                          onPress={onEventPress}
-                          {...(tt ? { translatedTitle: tt } : {})}
-                        />
-                      </View>
-                    );
-                  })}
-                </View>
+                  dateKey={dateKey}
+                  dayIndex={idx}
+                  columnWidth={columnWidth}
+                  dayEvents={eventsByDate[dateKey]}
+                  dayTodos={todosByDate?.[dateKey]}
+                  freeSlots={freeSlotsByDayKey[dateKey] ?? EMPTY_FREE_SLOTS}
+                  activeDragSourceId={
+                    dragState !== null &&
+                    toDateKey(dragState.event.startAt) === dateKey
+                      ? dragState.event.id
+                      : null
+                  }
+                  activeCandidateId={
+                    candidateEvent !== null &&
+                    toDateKey(candidateEvent.startAt) === dateKey
+                      ? candidateEvent.id
+                      : null
+                  }
+                  onEventPress={onEventPress}
+                  {...(onTodoPress ? { onTodoPress } : {})}
+                  {...(onFreeSlotPress ? { onFreeSlotPress } : {})}
+                  translatedTitles={translatedTitles}
+                  styles={styles}
+                />
               );
             })}
 
@@ -1296,3 +1199,168 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   },
   });
 }
+
+// ─── DayColumn (memoized) ────────────────────────────────────────────────────
+
+/**
+ * Build-71 perf — WeekView 의 day column 을 memo 화 분리.
+ * dayWindow shift 시 같은 dateKey 는 props 가 referentially stable 이면
+ * (eventsByDate sub-array, todosByDate sub-array, freeSlots, callbacks 등)
+ * re-render 를 skip. dragState/candidateEvent 은 active 한 col 에만
+ * active id 전달 → 무관 col 영향 X.
+ *
+ * key 는 부모에서 dateKey 로 안정화. 따라서 React 가 같은 component
+ * instance 를 reuse → memo 가 의미 있게 작동.
+ */
+type FreeSlotBucket = { topOffset: number; height: number; originalSlot: FreeSlot };
+const EMPTY_FREE_SLOTS: FreeSlotBucket[] = [];
+
+type DayTodo = { id: string; title: string; color: string; dueAt?: Date | null };
+
+interface DayColumnProps {
+  dateKey: string;
+  dayIndex: number;
+  columnWidth: number;
+  /** Raw eventsByDate[dateKey] (mixed allDay+timed). 컴포넌트 안에서 filter. */
+  dayEvents: EventSummary[] | undefined;
+  /** Raw todosByDate[dateKey]. 컴포넌트 안에서 timed 만 filter. */
+  dayTodos: DayTodo[] | undefined;
+  freeSlots: FreeSlotBucket[];
+  /** 이 col 의 chip 이 drag source 일 때만 event id, 아니면 null. */
+  activeDragSourceId: string | null;
+  /** 이 col 의 chip 이 longpress candidate 일 때만 event id, 아니면 null. */
+  activeCandidateId: string | null;
+  onEventPress: (e: EventSummary) => void;
+  onTodoPress?: (id: string) => void;
+  onFreeSlotPress?: (slot: FreeSlot) => void;
+  translatedTitles: Map<string, string>;
+  // makeStyles 결과 — 테마 변경 시에만 ref 변화. 무관 col 영향 X.
+  styles: ReturnType<typeof makeStyles>;
+}
+
+// ReturnType helper resolves StyleSheet.NamedStyles. 단순 인덱싱 가능 객체로 처리.
+type DayColumnStyles = {
+  dayCol: object;
+  freeSlotOverlay: object;
+  timedTodoChip: object;
+  timedTodoText: object;
+  draggingSource: object;
+  candidateChip: object;
+};
+
+function DayColumnImpl({
+  dateKey,
+  dayIndex,
+  columnWidth,
+  dayEvents,
+  dayTodos,
+  freeSlots,
+  activeDragSourceId,
+  activeCandidateId,
+  onEventPress,
+  onTodoPress,
+  onFreeSlotPress,
+  translatedTitles,
+  styles,
+}: DayColumnProps) {
+  // Filter timed events / todos. dayEvents/dayTodos ref 가 stable 이면
+  // 이 filter 결과도 매번 재생성되지만 memo 가 outer 호출을 차단하므로 OK.
+  const timedEvents = (dayEvents ?? []).filter((e) => !e.allDay);
+  const layouts = computeEventLayout(timedEvents, HOUR_HEIGHT);
+  const timedTodos = (dayTodos ?? []).filter(
+    (td): td is DayTodo & { dueAt: Date } => !!td.dueAt,
+  );
+
+  const s = styles as unknown as DayColumnStyles;
+  return (
+    <View
+      style={[
+        s.dayCol,
+        {
+          left: dayIndex * columnWidth,
+          width: columnWidth,
+          height: TOTAL_HEIGHT,
+        },
+      ]}
+    >
+      {/* Free time overlay */}
+      {freeSlots.map((slot, i) =>
+        onFreeSlotPress ? (
+          <TouchableOpacity
+            key={`free-${i}`}
+            activeOpacity={0.7}
+            onPress={() => onFreeSlotPress(slot.originalSlot)}
+            testID={`week-free-slot-${dateKey}`}
+            accessibilityRole="button"
+            style={[s.freeSlotOverlay, { top: slot.topOffset, height: slot.height }]}
+          />
+        ) : (
+          <View
+            key={`free-${i}`}
+            pointerEvents="none"
+            testID={`week-free-slot-${dateKey}`}
+            style={[s.freeSlotOverlay, { top: slot.topOffset, height: slot.height }]}
+          />
+        ),
+      )}
+
+      {/* Timed todo chips */}
+      {timedTodos.map((td) => {
+        const minutes = td.dueAt.getHours() * 60 + td.dueAt.getMinutes();
+        const top = (minutes / 60) * HOUR_HEIGHT;
+        const height = Math.min(HOUR_HEIGHT, TOTAL_HEIGHT - top);
+        const ChipWrap = onTodoPress ? TouchableOpacity : View;
+        return (
+          <ChipWrap
+            key={`todo-${td.id}`}
+            testID={`todo-grid-chip-${td.id}`}
+            {...(onTodoPress
+              ? { onPress: () => onTodoPress(td.id), activeOpacity: 0.8 }
+              : {})}
+            style={[
+              s.timedTodoChip,
+              {
+                top,
+                height,
+                backgroundColor: td.color + '22',
+                borderLeftColor: td.color,
+              },
+            ]}
+          >
+            <Text style={[s.timedTodoText, { color: td.color }]} numberOfLines={1}>
+              ✓ {td.title}
+            </Text>
+          </ChipWrap>
+        );
+      })}
+
+      {/* Event blocks */}
+      {layouts.map((lay) => {
+        const tt = translatedTitles.get(lay.event.id);
+        const isDragSource = activeDragSourceId === lay.event.id;
+        const isCandidate = activeCandidateId === lay.event.id;
+        return (
+          <View
+            key={lay.event.id}
+            style={[
+              isDragSource && s.draggingSource,
+              isCandidate && s.candidateChip,
+            ]}
+          >
+            <EventBlock
+              event={lay.event}
+              topOffset={lay.topOffset}
+              height={lay.height}
+              widthFraction={lay.widthFraction}
+              leftFraction={lay.leftFraction}
+              onPress={onEventPress}
+              {...(tt ? { translatedTitle: tt } : {})}
+            />
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+const DayColumn = memo(DayColumnImpl);

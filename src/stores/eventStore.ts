@@ -49,6 +49,14 @@ interface EventState {
   isFetching: boolean;
   /** Last fetch error, if any. */
   error: string | null;
+  /**
+   * Build-71 perf — server-fetched 된 date key (YYYY-MM-DD) 의 set.
+   * fetchEvents 가 다음 호출 시 range 의 모든 date key 가 이 set 안에 있으면
+   * Supabase 호출을 skip 한다. WeekView 좌우 swipe 가 빠를 때 "여전히 끊켜"
+   * 보고 → 동일 셀 / 동일 주 진입 시 redundant fetch + state 갱신 +
+   * useMemo 재계산 + 15-day grid re-render 가 매번 발생하던 것을 끊는다.
+   */
+  fetchedDateKeys: Set<string>;
 
   // ── Data actions ─────────────────────────────────────────────────────────
   /**
@@ -87,8 +95,25 @@ export const useEventStore = create<EventState>((set, _get) => ({
   selectedDate: new Date(),
   isFetching: false,
   error: null,
+  fetchedDateKeys: new Set<string>(),
 
   fetchEvents: async (range: DateRange) => {
+    // Build-71 perf — range 의 모든 date key 가 이미 fetched 라면 skip.
+    const requiredKeys: string[] = [];
+    const cursor = new Date(range.start);
+    cursor.setHours(0, 0, 0, 0);
+    const endMs = new Date(range.end).setHours(0, 0, 0, 0);
+    while (cursor.getTime() <= endMs) {
+      requiredKeys.push(localDateKey(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    const cached = _get().fetchedDateKeys;
+    if (requiredKeys.length > 0 && requiredKeys.every((k) => cached.has(k))) {
+      // 모든 일자 이미 fetched → Supabase 호출 / state 갱신 모두 skip.
+      // 결과: redundant re-render 0, swipe 부드러움.
+      return;
+    }
+
     set({ isFetching: true, error: null });
     try {
       const events = await getEventsInRange(range);
@@ -107,11 +132,18 @@ export const useEventStore = create<EventState>((set, _get) => ({
         }
       }
 
-      // Merge into existing eventsByDate — keeps events outside this range intact
-      set((state) => ({
-        eventsByDate: { ...state.eventsByDate, ...byDate },
-        isFetching: false,
-      }));
+      // Merge into existing eventsByDate — keeps events outside this range intact.
+      // fetchedDateKeys 는 range 의 모든 일자를 포함 (events 가 0건인 일자도
+      // server 에서 "없음" 응답을 받은 것이라 캐시 hit 자격).
+      set((state) => {
+        const newFetched = new Set(state.fetchedDateKeys);
+        for (const k of requiredKeys) newFetched.add(k);
+        return {
+          eventsByDate: { ...state.eventsByDate, ...byDate },
+          fetchedDateKeys: newFetched,
+          isFetching: false,
+        };
+      });
     } catch (err) {
       set({
         isFetching: false,

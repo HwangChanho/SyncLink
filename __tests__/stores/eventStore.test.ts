@@ -81,10 +81,13 @@ describe('eventStore', () => {
    */
   beforeEach(() => {
     useEventStore.setState({
-      eventsByDate: {},
-      selectedDate: new Date('2026-01-15T00:00:00.000Z'),
-      isFetching:   false,
-      error:        null,
+      eventsByDate:    {},
+      selectedDate:    new Date('2026-01-15T00:00:00.000Z'),
+      isFetching:      false,
+      error:           null,
+      // Build-71 — fetchedDateKeys 초기화 (이전 테스트 캐시 hit 으로
+      // fetchEvents 가 skip 되는 것 방지).
+      fetchedDateKeys: new Set<string>(),
     });
   });
 
