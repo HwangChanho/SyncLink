@@ -75,6 +75,12 @@ export function useCalendarSwipe({ viewMode, isDragging, onShift }: Args) {
       onMoveShouldSetPanResponder: (_, gs) =>
         // Hard gate — chip drag 중엔 절대 claim 금지.
         !isDraggingRef.current &&
+        // Build-67 LEAD bug: 주 모드에서 좌우 스와이프하면 inner WeekView 의
+        // horizontal ScrollView (15-day window, 1day snap) 와 outer fly-off
+        // 애니메이션이 동시에 firing 되어 "주 단위로 휙 이동" 처럼 느껴지고
+        // 헤더 selectedDate 가 inner scroll 위치와 어긋남. inner 가 owns 하도록
+        // outer 는 week 일 때 완전히 yield 한다. month/day 는 기존 동작 유지.
+        viewModeRef.current !== 'week' &&
         Math.abs(gs.dx) > Math.abs(gs.dy) * SWIPE_RATIO &&
         Math.abs(gs.dx) > 10 &&
         Math.abs(gs.vx) > 0.3,

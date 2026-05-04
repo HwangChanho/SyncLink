@@ -72,7 +72,7 @@ const TIME_COL_WIDTH = 44;
  */
 const VISIBLE_DAYS = 7;
 const WINDOW_DAYS = 15;
-/** dayWindow[7] = 이번 주 일요일. visible 첫 컬럼이 idx 7 일 때 정상 상태. */
+/** Build-67 fix — dayWindow[7] === selectedDate (rolling). visible 첫 컬럼이 idx 7. */
 const WINDOW_INITIAL_VISIBLE_IDX = 7;
 /** Height of each all-day event chip row in the strip. */
 const ALL_DAY_CHIP_HEIGHT = 20;
@@ -171,19 +171,24 @@ function isSameDay(a: Date, b: Date): boolean {
 }
 
 /**
- * Build-67 — 15-day window. dayWindow[7] = 이번 주 일요일 (즉 selectedDate
- * 의 주 시작). idx 0..6 = 이전 주, 7..13 = 이번 주, 14 = 다음 주 일.
- * 이번 주 일~토 가 visible 7-day 영역이며 horizontal scrollX = 7*colW 일
- * 때 정상 상태.
+ * Build-67 fix — 15-day window centered on selectedDate (rolling).
+ *
+ * dayWindow[WINDOW_INITIAL_VISIBLE_IDX] === selectedDate. visible 7-day 영역
+ * 의 첫 컬럼이 selectedDate 이다. 이렇게 둬야 horizontal scroll 후
+ * onDateSelect(dayWindow[visibleStartIdx]) 으로 selectedDate 를 갱신해도
+ * useEffect 의 reset (scrollTo idx 7) 이 동일한 visible 영역으로 돌아오므로
+ * 사용자 시각상 jolt 가 없다. 또한 헤더 (CalendarHeader) 가 selectedDate ~
+ * +6 day range 를 보여주면 보이는 7일 컬럼과 정확히 일치.
+ *
+ * 이전 (일요일 기준 정렬) 에서는 selectedDate 갱신 후 dayWindow 가
+ * Sunday 로 snap 되어 visible 영역이 ±N 일 뒤로 점프하는 문제가 있었음.
  */
 function getDayWindow(date: Date): Date[] {
-  const dow = date.getDay(); // 0 = Sunday
-  const sunday = new Date(date);
-  sunday.setDate(date.getDate() - dow);
-  sunday.setHours(0, 0, 0, 0);
+  const base = new Date(date);
+  base.setHours(0, 0, 0, 0);
   return Array.from({ length: WINDOW_DAYS }, (_, i) => {
-    const d = new Date(sunday);
-    d.setDate(sunday.getDate() + (i - WINDOW_INITIAL_VISIBLE_IDX));
+    const d = new Date(base);
+    d.setDate(base.getDate() + (i - WINDOW_INITIAL_VISIBLE_IDX));
     d.setHours(0, 0, 0, 0);
     return d;
   });
@@ -224,9 +229,10 @@ export function WeekView({
   const { t } = useTranslation();
   const removeEvent = useEventStore((s) => s.removeEvent);
 
-  // Build-67 — 15-day buffer window. selectedDate 가 어떤 일자든
-  // dayWindow[7..13] = "이번 주 일~토" 가 visible 영역이 되도록 일요일
-  // 기준으로 정렬.
+  // Build-67 fix — 15-day buffer window centered on selectedDate (rolling).
+  // dayWindow[7] === selectedDate. visible 7 컬럼 = selectedDate ~ +6일.
+  // horizontal scroll 후 selectedDate 갱신 → dayWindow recompute → visible
+  // idx 7 reset 이 jolt 없이 동기화. 헤더도 selectedDate ~ +6일 표시.
   const dayWindow = useMemo(() => getDayWindow(selectedDate), [selectedDate]);
   const today = new Date();
   /** Vertical 24-hour grid scroll. */
@@ -409,53 +415,31 @@ export function WeekView({
   }, [selectedDate, columnWidth]);
 
   /**
-   * Build-67 — horizontal scroll 종료 시 가장자리 처리.
+   * Build-67 fix — horizontal scroll 종료 시 selectedDate 동기화.
    *
-   * visible 첫 컬럼 idx = scrollX / colW (snap 단위라 정수). idx 가
-   * 1 이하 또는 13 이상에 도달하면 selectedDate 를 ±7일 shift 해서
-   * dayWindow 를 재계산하고 scrollX 를 다시 7*colW 로 reposition.
-   * buffer 가 줄어들어도 사용자 시각상 jolt 없음 (그 자리의 일자 자체는
-   * 그대로 visible 영역에 머물러 있고, dayWindow 의 idx 만 갱신).
+   * dayWindow 가 selectedDate 중심 (rolling) 이므로 visibleStartIdx 가
+   * WINDOW_INITIAL_VISIBLE_IDX (=7) 이 아니면 그 idx 에 위치한 일자를 새
+   * selectedDate 로 통보. 부모 (calendar.tsx) 가 selectedDate state 갱신
+   * → useMemo 가 dayWindow 재계산 → 새 dayWindow[7] = 그 일자 → useEffect
+   * 가 scrollTo idx 7 로 reset → visible 영역 동일 위치 유지 (jolt 없음).
+   *
+   * 헤더 (CalendarHeader) 도 selectedDate 기준이므로 동시에 갱신되어
+   * "표시되는 컬럼" 과 "헤더 날짜" 가 항상 일치.
+   *
+   * 가장자리 (idx 0 또는 14 부근) 도 같은 로직 — 그저 dayWindow 가 ±7일
+   * 더 shift 될 뿐. 별도 분기 불필요.
    */
   const handleHScrollEnd = useCallback(
     (e: import('react-native').NativeSyntheticEvent<import('react-native').NativeScrollEvent>) => {
       if (columnWidth <= 0) return;
       const x = e.nativeEvent.contentOffset.x;
       const visibleStartIdx = Math.round(x / columnWidth);
-      // 너무 왼쪽 가장자리 — 이전 주로 진입.
-      if (visibleStartIdx <= 0) {
-        const next = new Date(selectedDate);
-        next.setDate(next.getDate() - 7);
-        next.setHours(0, 0, 0, 0);
-        // selectedDate 갱신 → dayWindow 자동 재계산 (useMemo).
-        // 그 후 scrollX 를 7*colW 로 reset 해야 시각상 일자가 같은 위치에
-        // 머무름. setNativeProps 로 즉시 반영.
-        onDateSelect(next);
-        requestAnimationFrame(() => {
-          hScrollRef.current?.scrollTo({
-            x: WINDOW_INITIAL_VISIBLE_IDX * columnWidth,
-            y: 0,
-            animated: false,
-          });
-        });
-        return;
-      }
-      // 너무 오른쪽 가장자리 — 다음 주로 진입.
-      if (visibleStartIdx >= WINDOW_DAYS - VISIBLE_DAYS) {
-        const next = new Date(selectedDate);
-        next.setDate(next.getDate() + 7);
-        next.setHours(0, 0, 0, 0);
-        onDateSelect(next);
-        requestAnimationFrame(() => {
-          hScrollRef.current?.scrollTo({
-            x: WINDOW_INITIAL_VISIBLE_IDX * columnWidth,
-            y: 0,
-            animated: false,
-          });
-        });
-      }
+      if (visibleStartIdx === WINDOW_INITIAL_VISIBLE_IDX) return;
+      const next = dayWindow[visibleStartIdx];
+      if (!next) return;
+      onDateSelect(next);
     },
-    [columnWidth, selectedDate, onDateSelect],
+    [columnWidth, dayWindow, onDateSelect],
   );
 
   // Scroll to 8 AM on mount so mornings are visible by default

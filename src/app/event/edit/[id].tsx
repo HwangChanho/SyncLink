@@ -637,7 +637,7 @@ export default function EventEditScreen() {
           <FormRow label={t('event.form.memo')} rowStyle={rowStyle}>
             <TextInput
               style={[styles.inlineInput, styles.multilineInput]}
-              placeholder={t('nl.placeholder')}
+              placeholder=""
               placeholderTextColor={colors.textSecondary}
               value={description}
               onChangeText={setDescription}

@@ -117,16 +117,19 @@ function buildTitle(
   }
 
   if (mode === 'week') {
-    const sunday = new Date(date);
-    sunday.setDate(sunday.getDate() - sunday.getDay());
-    const saturday = new Date(sunday);
-    saturday.setDate(saturday.getDate() + 6);
+    // Build-67 fix — WeekView 가 selectedDate 중심 rolling 7-day window
+    // 를 보여주므로 헤더도 selectedDate ~ +6일 range 로 표시. 사용자가
+    // 좌우 스크롤할 때 visible 컬럼과 헤더 날짜가 항상 정확히 일치.
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
     return String(t('calendar.title.week', {
       year:       y,
-      startMonth: sunday.getMonth() + 1,
-      startDay:   sunday.getDate(),
-      endMonth:   saturday.getMonth() + 1,
-      endDay:     saturday.getDate(),
+      startMonth: start.getMonth() + 1,
+      startDay:   start.getDate(),
+      endMonth:   end.getMonth() + 1,
+      endDay:     end.getDate(),
     }));
   }
 
