@@ -24,7 +24,6 @@ import {
   View, Pressable, StyleSheet,
   Modal, TouchableOpacity, Text,
   Animated,
-  ActionSheetIOS, Platform, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -94,8 +93,10 @@ export default function CalendarScreen() {
   /** Whether the category filter sheet is open. */
   const [catFilterVisible, setCatFilterVisible] = useState(false);
 
-  /** Density mode: detailed bars with titles, or compact colour dots. */
-  const [monthDensity, setMonthDensity] = useState<'detailed' | 'compact'>('detailed');
+  /** Density mode: detailed bars with titles, or compact colour dots.
+   * Build-69 — toggle UI 제거 (⋯ 메뉴 단순화). 'detailed' 고정. setter
+   * 미사용. */
+  const [monthDensity] = useState<'detailed' | 'compact'>('detailed');
 
   // ── Free time finder (PRD 4.2 Tier 2) — 분리된 hook ───────────────────────
   const {
@@ -109,51 +110,14 @@ export default function CalendarScreen() {
   const [spacePickerVisible, setSpacePickerVisible] = useState(false);
 
   /**
-   * Build-50 follow-up — overflow menu (⋯) for the calendar header.
-   * Consolidates the three previous toolbar icons (filter / free-time /
-   * density) into a single ActionSheet so the period title can sit
-   * uncluttered in the screen centre. Density only appears in month
-   * view because compact/detailed only applies there.
-   *
-   * iOS uses ActionSheetIOS (native sheet); Android falls back to
-   * Alert.alert with buttons because we don't want to add a bottom-sheet
-   * dependency for v1.0. The Android sheet looks slightly different but
-   * the action set is identical.
+   * Build-69 LEAD: ⋯ 메뉴 리스트 없애고 바로 카테고리 필터로 진입.
+   * 이전 (Build 50~) 의 ActionSheet (필터/밀도/free-time) 제거. ⋯ 탭 =
+   * 카테고리 필터 sheet 다이렉트 오픈. 밀도 토글은 state 유지하지만 UI
+   * 노출 X (필요 시 별도 위치로 재배치).
    */
   const openCalendarOverflowMenu = useCallback(() => {
-    // Build-63 LEAD: "빈 시간 켜기 액션은 비활성화" — 메뉴에서 제외.
-    // freeTimeOn 토글 hook 자체는 유지 (UI 만 노출 차단). 추후 재활성
-    // 시 한 줄만 다시 추가하면 됨.
-    const items: { label: string; onPress: () => void }[] = [
-      {
-        label: dimmedCats.size > 0 ? '카테고리 필터 (활성)' : '카테고리 필터',
-        onPress: () => setCatFilterVisible(true),
-      },
-    ];
-    if (viewMode === 'month') {
-      items.push({
-        label: monthDensity === 'detailed' ? '간략 보기 (점)' : '상세 보기 (제목)',
-        onPress: () => setMonthDensity((d) => (d === 'detailed' ? 'compact' : 'detailed')),
-      });
-    }
-
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options: [...items.map((i) => i.label), '취소'],
-          cancelButtonIndex: items.length,
-        },
-        (idx) => {
-          if (idx >= 0 && idx < items.length) items[idx]!.onPress();
-        },
-      );
-    } else {
-      Alert.alert('더보기', undefined, [
-        ...items.map((i) => ({ text: i.label, onPress: i.onPress })),
-        { text: '취소', style: 'cancel' as const },
-      ]);
-    }
-  }, [dimmedCats, viewMode, monthDensity]);
+    setCatFilterVisible(true);
+  }, []);
 
   /**
    * Group todos by due-date key. Only todos with a due date and not yet
@@ -448,19 +412,14 @@ export default function CalendarScreen() {
               selectedDate={selectedDate}
               eventsByDate={displayEventsByDate}
               onEventPress={handleEventPress}
-              // Build-68 — 일자 헤더 탭 = day mode 진입 (drill-down).
+              // 일자 헤더 탭 = day mode 진입 (drill-down).
               onDateSelect={(date) => {
                 setSelectedDate(date);
                 setViewMode('day');
               }}
-              // Build-68 — 위 일자 row 좌우 스크롤(day-by-day) / pan-to-scrub
-              // 시 selectedDate 만 갱신, viewMode 는 'week' 유지.
+              // 일자 row pan-to-scrub / horizontal scroll edge-week-shift
+              // 시 selectedDate 만 갱신, viewMode='week' 유지.
               onSelectedDateChange={setSelectedDate}
-              // Build-68 — 아래 grid 영역 좌우 swipe = day mode 전환.
-              onSwitchToDayView={(date) => {
-                setSelectedDate(date);
-                setViewMode('day');
-              }}
               todosByDate={todosByDate}
               onTodoDrop={handleTodoDrop}
               onDragModeChange={handleChildDragModeChange}

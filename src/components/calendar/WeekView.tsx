@@ -72,7 +72,7 @@ const TIME_COL_WIDTH = 44;
  */
 const VISIBLE_DAYS = 7;
 const WINDOW_DAYS = 15;
-/** Build-67 fix — dayWindow[7] === selectedDate (rolling). visible 첫 컬럼이 idx 7. */
+/** Build-69 — dayWindow[7] = 선택된 주의 일요일. visible 영역 첫 컬럼 idx 7. */
 const WINDOW_INITIAL_VISIBLE_IDX = 7;
 /** Height of each all-day event chip row in the strip. */
 const ALL_DAY_CHIP_HEIGHT = 20;
@@ -159,16 +159,6 @@ interface WeekViewProps {
    * page rect 를 측정해 ref 로 전달. drag release 시 hit-test.
    */
   deleteZonePageRectRef?: { current: { left: number; top: number; right: number; bottom: number } | null };
-
-  /**
-   * Build-68 LEAD: 영역 분리 — 위 일자 row 좌우 = 현재 day-by-day 스크롤
-   * (inner horizontal ScrollView 가 처리), 아래 grid 영역 좌우 swipe =
-   * 일(day) view 모드로 전환. capture phase PanResponder 가 fast 횡 swipe
-   * 를 가로채 inner ScrollView 가 day-by-day 로 snap 되기 전에 day mode
-   * 로 진입하게 한다. 콜백은 부모 (calendar.tsx) 가 setViewMode('day') +
-   * setSelectedDate(date) 처리.
-   */
-  onSwitchToDayView?: (date: Date) => void;
 }
 
 // ─── Date utilities ────────────────────────────────────────────────────────
@@ -191,24 +181,26 @@ function isSameDay(a: Date, b: Date): boolean {
 }
 
 /**
- * Build-67 fix — 15-day window centered on selectedDate (rolling).
+ * Build-69 — Sunday-aligned 15-day window 로 롤백.
  *
- * dayWindow[WINDOW_INITIAL_VISIBLE_IDX] === selectedDate. visible 7-day 영역
- * 의 첫 컬럼이 selectedDate 이다. 이렇게 둬야 horizontal scroll 후
- * onDateSelect(dayWindow[visibleStartIdx]) 으로 selectedDate 를 갱신해도
- * useEffect 의 reset (scrollTo idx 7) 이 동일한 visible 영역으로 돌아오므로
- * 사용자 시각상 jolt 가 없다. 또한 헤더 (CalendarHeader) 가 selectedDate ~
- * +6 day range 를 보여주면 보이는 7일 컬럼과 정확히 일치.
+ * dayWindow[7] = selectedDate 의 주 일요일. dayWindow[7..13] = 그 주
+ * (일~토) = visible 7-day 영역. selectedDate 가 같은 주 안에서 변해도
+ * dayWindow 는 변하지 않으므로 (Sunday 가 그대로) re-render 가 매
+ * snap 마다 발생하지 않는다. handleHScrollEnd 가 가장자리 (idx≤0 / ≥8)
+ * 도달 시에만 selectedDate ±7 → dayWindow 가 새 주로 shift.
  *
- * 이전 (일요일 기준 정렬) 에서는 selectedDate 갱신 후 dayWindow 가
- * Sunday 로 snap 되어 visible 영역이 ±N 일 뒤로 점프하는 문제가 있었음.
+ * 이전 (Build 67-68) 의 rolling 디자인은 매 snap 마다 selectedDate 갱신
+ * → re-render → useEffect scrollTo reset 으로 visual jolt + 랙. Build 69
+ * 에서 Build 66 디자인으로 복귀.
  */
 function getDayWindow(date: Date): Date[] {
-  const base = new Date(date);
-  base.setHours(0, 0, 0, 0);
+  const dow = date.getDay(); // 0 = Sunday
+  const sunday = new Date(date);
+  sunday.setDate(date.getDate() - dow);
+  sunday.setHours(0, 0, 0, 0);
   return Array.from({ length: WINDOW_DAYS }, (_, i) => {
-    const d = new Date(base);
-    d.setDate(base.getDate() + (i - WINDOW_INITIAL_VISIBLE_IDX));
+    const d = new Date(sunday);
+    d.setDate(sunday.getDate() + (i - WINDOW_INITIAL_VISIBLE_IDX));
     d.setHours(0, 0, 0, 0);
     return d;
   });
@@ -243,7 +235,6 @@ export function WeekView({
   onDragModeChange,
   onEmptySlotPress,
   deleteZonePageRectRef,
-  onSwitchToDayView,
 }: WeekViewProps) {
   // Build-68 — selectedDate-only 갱신 콜백. 미제공 시 onDateSelect fallback.
   const updateSelectedDate = onSelectedDateChange ?? onDateSelect;
@@ -253,10 +244,8 @@ export function WeekView({
   const { t } = useTranslation();
   const removeEvent = useEventStore((s) => s.removeEvent);
 
-  // Build-67 fix — 15-day buffer window centered on selectedDate (rolling).
-  // dayWindow[7] === selectedDate. visible 7 컬럼 = selectedDate ~ +6일.
-  // horizontal scroll 후 selectedDate 갱신 → dayWindow recompute → visible
-  // idx 7 reset 이 jolt 없이 동기화. 헤더도 selectedDate ~ +6일 표시.
+  // Build-69 — Sunday-aligned 15-day window. selectedDate 가 같은 주 안에서
+  // 변해도 dayWindow 동일 → 불필요한 re-render 방지로 swipe 랙 해소.
   const dayWindow = useMemo(() => getDayWindow(selectedDate), [selectedDate]);
   const today = new Date();
   /** Vertical 24-hour grid scroll. */
@@ -421,65 +410,17 @@ export function WeekView({
     onDragModeChange?.(dragState !== null || todoDragState !== null);
   }, [dragState, todoDragState, onDragModeChange]);
 
-  /**
-   * Build-68 LEAD bug — 영역 분리 swipe responder (grid 영역 전용).
-   *
-   * 위 일자 row swipe = inner horizontal ScrollView 가 day-by-day snap
-   * (Build-67 동작 유지). 아래 grid 영역에서 fast 횡 swipe = 일(day) view
-   * 모드로 전환. capture phase 로 inner ScrollView 가 snap 하기 전에 가로챈다.
-   *
-   * 임계값 (dx > 25, vx > 0.3) 보다 작은 움직임은 yield → 정상적으로 grid
-   * 의 chip drag (longpress) / vertical scroll 작동. chip drag 는 longpress
-   * 라 stationary 시작이 필요해 fast swipe 와 양립.
-   *
-   * dragActiveRef 로 chip drag 진행 중엔 절대 claim 금지.
-   */
-  const dragActiveRef = useRef(false);
-  useEffect(() => {
-    dragActiveRef.current = dragState !== null || todoDragState !== null;
-  }, [dragState, todoDragState]);
-  const switchToDayRef = useRef(onSwitchToDayView);
-  useEffect(() => { switchToDayRef.current = onSwitchToDayView; }, [onSwitchToDayView]);
+  // Build-69 — Build 68 의 gridSwipeResponder (grid 영역 fast 횡 swipe →
+  // day mode 전환) 제거. 사용자 보고 "랙 + 월/주/일 사이 swipe 이동 없애기".
+  // 이제 grid 좌우 swipe 는 inner horizontal ScrollView 의 day-by-day snap
+  // 만 동작 (헤더 영역과 동일).
+  //
+  // headerPan 의 useRef PanResponder 가 selectedDate / updateSelectedDate
+  // closure 를 mount 시점 값으로 고정하므로 ref 로 최신화.
   const selectedDateRef = useRef(selectedDate);
   useEffect(() => { selectedDateRef.current = selectedDate; }, [selectedDate]);
-  // Build-68 — headerPan 의 PanResponder 가 useRef 로 한 번만 생성되므로
-  // updateSelectedDate closure 도 mount 시점 값으로 고정. ref 로 관리.
   const updateSelectedDateRef = useRef(updateSelectedDate);
   useEffect(() => { updateSelectedDateRef.current = updateSelectedDate; }, [updateSelectedDate]);
-
-  const gridSwipeResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponderCapture: (_, gs) => {
-        if (dragActiveRef.current) return false;
-        return (
-          Math.abs(gs.dx) > 25 &&
-          Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5 &&
-          Math.abs(gs.vx) > 0.3
-        );
-      },
-      onPanResponderGrant: () => {
-        // inner horizontal ScrollView 가 동시에 snap 하지 않도록 비활성화.
-        hScrollRef.current?.setNativeProps({ scrollEnabled: false });
-      },
-      onPanResponderRelease: (_, gs) => {
-        // ScrollView 재활성 (drag 진행 중 아닐 때만).
-        hScrollRef.current?.setNativeProps({
-          scrollEnabled: !dragActiveRef.current,
-        });
-        if (Math.abs(gs.dx) > 60) {
-          switchToDayRef.current?.(selectedDateRef.current);
-        }
-      },
-      onPanResponderTerminate: () => {
-        hScrollRef.current?.setNativeProps({
-          scrollEnabled: !dragActiveRef.current,
-        });
-      },
-    }),
-  ).current;
 
   /**
    * Build-67 — selectedDate 가 외부 (MonthView drilldown, NL 등) 에서 변경
@@ -499,32 +440,41 @@ export function WeekView({
   }, [selectedDate, columnWidth]);
 
   /**
-   * Build-67 fix — horizontal scroll 종료 시 selectedDate 동기화.
+   * Build-69 — horizontal scroll 종료 시 가장자리 처리만.
    *
-   * dayWindow 가 selectedDate 중심 (rolling) 이므로 visibleStartIdx 가
-   * WINDOW_INITIAL_VISIBLE_IDX (=7) 이 아니면 그 idx 에 위치한 일자를 새
-   * selectedDate 로 통보. 부모 (calendar.tsx) 가 selectedDate state 갱신
-   * → useMemo 가 dayWindow 재계산 → 새 dayWindow[7] = 그 일자 → useEffect
-   * 가 scrollTo idx 7 로 reset → visible 영역 동일 위치 유지 (jolt 없음).
+   * Sunday-aligned dayWindow 는 selectedDate 의 주 변화에만 반응. 따라서
+   * 사용자가 mid-window 에서 day-by-day scroll 하는 동안엔 selectedDate /
+   * dayWindow 모두 변하지 않음 → re-render 없음 → 랙 없음.
    *
-   * 헤더 (CalendarHeader) 도 selectedDate 기준이므로 동시에 갱신되어
-   * "표시되는 컬럼" 과 "헤더 날짜" 가 항상 일치.
+   * 가장자리 (visibleStartIdx ≤ 0 = 이전 주 진입, ≥ WINDOW_DAYS-VISIBLE_DAYS
+   * = 다음 주 진입) 에서만 selectedDate ±7 일 shift. 새 dayWindow 가
+   * 그려진 후 useEffect 가 scrollTo idx 7 으로 reset.
    *
-   * 가장자리 (idx 0 또는 14 부근) 도 같은 로직 — 그저 dayWindow 가 ±7일
-   * 더 shift 될 뿐. 별도 분기 불필요.
+   * 측정 갱신은 horizontal scroll 시점이 아니라 momentum 종료 시점에 한 번만.
    */
   const handleHScrollEnd = useCallback(
     (e: import('react-native').NativeSyntheticEvent<import('react-native').NativeScrollEvent>) => {
+      // momentum 종료 시 chip drag hit-test 용 page offset 갱신 (한 번).
+      measureEventsArea();
       if (columnWidth <= 0) return;
       const x = e.nativeEvent.contentOffset.x;
       const visibleStartIdx = Math.round(x / columnWidth);
-      if (visibleStartIdx === WINDOW_INITIAL_VISIBLE_IDX) return;
-      const next = dayWindow[visibleStartIdx];
-      if (!next) return;
-      // Build-68 — viewMode 유지하며 selectedDate 만 갱신.
-      updateSelectedDate(next);
+      // 가장자리 도달 시에만 주 단위 shift.
+      if (visibleStartIdx <= 0) {
+        const next = new Date(selectedDate);
+        next.setDate(next.getDate() - 7);
+        next.setHours(0, 0, 0, 0);
+        updateSelectedDate(next);
+        return;
+      }
+      if (visibleStartIdx >= WINDOW_DAYS - VISIBLE_DAYS) {
+        const next = new Date(selectedDate);
+        next.setDate(next.getDate() + 7);
+        next.setHours(0, 0, 0, 0);
+        updateSelectedDate(next);
+      }
     },
-    [columnWidth, dayWindow, updateSelectedDate],
+    [columnWidth, selectedDate, updateSelectedDate, measureEventsArea],
   );
 
   // Scroll to 8 AM on mount so mornings are visible by default
@@ -694,10 +644,10 @@ export function WeekView({
             setGridWidth(e.nativeEvent.layout.width);
             measureEventsArea();
           }}
-          // horizontal scroll 시 measureInWindow 갱신 — drag hit-test 의
-          // pageOffsetRef 도 새로 measure 되어야 정확.
-          onScroll={measureEventsArea}
-          scrollEventThrottle={16}
+          // Build-69 — onScroll 매 프레임 measureInWindow 호출이 swipe 랙
+          // 원인. handleHScrollEnd 가 momentum 종료 시 한 번만 갱신.
+          // 횡 scroll 중 chip drag 가 시작될 일은 없음 (ScrollView 가
+          // chip drag PanResponder 와 동시 활성 X).
           style={styles.hScroll}
         >
           <View style={[styles.hContent, { width: totalContentWidth }]}>
@@ -795,11 +745,6 @@ export function WeekView({
         </View>
       )}
 
-            {/* Build-68 — grid 영역 swipe 분리 wrapper. capture phase 로
-                 fast 횡 swipe 를 가로채 day mode 전환. 일자 row 에서 swipe
-                 한 경우는 이 wrapper 밖이라 영향 X — inner horizontal
-                 ScrollView 가 day-by-day snap. */}
-            <View style={styles.gridSwipeWrap} {...gridSwipeResponder.panHandlers}>
             {/* ─── Vertical scroll grid (timeCol 제외) ─── */}
             <ScrollView
               ref={scrollRef}
@@ -991,7 +936,6 @@ export function WeekView({
             {dragState && <DragGhost drag={dragState} />}
               </View>
             </ScrollView>
-            </View>
           </View>
         </ScrollView>
       </View>
@@ -1147,11 +1091,6 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     fontWeight: '600',
   },
   scrollView: {
-    flex: 1,
-  },
-  // Build-68 — grid 영역만 감싸 capture-phase swipe → day mode 전환.
-  // flex:1 로 vScroll 자리 차지. 시각적 효과 X.
-  gridSwipeWrap: {
     flex: 1,
   },
   gridRow: {
