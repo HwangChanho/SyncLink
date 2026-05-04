@@ -442,7 +442,10 @@ function makeStyles(colors: ColorTokens) {
       borderTopRightRadius: radius['2xl'],
       paddingHorizontal: spacing[5],
       paddingTop: spacing[2],
-      paddingBottom: spacing[8],
+      // Build-68 LEAD bug: 노트 textarea 와 키보드 사이 큰 빈 공간 제거.
+      // 키보드 열림 시 sheetWrapper.paddingBottom 이 이미 keyboardHeight 만큼
+      // sheet 를 들어올림. sheet 자체 paddingBottom 은 시각 breathing 만 충분.
+      paddingBottom: spacing[2],
       maxHeight: '90%',
     },
     handle: {
@@ -477,7 +480,7 @@ function makeStyles(colors: ColorTokens) {
 
     scrollContent: {
       gap: spacing[4],
-      paddingBottom: spacing[4],
+      paddingBottom: 0,
     },
     chipRow: {
       flexDirection: 'row',

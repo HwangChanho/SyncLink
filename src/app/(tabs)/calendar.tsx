@@ -448,7 +448,16 @@ export default function CalendarScreen() {
               selectedDate={selectedDate}
               eventsByDate={displayEventsByDate}
               onEventPress={handleEventPress}
+              // Build-68 — 일자 헤더 탭 = day mode 진입 (drill-down).
               onDateSelect={(date) => {
+                setSelectedDate(date);
+                setViewMode('day');
+              }}
+              // Build-68 — 위 일자 row 좌우 스크롤(day-by-day) / pan-to-scrub
+              // 시 selectedDate 만 갱신, viewMode 는 'week' 유지.
+              onSelectedDateChange={setSelectedDate}
+              // Build-68 — 아래 grid 영역 좌우 swipe = day mode 전환.
+              onSwitchToDayView={(date) => {
                 setSelectedDate(date);
                 setViewMode('day');
               }}

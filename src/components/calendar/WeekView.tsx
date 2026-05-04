@@ -94,8 +94,18 @@ interface WeekViewProps {
   eventsByDate: Record<string, EventSummary[]>;
   /** Called when the user taps an event block. */
   onEventPress: (event: EventSummary) => void;
-  /** Called when the user taps a day header to drill into DayView. */
+  /**
+   * Called when the user taps a day header to drill into DayView.
+   * 부모는 setViewMode('day') + setSelectedDate(date) 처리.
+   */
   onDateSelect: (date: Date) => void;
+  /**
+   * Build-68 LEAD bug 분리 — horizontal day-by-day scroll snap (handleHScrollEnd)
+   * 또는 day header pan-to-scrub 으로 selectedDate 만 갱신할 때 호출.
+   * onDateSelect 와 달리 viewMode 는 그대로 'week' 유지. 미제공 시 fallback
+   * = onDateSelect (이전 동작).
+   */
+  onSelectedDateChange?: (date: Date) => void;
   /**
    * Optional planner todos bucketed by ISO date key. Rendered as small
    * outlined chips in the all-day strip so a user glancing at a week
@@ -149,6 +159,16 @@ interface WeekViewProps {
    * page rect 를 측정해 ref 로 전달. drag release 시 hit-test.
    */
   deleteZonePageRectRef?: { current: { left: number; top: number; right: number; bottom: number } | null };
+
+  /**
+   * Build-68 LEAD: 영역 분리 — 위 일자 row 좌우 = 현재 day-by-day 스크롤
+   * (inner horizontal ScrollView 가 처리), 아래 grid 영역 좌우 swipe =
+   * 일(day) view 모드로 전환. capture phase PanResponder 가 fast 횡 swipe
+   * 를 가로채 inner ScrollView 가 day-by-day 로 snap 되기 전에 day mode
+   * 로 진입하게 한다. 콜백은 부모 (calendar.tsx) 가 setViewMode('day') +
+   * setSelectedDate(date) 처리.
+   */
+  onSwitchToDayView?: (date: Date) => void;
 }
 
 // ─── Date utilities ────────────────────────────────────────────────────────
@@ -214,6 +234,7 @@ export function WeekView({
   eventsByDate,
   onEventPress,
   onDateSelect,
+  onSelectedDateChange,
   todosByDate,
   onTodoPress,
   onTodoDrop,
@@ -222,7 +243,10 @@ export function WeekView({
   onDragModeChange,
   onEmptySlotPress,
   deleteZonePageRectRef,
+  onSwitchToDayView,
 }: WeekViewProps) {
+  // Build-68 — selectedDate-only 갱신 콜백. 미제공 시 onDateSelect fallback.
+  const updateSelectedDate = onSelectedDateChange ?? onDateSelect;
   // Resolve active theme colors for dark mode support (TASK-700)
   const colors = useColors();
   const styles = makeStyles(colors);
@@ -398,6 +422,66 @@ export function WeekView({
   }, [dragState, todoDragState, onDragModeChange]);
 
   /**
+   * Build-68 LEAD bug — 영역 분리 swipe responder (grid 영역 전용).
+   *
+   * 위 일자 row swipe = inner horizontal ScrollView 가 day-by-day snap
+   * (Build-67 동작 유지). 아래 grid 영역에서 fast 횡 swipe = 일(day) view
+   * 모드로 전환. capture phase 로 inner ScrollView 가 snap 하기 전에 가로챈다.
+   *
+   * 임계값 (dx > 25, vx > 0.3) 보다 작은 움직임은 yield → 정상적으로 grid
+   * 의 chip drag (longpress) / vertical scroll 작동. chip drag 는 longpress
+   * 라 stationary 시작이 필요해 fast swipe 와 양립.
+   *
+   * dragActiveRef 로 chip drag 진행 중엔 절대 claim 금지.
+   */
+  const dragActiveRef = useRef(false);
+  useEffect(() => {
+    dragActiveRef.current = dragState !== null || todoDragState !== null;
+  }, [dragState, todoDragState]);
+  const switchToDayRef = useRef(onSwitchToDayView);
+  useEffect(() => { switchToDayRef.current = onSwitchToDayView; }, [onSwitchToDayView]);
+  const selectedDateRef = useRef(selectedDate);
+  useEffect(() => { selectedDateRef.current = selectedDate; }, [selectedDate]);
+  // Build-68 — headerPan 의 PanResponder 가 useRef 로 한 번만 생성되므로
+  // updateSelectedDate closure 도 mount 시점 값으로 고정. ref 로 관리.
+  const updateSelectedDateRef = useRef(updateSelectedDate);
+  useEffect(() => { updateSelectedDateRef.current = updateSelectedDate; }, [updateSelectedDate]);
+
+  const gridSwipeResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponderCapture: (_, gs) => {
+        if (dragActiveRef.current) return false;
+        return (
+          Math.abs(gs.dx) > 25 &&
+          Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5 &&
+          Math.abs(gs.vx) > 0.3
+        );
+      },
+      onPanResponderGrant: () => {
+        // inner horizontal ScrollView 가 동시에 snap 하지 않도록 비활성화.
+        hScrollRef.current?.setNativeProps({ scrollEnabled: false });
+      },
+      onPanResponderRelease: (_, gs) => {
+        // ScrollView 재활성 (drag 진행 중 아닐 때만).
+        hScrollRef.current?.setNativeProps({
+          scrollEnabled: !dragActiveRef.current,
+        });
+        if (Math.abs(gs.dx) > 60) {
+          switchToDayRef.current?.(selectedDateRef.current);
+        }
+      },
+      onPanResponderTerminate: () => {
+        hScrollRef.current?.setNativeProps({
+          scrollEnabled: !dragActiveRef.current,
+        });
+      },
+    }),
+  ).current;
+
+  /**
    * Build-67 — selectedDate 가 외부 (MonthView drilldown, NL 등) 에서 변경
    * 되거나 colWidth 가 처음 측정될 때 horizontal scroll 위치를
    * WINDOW_INITIAL_VISIBLE_IDX 로 reset. 사용자가 좌우로 직접 scroll 한
@@ -437,9 +521,10 @@ export function WeekView({
       if (visibleStartIdx === WINDOW_INITIAL_VISIBLE_IDX) return;
       const next = dayWindow[visibleStartIdx];
       if (!next) return;
-      onDateSelect(next);
+      // Build-68 — viewMode 유지하며 selectedDate 만 갱신.
+      updateSelectedDate(next);
     },
-    [columnWidth, dayWindow, onDateSelect],
+    [columnWidth, dayWindow, updateSelectedDate],
   );
 
   // Scroll to 8 AM on mount so mornings are visible by default
@@ -469,7 +554,8 @@ export function WeekView({
       onMoveShouldSetPanResponder: (_, gs) =>
         Math.abs(gs.dx) > 5 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
       onPanResponderGrant: () => {
-        headerDragRef.current = { baseDate: selectedDate, lastDelta: 0 };
+        // Build-68 — selectedDateRef 사용 (ref 가 최신값 보장).
+        headerDragRef.current = { baseDate: selectedDateRef.current, lastDelta: 0 };
       },
       onPanResponderMove: (_, gs) => {
         const base = headerDragRef.current.baseDate;
@@ -480,7 +566,8 @@ export function WeekView({
         headerDragRef.current.lastDelta = delta;
         const next = new Date(base);
         next.setDate(next.getDate() + delta);
-        onDateSelect(next);
+        // Build-68 — header pan-to-scrub 도 viewMode 유지. ref 사용.
+        updateSelectedDateRef.current(next);
       },
       onPanResponderRelease: () => {
         headerDragRef.current = { baseDate: null, lastDelta: 0 };
@@ -708,6 +795,11 @@ export function WeekView({
         </View>
       )}
 
+            {/* Build-68 — grid 영역 swipe 분리 wrapper. capture phase 로
+                 fast 횡 swipe 를 가로채 day mode 전환. 일자 row 에서 swipe
+                 한 경우는 이 wrapper 밖이라 영향 X — inner horizontal
+                 ScrollView 가 day-by-day snap. */}
+            <View style={styles.gridSwipeWrap} {...gridSwipeResponder.panHandlers}>
             {/* ─── Vertical scroll grid (timeCol 제외) ─── */}
             <ScrollView
               ref={scrollRef}
@@ -899,6 +991,7 @@ export function WeekView({
             {dragState && <DragGhost drag={dragState} />}
               </View>
             </ScrollView>
+            </View>
           </View>
         </ScrollView>
       </View>
@@ -1054,6 +1147,11 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     fontWeight: '600',
   },
   scrollView: {
+    flex: 1,
+  },
+  // Build-68 — grid 영역만 감싸 capture-phase swipe → day mode 전환.
+  // flex:1 로 vScroll 자리 차지. 시각적 효과 X.
+  gridSwipeWrap: {
     flex: 1,
   },
   gridRow: {

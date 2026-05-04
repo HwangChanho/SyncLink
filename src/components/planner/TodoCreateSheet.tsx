@@ -357,7 +357,9 @@ function makeStyles(colors: ColorTokens) {
       borderTopRightRadius: radius['2xl'],
       paddingHorizontal: spacing[5],
       paddingTop: spacing[2],
-      paddingBottom: spacing[8],
+      // Build-68 LEAD bug: 키보드 열림 시 sheet 와 키보드 사이 공백 제거.
+      // sheetWrapper.paddingBottom=keyboardHeight 가 이미 sheet 를 들어올림.
+      paddingBottom: spacing[2],
       maxHeight: '90%',
     },
     handle: {
@@ -378,7 +380,7 @@ function makeStyles(colors: ColorTokens) {
     headerCancel: { ...textStyles.body, color: colors.textSecondary },
     headerSave: { ...textStyles.labelLg, color: colors.primary },
     disabled: { opacity: 0.4 },
-    scrollContent: { paddingBottom: spacing[6] },
+    scrollContent: { paddingBottom: 0 },
     chipRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',

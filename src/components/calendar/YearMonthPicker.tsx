@@ -380,24 +380,21 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     },
 
     // ── Month grid ───────────────────────────────────────────────────────────
-    // LEAD 2026-05-03 — "월이 왼쪽에 align되어있는데 가운데로 오게": 이전엔
-    // gap + marginHorizontal 가 동시에 적용돼서 items 의 누적 폭이 100% 를
-    // 넘었다 → space-between + paddingHorizontal 만 사용해 4 items 균등 분포.
-    // Build-60 LEAD: "버튼 몇월 이렇게 뜨는게 한가운데없고 아래로 쏠려있어"
-    // → paddingVertical 을 위아래 동일하게 spacing[4] 로 늘리고 monthItem
-    // aspectRatio 1.8→1.5 로 키워 그리드 자체가 카드 안 가운데 비중을
-    // 차지하게 한다.
+    // Build-68 LEAD: "월이 가운데 안있고 아래 깔려있어" — month grid 가
+    // 카드 상단에 몰리고 아래 큰 빈 공간이 생김. monthItem aspectRatio 를
+    // 1.5→1.1 로 키워 (height ≈ 0.91 * width) 각 item 이 더 정사각에 가깝게
+    // 커지고 grid 가 카드 안 시각적 중앙에 자리잡도록 함. rowGap 살짝 ↑.
     monthGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       justifyContent: 'space-between',
       paddingHorizontal: spacing[4],
-      paddingVertical: spacing[4],
-      rowGap: spacing[2],
+      paddingVertical: spacing[5],
+      rowGap: spacing[3],
     },
     monthItem: {
       width: '22%',
-      aspectRatio: 1.5,
+      aspectRatio: 1.1,
       alignItems: 'center',
       justifyContent: 'center',
       borderRadius: radius.md,
