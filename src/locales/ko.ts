@@ -240,7 +240,7 @@ const ko = {
     credit_consumed: 'AI 크레딧 1회 사용',
   },
   ai: {
-    quota_exceeded_title: 'AI 쿼터 초과',
+    quota_exceeded_title: 'AI 사용량 초과',
     quota_exceeded_subtitle: '오늘의 무료 AI 사용량을 모두 사용했어요.',
     upgrade_cta: 'Pro로 업그레이드',
   },

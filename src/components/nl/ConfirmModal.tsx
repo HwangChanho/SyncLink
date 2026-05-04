@@ -56,8 +56,17 @@ export function ConfirmModal({ visible, result, onConfirm, onEdit, onDismiss }: 
 
           <EventPreviewCard result={result} />
 
-          {/* Action buttons */}
+          {/* Action buttons. Build-75 — 사용자: "AI 일정 등록할때 취소도
+              있어야해". 백드롭 탭 dismiss 외 명시적 취소 버튼 추가. */}
           <View style={styles.actions}>
+            <Pressable
+              style={[styles.button, styles.cancelButton]}
+              onPress={onDismiss}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.cancel')}
+            >
+              <Text style={styles.cancelButtonText}>{t('common.cancel')}</Text>
+            </Pressable>
             <Pressable
               style={[styles.button, styles.editButton]}
               onPress={onEdit}
@@ -124,6 +133,16 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     paddingVertical: spacing[3],
     borderRadius: radius.md,
     alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  cancelButtonText: {
+    ...(textStyles.body as object),
+    color: colors.textSecondary,
+    fontWeight: '500',
   },
   editButton: {
     backgroundColor: colors.surfaceAlt,

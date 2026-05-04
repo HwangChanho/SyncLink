@@ -86,10 +86,19 @@ export function QuotaExceededSheet({
     try {
       const earned = await rewarded.show();
       if (earned) {
-        // Refresh the balance from the server — the SSV callback on our Edge
-        // Function will have written the new balance. A small delay gives
-        // the callback time to land; we poll-retry a couple of times below.
-        await refreshCredits();
+        // Build-75 LEAD: dev (TestIds) 는 AdMob SSV 콜백이 없어 server
+        // 측 credit 가 안 늘어나 refreshCredits 가 stale. 로컬에서 optimistic
+        // 으로 +CREDITS_PER_AD 적용해 사용자가 즉시 +n 변화를 확인할 수
+        // 있게 한다. production 은 server SSV 가 권위.
+        if (__DEV__) {
+          useSubscriptionStore.setState((s) => ({
+            adCredits: s.adCredits + CREDITS_PER_AD,
+          }));
+        } else {
+          // Refresh the balance from the server — the SSV callback on our Edge
+          // Function will have written the new balance.
+          await refreshCredits();
+        }
         onRewardEarned?.();
         onClose();
       } else {
@@ -120,7 +129,7 @@ export function QuotaExceededSheet({
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           <View style={styles.handle} />
 
-          <Text style={styles.title}>{t('ai.quota_exceeded_title') ?? 'AI 쿼터 초과'}</Text>
+          <Text style={styles.title}>{t('ai.quota_exceeded_title') ?? 'AI 사용량 초과'}</Text>
           <Text style={styles.subtitle}>
             {t('ai.quota_exceeded_subtitle') ?? '오늘의 무료 AI 사용량을 모두 사용했어요.'}
           </Text>

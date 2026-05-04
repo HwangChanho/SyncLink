@@ -95,11 +95,17 @@ export function useRewardedAd(userId: string | null): UseRewardedAdResult {
     if (!handle) return false;
     setIsLoaded(false);
     const { earned } = await handle.show();
-    // handle.load() is invoked internally when the ad closes; reflect in UI.
-    // Delay slightly so we don't flicker between ads.
-    setTimeout(() => {
-      setIsLoaded(handle.isLoaded());
-    }, 500);
+    // Build-75 LEAD: 첫 광고 시청 후 다음 광고가 load 되기 전엔 isLoaded
+    // false 라 버튼이 비활성. 단발 setTimeout 대신 polling 으로 다음 ad
+    // 가 ready 될 때까지 (또는 5초 timeout) tick.
+    const startedAt = Date.now();
+    const pollId = setInterval(() => {
+      const h = handleRef.current;
+      if (!h || h.isLoaded() || Date.now() - startedAt > 5000) {
+        setIsLoaded(h?.isLoaded() ?? false);
+        clearInterval(pollId);
+      }
+    }, 250);
     return earned;
   }, []);
 
