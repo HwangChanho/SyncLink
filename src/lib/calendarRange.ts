@@ -40,11 +40,15 @@ export function getViewRange(date: Date, mode: ViewMode): { start: Date; end: Da
     return { start, end };
   }
   if (mode === 'week') {
+    // Build-70 LEAD: "미리 2주치정도 양사이드로 로드". 주 모드 fetch 범위
+    // 를 ±2주 (5주, 35일) 로 확장. WeekView 의 15일 dayWindow 는 그대로
+    // 유지하되, 사용자가 좌우 빠르게 swipe 해 다른 주로 진입할 때 events
+    // 가 이미 캐시돼 있어 fetch 지연 + re-render 랙이 사라진다.
     const start = new Date(date);
-    start.setDate(start.getDate() - start.getDay());
+    start.setDate(start.getDate() - start.getDay() - 14); // 일요일 기준 -2주
     start.setHours(0, 0, 0, 0);
     const end = new Date(start);
-    end.setDate(end.getDate() + 6);
+    end.setDate(end.getDate() + 34); // 35일 (5주)
     end.setHours(23, 59, 59, 999);
     return { start, end };
   }

@@ -242,9 +242,19 @@ export default function CalendarScreen() {
    * Fetch events whenever the visible period changes.
    * `getViewRange` computes the exact date range for the current view mode
    * so we always load exactly what's visible on screen.
+   *
+   * Build-70 LEAD perf — 같은 range 가 연속으로 fetch 되면 skip.
+   * 주 모드 fetch 가 ±2주 (35일) 라 사용자가 한 주 shift 해도 새 range
+   * 시작/끝이 다른 일자라 skip 안 되고 fetch 새로 일어남. 단 똑같은
+   * selectedDate 로 다른 trigger (focus, language 등) 가 fire 할 때는
+   * 중복 fetch 차단.
    */
+  const lastFetchedRangeRef = useRef<string | null>(null);
   useEffect(() => {
     const range = getViewRange(selectedDate, viewMode);
+    const key = `${viewMode}:${toDateKey(range.start)}-${toDateKey(range.end)}`;
+    if (lastFetchedRangeRef.current === key) return;
+    lastFetchedRangeRef.current = key;
     void fetchEvents(range);
   }, [selectedDate, viewMode, fetchEvents]);
 
@@ -264,6 +274,10 @@ export default function CalendarScreen() {
   useFocusEffect(
     useCallback(() => {
       const range = getViewRange(selectedDate, viewMode);
+      const key = `${viewMode}:${toDateKey(range.start)}-${toDateKey(range.end)}`;
+      // Build-70 — focus 시 동일 range 면 중복 fetch skip.
+      if (lastFetchedRangeRef.current === key) return;
+      lastFetchedRangeRef.current = key;
       void fetchEvents(range);
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedDate, viewMode]),
