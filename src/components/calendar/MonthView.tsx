@@ -533,45 +533,49 @@ export function MonthView({
                    - detailed: Apple-Calendar-style coloured bars with title
                    - compact:  small colour dots only (overview / mobile)
                 */}
-                {dayItems.length > 0 && density === 'detailed' && (
-                  // LEAD 2026-04-28: 다른 월(leading/trailing) 일정은 연하게.
-                  <View style={[styles.barStack, !isCurrentMonth && styles.dimItems]}>
-                    {dayItems.slice(0, MAX_BARS).map((it) => (
-                      <View
-                        key={it.id}
-                        testID="event-bar"
-                        style={[
-                          styles.itemBar,
-                          it.kind === 'event'
-                            ? { backgroundColor: it.color }
-                            : {
-                                backgroundColor: it.color + '22',
-                                borderLeftWidth: 3,
-                                borderLeftColor: it.color,
-                              },
-                        ]}
-                      >
-                        <Text
+                {dayItems.length > 0 && density === 'detailed' && (() => {
+                  // Build-77 LEAD: dense 한 날 (6+) 은 bar 2개 + "+N" 으로
+                  // cell 여백 확보. 일반 (≤5) 은 3 + "+N" 유지.
+                  const visibleBars = dayItems.length > 5 ? 2 : MAX_BARS;
+                  const hidden = Math.max(0, dayItems.length - visibleBars);
+                  return (
+                    // LEAD 2026-04-28: 다른 월(leading/trailing) 일정은 연하게.
+                    <View style={[styles.barStack, !isCurrentMonth && styles.dimItems]}>
+                      {dayItems.slice(0, visibleBars).map((it) => (
+                        <View
+                          key={it.id}
+                          testID="event-bar"
                           style={[
-                            styles.itemBarText,
+                            styles.itemBar,
                             it.kind === 'event'
-                              // textPrimary adapts: gray-900 in light, white in dark
-                              ? { color: colors.textPrimary }
-                              : { color: it.color },
+                              ? { backgroundColor: it.color }
+                              : {
+                                  backgroundColor: it.color + '22',
+                                  borderLeftWidth: 3,
+                                  borderLeftColor: it.color,
+                                },
                           ]}
-                          numberOfLines={1}
                         >
-                          {it.title}
-                        </Text>
-                      </View>
-                    ))}
-                    {dayItems.length > MAX_BARS && (
-                      <Text style={styles.overflowLabel}>
-                        +{dayItems.length - MAX_BARS}
-                      </Text>
-                    )}
-                  </View>
-                )}
+                          <Text
+                            style={[
+                              styles.itemBarText,
+                              it.kind === 'event'
+                                // textPrimary adapts: gray-900 in light, white in dark
+                                ? { color: colors.textPrimary }
+                                : { color: it.color },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {it.title}
+                          </Text>
+                        </View>
+                      ))}
+                      {hidden > 0 && (
+                        <Text style={styles.overflowLabel}>+{hidden}</Text>
+                      )}
+                    </View>
+                  );
+                })()}
 
                 {dayItems.length > 0 && density === 'compact' && (
                   <View style={styles.dotRow}>
@@ -734,6 +738,8 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     paddingTop: spacing[1],
     borderRightWidth: StyleSheet.hairlineWidth,
     borderRightColor: colors.border,
+    // Build-77 LEAD: cell 안 일정 bar 가 늘어나도 다음 cell 침범 X.
+    overflow: 'hidden',
   },
   dateCircle: {
     width: DATE_CIRCLE,
@@ -790,17 +796,28 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     marginTop: spacing[0.5],
     height: 8,
   },
+  // Build-77 — overflow indicator pill 스타일. 작은 둥근 배경 + bold.
   overflowLabel: {
-    ...textStyles.caption,
-    color: colors.textTertiary,
-    lineHeight: 12,
+    fontSize: 9,
+    lineHeight: 11,
+    fontWeight: '700',
+    color: colors.textInverse,
+    backgroundColor: colors.textTertiary,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 7,
+    overflow: 'hidden',
+    alignSelf: 'flex-start',
+    marginLeft: 2,
+    marginTop: 2,
   },
-  // Apple-Calendar-style colour bars stacked below the day number.
+  // Apple-Calendar-style colour bars stacked top→bottom below the day number.
+  // Build-77 — gap 1→2 visual breathing.
   barStack: {
     marginTop: 2,
     width: '100%',
     paddingHorizontal: 2,
-    gap: 1,
+    gap: 2,
   },
   itemBar: {
     height: 13,
