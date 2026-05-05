@@ -408,6 +408,7 @@ export default function CalendarScreen() {
               density={monthDensity}
               onDateSelect={handleDateSelect}
               onDateLongPress={handleDateLongPress}
+              onEventPress={handleEventPress}
               onTargetingChange={setMonthTargetEvent}
               registerDeleteHandler={(fn) => { monthDeleteRef.current = fn; }}
             />

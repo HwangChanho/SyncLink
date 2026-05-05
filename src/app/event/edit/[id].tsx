@@ -773,7 +773,8 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
 
   scroll: { flex: 1 },
   scrollContent: {
-    paddingBottom: spacing[20],
+    // Build-78 LEAD: 키보드 간격 축소.
+    paddingBottom: spacing[3],
   },
 
   titleInput: {

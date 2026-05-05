@@ -111,6 +111,15 @@ interface MonthViewProps {
    * FAB 가 호출. 컴포넌트 unmount 시 부모가 ref 정리.
    */
   registerDeleteHandler?: (fn: (() => void) | null) => void;
+
+  /**
+   * Build-78 LEAD: short press 시 일정 detail/edit 진입.
+   *  - 셀 안 일정 1개: 그 일정 직접
+   *  - 셀 안 일정 2개+: 선택 picker → 사용자가 고른 일정 detail/edit
+   *  - 칩 직접 탭: 그 칩의 일정 detail/edit
+   * 부모 (calendar.tsx) 가 router.push(`/event/${id}`) 처리.
+   */
+  onEventPress?: (event: EventSummary) => void;
 }
 
 // ─── Date utilities ────────────────────────────────────────────────────────────
@@ -181,6 +190,7 @@ export function MonthView({
   onDateSelect,
   onEmptyDatePress,
   onDateLongPress,
+  onEventPress,
   onTargetingChange,
   registerDeleteHandler,
   onDragModeChange,
@@ -299,6 +309,8 @@ export function MonthView({
   // commits the move. This replaces the fragile finger-drag flow.
   const [targetEvent, setTargetEvent] = useState<EventSummary | null>(null);
   const [pickerEvents, setPickerEvents] = useState<EventSummary[] | null>(null);
+  // Build-78 — short press 다중 일정 view picker (move 용 pickerEvents 와 별개).
+  const [viewPickerEvents, setViewPickerEvents] = useState<EventSummary[] | null>(null);
 
   const { t } = useTranslation();
   const { toast: undoToast, showUndo } = useUndoToast();
@@ -382,8 +394,13 @@ export function MonthView({
   );
 
   const handleChipTap = useCallback(
-    (event: EventSummary) => onDateSelect(event.startAt),
-    [onDateSelect],
+    (event: EventSummary) => {
+      // Build-78 LEAD: chip 탭 = 그 일정 detail/edit. fallback 으로
+      // onDateSelect (drill-down) 유지 — onEventPress 미제공 환경.
+      if (onEventPress) onEventPress(event);
+      else onDateSelect(event.startAt);
+    },
+    [onEventPress, onDateSelect],
   );
 
   const { panHandlers, candidateEvent } = useMonthDragHandler({
@@ -414,26 +431,37 @@ export function MonthView({
   }, [registerDeleteHandler, handleDeletePickedEvent]);
 
   // Cell-tap dispatcher — used by every TouchableOpacity in the grid.
-  // Three modes:
+  // Build-78 LEAD: short press 분기.
   //   1. Targeting mode → commit the picked event to this cell.
-  //   2. Cell with events/todos → onDateSelect (parent updates
-  //      selectedDate; LEAD 2026-05-03 wants NO automatic switch to day
-  //      view — that turned a one-tap browse into a forced drill-down).
-  //   3. Empty cell → onEmptyDatePress → /event/create?date=...
+  //   2. Empty cell → onEmptyDatePress → /event/create?date=...
+  //   3. Cell with 1 event → onEventPress(event) (직접 detail/edit).
+  //   4. Cell with 2+ events → viewPickerEvents (선택 picker).
+  //   - todos 만 있고 events 0 인 경우: onDateSelect (드릴 X, 기존 동작).
   const handleCellPress = useCallback(
-    (date: Date, hasItems: boolean) => {
+    (date: Date, dayEvents: EventSummary[]) => {
       if (targetEvent) {
         commitMove(targetEvent, date);
         setTargetEvent(null);
         return;
       }
-      if (!hasItems && onEmptyDatePress) {
+      if (dayEvents.length === 0 && onEmptyDatePress) {
         onEmptyDatePress(date);
+        return;
+      }
+      if (dayEvents.length === 1 && onEventPress) {
+        const evt = dayEvents[0];
+        if (evt) {
+          onEventPress(evt);
+          return;
+        }
+      }
+      if (dayEvents.length >= 2 && onEventPress) {
+        setViewPickerEvents(dayEvents);
         return;
       }
       onDateSelect(date);
     },
-    [targetEvent, commitMove, onDateSelect, onEmptyDatePress],
+    [targetEvent, commitMove, onDateSelect, onEmptyDatePress, onEventPress],
   );
 
   return (
@@ -500,7 +528,7 @@ export function MonthView({
                     toDateKey(targetEvent.startAt) === dateKey &&
                     styles.targetSourceCell,
                 ]}
-                onPress={() => handleCellPress(date, dayItems.length > 0)}
+                onPress={() => handleCellPress(date, dayEvents)}
                 onLongPress={onDateLongPress ? () => onDateLongPress(date) : undefined}
                 delayLongPress={400}
                 activeOpacity={0.7}
@@ -669,6 +697,50 @@ export function MonthView({
                   onPress={() => {
                     setTargetEvent(evt);
                     setPickerEvents(null);
+                  }}
+                >
+                  <View style={[styles.pickerColorBar, { backgroundColor: evt.color }]} />
+                  <View style={{ flex: 1, marginLeft: 8 }}>
+                    <Text style={styles.pickerItemTitle} numberOfLines={1}>
+                      {translatedTitles.get(evt.id) ?? evt.title}
+                    </Text>
+                    <Text style={styles.pickerItemTime}>
+                      {evt.allDay ? '하루 종일' : `${startH}:${startM}`}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Build-78 — short press 다중 일정 view picker. 일정 1개 셀은 직접
+          onEventPress, 2+ 셀은 이 modal 노출 → 사용자가 고른 일정의
+          detail/edit 화면으로 이동. */}
+      <Modal
+        visible={viewPickerEvents !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setViewPickerEvents(null)}
+      >
+        <Pressable style={styles.pickerBackdrop} onPress={() => setViewPickerEvents(null)}>
+          <Pressable style={styles.pickerCard} onPress={() => undefined}>
+            <Text style={styles.pickerHeaderText}>{t('common.preview', '일정 보기')}</Text>
+            <Text style={styles.pickerHeaderHint}>탭하면 상세 / 편집 화면으로 이동해요</Text>
+            {viewPickerEvents?.map((evt) => {
+              const startH = String(evt.startAt.getHours()).padStart(2, '0');
+              const startM = String(evt.startAt.getMinutes()).padStart(2, '0');
+              return (
+                <Pressable
+                  key={evt.id}
+                  style={({ pressed }) => [
+                    styles.pickerItem,
+                    pressed && styles.pickerItemHi,
+                  ]}
+                  onPress={() => {
+                    setViewPickerEvents(null);
+                    onEventPress?.(evt);
                   }}
                 >
                   <View style={[styles.pickerColorBar, { backgroundColor: evt.color }]} />

@@ -1134,7 +1134,8 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   // Scroll
   scroll: { flex: 1 },
   scrollContent: {
-    paddingBottom: spacing[20],
+    // Build-78 LEAD: 키보드 / 텍스트필드 사이 간격 너무 큼. 80→12 축소.
+    paddingBottom: spacing[3],
   },
 
   // Title input
