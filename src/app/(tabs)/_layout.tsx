@@ -82,6 +82,9 @@ export default function TabLayout() {
         headerRight: () => <LanguageButton tintColor={headerFg} />,
         tabBarActiveTintColor: colors.tabActive,
         tabBarInactiveTintColor: colors.tabInactive,
+        // Build-79 LEAD: NL input 탭 시 키보드 위에 tab bar 가 끼어있어
+        // input 과 키보드 사이 ~83px 갭. 키보드 등장 시 tab bar hide.
+        tabBarHideOnKeyboard: true,
         tabBarStyle: {
           height:        componentHeight.tabBar + insets.bottom,
           paddingBottom: insets.bottom,

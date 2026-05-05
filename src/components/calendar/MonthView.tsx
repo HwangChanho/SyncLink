@@ -395,12 +395,20 @@ export function MonthView({
 
   const handleChipTap = useCallback(
     (event: EventSummary) => {
-      // Build-78 LEAD: chip 탭 = 그 일정 detail/edit. fallback 으로
-      // onDateSelect (drill-down) 유지 — onEventPress 미제공 환경.
+      // Build-79 LEAD: "월 뷰 칸에 여러 개 있으면 다른건 수정이 안되잖아.
+      // 샐랙 화면이 먼저 나와야". chip 직접 탭이라도 셀에 events 가
+      // 2+ 면 picker 먼저 노출 → 사용자가 어느 일정 편집할지 선택.
+      const dateKey = toDateKey(event.startAt);
+      const dayEvents = eventsByDate[dateKey] ?? [];
+      if (dayEvents.length >= 2 && onEventPress) {
+        setViewPickerEvents(dayEvents);
+        return;
+      }
+      // 셀에 1개 일정만 있을 때는 직접 detail/edit 진입.
       if (onEventPress) onEventPress(event);
       else onDateSelect(event.startAt);
     },
-    [onEventPress, onDateSelect],
+    [onEventPress, onDateSelect, eventsByDate],
   );
 
   const { panHandlers, candidateEvent } = useMonthDragHandler({
