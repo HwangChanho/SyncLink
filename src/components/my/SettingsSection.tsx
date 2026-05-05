@@ -98,6 +98,20 @@ export function SettingsSection() {
         </TouchableOpacity>
         <View style={menu.menuDivider} />
 
+        {/* Build-81 — 계정 (로그아웃 + 회원탈퇴) 화면. 기존 my.tsx
+            inline AccountSection 대체 — 화면 설정 / 앱 잠금 패턴 동일. */}
+        <TouchableOpacity
+          style={menu.menuItem}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onPress={() => router.push('/settings/account' as any)}
+          activeOpacity={0.7}
+          testID="settings-button-account"
+        >
+          <Text style={menu.menuItemText}>{t('settings.account', '계정')}</Text>
+          <Text style={menu.menuItemChevron}>›</Text>
+        </TouchableOpacity>
+        <View style={menu.menuDivider} />
+
         {/* Inline theme segmented control. Changes apply immediately via
             appearanceStore so the next render reflects the chosen mode. */}
         <View style={local.menuItemTheme}>

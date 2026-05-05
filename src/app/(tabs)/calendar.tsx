@@ -44,7 +44,7 @@ import { useColors } from '@/hooks/useColors';
 import { useTranslation } from 'react-i18next';
 // Phase 2.1 — date/range utils + 화면 hook 들로 분할.
 import { toDateKey, getViewRange, shiftDate } from '@/lib/calendarRange';
-import { useFreeTimeOverlay } from '@/hooks/useFreeTimeOverlay';
+// Build-81 — useFreeTimeOverlay 미사용 (free time 캘린더에서 제거). Space 화면 전용.
 import { useCalendarSwipe } from '@/hooks/useCalendarSwipe';
 import { useCategoryFilter } from '@/hooks/useCategoryFilter';
 
@@ -90,17 +90,10 @@ export default function CalendarScreen() {
    * 미사용. */
   const [monthDensity] = useState<'detailed' | 'compact'>('detailed');
 
-  // ── Free time finder (PRD 4.2 Tier 2) — 분리된 hook ───────────────────────
-  const {
-    isOn: freeTimeOn,
-    toggle: toggleFreeTime,
-    mySpaces,
-    selectedSpaceIds,
-    toggleSpaceSelection,
-    slots: freeSlots,
-    loaded: freeSlotsLoaded,
-  } = useFreeTimeOverlay({ selectedDate, viewMode });
-  const [spacePickerVisible, setSpacePickerVisible] = useState(false);
+  // Build-81 — Free time finder 캘린더에서 제거 (LEAD 2026-05-05).
+  // hook 사용 X, freeSlots prop 도 WeekView/DayView 에 미전달.
+  // useFreeTimeOverlay / FreeTimeRecommendSheet / FreeTimeSlotRow 등은
+  // Space 화면 (src/app/space/[id].tsx) 에서 계속 사용 가능.
 
   /**
    * Build-69 LEAD: ⋯ 메뉴 리스트 없애고 바로 카테고리 필터로 진입.
@@ -376,14 +369,12 @@ export default function CalendarScreen() {
                 size={20}
                 color={colors.textSecondary}
               />
-              {(dimmedCats.size > 0 || freeTimeOn) && (
+              {dimmedCats.size > 0 && (
                 <View style={[styles.catFilterBadge, { backgroundColor: colors.primary }]} />
               )}
             </TouchableOpacity>
           )}
           onSearchPress={() => router.push('/search')}
-          onFreeTimePress={toggleFreeTime}
-          freeTimeOn={freeTimeOn}
         />
 
         {/* Build-76 — wheel date picker (year/month/day spinner) for header
@@ -434,7 +425,6 @@ export default function CalendarScreen() {
               // todosByDate / onTodoDrop 전달 X (strip 정리, grid 깔끔).
               onDragModeChange={handleChildDragModeChange}
               deleteZonePageRectRef={fabRectRef}
-              {...(freeTimeOn ? { freeSlots } : {})}
             />
           )}
 
@@ -446,28 +436,7 @@ export default function CalendarScreen() {
               // Build-74 LEAD: todo 는 월에서만. day view 도 todos prop X.
               onDragModeChange={handleChildDragModeChange}
               deleteZonePageRectRef={fabRectRef}
-              {...(freeTimeOn ? { freeSlots } : {})}
             />
-          )}
-
-          {/*
-            PRD 4.2 Tier 2 — contextual hint shown only when the toggle
-            is on. Helps the user understand why nothing changed if the
-            view/space combination yields no slots. Rendered as a small
-            banner above the body so it doesn't shift the calendar grid.
-          */}
-          {freeTimeOn && (
-            <View pointerEvents="none" style={styles.freeTimeHint} testID="free-time-hint">
-              <Text style={styles.freeTimeHintText}>
-                {viewMode === 'month'
-                  ? t('calendar.free_time_month_hint')
-                  : mySpaces.length === 0
-                    ? t('calendar.free_time_no_space')
-                    : freeSlotsLoaded && freeSlots.length === 0
-                      ? t('calendar.free_time_empty')
-                      : ''}
-              </Text>
-            </View>
           )}
         </Animated.View>
 
@@ -570,61 +539,7 @@ export default function CalendarScreen() {
           </Pressable>
         </Modal>
 
-        {/*
-          PRD 4.2 Tier 2 — Space chip selector. Long-press on the
-          free-time button opens this so users can narrow the
-          intersection to a subset of their spaces. Empty state guides
-          users to create / join a space first.
-        */}
-        <Modal
-          visible={spacePickerVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setSpacePickerVisible(false)}
-        >
-          <Pressable
-            style={styles.catModalBackdrop}
-            onPress={() => setSpacePickerVisible(false)}
-          >
-            <Pressable
-              style={styles.catModalSheet}
-              onPress={(e) => e.stopPropagation()}
-            >
-              <Text style={styles.catModalTitle}>{t('calendar.free_time_select')}</Text>
-              {mySpaces.length === 0 ? (
-                <Text style={styles.catModalHint}>
-                  {t('calendar.free_time_no_space')}
-                </Text>
-              ) : (
-                mySpaces.map((sp) => {
-                  const active = selectedSpaceIds.has(sp.id);
-                  return (
-                    <TouchableOpacity
-                      key={sp.id}
-                      style={styles.catModalRow}
-                      onPress={() => toggleSpaceSelection(sp.id)}
-                      activeOpacity={0.7}
-                      testID={`free-time-space-${sp.id}`}
-                    >
-                      <View style={[styles.catModalDot, { backgroundColor: colors.primary }]} />
-                      <Text
-                        style={[styles.catModalName, !active && { opacity: 0.45 }]}
-                        numberOfLines={1}
-                      >
-                        {sp.name}
-                      </Text>
-                      <Ionicons
-                        name={active ? 'checkmark-circle' : 'ellipse-outline'}
-                        size={22}
-                        color={active ? colors.primary : colors.border}
-                      />
-                    </TouchableOpacity>
-                  );
-                })
-              )}
-            </Pressable>
-          </Pressable>
-        </Modal>
+        {/* Build-81 — Free time space picker modal 제거 (캘린더에서 free time 빼기). */}
       </View>
     </SafeAreaView>
   );

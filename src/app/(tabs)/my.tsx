@@ -42,7 +42,7 @@ import { SettingsSection } from '@/components/my/SettingsSection';
 // The component itself is preserved at src/components/my/LinkedAccountsSection.tsx
 // for future re-activation when a user-facing linked-account UI is needed.
 import { ServiceInfoSection } from '@/components/my/ServiceInfoSection';
-import { AccountSection } from '@/components/my/AccountSection';
+// Build-81 — AccountSection 은 settings/account 화면으로 이전. import 제거.
 import { DevDashboard } from '@/components/DevDashboard';
 
 // ─── Theme options are now built inside the component using i18n ───────────────
@@ -70,7 +70,7 @@ export default function MyScreen() {
   /** True during avatar upload */
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   /** True during sign-out */
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  // Build-81 — isLoggingOut 은 settings/account 로 이전.
 
   // Load spaces when tab mounts
   useEffect(() => {
@@ -193,103 +193,7 @@ export default function MyScreen() {
     }
   }, [setUser, t]);
 
-  // ─── Logout ──────────────────────────────────────────────────────────────
-
-  const handleLogout = useCallback(() => {
-    // Use showAlert (not Alert.alert) so the confirm dialog actually shows
-    // on web — React Native Web's Alert.alert is a no-op for some action
-    // sheets, which previously made the logout button look unresponsive.
-    showAlert(
-      t('auth.logout.button'),
-      t('auth.logout.confirm'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('auth.logout.button'),
-          style: 'destructive',
-          onPress: async () => {
-            setIsLoggingOut(true);
-            try {
-              await authService.signOut();
-              // Clear user from store — _layout.tsx's auth guard will redirect to /auth/login
-              setUser(null);
-            } catch (err) {
-              showAlert(t('common.error'), err instanceof Error ? err.message : t('auth.logout.failed'));
-              setIsLoggingOut(false);
-            }
-          },
-        },
-      ],
-    );
-  }, [setUser, t]);
-
-  // ─── Account deletion ─────────────────────────────────────────────────────
-
-  /**
-   * Prompt the user with a double-confirmation alert before deleting their account.
-   *
-   * Flow:
-   *   1) First Alert — primary warning.
-   *   2) Second Alert — irreversible-action confirm.
-   *   3) authService.deleteAccount() → server-side auth.admin.deleteUser + signOut.
-   *   4) Reset local auth state AND explicitly navigate to /auth/login.
-   *      The auth-guard in _layout.tsx also watches for user=null, but an
-   *      explicit router.replace() is more robust against race conditions
-   *      (the guard runs on segment change; a stale (tabs)/my render without
-   *      a guard re-run can otherwise linger for a frame).
-   *
-   * Logs:
-   *   console.error is used on failure so iOS silent-fail bugs surface in
-   *   Metro. Previously the user only saw the localised error title.
-   */
-  const handleDeleteAccount = useCallback(() => {
-    showAlert(
-      t('auth.delete_account.button'),
-      t('auth.delete_account.confirm'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('space.leave_button'),
-          style: 'destructive',
-          onPress: () => {
-            // Second confirmation to prevent accidental tap
-            showAlert(
-              t('common.confirm'),
-              t('common.irreversible'),
-              [
-                { text: t('common.cancel'), style: 'cancel' },
-                {
-                  text: t('common.delete'),
-                  style: 'destructive',
-                  onPress: async () => {
-                    try {
-                      await authService.deleteAccount();
-                      // Clear auth store — auth-guard will pick this up too.
-                      setUser(null);
-                      // Belt-and-braces: force navigation to the login screen
-                      // immediately so the user cannot see tab content after
-                      // their account has been deleted server-side.
-                      router.replace('/auth/login');
-                    } catch (err) {
-                      // Always log the raw error — helps triage Edge Function
-                      // failures that previously surfaced only as a generic
-                      // localised message on iOS.
-                      void logError({ context: 'my.deleteAccount', error: err });
-                      console.error('[My] deleteAccount failed:', err);
-                      showAlert(
-                        t('common.error'),
-                        err instanceof Error ? err.message : t('auth.delete_account.failed'),
-                      );
-                    }
-                  },
-                },
-              ],
-            );
-          },
-        },
-      ],
-    );
-  }, [setUser, t]);
+  // Build-81 — 로그아웃 / 회원탈퇴 핸들러는 settings/account.tsx 로 이전.
 
   // ─── Render ──────────────────────────────────────────────────────────────
 
@@ -500,15 +404,8 @@ export default function MyScreen() {
 
         <SettingsSection />
 
-        {/* Build-60 LEAD: "My탭은 시스템 하위에 유저 넣고 거기에 로그아웃
-            이랑 계정삭제 넣어놔" → 시스템(SettingsSection) 바로 아래에
-            유저(AccountSection) 가 오도록 순서 변경. ServiceInfoSection /
-            DevDashboard 는 그 아래로 이동. */}
-        <AccountSection
-          isLoggingOut={isLoggingOut}
-          onLogout={handleLogout}
-          onDeleteAccount={handleDeleteAccount}
-        />
+        {/* Build-81 — 로그아웃/회원탈퇴는 settings/account 화면으로 분리.
+            SettingsSection 의 "계정" 메뉴에서 진입. */}
 
         {/* ── Dev-only AI cost dashboard ───────────────────────────── */}
         {/* Rendered only in local development; never visible in production */}

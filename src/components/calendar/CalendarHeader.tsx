@@ -81,12 +81,10 @@ interface CalendarHeaderProps {
    */
   rightToolbar?: React.ReactNode;
   /**
-   * Build-80 ISSUE-021 fix — free-time 토글 UI 복원. Build 69 의 ⋯ 메뉴
-   * 단순화 시 누락된 PRD 4.2 Tier 2 빈 시간 찾기 진입점. 좌측 today
-   * 버튼 옆에 시계 아이콘으로 노출. 활성 시 primary 색상.
+   * Build-81 — free-time 토글 prop 제거 (캘린더에서 PRD 4.2 free time 빼기).
+   * Space 화면에서 별도 운영. 컴포넌트 호출처 미전달 시 미렌더.
    */
   onFreeTimePress?: () => void;
-  /** Free-time 토글 현재 상태 (active 표시용). */
   freeTimeOn?: boolean;
 }
 
