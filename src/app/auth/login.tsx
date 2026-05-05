@@ -210,7 +210,9 @@ export default function LoginScreen() {
             <TextInput
               testID="login-dev-email"
               style={styles.devInput}
-              placeholder={t('auth.login.email_placeholder')}
+              // Build-80 LEAD ISSUE-019: i18n 미준비 race 에서 'undefined'
+              // 노출 방지. fallback 한국어 명시.
+              placeholder={t('auth.login.email_placeholder', '이메일')}
               placeholderTextColor={colors.textTertiary}
               value={devEmail}
               onChangeText={setDevEmail}
@@ -249,7 +251,7 @@ export default function LoginScreen() {
               ref={passwordInputRef}
               testID="login-dev-password"
               style={styles.devInput}
-              placeholder={t('auth.login.password_placeholder')}
+              placeholder={t('auth.login.password_placeholder', '비밀번호')}
               placeholderTextColor={colors.textTertiary}
               value={devPassword}
               onChangeText={setDevPassword}
