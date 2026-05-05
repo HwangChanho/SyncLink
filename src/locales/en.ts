@@ -34,6 +34,7 @@ const en = {
     a11y_close: 'Close',
     a11y_back: 'Go back',
     a11y_today: 'Go to today',
+    a11y_free_time: 'Toggle free time finder',
     a11y_create_event: 'New event',
     a11y_search_event: 'Search events',
     a11y_select_month: 'Select year and month',

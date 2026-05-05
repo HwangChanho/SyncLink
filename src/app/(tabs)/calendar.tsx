@@ -93,6 +93,7 @@ export default function CalendarScreen() {
   // ── Free time finder (PRD 4.2 Tier 2) — 분리된 hook ───────────────────────
   const {
     isOn: freeTimeOn,
+    toggle: toggleFreeTime,
     mySpaces,
     selectedSpaceIds,
     toggleSpaceSelection,
@@ -381,6 +382,8 @@ export default function CalendarScreen() {
             </TouchableOpacity>
           )}
           onSearchPress={() => router.push('/search')}
+          onFreeTimePress={toggleFreeTime}
+          freeTimeOn={freeTimeOn}
         />
 
         {/* Build-76 — wheel date picker (year/month/day spinner) for header

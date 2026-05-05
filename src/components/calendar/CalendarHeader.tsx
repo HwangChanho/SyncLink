@@ -80,6 +80,14 @@ interface CalendarHeaderProps {
    * into a single ⋯ menu button).
    */
   rightToolbar?: React.ReactNode;
+  /**
+   * Build-80 ISSUE-021 fix — free-time 토글 UI 복원. Build 69 의 ⋯ 메뉴
+   * 단순화 시 누락된 PRD 4.2 Tier 2 빈 시간 찾기 진입점. 좌측 today
+   * 버튼 옆에 시계 아이콘으로 노출. 활성 시 primary 색상.
+   */
+  onFreeTimePress?: () => void;
+  /** Free-time 토글 현재 상태 (active 표시용). */
+  freeTimeOn?: boolean;
 }
 
 const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
@@ -156,6 +164,8 @@ export function CalendarHeader({
   onViewModeChange,
   onSearchPress,
   rightToolbar,
+  onFreeTimePress,
+  freeTimeOn = false,
 }: CalendarHeaderProps) {
   // Resolve active theme colors for dark mode support (TASK-700)
   const { t } = useTranslation();
@@ -206,6 +216,25 @@ export function CalendarHeader({
           >
             <Ionicons name="today-outline" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
+          {/* Build-80 — Free time finder 토글 (PRD 4.2 Tier 2). Build 69
+              의 ⋯ 메뉴 단순화 시 누락됐던 진입점 복원. */}
+          {onFreeTimePress && (
+            <TouchableOpacity
+              testID="calendar-header-free-time"
+              onPress={onFreeTimePress}
+              hitSlop={HIT_SLOP}
+              style={styles.todayButton}
+              accessibilityLabel={t('common.a11y_free_time') ?? '빈 시간 찾기'}
+              accessibilityRole="button"
+              accessibilityState={{ selected: freeTimeOn }}
+            >
+              <Ionicons
+                name={freeTimeOn ? 'time' : 'time-outline'}
+                size={20}
+                color={freeTimeOn ? colors.primary : colors.textSecondary}
+              />
+            </TouchableOpacity>
+          )}
         </View>
         <View style={styles.titleAbsolute} pointerEvents="box-none">
           <TouchableOpacity

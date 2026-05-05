@@ -34,6 +34,7 @@ const ja = {
     a11y_close: '閉じる',
     a11y_back: '戻る',
     a11y_today: '今日に戻る',
+    a11y_free_time: '空き時間検索の切替',
     a11y_create_event: '新しい予定',
     a11y_search_event: '予定を検索',
     a11y_select_month: '年月を選択',

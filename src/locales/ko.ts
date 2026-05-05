@@ -39,6 +39,7 @@ const ko = {
     a11y_close: '닫기',
     a11y_back: '뒤로 가기',
     a11y_today: '오늘로 이동',
+    a11y_free_time: '빈 시간 찾기 토글',
     a11y_create_event: '새 일정 만들기',
     a11y_search_event: '일정 검색',
     a11y_select_month: '년도/월 선택',

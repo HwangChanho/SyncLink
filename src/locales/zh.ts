@@ -34,6 +34,7 @@ const zh = {
     a11y_close: '关闭',
     a11y_back: '返回',
     a11y_today: '返回今天',
+    a11y_free_time: '切换空闲时间查找',
     a11y_create_event: '新建日程',
     a11y_search_event: '搜索日程',
     a11y_select_month: '选择年份和月份',
