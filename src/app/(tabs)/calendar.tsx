@@ -31,7 +31,7 @@ import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { NLInputBar } from '@/components/nl/NLInputBar';
 import { CalendarHeader, type ViewMode } from '@/components/calendar/CalendarHeader';
-import { YearMonthPicker } from '@/components/calendar/YearMonthPicker';
+import { WheelDatePicker } from '@/components/calendar/WheelDatePicker';
 import { MonthView } from '@/components/calendar/MonthView';
 import { WeekView } from '@/components/calendar/WeekView';
 import { DayView } from '@/components/calendar/DayView';
@@ -383,8 +383,9 @@ export default function CalendarScreen() {
           onSearchPress={() => router.push('/search')}
         />
 
-        {/* Year/month picker modal — opens when the header title is tapped */}
-        <YearMonthPicker
+        {/* Build-76 — wheel date picker (year/month/day spinner) for header
+            title tap. 기존 YearMonthPicker (grid) 대체. */}
+        <WheelDatePicker
           visible={pickerVisible}
           currentDate={selectedDate}
           onSelect={handleYearMonthSelect}

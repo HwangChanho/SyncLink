@@ -487,6 +487,7 @@ export function DayView({
                       height={lay.height}
                       widthFraction={lay.widthFraction}
                       leftFraction={lay.leftFraction}
+                      hiddenCount={lay.hiddenCount}
                       onPress={onEventPress}
                       {...(tt ? { translatedTitle: tt } : {})}
                     />

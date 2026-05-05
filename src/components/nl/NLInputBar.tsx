@@ -360,9 +360,9 @@ export function NLInputBar({ onEventCreated }: Props) {
      */
     <View style={[
       styles.container,
-      // Conditional spread instead of `paddingBottom: undefined` because RN
-      // can read explicit-undefined as an override of the StyleSheet value.
-      keyboardHeight > 0 && { paddingBottom: keyboardHeight + 8 },
+      // Build-76 LEAD: 키보드와 텍스트필드 사이 간격 제거. 이전 +8 px
+      // 여백이 사용자 보기에 너무 컸음. 정확히 keyboardHeight 만큼만 lift.
+      keyboardHeight > 0 && { paddingBottom: keyboardHeight },
     ]}>
       {/* Suggestion chips — shown when focused with empty text */}
       {isFocused && !text && inputState === 'idle' && (

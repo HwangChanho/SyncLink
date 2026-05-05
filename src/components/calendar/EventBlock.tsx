@@ -41,6 +41,11 @@ interface EventBlockProps {
    * to event.title when undefined.
    */
   translatedTitle?: string;
+  /**
+   * Build-76 — overlap cluster 의 hidden 일정 수. 0 보면 indicator 없음.
+   * 양수면 우측 상단에 "+N" 배지 표시.
+   */
+  hiddenCount?: number;
 }
 
 export function EventBlock({
@@ -50,12 +55,16 @@ export function EventBlock({
   widthFraction = 1,
   leftFraction = 0,
   translatedTitle,
+  hiddenCount = 0,
 }: EventBlockProps) {
   const colors = useColors();
   const styles = makeStyles(colors);
 
   const blockHeight = Math.max(height, MIN_HEIGHT);
-  const showSubtitle = blockHeight >= 38;
+  // Build-76 — narrow chip 에서 텍스트가 글자별 줄바꿈으로 깨지는 것 방지.
+  // numberOfLines=2 는 1시간 이상 (60+) 의 chip 에서만 허용. 그보다 작으면
+  // 1줄 ellipsize. (이전 임계 38 → 60.)
+  const showSubtitle = blockHeight >= 60;
   const bgColor = `${event.color}CC`;
 
   return (
@@ -73,15 +82,11 @@ export function EventBlock({
         },
       ]}
     >
-      {/*
-        No Text.onPress — the parent useGridDragHandler PanResponder owns
-        all touches on event chips. Without this, iOS's native press
-        recognition for Text.onPress was winning the touch race, never
-        firing the parent onStartShould (sprint-32 Build 44/sim Build #4
-        diagnostic showed "idle" for long-presses on the chip).
-        Tap-to-open is replayed by the hook's onTap callback on release.
-      */}
-      <Text style={styles.title} numberOfLines={showSubtitle ? 2 : 1}>
+      <Text
+        style={styles.title}
+        numberOfLines={showSubtitle ? 2 : 1}
+        ellipsizeMode="tail"
+      >
         {translatedTitle ?? event.title}
       </Text>
 
@@ -90,6 +95,13 @@ export function EventBlock({
           testID="owner-dot"
           style={[styles.ownerDot, { backgroundColor: event.color }]}
         />
+      )}
+
+      {/* Build-76 — overlap 시 hidden chip 수 indicator. */}
+      {hiddenCount > 0 && (
+        <View testID="overflow-badge" style={styles.overflowBadge}>
+          <Text style={styles.overflowBadgeText}>+{hiddenCount}</Text>
+        </View>
       )}
     </View>
   );
@@ -118,6 +130,21 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       borderRadius: OWNER_DOT_SIZE / 2,
       borderWidth: 1,
       borderColor: 'rgba(255, 255, 255, 0.85)',
+    },
+    overflowBadge: {
+      position: 'absolute',
+      bottom: 2,
+      right: 2,
+      paddingHorizontal: 4,
+      paddingVertical: 1,
+      borderRadius: 8,
+      backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    },
+    overflowBadgeText: {
+      ...textStyles.caption,
+      color: '#FFFFFF',
+      fontWeight: '700',
+      fontSize: 10,
     },
   });
 }

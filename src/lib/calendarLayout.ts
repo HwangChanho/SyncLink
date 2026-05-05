@@ -22,7 +22,18 @@ export interface LayoutEvent {
   height: number;
   widthFraction: number;
   leftFraction: number;
+  /**
+   * Build-76 LEAD: "여러개 등록하면 보기싫게 쌓여서 알아볼 수 없음".
+   * 같은 시간대 cluster 의 events 가 MAX_VISIBLE_COLS (2) 보다 많을 때
+   * 마지막 visible chip 에 hiddenCount 를 부여해 EventBlock 이 "+N"
+   * indicator 표시. 클러스터 내 다른 chips 는 hiddenCount=0.
+   */
+  hiddenCount: number;
 }
+
+/** Build-76 — overlap cluster 의 chip 가 가로로 깎여 narrow 해지지 않게
+ *  최대 2 columns 까지만 side-by-side, 나머지는 hidden + indicator. */
+const MAX_VISIBLE_COLS = 2;
 
 /**
  * Compute positions for events within a single day column.
@@ -84,16 +95,33 @@ export function computeEventLayout(
       }
     }
     const totalCols = colEndTimes.length;
-    for (const { event, colIndex } of assignments) {
+    // Build-76 — visible col 수 cap. 클러스터 내 events 중 colIndex 가
+    // MAX_VISIBLE_COLS 이상인 것은 hidden, 나머지는 lastVisible col 의 chip
+    // 에 +N indicator 부여.
+    const visibleCols = Math.min(totalCols, MAX_VISIBLE_COLS);
+    const hiddenAssignments = assignments.filter((a) => a.colIndex >= MAX_VISIBLE_COLS);
+    const visibleAssignments = assignments.filter((a) => a.colIndex < MAX_VISIBLE_COLS);
+    const hiddenCount = hiddenAssignments.length;
+
+    // 마지막 visible col 의 첫 번째 event 가 +N indicator 를 들고감.
+    // (단순화: visibleAssignments 중 colIndex 가 가장 큰 것에 배지.)
+    let badgeAssigned = false;
+    const lastVisibleColIdx = visibleCols - 1;
+
+    for (const { event, colIndex } of visibleAssignments) {
       const startHour = event.startAt.getHours() + event.startAt.getMinutes() / 60;
       const endHour   = event.endAt.getHours()   + event.endAt.getMinutes()   / 60;
       const durationHours = Math.max(endHour - startHour, 0.25);
+      const isBadgeChip =
+        !badgeAssigned && hiddenCount > 0 && colIndex === lastVisibleColIdx;
+      if (isBadgeChip) badgeAssigned = true;
       out.push({
         event,
         topOffset:     startHour * hourHeight,
         height:        durationHours * hourHeight,
-        widthFraction: 1 / totalCols,
-        leftFraction:  colIndex / totalCols,
+        widthFraction: 1 / visibleCols,
+        leftFraction:  colIndex / visibleCols,
+        hiddenCount:   isBadgeChip ? hiddenCount : 0,
       });
     }
     cluster = [];

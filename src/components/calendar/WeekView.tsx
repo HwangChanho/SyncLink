@@ -698,18 +698,27 @@ export function WeekView({
             const allDayEvts = (eventsByDate[dateKey] ?? []).filter((e) => e.allDay);
             // 시간 없는 todo 만 strip 에. 시간 있는 건 아래 grid 에서 그린다.
             const dayTodos = (todosByDate?.[dateKey] ?? []).filter((td) => !td.dueAt);
+            // Build-76 LEAD: all-day strip 에 일정 여러 개면 줄 깨지고
+            // 알아볼 수 없음. 일자당 최대 1개 chip + 나머지는 "+N" indicator.
+            const visibleEvts = allDayEvts.slice(0, 1);
+            const hiddenEvtCount = Math.max(0, allDayEvts.length - 1);
             return (
               <View key={dateKey} style={[styles.allDayCol, { width: columnWidth }]}>
-                {allDayEvts.map((evt) => (
+                {visibleEvts.map((evt) => (
                   <TouchableOpacity
                     key={evt.id}
                     onPress={() => onEventPress(evt)}
                     activeOpacity={0.8}
                     style={[styles.allDayChip, { backgroundColor: evt.color ?? colors.primary }]}
                   >
-                    <Text style={styles.allDayChipText} numberOfLines={1}>
+                    <Text style={styles.allDayChipText} numberOfLines={1} ellipsizeMode="tail">
                       {translatedTitles.get(evt.id) ?? evt.title}
                     </Text>
+                    {hiddenEvtCount > 0 && (
+                      <View style={styles.allDayBadge}>
+                        <Text style={styles.allDayBadgeText}>+{hiddenEvtCount}</Text>
+                      </View>
+                    )}
                   </TouchableOpacity>
                 ))}
                 {dayTodos.map((td) => {
@@ -1074,6 +1083,24 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     color: colors.textInverse,
     fontWeight: '600',
   },
+  // Build-76 — strip chip 우측에 +N indicator (overflow 일자).
+  allDayBadge: {
+    position: 'absolute',
+    right: 4,
+    top: 1,
+    bottom: 1,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  allDayBadgeText: {
+    ...textStyles.caption,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 10,
+  },
   /** Build-66 — grid 안에 노출되는 시간 있는 todo chip. */
   timedTodoChip: {
     position: 'absolute',
@@ -1354,6 +1381,7 @@ function DayColumnImpl({
               height={lay.height}
               widthFraction={lay.widthFraction}
               leftFraction={lay.leftFraction}
+              hiddenCount={lay.hiddenCount}
               onPress={onEventPress}
               {...(tt ? { translatedTitle: tt } : {})}
             />
