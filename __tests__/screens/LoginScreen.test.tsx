@@ -150,10 +150,10 @@ describe('LoginScreen', () => {
       expect(getByText('Apple로 시작하기')).toBeTruthy();
     });
 
-    it('Android: Apple 로그인 버튼도 렌더링됨 (Sprint 17 — 모든 플랫폼에 노출)', () => {
+    it('Android: Apple 로그인 버튼 미렌더링 (Build-80 LEAD: web/Android Apple hide)', () => {
       Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
-      const { getByText } = render(<LoginScreen />);
-      expect(getByText('Apple로 시작하기')).toBeTruthy();
+      const { queryByText } = render(<LoginScreen />);
+      expect(queryByText('Apple로 시작하기')).toBeNull();
     });
 
     it('초기 상태에서 에러 메시지가 없음', () => {
@@ -346,13 +346,12 @@ describe('LoginScreen', () => {
       });
     });
 
-    it('Android: Apple 버튼 렌더링됨 (Sprint 17 — 모든 플랫폼 노출)', () => {
+    it('Android: Apple 버튼 미렌더링 (Build-80 LEAD: iOS only)', () => {
       Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
 
-      const { getByText } = render(<LoginScreen />);
+      const { queryByText } = render(<LoginScreen />);
 
-      // Sprint 17 변경: Android에서도 Apple 버튼 표시
-      expect(getByText('Apple로 시작하기')).toBeTruthy();
+      expect(queryByText('Apple로 시작하기')).toBeNull();
       expect(signInWithApple).not.toHaveBeenCalled();
     });
 
