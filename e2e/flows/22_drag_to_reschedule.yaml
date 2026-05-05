@@ -76,11 +76,12 @@ env:
       visible:
         id: "event-block-gh"
     commands:
-      # Maestro swipeFrom: 이벤트 블록에서 아래로 60px swipe
-      # long-press dead-zone(8px)을 초과하는 수직 이동으로 gesture 트리거 시도.
-      # duration은 충분히 길게 설정해 PAN_ACTIVATION_PX 통과를 유도.
-      - swipeFrom:
-          id: "event-block-gh"
+      # Maestro 2.5+ syntax: swipe with `from` block (deprecated swipeFrom).
+      # 이벤트 블록에서 아래로 swipe 60px 시도 — long-press dead-zone(8px)
+      # 초과 + PAN_ACTIVATION_PX 통과 유도.
+      - swipe:
+          from:
+            id: "event-block-gh"
           direction: DOWN
           duration: 1200
       - waitForAnimationToEnd

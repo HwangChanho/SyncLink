@@ -197,6 +197,7 @@ export function CalendarHeader({
             viewMode 유지하며 selectedDate = 오늘로 점프. */}
         <View style={styles.leftActions}>
           <TouchableOpacity
+            testID="calendar-header-today"
             onPress={onToday}
             hitSlop={HIT_SLOP}
             style={styles.todayButton}

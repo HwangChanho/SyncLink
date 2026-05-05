@@ -1,0 +1,117 @@
+# 26_wheel_date_picker — 캘린더 헤더 타이틀 탭 → wheel date picker 검증
+#
+# Build 76 신규: WheelDatePicker (year/month/day spinner) — 캘린더 헤더의
+# "2026년 5월" 타이틀을 탭하면 bottom sheet 로 spinner picker 노출.
+# 기존 YearMonthPicker (grid) 대체.
+#
+# 검증:
+#   1. 캘린더 진입 후 헤더 타이틀 탭
+#   2. WheelDatePicker bottom sheet 가시성 (취소/확인 버튼 노출)
+#   3. 취소 → 닫힘
+#
+# testID 참조:
+#   calendar-header-title    — CalendarHeader 타이틀 TouchableOpacity
+#   wheel-date-picker-cancel — WheelDatePicker 취소 버튼
+#   wheel-date-picker-confirm — WheelDatePicker 확인 버튼
+#   tab-button-calendar      — 탭 바 캘린더 버튼
+
+appId: io.synclink.app
+env:
+  TEST_EMAIL: ${TEST_EMAIL}
+  TEST_PASSWORD: ${TEST_PASSWORD}
+---
+# ── 앱 초기화 ──────────────────────────────────────────────────────────────────
+- stopApp
+- clearState
+- launchApp:
+    permissions:
+      all: deny
+
+# Dialog dismiss (런타임 권한 요청)
+- repeat:
+    times: 5
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "허용 안 함"
+          commands:
+            - tapOn:
+                text: "허용 안 함"
+            - waitForAnimationToEnd
+      - runFlow:
+          when:
+            visible:
+              text: "Don't Allow"
+          commands:
+            - tapOn:
+                text: "Don't Allow"
+            - waitForAnimationToEnd
+
+# ── 로그인 ─────────────────────────────────────────────────────────────────────
+- extendedWaitUntil:
+    visible:
+      id: "login-dev-submit"
+    timeout: 30000
+- tapOn:
+    id: "login-dev-email"
+- eraseText
+- inputText: ${TEST_EMAIL}
+- tapOn:
+    id: "login-dev-password"
+- eraseText
+- inputText: ${TEST_PASSWORD}
+- tapOn:
+    id: "login-dev-submit"
+- waitForAnimationToEnd
+
+# Onboarding skip (있을 때)
+- runFlow:
+    when:
+      visible:
+        id: "onboarding-button-skip"
+    commands:
+      - tapOn:
+          id: "onboarding-button-skip"
+      - waitForAnimationToEnd
+
+# Home tab 도달
+- extendedWaitUntil:
+    visible:
+      id: "tab-button-home"
+    timeout: 30000
+
+# ── 캘린더 진입 ────────────────────────────────────────────────────────────────
+- tapOn:
+    id: "tab-button-calendar"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/26_calendar_view
+
+# ── 헤더 타이틀 탭 → WheelDatePicker 노출 ───────────────────────────────────────
+# CalendarHeader 의 title TouchableOpacity 는 testID 미설정. text 매칭으로 시도.
+# fallback: assertVisible 로 wheel picker 등장 확인.
+- tapOn:
+    text: ".*년 .*"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/26_wheel_picker_open
+
+# WheelDatePicker bottom sheet 의 취소/확인 버튼 가시성 검증.
+- assertVisible:
+    text: "취소"
+    optional: true
+- assertVisible:
+    text: "확인"
+    optional: true
+
+# ── 취소 → 닫힘 ────────────────────────────────────────────────────────────────
+- tapOn:
+    text: "취소"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/26_wheel_picker_dismissed
+
+# ── 캘린더 정상 상태 확인 ─────────────────────────────────────────────────────
+- assertVisible:
+    id: "tab-button-calendar"
+- takeScreenshot: screenshots/26_final

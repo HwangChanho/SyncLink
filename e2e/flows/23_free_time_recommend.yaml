@@ -66,7 +66,7 @@ env:
 #       QA 계정에 free slot이 있는 날짜의 주가 표시되어야 함.
 - assertVisible:
     id: "free-time-toggle"  # Tier 2 free time 표시 토글 (캘린더 헤더)
-  optional: true
+    optional: true
 - takeScreenshot: screenshots/rec_03_free_slots
 
 # ── 4. 빈 슬롯 탭 → BottomSheet 열림 ─────────────────────────────────────────
@@ -80,20 +80,20 @@ env:
 # ── 5. FreeTimeRecommendSheet 표시 확인 ────────────────────────────────────────
 - assertVisible:
     id: "free-time-recommend-sheet"
-  optional: true
+    optional: true
 - takeScreenshot: screenshots/rec_04_sheet_open
 
 # ── 6. 룰 baseline 활동 카드 표시 확인 ────────────────────────────────────────
 # 룰 baseline은 즉시 (0ms) 표시되므로 sheet가 열리면 바로 확인 가능.
 - assertVisible:
     id: "free-time-recommend-activity-0"
-  optional: true
+    optional: true
 - takeScreenshot: screenshots/rec_05_activities
 
 # ── 7. "다시 추천" 버튼 탭 ──────────────────────────────────────────────────────
 - tapOn:
     id: "free-time-recommend-refresh-btn"
-  optional: true
+    optional: true
 - waitForAnimationToEnd
 - takeScreenshot: screenshots/rec_06_refresh
 
@@ -101,20 +101,20 @@ env:
 # 탭 시 이벤트 생성 모달이 열리고 제목이 prefill되어야 함.
 - tapOn:
     id: "free-time-recommend-create-btn-0"
-  optional: true
+    optional: true
 - waitForAnimationToEnd
 - takeScreenshot: screenshots/rec_07_create_event
 
 # ── 9. BottomSheet 배경 탭으로 닫기 또는 Back ────────────────────────────────
-# 이벤트 모달이 열렸으면 Back으로 닫기.
+# 이벤트 모달이 열렸으면 Back으로 닫기. (Maestro 의 back 은 단일 command 라
+# optional 사용 불가 — 그냥 실행, 화면이 root 라도 무해.)
 - back
-  optional: true
 - waitForAnimationToEnd
 
 # 시트가 열려 있으면 배경 탭으로 닫기.
 - tapOn:
     id: "free-time-recommend-backdrop"
-  optional: true
+    optional: true
 - waitForAnimationToEnd
 
 # ── 10. 앱 크래시 없음 최종 확인 ────────────────────────────────────────────────

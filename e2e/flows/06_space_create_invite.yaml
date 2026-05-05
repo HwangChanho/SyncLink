@@ -127,11 +127,13 @@ env:
 - takeScreenshot: screenshots/06_my_tab
 
 # ── 4. Space 생성 화면 진입 ────────────────────────────────────────────────────
-# my.tsx에 Space가 없으면 my-button-create-space, 있으면 my-button-add-space로 표시.
-# 두 분기를 모두 커버하기 위해 스크롤 후 조건부 탭. Maestro 2.5는 scrollToBottom 미지원
-# 이라 일반 scroll 을 두 번 반복해 ScrollView 끝까지 내려간다.
-- scroll
-- scroll
+# my.tsx에 Space가 없으면 my-button-create-space (empty state), 있으면
+# my-button-add-space (목록 하단). 두 분기 모두 커버. 첫 spaces 로드 race
+# 회피 위해 waitForAnimationToEnd 후 명시적 scroll 진행.
+- waitForAnimationToEnd
+
+# Space 없을 때 분기 — empty state 의 create-space 버튼은 ScrollView 상단에
+# 있어 scroll 없이 보일 가능성 큼. 보이면 즉시 탭.
 - runFlow:
     when:
       visible:
@@ -140,11 +142,22 @@ env:
       - tapOn:
           id: "my-button-create-space"
       - waitForAnimationToEnd
+
+# Space 있을 때 분기 — add-space 버튼은 spaces 목록 하단. scrollUntilVisible
+# 로 안정 스크롤. (이전 flow 의 단순 scroll x2 는 data race + 화면 길이
+# 가변에 취약했음.)
 - runFlow:
     when:
-      visible:
-        id: "my-button-add-space"
+      notVisible:
+        id: "space-create-name-input"
     commands:
+      - scrollUntilVisible:
+          element:
+            id: "my-button-add-space"
+          direction: DOWN
+          timeout: 10000
+          speed: 40
+          visibilityPercentage: 60
       - tapOn:
           id: "my-button-add-space"
       - waitForAnimationToEnd
