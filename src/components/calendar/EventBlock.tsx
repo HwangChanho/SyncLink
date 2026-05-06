@@ -65,7 +65,10 @@ export function EventBlock({
   // numberOfLines=2 는 1시간 이상 (60+) 의 chip 에서만 허용. 그보다 작으면
   // 1줄 ellipsize. (이전 임계 38 → 60.)
   const showSubtitle = blockHeight >= 60;
-  const bgColor = `${event.color}CC`;
+  // Build-91 LEAD — 공유 받은 이벤트 (본인 소유 X) 는 더 연하게. CC (~80%)
+  // → 4D (~30%) alpha. 우상단 ownerDot 와 함께 두 표시가 동작.
+  const alphaSuffix = event.isOwn ? 'CC' : '4D';
+  const bgColor = `${event.color}${alphaSuffix}`;
 
   return (
     <View
