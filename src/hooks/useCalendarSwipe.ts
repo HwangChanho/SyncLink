@@ -15,7 +15,7 @@
  */
 
 import { useCallback, useEffect, useRef } from 'react';
-import { Animated, Dimensions, PanResponder } from 'react-native';
+import { Animated, PanResponder } from 'react-native';
 
 const SWIPE_THRESHOLD = 60;
 const SWIPE_RATIO = 1.5;
@@ -45,30 +45,15 @@ export function useCalendarSwipe({ viewMode, isDragging, onShift }: Args) {
   useEffect(() => { onShiftRef.current = onShift; }, [onShift]);
 
   const swipeX = useRef(new Animated.Value(0)).current;
-  const screenWidth = Dimensions.get('window').width;
 
-  const animateCommit = useCallback((direction: -1 | 1) => {
-    Animated.sequence([
-      // 현재 view 를 swipe 방향 반대편으로 날린다.
-      Animated.timing(swipeX, {
-        toValue: -direction * screenWidth,
-        duration: 160,
-        useNativeDriver: true,
-      }),
-      // 즉시 반대편 끝으로 워프 — 새 period 가 거기서 들어옴.
-      Animated.timing(swipeX, {
-        toValue: direction * screenWidth,
-        duration: 0,
-        useNativeDriver: true,
-      }),
-      Animated.spring(swipeX, {
-        toValue: 0,
-        useNativeDriver: true,
-        bounciness: 6,
-        speed: 14,
-      }),
-    ]).start();
-  }, [swipeX, screenWidth]);
+  // Build-82 LEAD: month swipe 렉. 이전 fly-off + warp + spring 3단계
+  // sequence (~600ms 총) 가 selectedDate 변경에 따른 MonthView 6×7=42
+  // cells 재렌더와 동시 진행되며 frame drop 발생. 즉시 reset 으로 단순화 —
+  // 사용자가 commit 직후 바로 새 selectedDate 의 콘텐츠를 봄. 시각적 jolt
+  // 줄어듦.
+  const animateCommit = useCallback(() => {
+    swipeX.setValue(0);
+  }, [swipeX]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -85,19 +70,19 @@ export function useCalendarSwipe({ viewMode, isDragging, onShift }: Args) {
         Math.abs(gs.dx) > 10 &&
         Math.abs(gs.vx) > 0.3,
       onPanResponderMove: (_, gs) => {
-        swipeX.setValue(gs.dx * 0.6);
+        // Build-82 — rubber-banding 비율 ↓ (0.6 → 0.3). 손가락 따라 시각 피드백
+        // 만 주고 commit 시 바로 swap. 큰 화면 이동 X 라 부드러움.
+        swipeX.setValue(gs.dx * 0.3);
       },
       onPanResponderRelease: (_, gs) => {
         if (Math.abs(gs.dx) < SWIPE_THRESHOLD) {
-          // 임계값 미만 — 원위치 bounce.
-          Animated.spring(swipeX, {
-            toValue: 0, useNativeDriver: true, bounciness: 4,
-          }).start();
+          // 임계값 미만 — 원위치 즉시 reset (이전 spring 도 제거).
+          swipeX.setValue(0);
           return;
         }
         const direction: -1 | 1 = gs.dx < 0 ? 1 : -1;
         onShiftRef.current(direction);
-        animateCommit(direction);
+        animateCommit();
       },
     }),
   ).current;
