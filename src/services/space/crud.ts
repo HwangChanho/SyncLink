@@ -112,7 +112,15 @@ export async function createSpace(input: CreateSpaceInput): Promise<Space> {
       context: 'space.create.insert',
       error:   spaceError ?? new Error('Space INSERT returned no row'),
       userId,
-      details: { step: 'spaces.insert', input, supabaseError: serializeSupabaseError(spaceError) },
+      details: {
+        step:           'spaces.insert',
+        input,
+        // Build-87 진단 — 실제 보낸 invite_code 값과 길이 (CHECK 위반 시 어떤
+        // 값이 거부됐는지). 클라/번들 캐시 추적용.
+        inviteCode,
+        inviteCodeLength: inviteCode.length,
+        supabaseError:  serializeSupabaseError(spaceError),
+      },
     });
     throw spaceError ?? new Error('Space 생성에 실패했습니다.');
   }
