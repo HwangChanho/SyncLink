@@ -206,6 +206,23 @@ export interface GetMemberColorOptions {
  * @param opts        - Optional overrides ({ dark } toggles dark-mode lightness).
  * @returns CSS HSL colour string consumable by RN style props and DB columns.
  */
+/**
+ * HSL → #RRGGBB hex 변환. DB `space_members.color` CHECK 제약이
+ * `^#[0-9A-Fa-f]{6}$` 만 허용해 hsl(...) 문자열은 거부됨 (Build 87 회귀).
+ * h: [0, 360), s/l: [0, 100].
+ */
+function hslToHex(h: number, s: number, l: number): string {
+  const sN = s / 100;
+  const lN = l / 100;
+  const k = (n: number) => (n + h / 30) % 12;
+  const a = sN * Math.min(lN, 1 - lN);
+  const f = (n: number) => {
+    const c = lN - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    return Math.round(c * 255).toString(16).padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
 export function getMemberColor(
   memberIndex: number,
   opts: GetMemberColorOptions = {},
@@ -222,7 +239,9 @@ export function getMemberColor(
     ? MEMBER_COLOR_LIGHTNESS_DARK
     : MEMBER_COLOR_LIGHTNESS_LIGHT;
 
-  return `hsl(${hue}, ${MEMBER_COLOR_SATURATION}%, ${lightness}%)`;
+  // DB CHECK 제약 (color_hex_format) 과 호환되는 hex 형식. RN 도 hex 정상
+  // 렌더링하므로 화면 표현엔 영향 없음.
+  return hslToHex(hue, MEMBER_COLOR_SATURATION, lightness);
 }
 
 // ─── Category colors ──────────────────────────────────────────────────────────
