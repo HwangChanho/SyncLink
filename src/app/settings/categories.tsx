@@ -15,6 +15,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, TextInput,
   StyleSheet, ActivityIndicator, Alert, Modal,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -169,6 +170,13 @@ function CategoryFormModal({
       animationType="slide"
       onRequestClose={onClose}
     >
+      {/* KeyboardAvoidingView — 키보드가 modalSheet 의 색상 선택 grid 를
+          가리던 LEAD 보고 (2026-04-27 bug-inbox). iOS 는 padding, Android
+          는 height 동작이 가장 부드러움. */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
       <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
         <TouchableOpacity style={styles.modalSheet} activeOpacity={1}>
           <Text style={styles.modalTitle}>
@@ -231,6 +239,7 @@ function CategoryFormModal({
           </View>
         </TouchableOpacity>
       </TouchableOpacity>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

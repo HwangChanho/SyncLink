@@ -181,7 +181,7 @@ export function NLInputBar({ onEventCreated }: Props) {
     if (inputState === 'loading') return;
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (perm.status !== 'granted') {
-      Alert.alert(t('common.error'), t('nl.attach_image_permission', { defaultValue: '사진 권한이 필요합니다.' }));
+      Alert.alert(t('common.error'), t('nl.attach_image_permission'));
       return;
     }
     // 1024px max + JPEG quality 0.6 → ~150KB. 더 크면 base64 가 커져
@@ -459,13 +459,13 @@ export function NLInputBar({ onEventCreated }: Props) {
         <View style={styles.attachmentRow}>
           <Image source={{ uri: attachedImage.uri }} style={styles.attachmentThumb} />
           <Text style={styles.attachmentLabel} numberOfLines={1}>
-            {t('nl.attached_image', { defaultValue: '사진 첨부됨 — AI 가 분석 후 일정 등록' })}
+            {t('nl.attached_image')}
           </Text>
           <Pressable
             onPress={handleRemoveImage}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel={t('nl.remove_image', { defaultValue: '사진 제거' })}
+            accessibilityLabel={t('nl.remove_image')}
           >
             <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
           </Pressable>
@@ -480,7 +480,7 @@ export function NLInputBar({ onEventCreated }: Props) {
           onPress={handleAttachImage}
           disabled={inputState === 'loading'}
           accessibilityRole="button"
-          accessibilityLabel={t('nl.attach_image', { defaultValue: '사진 첨부' })}
+          accessibilityLabel={t('nl.attach_image')}
           testID="nl-button-attach-image"
         >
           <Ionicons

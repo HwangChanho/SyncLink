@@ -421,7 +421,10 @@ export default function RootLayout() {
   useEffect(() => {
     const tick = () => {
       const s = useSubscriptionStore.getState();
-      const ymd = new Date().toISOString().slice(0, 10);
+      // 로컬 timezone 기준 — toISOString() 은 UTC 라 자정 부근에서 하루가
+      // 빠른 키가 만들어져 다른 날 데이터가 합쳐질 수 있음.
+      const __now = new Date();
+      const ymd = `${__now.getFullYear()}-${String(__now.getMonth() + 1).padStart(2, '0')}-${String(__now.getDate()).padStart(2, '0')}`;
       const month = ymd.slice(0, 7);
       const patch: Partial<typeof s> = {};
       if (s.lastResetDate !== ymd)

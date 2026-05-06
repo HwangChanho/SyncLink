@@ -87,7 +87,13 @@ export function WheelDatePicker({
               ? (
                 <input
                   type="date"
-                  value={draft.toISOString().slice(0, 10)}
+                  value={
+                    // toISOString() 은 UTC 기준이라 KST 의 자정 직후 (예:
+                    // 2026-04-28 00:00 KST = UTC 2026-04-27 15:00) 가 하루
+                    // 빠른 날짜로 바뀌어 picker 가 한 칸 어긋나는 버그.
+                    // 로컬 Y/M/D 로 직접 포맷.
+                    `${draft.getFullYear()}-${String(draft.getMonth() + 1).padStart(2, '0')}-${String(draft.getDate()).padStart(2, '0')}`
+                  }
                   onChange={(e) => {
                     // input value 는 'YYYY-MM-DD' (로컬 day picker). 로컬 자정으로 해석.
                     const v = (e.target as HTMLInputElement).value;

@@ -9,7 +9,7 @@
  * Extracted from planner.tsx (TASK-400/TASK-600) to reduce file size.
  */
 
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView,
   TouchableOpacity, ActivityIndicator, Pressable,
@@ -62,35 +62,49 @@ const TodoRow = memo(function TodoRow({
     low:    t('todo.priority.low'),
   };
 
+  // Build-86 LEAD: "왼쪽 스와이프 → 삭제 버튼 뜨지만 누를 수 없고 수정 창
+  // 이 뜸". 이전 구현은 actions 가 단순 <View> 라 탭 불가능 + onSwipeableOpen
+  // 가 자동 close → 다시 row 가 노출되어 사용자 의도 외 onPress (수정) 발화.
+  // 두 가지 수정:
+  //  1. actions 를 TouchableOpacity 로 만들어 명시적 탭
+  //  2. onSwipeableOpen 의 auto-trigger 제거 (사용자가 의도해서 탭하게)
+  const swipeRef = useRef<Swipeable | null>(null);
+
   const renderRightActions = () => (
-    <View style={[styles.swipeAction, styles.swipeDeleteAction]}>
+    <TouchableOpacity
+      testID={`todo-swipe-delete-${todo.id}`}
+      style={[styles.swipeAction, styles.swipeDeleteAction]}
+      onPress={() => {
+        swipeRef.current?.close();
+        onDelete(todo.id);
+      }}
+      activeOpacity={0.8}
+    >
       <Ionicons name="trash" size={20} color={colors.textInverse} />
       <Text style={styles.swipeActionText}>{t('common.delete')}</Text>
-    </View>
+    </TouchableOpacity>
   );
 
   const renderLeftActions = () => (
-    <View style={[styles.swipeAction, styles.swipeCategoryAction]}>
+    <TouchableOpacity
+      testID={`todo-swipe-category-${todo.id}`}
+      style={[styles.swipeAction, styles.swipeCategoryAction]}
+      onPress={() => {
+        swipeRef.current?.close();
+        onChangeCategory(todo);
+      }}
+      activeOpacity={0.8}
+    >
       <Ionicons name="folder-open" size={20} color={colors.textInverse} />
       <Text style={styles.swipeActionText}>{t('planner.change_category')}</Text>
-    </View>
+    </TouchableOpacity>
   );
 
   return (
     <Swipeable
+      ref={swipeRef}
       renderRightActions={renderRightActions}
       renderLeftActions={renderLeftActions}
-      onSwipeableOpen={(direction, swipeable) => {
-        swipeable.close();
-        // TASK-006: react-native-gesture-handler에서 direction은 노출된 actions
-        // 영역의 위치를 의미. 왼쪽 swipe → renderRightActions 노출 → direction='right'.
-        // 우리 의도: 왼쪽 swipe = 삭제 (renderRightActions 내용 = trash 아이콘).
-        if (direction === 'right') {
-          onDelete(todo.id);
-        } else {
-          onChangeCategory(todo);
-        }
-      }}
       overshootLeft={false}
       overshootRight={false}
     >
