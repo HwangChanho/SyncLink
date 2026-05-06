@@ -17,12 +17,26 @@
  */
 
 import { supabase, getCurrentUserId } from '@/lib/supabase';
+import { logError } from '@/lib/errorLogger';
 import type {
   Todo, TodoSummary, CreateTodoInput, UpdateTodoInput,
   TodoFilter, NoteFilter, ContentType,
   Note, CreateNoteInput, UpdateNoteInput,
   TodoRow,
 } from '@/types';
+
+// Build-92 — Tier 1 (todo CRUD) 의 Postgrest error 직렬화 헬퍼.
+// instanceof Error 안 잡히는 plain object 도 message/code/details 추출.
+function serializePgError(err: unknown): Record<string, unknown> {
+  if (!err || typeof err !== 'object') return { raw: String(err) };
+  const e = err as Record<string, unknown>;
+  return {
+    message: e.message ?? null,
+    code:    e.code    ?? null,
+    details: e.details ?? null,
+    hint:    e.hint    ?? null,
+  };
+}
 
 // supabase-js v2 workaround for missing Relationships types
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -194,7 +208,15 @@ export async function createTodo(input: CreateTodoInput): Promise<Todo> {
     .select()
     .single() as { data: TodoRow | null; error: Error | null };
 
-  if (error || !data) throw error ?? new Error('할일 생성에 실패했습니다.');
+  if (error || !data) {
+    void logError({
+      context: 'todo.create',
+      error:   error ?? new Error('todo INSERT no row'),
+      userId,
+      details: { supabaseError: serializePgError(error), spaceId: input.spaceId, contentType: input.contentType ?? 'todo' },
+    });
+    throw error ?? new Error('할일 생성에 실패했습니다.');
+  }
   return toTodo(data);
 }
 
@@ -239,7 +261,15 @@ export async function updateTodo(todoId: string, updates: UpdateTodoInput): Prom
     .eq('id', todoId)
     .eq('user_id', userId) as { error: Error | null };
 
-  if (error) throw error;
+  if (error) {
+    void logError({
+      context: 'todo.update',
+      error,
+      userId,
+      details: { todoId, changedKeys: Object.keys(patch), supabaseError: serializePgError(error) },
+    });
+    throw error;
+  }
   return getTodoById(todoId);
 }
 
@@ -258,7 +288,15 @@ export async function deleteTodo(todoId: string): Promise<void> {
     .eq('id', todoId)
     .eq('user_id', userId) as { error: Error | null };
 
-  if (error) throw error;
+  if (error) {
+    void logError({
+      context: 'todo.delete',
+      error,
+      userId,
+      details: { todoId, supabaseError: serializePgError(error) },
+    });
+    throw error;
+  }
 }
 
 /**
@@ -283,7 +321,15 @@ export async function toggleTodoComplete(todoId: string, isCompleted: boolean): 
     .eq('id', todoId)
     .eq('user_id', userId) as { error: Error | null };
 
-  if (error) throw error;
+  if (error) {
+    void logError({
+      context: 'todo.toggleComplete',
+      error,
+      userId,
+      details: { todoId, isCompleted, supabaseError: serializePgError(error) },
+    });
+    throw error;
+  }
   return getTodoById(todoId);
 }
 

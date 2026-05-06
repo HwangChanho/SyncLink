@@ -52,29 +52,50 @@ export interface LogErrorOptions {
  *
  * @param opts 로그 옵션 (LogErrorOptions 참고)
  */
-export async function logError(opts: LogErrorOptions): Promise<void> {
-  try {
-    const errorObj = opts.error;
-    // Error 객체면 .message/.stack 추출, 아니면 문자열로 강제 변환
-    const message = errorObj instanceof Error ? errorObj.message : String(errorObj);
-    const stack   = errorObj instanceof Error ? errorObj.stack   : undefined;
+/**
+ * Build-92 LEAD: "로그는 디밸로퍼 모드에서만 활성화시켜야해 실제 배포버전은
+ * 제외야". 일반 사용자 device 의 production 빌드는 error_logs 에 INSERT
+ * 안 함 — 사용자 활동 비공개 + DB 비용 절감. 콘솔 출력 (Sentry / Xcode /
+ * Android Studio 에서 LEAD 진단용) 은 모든 환경에서 유지.
+ *
+ * 활성 조건:
+ *  - `__DEV__` (Metro debug bundle, App Store/TestFlight 의 release 번들은 false)
+ *  - 또는 EXPO_PUBLIC_APP_ENV !== 'production' (preview/staging 은 logging)
+ */
+const APP_ENV = process.env.EXPO_PUBLIC_APP_ENV;
+const SHOULD_PERSIST_LOGS =
+  // Metro debug bundle (개발 모드)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (typeof __DEV__ !== 'undefined' && (__DEV__ as boolean))
+  || APP_ENV !== 'production';
 
-    // supabase-js v2 Database 제네릭 한계 우회 (다른 서비스와 동일한 패턴)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase.from('error_logs') as any).insert({
-      context:     opts.context,
-      severity:    opts.severity ?? 'error',
-      // 길이 제한: 극단적으로 긴 message로 인덱스/스토리지가 터지지 않게
-      message:     message.slice(0, 2000),
-      details:     { ...(opts.details ?? {}), stack },
-      user_id:     opts.userId ?? null,
-      platform:    Platform.OS,
-      app_version: Constants.expoConfig?.version ?? '1.0.0',
-    });
-  } catch {
-    // 로깅 실패는 무시 — 재귀 호출로 인한 무한 루프 방지
+export async function logError(opts: LogErrorOptions): Promise<void> {
+  if (SHOULD_PERSIST_LOGS) {
+    try {
+      const errorObj = opts.error;
+      // Error 객체면 .message/.stack 추출, 아니면 문자열로 강제 변환
+      const message = errorObj instanceof Error ? errorObj.message : String(errorObj);
+      const stack   = errorObj instanceof Error ? errorObj.stack   : undefined;
+
+      // supabase-js v2 Database 제네릭 한계 우회 (다른 서비스와 동일한 패턴)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase.from('error_logs') as any).insert({
+        context:     opts.context,
+        severity:    opts.severity ?? 'error',
+        // 길이 제한: 극단적으로 긴 message로 인덱스/스토리지가 터지지 않게
+        message:     message.slice(0, 2000),
+        details:     { ...(opts.details ?? {}), stack },
+        user_id:     opts.userId ?? null,
+        platform:    Platform.OS,
+        app_version: Constants.expoConfig?.version ?? '1.0.0',
+      });
+    } catch {
+      // 로깅 실패는 무시 — 재귀 호출로 인한 무한 루프 방지
+    }
   }
 
-  // 콘솔에는 항상 출력 (개발자 도구/Sentry에서도 보이도록)
+  // 콘솔에는 항상 출력 (개발자 도구/Sentry에서도 보이도록).
+  // production 사용자 device 도 console.error 까지는 띄움 — Sentry 가
+  // capture 하면 거기서 진단.
   console.error(`[${opts.context}]`, opts.error);
 }
