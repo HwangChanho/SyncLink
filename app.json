@@ -20,7 +20,7 @@
       "bundleIdentifier": "io.synclink.app",
       "appleTeamId": "QUVU2PY6PG",
       "newArchEnabled": false,
-      "buildNumber": "81",
+      "buildNumber": "84",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.io.synclink.app.widget"
@@ -182,7 +182,9 @@
     "owner": "danielhwang",
     "runtimeVersion": "1.0.0",
     "updates": {
-      "url": "https://u.expo.dev/c9ef6634-3221-4503-9ca0-3dee0e53ac45"
+      "url":             "https://u.expo.dev/c9ef6634-3221-4503-9ca0-3dee0e53ac45",
+      "enabled":         false,
+      "checkAutomatically": "NEVER"
     }
   }
 }

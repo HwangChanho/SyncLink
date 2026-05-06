@@ -39,10 +39,6 @@ export default function SpacesScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Space</Text>
-      </View>
-
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {isLoading && spaces.length === 0 ? (
           <View style={styles.loadingRow}>
@@ -107,18 +103,6 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     safe: {
       flex:            1,
       backgroundColor: colors.backgroundAlt,
-    },
-    header: {
-      paddingHorizontal: spacing[5],
-      paddingTop:        spacing[3],
-      paddingBottom:     spacing[3],
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
-      backgroundColor:   colors.background,
-    },
-    headerTitle: {
-      ...textStyles.h2,
-      color: colors.textPrimary,
     },
     scrollContent: {
       padding:       spacing[4],

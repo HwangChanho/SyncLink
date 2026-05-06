@@ -19,7 +19,11 @@
     "test:e2e:studio": "maestro studio",
     "release:ios": "./scripts/release-ios.sh",
     "release:android": "./scripts/release-android.sh",
-    "release:both": "./scripts/release-both.sh"
+    "release:both": "./scripts/release-both.sh",
+    "release:web":  "expo export -p web && wrangler pages deploy dist --project-name=synclink --branch=main --commit-dirty=true --commit-message=\"web release\"",
+    "feature":      "node scripts/notion-sync.mjs",
+    "feature:start": "node scripts/notion-sync.mjs --status 진행 --feature",
+    "feature:done":  "node scripts/notion-sync.mjs --status 완료 --feature"
   },
   "dependencies": {
     "@gorhom/bottom-sheet": "^5.2.10",
