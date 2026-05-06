@@ -88,7 +88,11 @@ interface EdgeFunctionResult {
  * @param text - Raw user input text
  * @returns EdgeFunctionResult — NLParseResult + token count for usage tracking
  */
-async function callEdgeFunction(text: string): Promise<EdgeFunctionResult> {
+async function callEdgeFunction(
+  text: string,
+  imageBase64?: string,
+  imageMediaType?: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
+): Promise<EdgeFunctionResult> {
   // Build-51 — pull live i18n locale so the Edge Function picks the right
   // system prompt instead of always using Korean. Fallback to 'ko' for
   // safety if the i18n module hasn't been initialised yet.
@@ -112,6 +116,9 @@ async function callEdgeFunction(text: string): Promise<EdgeFunctionResult> {
           text,
           contextDatetime: new Date().toISOString(),
           locale,
+          ...(imageBase64
+            ? { imageBase64, imageMediaType: imageMediaType ?? 'image/jpeg' }
+            : {}),
         },
       },
     );
@@ -203,35 +210,56 @@ export async function parseNaturalLanguageMulti(text: string): Promise<NLParseRe
   return [single];
 }
 
-export async function parseNaturalLanguage(text: string): Promise<NLParseResult> {
-  // Step 1 & 2: local parse first
-  const localResult = parseLocally(text);
-  if (localResult.confidence !== 'low') {
-    return localResult;
+export async function parseNaturalLanguage(
+  text: string,
+  options?: {
+    imageBase64?: string;
+    imageMediaType?: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
+  },
+): Promise<NLParseResult> {
+  const hasImage = !!options?.imageBase64;
+
+  // Step 1 & 2: local parse first — image 첨부 시엔 의미 없으므로 skip.
+  if (!hasImage) {
+    const localResult = parseLocally(text);
+    if (localResult.confidence !== 'low') {
+      return localResult;
+    }
   }
 
-  // Step 3: check daily limit before making an API call
-  const usage = await readUsageRecord();
-  if (usage.callCount >= FREE_AI_DAILY_LIMIT) {
-    return {
-      parsed: {},
-      confidence: 'low',
-      source: 'local',
-      rawInput: text,
-      processingMs: null,
-      error: `오늘 AI 파싱 한도(${FREE_AI_DAILY_LIMIT}회)에 도달했어요. 직접 입력해주세요.`,
-    };
+  // Step 3: client-side daily limit (text 만). image 한도는 server quota 가
+  // 별도 (parse-event-vision: free 2/day). 클라이언트에선 굳이 사전 차단 X.
+  if (!hasImage) {
+    const usage = await readUsageRecord();
+    if (usage.callCount >= FREE_AI_DAILY_LIMIT) {
+      return {
+        parsed: {},
+        confidence: 'low',
+        source: 'local',
+        rawInput: text,
+        processingMs: null,
+        error: `오늘 AI 파싱 한도(${FREE_AI_DAILY_LIMIT}회)에 도달했어요. 직접 입력해주세요.`,
+      };
+    }
   }
 
-  // Step 4: call Edge Function
-  const { nlResult, tokensUsed } = await callEdgeFunction(text);
+  // Step 4: call Edge Function — image 가 있으면 함께 전달 (서버에서 vision
+  // 모델 + vision quota 사용).
+  const { nlResult, tokensUsed } = await callEdgeFunction(
+    text,
+    options?.imageBase64,
+    options?.imageMediaType,
+  );
 
-  // Step 5: record usage — count even on failure to prevent retry abuse
-  await writeUsageRecord({
-    date: usage.date,
-    callCount: usage.callCount + 1,
-    tokensUsed: usage.tokensUsed + tokensUsed,
-  });
+  // Step 5: record usage — text 흐름만 클라 카운트 (image 는 server-only).
+  if (!hasImage) {
+    const usage = await readUsageRecord();
+    await writeUsageRecord({
+      date:       usage.date,
+      callCount:  usage.callCount + 1,
+      tokensUsed: usage.tokensUsed + tokensUsed,
+    });
+  }
 
   return nlResult;
 }

@@ -91,11 +91,16 @@ export interface NLParseResult {
 
 /** Request sent to the parse-event Edge Function. */
 export interface AiParseRequest {
+  /** text-only 사용 시 필수, image 첨부 시 빈 문자열 허용. */
   text: string;
   /** Current datetime for relative date resolution (ISO-8601). */
   contextDatetime: string;
   /** User's locale for date/time formatting hints. */
   locale: string;
+  /** 사진 첨부 NL 등록 — raw base64 (data URL prefix 없이). */
+  imageBase64?: string;
+  /** imageBase64 의 media type. 기본 'image/jpeg'. */
+  imageMediaType?: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
 }
 
 /** Response from the parse-event Edge Function. */

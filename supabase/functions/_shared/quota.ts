@@ -49,6 +49,9 @@ export interface QuotaResult {
  */
 const LIMITS: Record<string, { freeDaily: number; proHourly: number; proRequiresPaid?: boolean }> = {
   'parse-event':          { freeDaily: 5,  proHourly: 60 },
+  // 사진 첨부 NL — Sonnet vision 사용으로 텍스트 대비 비용 ~10× 높아 free
+  // 1일 2회 (LEAD 결정 2026-05-06). Pro 도 hourly 보수적으로.
+  'parse-event-vision':   { freeDaily: 2,  proHourly: 20 },
   'suggest-date':         { freeDaily: 3,  proHourly: 30 },
   'weekly-review':        { freeDaily: 1,  proHourly: 5  },
   'translate-event':      { freeDaily: 0,  proHourly: 60, proRequiresPaid: true },

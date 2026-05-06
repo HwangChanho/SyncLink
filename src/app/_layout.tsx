@@ -694,6 +694,21 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      {/* Web 에서 좌우 여백 + 가운데 정렬. 모바일 앱 (iOS/Android) 은 영향
+          없음. 데스크톱 브라우저에서 컨테이너가 viewport 전체를 채우면 너무
+          허전해 보이고 콘텐츠가 가장자리에 딱 붙음 — 모바일 친화 max-width
+          (520px) 로 좁히고 가운데 정렬 + 좌우 패딩. (LEAD 2026-05-06) */}
+      <View
+        style={[
+          { flex: 1 },
+          Platform.OS === 'web' && {
+            maxWidth:        520,
+            width:           '100%',
+            alignSelf:       'center',
+            paddingHorizontal: 16,
+          },
+        ]}
+      >
       <SafeAreaProvider>
         <StatusBar style="auto" />
         {/* TASK-900: App lock overlay — rendered above all content when locked */}
@@ -731,6 +746,7 @@ export default function RootLayout() {
           <Stack.Screen name="settings/pin" options={{ presentation: 'modal' }} />
         </Stack>
       </SafeAreaProvider>
+      </View>
     </GestureHandlerRootView>
   );
 }

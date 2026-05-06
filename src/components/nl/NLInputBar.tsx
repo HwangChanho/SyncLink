@@ -16,17 +16,18 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  View, TextInput, Pressable, Text, ActivityIndicator,
+  View, TextInput, Pressable, Text, ActivityIndicator, Image,
   StyleSheet, Keyboard, Alert, Platform, ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import Voice, { type SpeechResultsEvent, type SpeechErrorEvent } from '@react-native-voice/voice';
+import * as ImagePicker from 'expo-image-picker';
 import { ConfirmModal } from './ConfirmModal';
 import { QuotaExceededSheet } from '@/components/ai/QuotaExceededSheet';
 import { FreeBannerAd } from '@/components/ads/FreeBannerAd';
-import { parseNaturalLanguageMulti } from '@/services/aiService';
+import { parseNaturalLanguage, parseNaturalLanguageMulti } from '@/services/aiService';
 import { createEvent } from '@/services/eventService';
 import { logError } from '@/lib/errorLogger';
 import { useEventStore } from '@/stores/eventStore';
@@ -101,6 +102,16 @@ export function NLInputBar({ onEventCreated }: Props) {
    */
   const [quotaSheetVisible, setQuotaSheetVisible] = useState(false);
   /**
+   * 첨부된 사진 (Vision NL — 카톡 예약 캡쳐 등). null 이면 text-only 흐름.
+   * uri 는 thumbnail 표시용, base64 + mediaType 는 Edge Function 전송용.
+   * 사용자가 send 하면 server quota (parse-event-vision: free 1일 2회) 적용.
+   */
+  const [attachedImage, setAttachedImage] = useState<{
+    uri:       string;
+    base64:    string;
+    mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
+  } | null>(null);
+  /**
    * Live keyboard height (px). Tracked via Keyboard events so the bar
    * lifts above the software keyboard on both iOS and Android.
    *
@@ -164,11 +175,47 @@ export function NLInputBar({ onEventCreated }: Props) {
     }
   }, [isListening, t]);
 
+  // ── 사진 첨부 (Vision NL) ────────────────────────────────────────────────────
+
+  const handleAttachImage = useCallback(async () => {
+    if (inputState === 'loading') return;
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (perm.status !== 'granted') {
+      Alert.alert(t('common.error'), t('nl.attach_image_permission', { defaultValue: '사진 권한이 필요합니다.' }));
+      return;
+    }
+    // 1024px max + JPEG quality 0.6 → ~150KB. 더 크면 base64 가 커져
+    // Edge Function 요청 한도 (~6MB) 와 비용에 영향.
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes:   ImagePicker.MediaTypeOptions.Images,
+      base64:       true,
+      quality:      0.6,
+      allowsEditing: false,
+    });
+    if (result.canceled) return;
+    const asset = result.assets[0];
+    if (!asset?.base64) return;
+    // Resolve mediaType from URI extension. iOS picker 가 mimeType 직접 안 줌.
+    const ext = asset.uri.split('.').pop()?.toLowerCase();
+    const mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' =
+      ext === 'png'  ? 'image/png'  :
+      ext === 'gif'  ? 'image/gif'  :
+      ext === 'webp' ? 'image/webp' :
+                       'image/jpeg';
+    setAttachedImage({ uri: asset.uri, base64: asset.base64, mediaType });
+  }, [inputState, t]);
+
+  const handleRemoveImage = useCallback(() => {
+    setAttachedImage(null);
+  }, []);
+
   // ── Parse submission ────────────────────────────────────────────────────────
 
   const handleSubmit = useCallback(async () => {
     const trimmed = text.trim();
-    if (!trimmed || inputState === 'loading') return;
+    // image 첨부 시엔 text 가 비어도 허용. text-only 면 빈 입력 차단.
+    if (!attachedImage && !trimmed) return;
+    if (inputState === 'loading') return;
 
     Keyboard.dismiss();
 
@@ -189,12 +236,17 @@ export function NLInputBar({ onEventCreated }: Props) {
     setInputState('loading');
     setErrorMsg('');
 
-    const results = await parseNaturalLanguageMulti(trimmed);
+    // image 첨부 흐름: multi-splitter 우회 (single 결과). server vision quota
+    // 적용 + 비용 모니터링은 server-side. text-only 흐름은 기존 multi 그대로.
+    const results = attachedImage
+      ? [await parseNaturalLanguage(trimmed, {
+          imageBase64:    attachedImage.base64,
+          imageMediaType: attachedImage.mediaType,
+        })]
+      : await parseNaturalLanguageMulti(trimmed);
 
-    // If any AI call was made, charge once. parseNaturalLanguageMulti
-    // currently uses AI only for single-event fallback, so consuming
-    // once is correct for both single and multi paths.
-    if (results.some((r) => r.source === 'ai' && !r.error)) {
+    // text-only AI 호출 시 클라 카운트 차감. image 흐름은 server quota 라 skip.
+    if (!attachedImage && results.some((r) => r.source === 'ai' && !r.error)) {
       void consumeAI();
     }
 
@@ -216,7 +268,9 @@ export function NLInputBar({ onEventCreated }: Props) {
     setParseResult(head ?? null);
     setPendingResults(tail);
     setInputState('preview');
-  }, [text, inputState, canUseAI, consumeAI]);
+    // 결과 표시 시 첨부 이미지는 즉시 정리 (재호출 방지 + 미리보기 깨끗).
+    if (attachedImage) setAttachedImage(null);
+  }, [text, inputState, canUseAI, consumeAI, attachedImage]);
 
   /**
    * Returns true when [startAt, endAt) overlaps any existing event on
@@ -400,8 +454,42 @@ export function NLInputBar({ onEventCreated }: Props) {
           있어 Pro 면 null 반환. SDK 미설치/web 도 null 이라 안전. */}
       <FreeBannerAd style={styles.adWrap} />
 
+      {/* 첨부된 사진 thumbnail (Vision NL). attachedImage 가 있을 때만. */}
+      {attachedImage && (
+        <View style={styles.attachmentRow}>
+          <Image source={{ uri: attachedImage.uri }} style={styles.attachmentThumb} />
+          <Text style={styles.attachmentLabel} numberOfLines={1}>
+            {t('nl.attached_image', { defaultValue: '사진 첨부됨 — AI 가 분석 후 일정 등록' })}
+          </Text>
+          <Pressable
+            onPress={handleRemoveImage}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('nl.remove_image', { defaultValue: '사진 제거' })}
+          >
+            <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
+          </Pressable>
+        </View>
+      )}
+
       {/* Input row */}
       <View style={styles.inputRow}>
+        {/* 사진 첨부 버튼 (Vision NL) */}
+        <Pressable
+          style={styles.micButton}
+          onPress={handleAttachImage}
+          disabled={inputState === 'loading'}
+          accessibilityRole="button"
+          accessibilityLabel={t('nl.attach_image', { defaultValue: '사진 첨부' })}
+          testID="nl-button-attach-image"
+        >
+          <Ionicons
+            name="image-outline"
+            size={18}
+            color={colors.textSecondary}
+          />
+        </Pressable>
+
         {/* Microphone button */}
         <Pressable
           style={[styles.micButton, isListening && styles.micButtonActive]}
@@ -442,10 +530,10 @@ export function NLInputBar({ onEventCreated }: Props) {
         <Pressable
           style={[
             styles.sendButton,
-            (!text.trim() || inputState === 'loading') && styles.sendButtonDisabled,
+            ((!text.trim() && !attachedImage) || inputState === 'loading') && styles.sendButtonDisabled,
           ]}
           onPress={handleSubmit}
-          disabled={!text.trim() || inputState === 'loading'}
+          disabled={(!text.trim() && !attachedImage) || inputState === 'loading'}
           accessibilityRole="button"
           accessibilityLabel={t('common.a11y_parse_event')}
         >
@@ -511,6 +599,26 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   // Free 배너 wrapper. ads/FreeBannerAd 가 자체적으로 isPro 가드를 하므로
   // 여기 스타일은 항상 적용되더라도 Pro 사용자는 자식이 null 이라 보이지
   // 않는다. 입력바와 분리되도록 작은 위쪽 마진만 둔다.
+  attachmentRow: {
+    flexDirection:    'row',
+    alignItems:       'center',
+    gap:              spacing[2],
+    paddingVertical:  spacing[2],
+    paddingHorizontal: spacing[3],
+    backgroundColor:  colors.surface,
+    borderRadius:     radius.lg,
+    marginBottom:     spacing[2],
+  },
+  attachmentThumb: {
+    width:        40,
+    height:       40,
+    borderRadius: 6,
+  },
+  attachmentLabel: {
+    ...textStyles.caption,
+    color: colors.textSecondary,
+    flex:  1,
+  },
   adWrap: {
     alignItems: 'center',
     minHeight: 0,

@@ -25,12 +25,19 @@ import { createClient } from 'npm:@supabase/supabase-js';
 // ─── Types (inlined to avoid shared package dependency in Deno) ───────────────
 
 interface AiParseRequest {
-  /** Korean natural-language text to parse. */
+  /** Korean natural-language text to parse. text-only 사용 시 필수, image
+   *  와 함께 보낼 때는 빈 문자열도 허용. */
   text: string;
   /** ISO-8601 datetime for resolving relative dates (e.g. "내일"). */
   contextDatetime: string;
   /** User locale hint (e.g. "ko-KR"). */
   locale: string;
+  /** Optional: 사진 첨부 자연어 등록 (예: 미용실 예약 카톡 캡쳐). 있으면
+   *  Vision 지원 모델 (Sonnet) 로 multimodal 호출 + 비용 분리 quota.
+   *  data URL prefix 없이 raw base64 (jpeg/png). */
+  imageBase64?: string;
+  /** Optional: imageBase64 의 media type. 기본 'image/jpeg'. */
+  imageMediaType?: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
 }
 
 interface ParsedEventFromAI {
@@ -174,19 +181,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     // 2. Parse request body
     const body: AiParseRequest = await req.json();
-    const { text, contextDatetime, locale } = body;
+    const { text, contextDatetime, locale, imageBase64, imageMediaType } = body;
 
-    if (!text?.trim()) {
-      return new Response(JSON.stringify({ error: 'text is required' }), {
+    const hasImage = typeof imageBase64 === 'string' && imageBase64.length > 0;
+    if (!hasImage && !text?.trim()) {
+      return new Response(JSON.stringify({ error: 'text or imageBase64 is required' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    // 2.5. Server-side quota gate. Free: 5/day, Pro: 60/hour.
-    // Counts existing usage_metrics rows for this user/function in the
-    // current window. Returns 429 with a stable machine-readable reason
-    // so the client can map it to a user-facing message.
+    // 2.5. Server-side quota gate. text → parse-event (Free 5/day,
+    // Pro 60/hour). image → parse-event-vision (Free 2/day, Pro 20/hour) —
+    // Sonnet vision 비용이 ~10× 높아 별도 한도.
+    const functionName = hasImage ? 'parse-event-vision' : 'parse-event';
     const adminClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
@@ -197,7 +205,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const quota = await enforceQuota({
       adminClient,
       userId,
-      functionName: 'parse-event',
+      functionName,
     });
     if (!quota.allowed) {
       return new Response(JSON.stringify({ error: quota.reason, plan: quota.plan }), {
@@ -206,16 +214,33 @@ Deno.serve(async (req: Request): Promise<Response> => {
       });
     }
 
-    // 3. Call Claude Haiku
+    // 3. Call Claude. Vision (이미지 첨부) 면 Sonnet, text-only 면 Haiku.
+    //    Sonnet 만 multimodal 지원 + Haiku 보다 비싸므로 image 있을 때만.
     const client = new Anthropic();
+    const model = hasImage ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001';
+    const userContent = hasImage
+      ? [
+          {
+            type:   'image',
+            source: {
+              type:       'base64',
+              media_type: imageMediaType ?? 'image/jpeg',
+              data:       imageBase64!,
+            },
+          },
+          // text 가 비어있어도 모델에게 "이미지에서 일정 추출" 가이드 줌.
+          { type: 'text', text: text?.trim() || '이 이미지에서 일정 정보를 추출해줘.' },
+        ]
+      : text;
     const message = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 150,
+      model,
+      max_tokens: hasImage ? 400 : 150,
       system: buildSystemPrompt(
         contextDatetime ?? new Date().toISOString(),
         locale ?? 'ko',
       ),
-      messages: [{ role: 'user', content: text }],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any — Anthropic SDK union
+      messages: [{ role: 'user', content: userContent as any }],
     });
 
     // 4. Extract JSON from response
@@ -250,15 +275,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
           Deno.env.get('SUPABASE_URL') ?? '',
           Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
         );
-        const INPUT_COST = 0.80 / 1_000_000;
-        const OUTPUT_COST = 4.00 / 1_000_000;
+        // 모델별 가격 (USD / 1M tokens). Haiku 4.5: 0.80/4.00. Sonnet 4.6: 3.00/15.00.
+        const INPUT_COST  = (hasImage ? 3.00 : 0.80) / 1_000_000;
+        const OUTPUT_COST = (hasImage ? 15.00 : 4.00) / 1_000_000;
         await supabaseAdmin.from('usage_metrics').insert({
-          user_id: user.id,
-          function_name: 'parse-event',
-          model: 'claude-haiku-4-5',
-          input_tokens: inputTokens,
+          user_id:       user.id,
+          function_name: functionName,
+          model:         hasImage ? 'claude-sonnet-4-6' : 'claude-haiku-4-5',
+          input_tokens:  inputTokens,
           output_tokens: outputTokens,
-          cost_usd: inputTokens * INPUT_COST + outputTokens * OUTPUT_COST,
+          cost_usd:      inputTokens * INPUT_COST + outputTokens * OUTPUT_COST,
         });
       }
     } catch (metricsErr) {
