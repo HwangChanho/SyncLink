@@ -344,7 +344,7 @@ const ja = {
     email_body: 'SyncDay Space "{{name}}" に招待します！\n\n招待コード：{{code}}\n参加リンク：{{link}}\n\n上のリンクをクリックするか、SyncDay アプリでコードを入力して参加してください。',
     edit_accessibility: 'Space を編集',
     // IDEA-011 Phase B — 明示的な所有権譲渡 UX
-    transfer_ownership: '所有権の譲渡',
+    transfer_ownership: '管理者の変更',
     transfer_confirm: '所有権を {{nickname}} さんに譲渡しますか？この操作は元に戻せません。',
     transfer_failed: '所有権の譲渡に失敗しました。',
     new_owner: '新しい管理者を選択',

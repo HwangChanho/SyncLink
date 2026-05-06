@@ -31,9 +31,15 @@ export async function shareEventToSpace(eventId: string, spaceId: string): Promi
     .upsert(
       { event_id: eventId, space_id: spaceId },
       { onConflict: 'event_id,space_id' },
-    ) as { error: Error | null };
+    ) as { error: { message?: string; code?: string; details?: string; hint?: string } | null };
 
-  if (error) throw error;
+  if (error) {
+    // Build-92 진단 — caller 에서 generic "공유 설정 변경에 실패" 만 노출
+    // 되어 root cause 추적 어려움. PostgrestError 의 message/code 를
+    // throw 메시지에 포함해 사용자/error_logs 모두에 보이도록.
+    const detail = error.code ? ` [${error.code}]` : '';
+    throw new Error(`event_shares INSERT 실패${detail}: ${error.message ?? 'unknown'}`);
+  }
 }
 
 /**

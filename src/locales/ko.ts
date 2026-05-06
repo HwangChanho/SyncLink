@@ -358,7 +358,7 @@ const ko = {
     email_body: 'SyncDay Space "{{name}}"에 초대합니다!\n\n초대 코드: {{code}}\n참여 링크: {{link}}\n\n위 링크를 클릭하거나, SyncDay 앱에서 위 코드를 입력해 참여하세요.',
     edit_accessibility: 'Space 편집',
     // IDEA-011 Phase B — 소유권 명시적 양도 UX
-    transfer_ownership: '소유권 양도',
+    transfer_ownership: '관리자 변경',
     transfer_confirm: '소유권을 {{nickname}}님에게 양도하면 되돌릴 수 없습니다. 진행할까요?',
     transfer_failed: '소유권 양도에 실패했습니다.',
     new_owner: '새 관리자 선택',

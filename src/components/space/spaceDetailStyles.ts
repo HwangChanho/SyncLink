@@ -170,7 +170,10 @@ export function makeSpaceDetailStyles(colors: ReturnType<typeof useColors>) {
   },
   capacityHint: {
     ...textStyles.caption,
-    color: colors.textTertiary,
+    color:     colors.textTertiary,
+    // Build-92 — capacityHint ("2/2명 참여중") 가 그 위 "초대 코드 보기"
+    // 버튼과 너무 붙어있던 LEAD 보고. marginTop 으로 분리.
+    marginTop: spacing[2],
   },
 
   // ── InviteCodeSection — 초대 코드 hide/show + 타이머 ─────────────────────
@@ -329,6 +332,10 @@ export function makeSpaceDetailStyles(colors: ReturnType<typeof useColors>) {
     borderRadius: radius.xl,
     borderWidth: 1,
     borderColor: colors.error,
+    // Build-92 — 같은 dangerZone 안 두 버튼 (관리자 변경 + 탈퇴) 사이 여백.
+    // 첫 버튼은 마진 0 (View 의 marginTop 가 영역 시작), 두 번째 버튼이
+    // 위와 분리되도록 marginTop. siblings 모두 같은 값이라 OR 처리.
+    marginTop: spacing[3],
   },
   leaveButtonText: {
     ...textStyles.labelLg,
