@@ -16,7 +16,10 @@
     "test:e2e": "maestro test e2e/flows/",
     "test:e2e:launch": "maestro test e2e/flows/00_launch.yaml",
     "test:e2e:golden": "maestro test e2e/flows/05_golden_path.yaml",
-    "test:e2e:studio": "maestro studio"
+    "test:e2e:studio": "maestro studio",
+    "release:ios": "./scripts/release-ios.sh",
+    "release:android": "./scripts/release-android.sh",
+    "release:both": "./scripts/release-both.sh"
   },
   "dependencies": {
     "@gorhom/bottom-sheet": "^5.2.10",
