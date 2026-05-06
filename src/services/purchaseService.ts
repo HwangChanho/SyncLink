@@ -58,8 +58,16 @@ export async function initializePurchases(userId: string): Promise<void> {
   // The banner appears with DEBUG/VERBOSE level even in __DEV__ simulator builds.
   Purchases.setLogLevel(LOG_LEVEL.ERROR);
 
-  // Select API key based on platform — iOS and Android use separate RC projects
+  // Select API key based on platform — iOS and Android use separate RC projects.
   const apiKey = Platform.OS === 'ios' ? RC_API_KEY_IOS : RC_API_KEY_ANDROID;
+
+  // RevenueCat SDK throws "API key must be set" (fatal) if an empty string
+  // reaches Purchases.configure. Pre-Play-Store launch the Android key may
+  // not yet be issued — skip init in that case so the app boots normally.
+  // IAP UI gracefully degrades when Purchases is not configured.
+  if (!apiKey) {
+    return;
+  }
 
   await Purchases.configure({
     apiKey,

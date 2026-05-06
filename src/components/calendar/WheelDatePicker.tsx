@@ -78,16 +78,47 @@ export function WheelDatePicker({
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           <View style={styles.handle} />
 
-          {/* Wheel picker. iOS: spinner = 3-column native wheel. */}
+          {/* Wheel picker. iOS: spinner = 3-column native wheel.
+              Web: @react-native-community/datetimepicker 가 미지원 → 모달 안에
+              아무것도 안 그려져 흰 화면처럼 보임. native HTML <input type="date">
+              로 fallback (RN 의 RNW 가 인식 안 하지만 div 자식으로 렌더해도 됨). */}
           <View style={styles.pickerRow}>
-            <DateTimePicker
-              value={draft}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={handleDateChange}
-              style={styles.picker}
-              themeVariant="dark"
-            />
+            {Platform.OS === 'web'
+              ? (
+                <input
+                  type="date"
+                  value={draft.toISOString().slice(0, 10)}
+                  onChange={(e) => {
+                    // input value 는 'YYYY-MM-DD' (로컬 day picker). 로컬 자정으로 해석.
+                    const v = (e.target as HTMLInputElement).value;
+                    const parts = v.split('-').map(Number);
+                    if (parts.length === 3 && parts.every(n => Number.isFinite(n))) {
+                      const [y, m, d] = parts as [number, number, number];
+                      setDraft(new Date(y, m - 1, d));
+                    }
+                  }}
+                  style={{
+                    fontSize:        18,
+                    padding:         12,
+                    borderRadius:    8,
+                    border:          '1px solid #444',
+                    background:      'transparent',
+                    color:           '#FFF',
+                    width:           '100%',
+                    colorScheme:     'dark',
+                  }}
+                />
+              )
+              : (
+                <DateTimePicker
+                  value={draft}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={handleDateChange}
+                  style={styles.picker}
+                  themeVariant="dark"
+                />
+              )}
           </View>
 
           {/* Action buttons — 취소 / 확인. */}

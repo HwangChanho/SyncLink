@@ -89,11 +89,64 @@ serve(async (req: Request): Promise<Response> => {
 
     const userId = user.id;
 
-    // ── 2. Delete the user using the service role client ─────────────────────
+    // ── 2. Delete dependent rows first ────────────────────────────────────────
+    //
+    // 일부 테이블의 FK 가 ON DELETE CASCADE 가 누락되어 auth.users 직접 삭제 시
+    // "Database error deleting user" 발생. service_role 로 명시적으로 모든
+    // user-linked rows 를 먼저 정리한 뒤 auth.users 를 삭제한다. 누락이 발견되면
+    // 이 목록에 추가하면 됨 (정확한 FK 그래프 확인 후 schema CASCADE 추가가
+    // 장기적 해결책).
+    //
+    // 삭제 순서: 자식 → 부모. 실제 존재하는 테이블만. 진단 결과 (2026-05-06):
+    //  - spaces.created_by → public.users.id 가 ON DELETE NO ACTION 이라 막음.
+    //    spaces 부터 정리해야 public.users 삭제 가능.
+    //  - linked_accounts / user_categories / user_settings / user_lock_settings
+    //    / user_devices / ai_usage 는 schema 에 미존재 (PGRST205). 목록 제거.
+    const cleanupTables: { table: string; column: string }[] = [
+      // user_id 컬럼 가진 테이블
+      { table: 'event_shares',  column: 'user_id'    },
+      { table: 'notifications', column: 'user_id'    },
+      { table: 'categories',    column: 'user_id'    },
+      { table: 'space_members', column: 'user_id'    },
+      { table: 'todos',         column: 'user_id'    },
+      { table: 'events',        column: 'user_id'    },
+      { table: 'error_logs',    column: 'user_id'    },
+      // user 가 owner/creator 인 spaces — 삭제 시 space_members/events 등이
+      // CASCADE 로 함께 정리되어야 (DB schema 가정). 현재 user 가 만든 모든
+      // space 가 사라지는 영향이 있어 운영 정책으로 의식적인 결정.
+      { table: 'spaces',        column: 'created_by' },
+      // 마지막에 public.users (id 컬럼)
+      { table: 'users',         column: 'id'         },
+    ];
 
-    // deleteUser removes the auth.users row.
-    // All dependent rows (users, events, todos, space_members, etc.) are
-    // removed via ON DELETE CASCADE in the DB schema.
+    for (const { table, column } of cleanupTables) {
+      const { error: cleanupErr } = await adminClient
+        .from(table)
+        .delete()
+        .eq(column, userId);
+      // 정상 처리할 에러 코드:
+      //  - 42P01 : 테이블 미존재 (Postgres)
+      //  - PGRST205 : PostgREST schema cache 에 없음 (테이블 미존재의 다른 표현)
+      const skip = !cleanupErr
+        || cleanupErr.code === '42P01'
+        || cleanupErr.code === 'PGRST205';
+      if (!skip) {
+        await logToDb(
+          'delete-account.cleanup',
+          new Error(cleanupErr.message ?? 'unknown cleanup error'),
+          {
+            userId,
+            table,
+            pgCode:    cleanupErr.code,
+            pgDetails: cleanupErr.details,
+            pgHint:    cleanupErr.hint,
+          },
+        );
+        // 치명 에러가 아니면 계속 진행 — 다른 테이블이라도 정리.
+      }
+    }
+
+    // ── 3. Delete the auth.users row ──────────────────────────────────────────
     const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId);
 
     if (deleteError) {

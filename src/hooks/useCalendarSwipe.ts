@@ -46,17 +46,34 @@ export function useCalendarSwipe({ viewMode, isDragging, onShift }: Args) {
 
   const swipeX = useRef(new Animated.Value(0)).current;
 
-  // Build-82 LEAD: month swipe 렉. 이전 fly-off + warp + spring 3단계
-  // sequence (~600ms 총) 가 selectedDate 변경에 따른 MonthView 6×7=42
-  // cells 재렌더와 동시 진행되며 frame drop 발생. 즉시 reset 으로 단순화 —
-  // 사용자가 commit 직후 바로 새 selectedDate 의 콘텐츠를 봄. 시각적 jolt
-  // 줄어듦.
+  // Build-83 LEAD: month swipe 멀미. Build 82 의 setValue(0) 즉시 reset 은
+  // 시각적 jolt 가 너무 큼 ("멀미남"). 짧은 timing 으로 부드러운 transition
+  // — 빠르되 (180ms) 갑작스럽지 않게. spring 의 overshoot/oscillation 회피.
+  // useNativeDriver 로 JS thread 의존 없이 60fps 보장.
   const animateCommit = useCallback(() => {
-    swipeX.setValue(0);
+    Animated.timing(swipeX, {
+      toValue: 0,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
   }, [swipeX]);
+
+  // Build-83 LEAD: 월 뷰 셀 살짝 탭만 해도 일정 등록으로 진입하는 문제.
+  // capture variant 가 자식의 TouchableOpacity 보다 우선해서 horizontal
+  // 의도면 onPress 를 cancel. 임계값을 일반 ShouldSet 보다 빠르게 잡되
+  // (dx>8, vx>0.15) 정적 탭은 통과시키도록 균형.
+  const horizIntent = (gs: { dx: number; dy: number; vx: number }) =>
+    !isDraggingRef.current &&
+    viewModeRef.current !== 'week' &&
+    Math.abs(gs.dx) > Math.abs(gs.dy) * SWIPE_RATIO &&
+    Math.abs(gs.dx) > 8 &&
+    Math.abs(gs.vx) > 0.15;
 
   const panResponder = useRef(
     PanResponder.create({
+      // 자식 onPress 보다 우선 — 손가락 이동이 horizontal 의도면 즉시 가져와
+      // 셀 탭을 cancel. 정적 탭 (dx≈0, vx≈0) 은 자식이 처리.
+      onMoveShouldSetPanResponderCapture: (_, gs) => horizIntent(gs),
       onMoveShouldSetPanResponder: (_, gs) =>
         // Hard gate — chip drag 중엔 절대 claim 금지.
         !isDraggingRef.current &&
@@ -70,14 +87,19 @@ export function useCalendarSwipe({ viewMode, isDragging, onShift }: Args) {
         Math.abs(gs.dx) > 10 &&
         Math.abs(gs.vx) > 0.3,
       onPanResponderMove: (_, gs) => {
-        // Build-82 — rubber-banding 비율 ↓ (0.6 → 0.3). 손가락 따라 시각 피드백
-        // 만 주고 commit 시 바로 swap. 큰 화면 이동 X 라 부드러움.
-        swipeX.setValue(gs.dx * 0.3);
+        // Build-83 — rubber-banding 0.4 (Build 82 의 0.3 보다 살짝 ↑). 손가락
+        // 추적이 너무 적으면 인터랙션 dead 같은 느낌. 적당한 시각 피드백.
+        swipeX.setValue(gs.dx * 0.4);
       },
       onPanResponderRelease: (_, gs) => {
         if (Math.abs(gs.dx) < SWIPE_THRESHOLD) {
-          // 임계값 미만 — 원위치 즉시 reset (이전 spring 도 제거).
-          swipeX.setValue(0);
+          // Build-83 — 짧은 timing 으로 부드러운 원위치 (120ms). spring
+          // 오버슈트 없이 깔끔.
+          Animated.timing(swipeX, {
+            toValue: 0,
+            duration: 120,
+            useNativeDriver: true,
+          }).start();
           return;
         }
         const direction: -1 | 1 = gs.dx < 0 ? 1 : -1;
