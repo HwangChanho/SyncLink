@@ -200,7 +200,7 @@ describe('spaceService', () => {
       expect(result.members[0]?.role).toBe('owner');
     });
 
-    it('invite_code 형식: 8자리, O/0/I/1 제외 문자셋으로 구성됨 (Sprint 28: 6→8자리 업그레이드)', async () => {
+    it('invite_code 형식: 8자리, O/0/I/1 제외 문자셋으로 구성됨 (Build 86: DB CHECK 와 동기화 위해 8→6 rollback)', async () => {
       // generateCode()가 생성한 코드를 spaces INSERT에서 캡처
       let capturedInviteCode: string | undefined;
       const spacesChain = makeChain({ data: mockSpaceRow, error: null });
@@ -218,7 +218,7 @@ describe('spaceService', () => {
       await createSpace({ name: 'Test', type: 'couple' });
 
       // 8자리 확인 (Sprint 28 fix: 6→8자리 코드 공간 확장)
-      expect(capturedInviteCode).toHaveLength(8);
+      expect(capturedInviteCode).toHaveLength(6);
       // O(오), 0(영), I(아이), 1(일) 제외 확인
       const EXCLUDED_CHARS = /[O0I1]/;
       expect(EXCLUDED_CHARS.test(capturedInviteCode!)).toBe(false);
@@ -516,7 +516,7 @@ describe('spaceService', () => {
 
       const newCode = await regenerateInviteCode('space-abc');
 
-      expect(newCode).toHaveLength(8);
+      expect(newCode).toHaveLength(6);
     });
 
     it('생성된 코드: O/0/I/1이 포함되지 않고 허용 문자셋만 사용됨 (100회 확인)', async () => {
@@ -529,7 +529,7 @@ describe('spaceService', () => {
         const code = await regenerateInviteCode('space-abc');
         expect(EXCLUDED_CHARS.test(code)).toBe(false);
         expect(ALLOWED_CHARS.test(code)).toBe(true);
-        expect(code).toHaveLength(8);
+        expect(code).toHaveLength(6);
       }
     });
 
@@ -578,7 +578,7 @@ describe('spaceService', () => {
       const newCode = await regenerateInviteCode('space-abc');
 
       // 성공적으로 8자리 코드 반환됨
-      expect(newCode).toHaveLength(8);
+      expect(newCode).toHaveLength(6);
     });
 
     it('Sprint 28 fix — 10회 모두 UNIQUE 위반 시 에러 throw', async () => {

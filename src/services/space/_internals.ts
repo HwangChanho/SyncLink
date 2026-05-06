@@ -23,13 +23,19 @@ export function serializeSupabaseError(err: unknown): Record<string, unknown> | 
 }
 
 /**
- * Generate a random 8-character invite code.
- * O/0/I/1 등 모호 문자 제외 — 32^8 ≈ 1.1 trillion 코드 공간.
+ * Generate a random 6-character invite code.
+ *
+ * 길이 6 은 DB CHECK 제약 (`invite_code ~ '^[A-Z0-9]{6}$'`, migration 001)
+ * 와 동기화 — 8 자였을 때 23514 위반으로 Space 생성이 전부 실패. char set
+ * 은 모호 문자 (O/0/I/1) 제외 시 32 종 → 32^6 ≈ 10.7억 코드 공간으로 충분.
+ *
+ * char set 이 [A-Z0-9] 의 부분집합이라 CHECK 제약과 호환 (O/0/I/1 도
+ * regex 통과지만 사용자 가독성 위해 의도적으로 제외).
  */
 export function generateCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 6; i++) {
     code += chars[Math.floor(Math.random() * chars.length)];
   }
   return code;
