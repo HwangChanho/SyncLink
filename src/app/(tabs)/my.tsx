@@ -32,10 +32,8 @@ import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import * as authService from '@/services/authService';
 import { useAuthStore } from '@/stores/authStore';
-import { useSpaceStore } from '@/stores/spaceStore';
 import { showAlert } from '@/lib/webAlert';
 import { logError } from '@/lib/errorLogger';
-import type { SpaceSummary } from '@/types';
 import { SettingsSection } from '@/components/my/SettingsSection';
 // LinkedAccountsSection is intentionally not imported here.
 // SSO is handled server-side; UI exposure is disabled per LEAD directive.
@@ -58,7 +56,6 @@ export default function MyScreen() {
   const { plan, aiUsageToday } = useSubscriptionStore();
 
   const { user, setUser } = useAuthStore();
-  const { spaces, fetchMySpaces, isLoading: spacesLoading } = useSpaceStore();
 
   // ─── Local UI state ──────────────────────────────────────────────────────
   /** True when the nickname TextInput is visible */
@@ -71,11 +68,6 @@ export default function MyScreen() {
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   /** True during sign-out */
   // Build-81 — isLoggingOut 은 settings/account 로 이전.
-
-  // Load spaces when tab mounts
-  useEffect(() => {
-    fetchMySpaces();
-  }, [fetchMySpaces]);
 
   // Keep draft in sync when user changes externally (e.g. after save)
   useEffect(() => {
@@ -315,70 +307,9 @@ export default function MyScreen() {
           </View>
         </View>
 
-        {/* ── My Spaces section ───────────────────────────────────────── */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('tabs.my')} Space</Text>
-
-          {spacesLoading && spaces.length === 0 ? (
-            <View style={styles.loadingRow}>
-              <ActivityIndicator size="small" color={colors.primary} />
-            </View>
-          ) : spaces.length === 0 ? (
-            <View style={styles.emptySpacesCard}>
-              <Text style={styles.emptySpacesText}>{t('common.none')}</Text>
-              <View style={styles.spaceActionsRow}>
-                <TouchableOpacity
-                  // testID="my-button-create-space" — e2e 06_space_create_invite 진입점
-                  testID="my-button-create-space"
-                  style={styles.createSpaceButton}
-                  onPress={() => router.push('/space/create')}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.createSpaceButtonText}>Space {t('category.new')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.joinSpaceButton}
-                  onPress={() => router.push('/space/join')}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.joinSpaceButtonText}>{t('space.join_with_code')}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            <>
-              {spaces.map(space => (
-                <SpaceCard
-                  key={space.id}
-                  space={space}
-                  onPress={() => router.push(`/space/${space.id}`)}
-                />
-              ))}
-              {/* Add space buttons at the bottom of the list — owner can
-                  create a new Space, member can join via invite code. */}
-              <View style={styles.spaceActionsRow}>
-                <TouchableOpacity
-                  // testID="my-button-add-space" — e2e 06_space_create_invite 진입점 (Space 있을 때)
-                  testID="my-button-add-space"
-                  style={styles.addSpaceRow}
-                  onPress={() => router.push('/space/create')}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.addSpaceText}>+ Space {t('category.new')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.addSpaceRow}
-                  onPress={() => router.push('/space/join')}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.addSpaceText}>↗ 초대 코드로 참여</Text>
-                </TouchableOpacity>
-              </View>
-            </>
-          )}
-        </View>
-
         {/* ── Subscription banner (Free plan only) ────────────────────── */}
+        {/* Sprint 31 후속 (2026-05-06): Spaces 섹션은 별도 탭 (/spaces) 으로
+            이동. SpaceCard 는 @/components/space/SpaceCard 로 추출. */}
         {plan === 'free' && (
           <View style={styles.section}>
             <TouchableOpacity
@@ -423,45 +354,6 @@ export default function MyScreen() {
  * Card row for a single space in the My Spaces list.
  * Uses useColors() directly to respond to theme changes.
  */
-function SpaceCard({
-  space,
-  onPress,
-}: {
-  space: SpaceSummary;
-  onPress: () => void;
-}) {
-  const { t } = useTranslation();
-  const colors = useColors();
-  const styles = makeStyles(colors);
-  const typeLabel = space.type === 'couple' ? t('space.types.couple') : t('space.types.group');
-
-  return (
-    <TouchableOpacity style={styles.spaceCard} onPress={onPress} activeOpacity={0.7}>
-      {/* Space icon */}
-      <View style={styles.spaceCardIcon}>
-        {space.coverImageUrl ? (
-          <Image source={{ uri: space.coverImageUrl }} style={styles.spaceCardImage} />
-        ) : (
-          <Text style={styles.spaceCardEmoji}>
-            {space.type === 'couple' ? '💑' : '👥'}
-          </Text>
-        )}
-      </View>
-
-      {/* Space info */}
-      <View style={styles.spaceCardInfo}>
-        <Text style={styles.spaceCardName} numberOfLines={1}>{space.name}</Text>
-        <Text style={styles.spaceCardMeta}>
-          {typeLabel} · {space.memberCount}명
-        </Text>
-      </View>
-
-      {/* Chevron */}
-      <Text style={styles.spaceCardChevron}>›</Text>
-    </TouchableOpacity>
-  );
-}
-
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 /**

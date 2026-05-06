@@ -93,6 +93,7 @@ const en = {
     home: 'Home',
     calendar: 'Calendar',
     planner: 'Planner',
+    spaces: 'Spaces',
     my: 'My',
   },
 

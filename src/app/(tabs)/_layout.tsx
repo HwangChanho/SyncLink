@@ -139,6 +139,20 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="spaces"
+        options={{
+          title: t('tabs.spaces', { defaultValue: 'Space' }),
+          tabBarButtonTestID: 'tab-button-spaces',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? 'people' : 'people-outline'}
+              size={22}
+              color={color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="my"
         options={{
           title: t('tabs.my'),

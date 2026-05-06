@@ -20,24 +20,65 @@ interface LicenseEntry {
   url?: string;
 }
 
+// package.json 의 runtime dependencies 와 동기화. 새 dep 추가 시 이 목록도 갱신.
+// 정렬: React/Expo core → Supabase → state/UI → 기능 모듈 → API/SaaS.
 const LICENSES: LicenseEntry[] = [
-  { name: 'React Native',                 license: 'MIT', url: 'https://github.com/facebook/react-native/blob/main/LICENSE' },
-  { name: 'Expo SDK',                     license: 'MIT', url: 'https://github.com/expo/expo/blob/main/LICENSE' },
-  { name: 'Supabase JS',                  license: 'MIT', url: 'https://github.com/supabase/supabase-js/blob/master/LICENSE' },
-  { name: 'Zustand',                      license: 'MIT', url: 'https://github.com/pmndrs/zustand/blob/main/LICENSE' },
-  { name: 'i18next',                      license: 'MIT', url: 'https://github.com/i18next/i18next/blob/master/LICENSE' },
-  { name: 'react-native-gesture-handler', license: 'MIT' },
-  { name: 'react-native-reanimated',      license: 'MIT' },
-  { name: '@react-native-google-mobile-ads', license: 'Apache-2.0' },
-  { name: 'expo-tracking-transparency',   license: 'MIT' },
-  { name: '@sentry/react-native',         license: 'MIT' },
-  { name: 'react-native-purchases',       license: 'MIT' },
-  { name: '@gorhom/bottom-sheet',         license: 'MIT' },
+  // ── Core ─────────────────────────────────────────────────────────────
+  { name: 'React',                                  license: 'MIT', url: 'https://github.com/facebook/react/blob/main/LICENSE' },
+  { name: 'React Native',                           license: 'MIT', url: 'https://github.com/facebook/react-native/blob/main/LICENSE' },
+  { name: 'React Native Web',                       license: 'MIT', url: 'https://github.com/necolas/react-native-web/blob/master/LICENSE' },
+  { name: 'Expo SDK',                               license: 'MIT', url: 'https://github.com/expo/expo/blob/main/LICENSE' },
+  { name: 'Expo Router',                            license: 'MIT' },
+  { name: 'Expo Updates',                           license: 'MIT' },
+  { name: 'Expo Constants',                         license: 'MIT' },
+  { name: 'Expo Linking',                           license: 'MIT' },
+  { name: 'Expo Splash Screen',                     license: 'MIT' },
+  { name: 'Expo Status Bar',                        license: 'MIT' },
+  { name: 'Expo System UI',                         license: 'MIT' },
+  // ── Backend / Storage ────────────────────────────────────────────────
+  { name: 'Supabase JS',                            license: 'MIT', url: 'https://github.com/supabase/supabase-js/blob/master/LICENSE' },
   { name: '@react-native-async-storage/async-storage', license: 'MIT' },
+  { name: 'Expo Secure Store',                      license: 'MIT' },
+  { name: 'Expo File System',                       license: 'MIT' },
+  // ── State / Navigation / UI ──────────────────────────────────────────
+  { name: 'Zustand',                                license: 'MIT', url: 'https://github.com/pmndrs/zustand/blob/main/LICENSE' },
+  { name: '@gorhom/bottom-sheet',                   license: 'MIT' },
+  { name: 'react-native-gesture-handler',           license: 'MIT' },
+  { name: 'react-native-reanimated',                license: 'MIT' },
+  { name: 'react-native-safe-area-context',         license: 'MIT' },
+  { name: 'react-native-screens',                   license: 'MIT' },
+  { name: 'Ionicons / @expo/vector-icons',          license: 'MIT' },
+  { name: 'react-native-markdown-display',          license: 'MIT' },
   { name: '@react-native-community/datetimepicker', license: 'MIT' },
-  { name: 'Ionicons / @expo/vector-icons', license: 'MIT' },
-  { name: 'OpenWeatherMap API',           license: 'Free tier terms', url: 'https://openweathermap.org/terms' },
-  { name: 'Claude API (Anthropic)',       license: 'Commercial terms', url: 'https://www.anthropic.com/legal' },
+  // ── i18n ─────────────────────────────────────────────────────────────
+  { name: 'i18next',                                license: 'MIT', url: 'https://github.com/i18next/i18next/blob/master/LICENSE' },
+  { name: 'react-i18next',                          license: 'MIT' },
+  { name: 'expo-localization',                      license: 'MIT' },
+  // ── Auth ─────────────────────────────────────────────────────────────
+  { name: '@react-native-google-signin/google-signin', license: 'Apache-2.0' },
+  { name: 'expo-apple-authentication',              license: 'MIT' },
+  { name: 'expo-web-browser',                       license: 'MIT' },
+  { name: 'expo-local-authentication',              license: 'MIT' },
+  { name: 'expo-crypto',                            license: 'MIT' },
+  // ── Device / Permissions ─────────────────────────────────────────────
+  { name: 'expo-image',                             license: 'MIT' },
+  { name: 'expo-image-picker',                      license: 'MIT' },
+  { name: 'expo-contacts',                          license: 'MIT' },
+  { name: 'expo-location',                          license: 'MIT' },
+  { name: 'expo-network',                           license: 'MIT' },
+  { name: 'expo-notifications',                     license: 'MIT' },
+  { name: 'expo-tracking-transparency',             license: 'MIT' },
+  { name: '@react-native-voice/voice',              license: 'MIT' },
+  { name: 'react-native-android-widget',            license: 'MIT' },
+  // ── Ads / Monetization / Telemetry ───────────────────────────────────
+  { name: 'react-native-google-mobile-ads',         license: 'Apache-2.0' },
+  { name: 'react-native-purchases',                 license: 'MIT' },
+  { name: '@sentry/react-native',                   license: 'MIT' },
+  // ── External APIs ────────────────────────────────────────────────────
+  { name: 'OpenWeatherMap API',                     license: 'Free tier terms',       url: 'https://openweathermap.org/terms' },
+  { name: 'Claude API (Anthropic)',                 license: 'Commercial terms',      url: 'https://www.anthropic.com/legal' },
+  { name: 'Google Maps Platform',                   license: 'Google Maps Terms',     url: 'https://cloud.google.com/maps-platform/terms' },
+  { name: 'Kakao Login',                            license: 'Kakao Developers Terms', url: 'https://developers.kakao.com/policy' },
 ];
 
 export default function LicensesScreen() {

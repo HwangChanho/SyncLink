@@ -93,6 +93,7 @@ const zh = {
     home: '首页',
     calendar: '日历',
     planner: '计划',
+    spaces: '空间',
     my: '我的',
   },
 

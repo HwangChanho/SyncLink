@@ -93,6 +93,7 @@ const ja = {
     home: 'ホーム',
     calendar: 'カレンダー',
     planner: 'プランナー',
+    spaces: 'スペース',
     my: 'マイページ',
   },
 
