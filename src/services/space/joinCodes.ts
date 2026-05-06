@@ -20,11 +20,15 @@ export async function joinSpaceByInviteCode(inviteCode: string): Promise<Space> 
   const userId = await getCurrentUserId();
   if (!userId) throw new Error('로그인이 필요합니다.');
 
-  const { data: spaceRow, error: spaceError } = await supa
-    .from('spaces').select('*').eq('invite_code', inviteCode.toUpperCase()).single() as {
-      data: SpaceRow | null; error: Error | null;
+  // Build-90 fix: spaces SELECT RLS 가 멤버/owner 만 허용해 외부 참여자가
+  // invite_code 로 lookup 하면 0 row → "유효하지 않은 초대 코드". migration
+  // 030 의 SECURITY DEFINER RPC `find_space_by_invite_code` 통해 우회.
+  const { data: spaceRows, error: spaceError } = await supa
+    .rpc('find_space_by_invite_code', { code: inviteCode.toUpperCase() }) as {
+      data: SpaceRow[] | null; error: Error | null;
     };
 
+  const spaceRow = spaceRows?.[0] ?? null;
   if (spaceError || !spaceRow) {
     throw new Error('유효하지 않은 초대 코드입니다. 코드를 다시 확인해 주세요.');
   }
