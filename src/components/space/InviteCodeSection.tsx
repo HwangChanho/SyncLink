@@ -223,7 +223,9 @@ export function InviteCodeSection({
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <View>
+    // Build-91 — root container 에 paddingBottom. SectionCard 의 다음 영역
+    // (혹은 화면 끝) 과 너무 딱 붙는다는 LEAD 보고.
+    <View style={{ paddingBottom: 16 }}>
       {/* ── 숨김 상태: "초대 코드 보기" 버튼만 표시 ─────────────────────── */}
       {!isVisible && (
         <TouchableOpacity

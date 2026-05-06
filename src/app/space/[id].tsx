@@ -26,8 +26,9 @@ import {
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { supabase } from '@/lib/supabase';
 import { useColors } from '@/hooks/useColors';
 import { makeSpaceDetailStyles } from '@/components/space/spaceDetailStyles';
 import * as spaceService from '@/services/spaceService';
@@ -152,6 +153,34 @@ export default function SpaceDetailScreen() {
     loadSpace();
     loadAnniversaries();
   }, [loadSpace, loadAnniversaries]);
+
+  // Build-91 — 새 멤버가 참여해도 owner 화면이 갱신 안 되던 회귀 (LEAD:
+  // "초대 받아서 들어갔는데 보낸사람은 갱신이 안됐어"). 두 갈래 갱신:
+  //  1. 화면 focus 마다 refetch (다른 탭 갔다 와도 최신 멤버)
+  //  2. space_members INSERT/DELETE realtime 구독 (같은 화면 떠 있어도 즉시)
+  useFocusEffect(
+    useCallback(() => {
+      loadSpace();
+    }, [loadSpace]),
+  );
+
+  useEffect(() => {
+    if (!spaceId) return;
+    const channel = supabase
+      .channel(`space-members:${spaceId}`)
+      .on(
+        'postgres_changes',
+        {
+          event:  '*',
+          schema: 'public',
+          table:  'space_members',
+          filter: `space_id=eq.${spaceId}`,
+        },
+        () => { void loadSpace(); },
+      )
+      .subscribe();
+    return () => { void channel.unsubscribe(); };
+  }, [spaceId, loadSpace]);
 
   // ─── Actions ─────────────────────────────────────────────────────────────
 
@@ -679,7 +708,10 @@ export default function SpaceDetailScreen() {
           </View>
         </View>
 
-        {/* Invite code section — InviteCodeSection manages hide/show/timer/regenerate */}
+        {/* Invite code section — owner 만 노출 (Build 91 LEAD 결정).
+            일반 멤버 화면에선 코드 자체 + "보기" 버튼 모두 hide. owner 가
+            공유 후 새 멤버 합류, 그 후엔 코드 노출 불필요. */}
+        {isOwner && (
         <SectionCard title={t('space.invite_code_section')} colors={colors} styles={styles}>
           <InviteCodeSection
             spaceId={space.id}
@@ -709,6 +741,7 @@ export default function SpaceDetailScreen() {
             memberCount={space.members.length}
           />
         </SectionCard>
+        )}
 
         {/* Member list */}
         <SectionCard title={t('space.member_section', { count: space.members.length })} colors={colors} styles={styles}>
