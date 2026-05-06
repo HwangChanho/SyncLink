@@ -30,9 +30,11 @@ import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import * as spaceService from '@/services/spaceService';
 import { useSpaceStore } from '@/stores/spaceStore';
+import { INVITE_CODE_LENGTH } from '@/constants/config';
 
-// Invite code is 8 characters (upgraded from 6 in Sprint 28 fix — UNIQUE guarantee)
-const CODE_LENGTH = 8;
+// 단일 진실 — generateCode (DB CHECK ^[A-Z0-9]{6}$) 와 동기화. Build 89:
+// 이전 자체 상수 8 이라 join 화면이 6자 코드를 거부 (LEAD 보고 "참여는 8자").
+const CODE_LENGTH = INVITE_CODE_LENGTH;
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
