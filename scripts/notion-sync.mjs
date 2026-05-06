@@ -44,7 +44,18 @@ function arg(name) {
 const feature = arg('feature') || args.find(a => !a.startsWith('--'));
 const status  = arg('status') ?? '진행';
 const build   = arg('build');
-const memo    = arg('memo');
+const memoArg = arg('memo');
+
+// 현재 git HEAD commit hash (short). LEAD 요청: Notion 에 commit hash 도
+// 함께 기록해 코드 변경과 작업 단위 매핑 추적. memo 앞에 [hash] prefix.
+import { execSync } from 'node:child_process';
+let commitHash = '';
+try {
+  commitHash = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
+} catch {
+  // git 없거나 repo 밖이면 skip
+}
+const memo = memoArg;
 if (!feature) {
   console.error('Usage: notion-sync.mjs --feature "이름" [--status 진행|완료|계획] [--build 84] [--memo ...]');
   process.exit(1);
@@ -72,20 +83,21 @@ async function findExistingPage(name) {
 }
 
 // ── property body 빌드 ────────────────────────────────────────────────────
-function buildProps({ feature, status, build, memo }) {
+function buildProps({ feature, status, build, memo, commit }) {
   const props = {
     '이름':   { title: [{ text: { content: feature } }] },
     'Status': { multi_select: [{ name: status }] },
     'Update': { date: { start: new Date().toISOString().slice(0, 10) } },
   };
-  if (build) props['Build'] = { rich_text: [{ text: { content: String(build) } }] };
-  if (memo)  props['Memo']  = { rich_text: [{ text: { content: memo } }] };
+  if (build)  props['Build']  = { rich_text: [{ text: { content: String(build) } }] };
+  if (memo)   props['Memo']   = { rich_text: [{ text: { content: memo } }] };
+  if (commit) props['Commit'] = { rich_text: [{ text: { content: commit } }] };
   return props;
 }
 
 // ── upsert ────────────────────────────────────────────────────────────────
 const existing = await findExistingPage(feature);
-const properties = buildProps({ feature, status, build, memo });
+const properties = buildProps({ feature, status, build, memo, commit: commitHash });
 
 let r, body, action;
 if (existing) {
