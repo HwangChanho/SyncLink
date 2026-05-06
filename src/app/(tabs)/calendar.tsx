@@ -33,6 +33,7 @@ import { NLInputBar } from '@/components/nl/NLInputBar';
 import { CalendarHeader, type ViewMode } from '@/components/calendar/CalendarHeader';
 import { WheelDatePicker } from '@/components/calendar/WheelDatePicker';
 import { MonthView } from '@/components/calendar/MonthView';
+import { useAnniversaryStore } from '@/stores/anniversaryStore';
 import { WeekView } from '@/components/calendar/WeekView';
 import { DayView } from '@/components/calendar/DayView';
 import { useEventStore } from '@/stores/eventStore';
@@ -61,6 +62,15 @@ export default function CalendarScreen() {
   // Build-74 — week/day view 에선 todo 미노출. drag-to-reschedule 도 X.
   const { todos, fetchTodos } = useTodoStore();
   useEffect(() => { void fetchTodos(); }, [fetchTodos]);
+
+  // Build-91 — anniversaries (Space 단위 기념일) 도 캘린더에 표시. RLS 가
+  // 본인 멤버 space 만 통과 → 한 번 fetch 후 month picker 마다 클라
+  // 매핑 (repeat_yearly 처리). 데이터 양 적어 최초 1회 + 새 Space 합류
+  // 시 (focus 마다) 충분. anniversariesByDate 의 useMemo 는 selectedDate
+  // 선언 후 위치 (block-scoped 참조).
+  const fetchAnniversaries = useAnniversaryStore(s => s.fetchAll);
+  const occurrencesByDate  = useAnniversaryStore(s => s.occurrencesByDate);
+  useEffect(() => { void fetchAnniversaries(); }, [fetchAnniversaries]);
 
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
@@ -134,6 +144,12 @@ export default function CalendarScreen() {
     }
     return map;
   }, [todos, categories]);
+
+  // Build-91 — anniversariesByDate 매핑 (selectedDate 의존 → 여기 위치).
+  const anniversariesByDate = useMemo(
+    () => occurrencesByDate(selectedDate.getFullYear(), selectedDate.getMonth()),
+    [occurrencesByDate, selectedDate],
+  );
 
   // displayEventsByDate / toggleCategoryDim / toggleSpaceSelection 모두
   // useCategoryFilter / useFreeTimeOverlay 가 제공.
@@ -398,6 +414,7 @@ export default function CalendarScreen() {
               selectedDate={selectedDate}
               eventsByDate={displayEventsByDate}
               todosByDate={todosByDate}
+              anniversariesByDate={anniversariesByDate}
               onDragModeChange={handleChildDragModeChange}
               density={monthDensity}
               onDateSelect={handleDateSelect}

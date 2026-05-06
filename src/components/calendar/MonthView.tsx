@@ -69,6 +69,12 @@ interface MonthViewProps {
    */
   todosByDate?: Record<string, MonthViewItem[]>;
   /**
+   * Build-91 — Space 단위 기념일 (anniversary). 항상 노출 (LEAD 결정).
+   * 이미 dateKey 별로 매핑된 상태로 들어옴 (anniversaryStore.occurrencesByDate).
+   * MonthViewItem 으로 변환 후 events/todos 와 같은 strip 에 렌더.
+   */
+  anniversariesByDate?: Record<string, { id: string; title: string }[]>;
+  /**
    * Density of the bottom strip per cell.
    *   'detailed' → Apple-Calendar-style coloured bars with title text
    *   'compact'  → small colour dots only (simplified overview)
@@ -186,6 +192,7 @@ export function MonthView({
   selectedDate,
   eventsByDate,
   todosByDate,
+  anniversariesByDate,
   density = 'detailed',
   onDateSelect,
   onEmptyDatePress,
@@ -506,9 +513,10 @@ export function MonthView({
             const dateKey = toDateKey(date);
             const dayEvents = eventsByDate[dateKey] ?? [];
             const dayTodos = todosByDate?.[dateKey] ?? [];
-            // Merge events + todos into a single ordered list so the month
-            // cell shows an Apple-Calendar-style colour bar per item.
-            // Events come first (chronological priority), then todos.
+            const dayAnniversaries = anniversariesByDate?.[dateKey] ?? [];
+            // Merge events + todos + anniversaries 한 strip. Build-91 —
+            // anniversary 는 항상 표시 (Space 단위 공유 기념일 — 무조건 노출).
+            // 색은 핫핑크 계열로 events/todos 와 시각적으로 구분.
             const dayItems: MonthViewItem[] = [
               ...dayEvents.map((e): MonthViewItem => ({
                 id: e.id,
@@ -519,6 +527,12 @@ export function MonthView({
                 kind: 'event',
               })),
               ...dayTodos,
+              ...dayAnniversaries.map((a): MonthViewItem => ({
+                id:    `anniv-${a.id}`,
+                title: `🎉 ${a.title}`,
+                color: '#EC4899', // Tailwind pink-500 — anniversary signature
+                kind:  'event',   // bar style 은 event 와 동일
+              })),
             ];
 
             return (
