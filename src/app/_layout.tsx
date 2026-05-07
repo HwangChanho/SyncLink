@@ -557,12 +557,15 @@ export default function RootLayout() {
       : process.env.EXPO_PUBLIC_RC_API_KEY_ANDROID;
     if (!rcKey) {
       // RC 미설정 환경 — sync 건너뛰고 plan 은 DB 에서만 결정.
-      void supabase.from('users').select('subscription_plan').eq('id', userId).maybeSingle()
-        .then(({ data }) => {
+      (async () => {
+        try {
+          const { data } = await supabase.from('users').select('subscription_plan').eq('id', userId).maybeSingle();
           const dbPlan = (data as unknown as { subscription_plan?: string } | null)?.subscription_plan;
           setPlan(dbPlan === 'pro' ? 'pro' : 'free');
-        })
-        .catch(() => undefined);
+        } catch {
+          // 무시 — plan 미정 = free 유지
+        }
+      })();
       return;
     }
 
