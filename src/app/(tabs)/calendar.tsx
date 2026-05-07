@@ -276,11 +276,11 @@ export default function CalendarScreen() {
   useFocusEffect(
     useCallback(() => {
       const range = getViewRange(selectedDate, viewMode);
-      const key = `${viewMode}:${toDateKey(range.start)}-${toDateKey(range.end)}`;
-      // Build-70 — focus 시 동일 range 면 중복 fetch skip.
-      if (lastFetchedRangeRef.current === key) return;
-      lastFetchedRangeRef.current = key;
-      void fetchEvents(range);
+      // Build-94 — 화면 focus 마다 force refetch. Realtime 으로 받지 못한
+      // 새 share / 다른 device 변경이 stale cache 로 안 보이던 LEAD 보고
+      // ("상대방 달력에서 안떠"). focus 빈도가 적어 비용 작고 신선도 보장.
+      void fetchEvents(range, { force: true });
+      void fetchAnniversaries();
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedDate, viewMode]),
   );

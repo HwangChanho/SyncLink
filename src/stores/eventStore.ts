@@ -66,7 +66,7 @@ interface EventState {
    *
    * @param range - Inclusive start/end date range
    */
-  fetchEvents: (range: DateRange) => Promise<void>;
+  fetchEvents: (range: DateRange, opts?: { force?: boolean }) => Promise<void>;
   setEventsForDate: (date: string, events: EventSummary[]) => void;
   upsertEvent: (event: EventSummary) => void;
   removeEvent: (eventId: string) => void;
@@ -97,8 +97,10 @@ export const useEventStore = create<EventState>((set, _get) => ({
   error: null,
   fetchedDateKeys: new Set<string>(),
 
-  fetchEvents: async (range: DateRange) => {
+  fetchEvents: async (range: DateRange, opts?: { force?: boolean }) => {
     // Build-71 perf — range 의 모든 date key 가 이미 fetched 라면 skip.
+    // Build-94 — 단, opts.force 면 캐시 무시 후 refetch (Realtime 으로 받지
+    // 못한 새 share / 다른 device 변경 등 stale 가능성 처리).
     const requiredKeys: string[] = [];
     const cursor = new Date(range.start);
     cursor.setHours(0, 0, 0, 0);
@@ -107,11 +109,12 @@ export const useEventStore = create<EventState>((set, _get) => ({
       requiredKeys.push(localDateKey(cursor));
       cursor.setDate(cursor.getDate() + 1);
     }
-    const cached = _get().fetchedDateKeys;
-    if (requiredKeys.length > 0 && requiredKeys.every((k) => cached.has(k))) {
-      // 모든 일자 이미 fetched → Supabase 호출 / state 갱신 모두 skip.
-      // 결과: redundant re-render 0, swipe 부드러움.
-      return;
+    if (!opts?.force) {
+      const cached = _get().fetchedDateKeys;
+      if (requiredKeys.length > 0 && requiredKeys.every((k) => cached.has(k))) {
+        // 모든 일자 이미 fetched → Supabase 호출 / state 갱신 모두 skip.
+        return;
+      }
     }
 
     set({ isFetching: true, error: null });
