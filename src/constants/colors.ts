@@ -163,6 +163,11 @@ export const memberEventColors = [
  *
  *   Reference: https://en.wikipedia.org/wiki/Golden_angle (Vogel's model).
  */
+// Build-99 LEAD: "기본 색상 빨간색 말고 디바이스 테마에 어울리는 (잘 보이고
+// 눈이 편한) 색". index 0 의 hue 가 0 (빨강) 이라 light/dark 모두 부담스러움.
+// Indigo 계열 (hue 230) 부터 시작해 첫 owner 가 차분한 indigo, 다음 멤버는
+// golden angle 분포로 자연 분산.
+const HUE_OFFSET_DEG  = 230;
 const GOLDEN_ANGLE_DEG = 137.508;
 
 /** HSL saturation locked to 65% — vivid but not garish, AA-friendly. */
@@ -233,7 +238,9 @@ export function getMemberColor(
     : 0;
 
   // Compute hue. `% 360` handles wraparound; result is in [0, 360).
-  const hue = (safeIndex * GOLDEN_ANGLE_DEG) % 360;
+  // Build-99 — HUE_OFFSET_DEG (230, indigo) 부터 시작. index 0 = indigo,
+  // 1, 2... 는 golden angle 로 자연 분산.
+  const hue = (HUE_OFFSET_DEG + safeIndex * GOLDEN_ANGLE_DEG) % 360;
 
   const lightness = opts.dark
     ? MEMBER_COLOR_LIGHTNESS_DARK
