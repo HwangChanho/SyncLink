@@ -322,8 +322,13 @@ export function WeekView({
     const out: DragLayoutRect[] = [];
     dayWindow.forEach((day, idx) => {
       const k = toDateKey(day);
-      const timed = (eventsByDate[k] ?? []).filter((e) => !e.allDay);
-      computeLayout(timed).forEach((lay) => {
+      // Build-98 — dragLayouts 자체에서 공유 받은 (isOwn=false 이고 편집
+      // 허용 X) 이벤트 제외. hit-test 가 아예 매칭 안 되어 long-press
+      // 단계까지도 안 진입 → "공유 받은 일정이 옮겨지는" 회귀 차단.
+      const draggable = (eventsByDate[k] ?? []).filter(
+        (e) => !e.allDay && (e.isOwn || e.editableByMembers === true),
+      );
+      computeLayout(draggable).forEach((lay) => {
         out.push({
           event:    lay.event,
           dayIndex: idx,

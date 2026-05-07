@@ -223,14 +223,18 @@ export function DayView({
   const [containerWidth, setContainerWidth] = useState(0);
   const dragLayouts = useMemo<DragLayoutRect[]>(() => {
     if (containerWidth <= 0) return [];
-    return timedEvents.map((lay) => ({
-      event:    lay.event,
-      dayIndex: 0,
-      left:     lay.leftFraction * containerWidth,
-      top:      lay.topOffset,
-      width:    lay.widthFraction * containerWidth,
-      height:   lay.height,
-    }));
+    // Build-98 — 공유 받은 (isOwn=false 이고 편집 허용 X) 이벤트는 hit-test
+    // 자체에서 제외 → drag 진입 불가능 (LEAD: 옮겨지고 복사되고 난리).
+    return timedEvents
+      .filter((lay) => lay.event.isOwn || lay.event.editableByMembers === true)
+      .map((lay) => ({
+        event:    lay.event,
+        dayIndex: 0,
+        left:     lay.leftFraction * containerWidth,
+        top:      lay.topOffset,
+        width:    lay.widthFraction * containerWidth,
+        height:   lay.height,
+      }));
   }, [timedEvents, containerWidth]);
 
   // Build-47 — eventsArea page-position ref so the drag hook can convert

@@ -274,6 +274,16 @@ export function useGridDragHandler({
         if (!candidate) return;
         // Build-94/96 — drag-to-reschedule 가드. 본인 소유 (isOwn) 또는
         // owner 가 "편집 허용" 토글한 경우 (editableByMembers) 만 진입.
+        if (__DEV__) {
+          // eslint-disable-next-line no-console
+          console.log('[DragHandler]', {
+            id:      candidate.event.id,
+            title:   candidate.event.title,
+            isOwn:   candidate.event.isOwn,
+            editableByMembers: candidate.event.editableByMembers,
+            blocked: !candidate.event.isOwn && !candidate.event.editableByMembers,
+          });
+        }
         if (!candidate.event.isOwn && !candidate.event.editableByMembers) return;
         // Schedule drag-mode entry. If the finger moves too much before
         // this fires, onPanResponderMove cancels the timer.
