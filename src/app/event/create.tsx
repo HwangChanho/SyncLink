@@ -252,11 +252,12 @@ export default function EventCreateScreen() {
   const {
     title, allDay, startAt, endAt, repeatType, repeatWeekdays,
     location, description, shareSpaceIds, reminderMinutes, eventColor, categoryId,
+    editableByMembers,
   } = form;
   const {
     setTitle, setAllDay, setStartAt, setEndAt, setRepeatType, setRepeatWeekdays,
     setLocation, setDescription, setShareSpaceIds, setReminderMinutes,
-    setEventColor, setCategoryId,
+    setEventColor, setCategoryId, setEditableByMembers,
   } = setters;
 
   const [isSaving, setIsSaving] = useState(false);
@@ -490,6 +491,7 @@ export default function EventCreateScreen() {
         // Pass color override — null is fine (service layer accepts null = no override)
         ...(eventColor          ? { color: eventColor }                : {}),
         shareToSpaceIds: shareSpaceIds,
+        editableByMembers,
       });
 
       // Persist reminders for the newly created event (fire-and-forget; see
@@ -525,7 +527,7 @@ export default function EventCreateScreen() {
     }
   }, [
     title, allDay, startAt, repeatType, location, description, categoryId,
-    eventColor, shareSpaceIds, reminderMinutes, upsertEvent, router, colors.primary, t, showToast,
+    eventColor, shareSpaceIds, reminderMinutes, editableByMembers, upsertEvent, router, colors.primary, t, showToast,
   ]);
 
   /**
@@ -1027,6 +1029,20 @@ export default function EventCreateScreen() {
                   </Pressable>
                 );
               })}
+
+              {/* Build-96 — 멤버 편집 허용 토글. share 1개 이상 선택됐을
+                  때만 의미 — owner 가 ON 하면 멤버도 reschedule/edit. */}
+              {shareSpaceIds.length > 0 && (
+                <View style={styles.spaceRow} testID="event-editable-members-row">
+                  <Text style={styles.spaceName}>{t('event.form.editable_by_members', { defaultValue: '멤버 편집 허용' })}</Text>
+                  <Switch
+                    testID="event-editable-members-switch"
+                    value={editableByMembers}
+                    onValueChange={setEditableByMembers}
+                    trackColor={{ false: colors.border, true: colors.primary }}
+                  />
+                </View>
+              )}
             </View>
           )}
         </View>

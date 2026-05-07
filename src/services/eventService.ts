@@ -57,6 +57,8 @@ function toEventSummary(
     // Build-94 — 공유 받은 이벤트만 nickname. own 이면 undefined → 캘린더가
     // prefix 표시 안 함.
     ...(ownerNickname && !isOwn ? { ownerNickname } : {}),
+    // Build-96 — drag 가드 우회 조건. true 면 멤버도 reschedule 가능.
+    ...(row.editable_by_members ? { editableByMembers: true } : {}),
   };
 }
 
@@ -84,6 +86,7 @@ function toEvent(
     sharedSpaceIds,
     ownerNickname,
     isOwn,
+    editableByMembers: row.editable_by_members ?? false,
     createdAt:    new Date(row.created_at),
     updatedAt:    new Date(row.updated_at),
   };
@@ -382,6 +385,7 @@ export async function createEvent(input: CreateEventInput): Promise<Event> {
       repeat_until: input.repeatUntil?.toISOString() ?? null,
       category_id:  input.categoryId ?? null,
       color:        input.color ?? null,
+      editable_by_members: input.editableByMembers ?? false,
     };
     if (input.repeatType === 'custom_weekly') {
       insertPayload.repeat_weekdays = input.repeatWeekdays ?? [];
@@ -450,6 +454,7 @@ export async function createEvent(input: CreateEventInput): Promise<Event> {
         sharedSpaceIds: input.shareToSpaceIds ?? [],
         ownerNickname: '',
         isOwn:         true,
+        editableByMembers: input.editableByMembers ?? false,
         createdAt:     new Date(row.created_at),
         updatedAt:     new Date(row.updated_at),
       };
@@ -514,6 +519,7 @@ export async function updateEvent(eventId: string, updates: UpdateEventInput): P
     if (updates.repeatUntil !== undefined) patch.repeat_until = updates.repeatUntil?.toISOString() ?? null;
     if (updates.categoryId  !== undefined) patch.category_id  = updates.categoryId ?? null;
     if (updates.color       !== undefined) patch.color        = updates.color ?? null;
+    if (updates.editableByMembers !== undefined) patch.editable_by_members = updates.editableByMembers;
 
     if (Object.keys(patch).length > 0) {
       const { error } = await supa

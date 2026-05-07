@@ -49,6 +49,11 @@ export interface Event {
   ownerNickname: string;
   /** True if the current user owns this event. */
   isOwn: boolean;
+  /**
+   * Build-96 — true 이면 share 받은 space 의 멤버도 UPDATE 가능 (drag-to-
+   * reschedule, edit). owner 가 등록 폼에서 토글로 결정. default false.
+   */
+  editableByMembers: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -73,6 +78,11 @@ export interface EventSummary {
    * 셀에 누가 등록했는지 prefix 로 표시. own event 는 undefined.
    */
   ownerNickname?: string;
+  /**
+   * Build-96 — owner 가 "편집 허용" 토글한 경우 true. 클라가 멤버일 때
+   * drag-to-reschedule 가드 우회 조건.
+   */
+  editableByMembers?: boolean;
 }
 
 /** Payload when creating a new event (omit server-generated fields). */
@@ -96,6 +106,11 @@ export interface CreateEventInput {
   color?: string | null;
   /** Space IDs to share this event to immediately upon creation. */
   shareToSpaceIds?: string[];
+  /**
+   * Build-96 — true 면 share 받은 space 의 멤버도 reschedule/edit 가능.
+   * default false (owner-only). update 시 undefined 면 기존 값 유지.
+   */
+  editableByMembers?: boolean;
 }
 
 /** Payload when updating an event. */

@@ -34,6 +34,8 @@ export interface EventFormInitial {
   reminderMinutes?: number[];
   eventColor?: string | null;
   categoryId?: string | null;
+  /** Build-96 — 멤버 편집 허용 토글 초기값. default false. */
+  editableByMembers?: boolean;
 }
 
 export interface EventFormState {
@@ -51,6 +53,7 @@ export interface EventFormState {
   /** null = 카테고리/멤버 색 fallback. */
   eventColor: string | null;
   categoryId: string | null;
+  editableByMembers: boolean;
 }
 
 // 모든 setter 를 React.Dispatch 로 노출 — 호출자가 prev 기반 함수형
@@ -68,6 +71,7 @@ export interface EventFormSetters {
   setReminderMinutes: React.Dispatch<React.SetStateAction<number[]>>;
   setEventColor: React.Dispatch<React.SetStateAction<string | null>>;
   setCategoryId: React.Dispatch<React.SetStateAction<string | null>>;
+  setEditableByMembers: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 export interface EventFormHelpers {
@@ -118,6 +122,7 @@ export function useEventForm(initial: EventFormInitial = {}): {
   const [reminderMinutes, setReminderMinutes] = useState<number[]>(initial.reminderMinutes ?? []);
   const [eventColor, setEventColor] = useState<string | null>(initial.eventColor ?? null);
   const [categoryId, setCategoryId] = useState<string | null>(initial.categoryId ?? null);
+  const [editableByMembers, setEditableByMembers] = useState<boolean>(initial.editableByMembers ?? false);
 
   const applyPickerValue = useCallback((target: 'start' | 'end', selected: Date) => {
     if (target === 'start') {
@@ -151,10 +156,12 @@ export function useEventForm(initial: EventFormInitial = {}): {
     state: {
       title, allDay, startAt, endAt, repeatType, repeatWeekdays,
       location, description, shareSpaceIds, reminderMinutes, eventColor, categoryId,
+      editableByMembers,
     },
     setters: {
       setTitle, setAllDay, setStartAt, setEndAt, setRepeatType, setRepeatWeekdays,
       setLocation, setDescription, setShareSpaceIds, setReminderMinutes, setEventColor, setCategoryId,
+      setEditableByMembers,
     },
     helpers: { applyPickerValue, applyWebDateChange, shiftTime },
   };

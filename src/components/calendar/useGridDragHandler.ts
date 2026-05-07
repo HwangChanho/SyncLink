@@ -272,11 +272,9 @@ export function useGridDragHandler({
         cancelLongPress();
         const candidate = candidateRef.current;
         if (!candidate) return;
-        // Build-94 LEAD: "상대방이 등록한 일정도 내 달력에서 옮겨지는데
-        // 그러면 안 돼". drag-to-reschedule 은 본인 소유 (isOwn=true)
-        // 만 허용 — 공유 받은 이벤트는 long-press 무시. (편집 허용 토글
-        // 도입 시 이 가드에 || event.editableByMembers 추가 예정.)
-        if (!candidate.event.isOwn) return;
+        // Build-94/96 — drag-to-reschedule 가드. 본인 소유 (isOwn) 또는
+        // owner 가 "편집 허용" 토글한 경우 (editableByMembers) 만 진입.
+        if (!candidate.event.isOwn && !candidate.event.editableByMembers) return;
         // Schedule drag-mode entry. If the finger moves too much before
         // this fires, onPanResponderMove cancels the timer.
         longPressTimerRef.current = setTimeout(() => {

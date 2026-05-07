@@ -102,6 +102,8 @@ export interface EventRow {
   repeat_until: string | null;
   category_id: string | null;
   color: EventColorDb | null;
+  /** Build-96 — true: share 받은 멤버도 UPDATE 가능. default false. */
+  editable_by_members: boolean;
   created_at: string;
   updated_at: string;
 }

@@ -150,11 +150,12 @@ export default function EventEditScreen() {
   const {
     title, allDay, startAt, endAt, repeatType, repeatWeekdays,
     location, description, shareSpaceIds, reminderMinutes, eventColor,
+    editableByMembers,
   } = form;
   const {
     setTitle, setAllDay, setStartAt, setEndAt, setRepeatType, setRepeatWeekdays,
     setLocation, setDescription, setShareSpaceIds, setReminderMinutes,
-    setEventColor,
+    setEventColor, setEditableByMembers,
   } = setters;
 
   /** Original event kept for diffing shares on save. */
@@ -199,6 +200,8 @@ export default function EventEditScreen() {
         setEventColor(ev.color ?? null);
         // Pre-fill reminder offsets from DB
         setReminderMinutes(reminders.map((r) => r.minutesBefore));
+        // Build-96 — 멤버 편집 허용 토글 초기값.
+        setEditableByMembers(ev.editableByMembers ?? false);
       } catch (err) {
         if (!cancelled) {
           setLoadError(err instanceof Error ? err.message : t('event.load_failed'));
@@ -271,6 +274,7 @@ export default function EventEditScreen() {
         ...(description.trim() ? { description: description.trim() } : {}),
         // Always pass color so clearing the override (null) also persists
         color: eventColor,
+        editableByMembers,
       });
 
       // 2. Compute sharing diff
@@ -679,6 +683,18 @@ export default function EventEditScreen() {
                   </Pressable>
                 );
               })}
+
+              {/* Build-96 — 멤버 편집 허용 토글. */}
+              {shareSpaceIds.length > 0 && (
+                <View style={styles.spaceRow}>
+                  <Text style={styles.spaceName}>{t('event.form.editable_by_members', { defaultValue: '멤버 편집 허용' })}</Text>
+                  <Switch
+                    value={editableByMembers}
+                    onValueChange={setEditableByMembers}
+                    trackColor={{ false: colors.border, true: colors.primary }}
+                  />
+                </View>
+              )}
             </View>
           )}
 
