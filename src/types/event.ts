@@ -68,6 +68,11 @@ export interface EventSummary {
    * has toggled off in the category filter chip.
    */
   categoryId?: string | null;
+  /**
+   * Build-94 — 공유 받은 (isOwn=false) 이벤트의 등록자 닉네임. 캘린더
+   * 셀에 누가 등록했는지 prefix 로 표시. own event 는 undefined.
+   */
+  ownerNickname?: string;
 }
 
 /** Payload when creating a new event (omit server-generated fields). */

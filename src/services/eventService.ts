@@ -39,7 +39,12 @@ const supa = supabase as any;
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
 /** Converts an EventRow to an EventSummary for calendar rendering. */
-function toEventSummary(row: EventRow, isOwn: boolean, color: string): EventSummary {
+function toEventSummary(
+  row: EventRow,
+  isOwn: boolean,
+  color: string,
+  ownerNickname?: string,
+): EventSummary {
   return {
     id:     row.id,
     title:  row.title,
@@ -49,6 +54,9 @@ function toEventSummary(row: EventRow, isOwn: boolean, color: string): EventSumm
     color:   row.color ?? color,
     isOwn,
     categoryId: row.category_id,
+    // Build-94 — 공유 받은 이벤트만 nickname. own 이면 undefined → 캘린더가
+    // prefix 표시 안 함.
+    ...(ownerNickname && !isOwn ? { ownerNickname } : {}),
   };
 }
 
@@ -186,11 +194,25 @@ export async function getEventsInRange(range: DateRange): Promise<EventSummary[]
     }
   }
 
+  // Build-94 — owner nickname 도 함께 — 캘린더 셀에 "누가 등록" 표시.
+  const { data: ownerProfiles } = await supa
+    .from('users')
+    .select('id, nickname')
+    .in('id', ownerIds) as {
+      data: { id: string; nickname: string | null }[] | null;
+      error: Error | null;
+    };
+  const ownerNicknameMap = new Map<string, string>();
+  for (const u of ownerProfiles ?? []) {
+    if (u.nickname) ownerNicknameMap.set(u.id, u.nickname);
+  }
+
   const sharedSummaries: EventSummary[] = sharedRows.map(row =>
     toEventSummary(
       row,
       false,
       ownerColorMap.get(row.user_id) ?? getMemberColor(1),
+      ownerNicknameMap.get(row.user_id),
     ),
   );
 

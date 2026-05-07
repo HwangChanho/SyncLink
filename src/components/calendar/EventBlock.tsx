@@ -90,7 +90,11 @@ export function EventBlock({
         numberOfLines={showSubtitle ? 2 : 1}
         ellipsizeMode="tail"
       >
-        {translatedTitle ?? event.title}
+        {/* Build-94 — 공유 받은 이벤트면 등록자 nickname 을 prefix 로 표시.
+            "홍길동 · 회의" 형식. own event 는 prefix 없음. */}
+        {!event.isOwn && event.ownerNickname
+          ? `${event.ownerNickname} · ${translatedTitle ?? event.title}`
+          : (translatedTitle ?? event.title)}
       </Text>
 
       {!event.isOwn && (
