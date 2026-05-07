@@ -135,16 +135,25 @@ export const useEventStore = create<EventState>((set, _get) => ({
         }
       }
 
-      // Merge into existing eventsByDate — keeps events outside this range intact.
-      // fetchedDateKeys 는 range 의 모든 일자를 포함 (events 가 0건인 일자도
-      // server 에서 "없음" 응답을 받은 것이라 캐시 hit 자격).
+      // Build-97 — fetch 결과로 range 안 dateKey 를 완전히 교체. 이전엔
+      // spread merge 로 옛 dateKey 의 events 가 살아있어 drag-to-reschedule
+      // 후 server 에 fail 하거나 동기화될 때 "옛 위치 + 새 위치" 둘 다
+      // 표시되는 복사 현상 발생 (LEAD: "옮겨지고 복사되고 난리"). range
+      // 안 dateKey 는 server 응답이 truth 이므로 교체. range 밖 keys 는
+      // 그대로 보존.
       set((state) => {
         const newFetched = new Set(state.fetchedDateKeys);
-        for (const k of requiredKeys) newFetched.add(k);
+        const merged: typeof state.eventsByDate = { ...state.eventsByDate };
+        // range 의 모든 dateKey 를 빈 배열로 초기화 후 server 결과 병합 —
+        // server 에 없는 일자는 빈 배열 유지 (이전엔 옛 events 잔존).
+        for (const k of requiredKeys) {
+          newFetched.add(k);
+          merged[k] = byDate[k] ?? [];
+        }
         return {
-          eventsByDate: { ...state.eventsByDate, ...byDate },
+          eventsByDate:    merged,
           fetchedDateKeys: newFetched,
-          isFetching: false,
+          isFetching:      false,
         };
       });
     } catch (err) {
