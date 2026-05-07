@@ -63,6 +63,19 @@ export function useOptimisticReschedule(
     const store = useEventStore.getState();
     const originalEvent = payload.event;
 
+    // Build-98 LEAD: "옮기는 것 자체를 막아야 한다". useGridDragHandler 가
+    // 이미 가드하지만, 어떤 경로로 여기 도달해도 멈추는 3중 안전망. 본인
+    // 소유 (isOwn) 또는 owner 가 편집 허용한 경우 (editableByMembers) 만
+    // 통과. 그 외는 store upsert 자체 안 함 → 화면에 옮겨지는 시각도 X.
+    if (!originalEvent.isOwn && !originalEvent.editableByMembers) {
+      Alert.alert(
+        '편집 권한 없음',
+        '다른 사람이 등록한 일정이라 옮길 수 없어요.\n등록자가 "멤버 편집 허용" 을 켜면 다 같이 편집할 수 있어요.',
+        [{ text: '확인' }],
+      );
+      return;
+    }
+
     const optimisticEvent: EventSummary = {
       ...originalEvent,
       startAt: payload.newStartAt,
