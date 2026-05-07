@@ -548,6 +548,24 @@ export default function RootLayout() {
     // is downgraded (e.g. subscription expired). This closes the gap
     // where DB had 'pro' but RevenueCat hadn't been billed yet, so the
     // client showed Free indefinitely.
+    // Build-98 — Android RC API key 빈 값이면 initializePurchases 가 silent
+    // skip (Build 88 fix). 이후 checkProStatus 가 Purchases.getCustomerInfo
+    // 호출 시 "no singleton" warning. debug build 의 LogBox overlay 에
+    // 노이즈로 노출 → 빈 key 환경 (Android pre-launch) 에선 sync 자체 skip.
+    const rcKey = Platform.OS === 'ios'
+      ? process.env.EXPO_PUBLIC_RC_API_KEY_IOS
+      : process.env.EXPO_PUBLIC_RC_API_KEY_ANDROID;
+    if (!rcKey) {
+      // RC 미설정 환경 — sync 건너뛰고 plan 은 DB 에서만 결정.
+      void supabase.from('users').select('subscription_plan').eq('id', userId).maybeSingle()
+        .then(({ data }) => {
+          const dbPlan = (data as unknown as { subscription_plan?: string } | null)?.subscription_plan;
+          setPlan(dbPlan === 'pro' ? 'pro' : 'free');
+        })
+        .catch(() => undefined);
+      return;
+    }
+
     initializePurchases(userId)
       .then(() => checkProStatus())
       .then(async (isProFromRC) => {
