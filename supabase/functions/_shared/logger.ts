@@ -49,8 +49,30 @@ export async function logToDb(
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const message = error instanceof Error ? error.message : String(error);
-    const stack   = error instanceof Error ? error.stack   : undefined;
+    // Build-92 — PostgrestError / supabase-js 의 plain object error 도
+    // message/code 추출 (instanceof Error 못 잡음). 이전엔 "[object Object]"
+    // 만 저장돼 root cause 추적 불가했음.
+    let message: string;
+    let stack: string | undefined;
+    if (error instanceof Error) {
+      message = error.message;
+      stack   = error.stack;
+    } else if (error && typeof error === 'object') {
+      const e = error as Record<string, unknown>;
+      const msg  = typeof e.message === 'string' ? e.message : '';
+      const code = e.code ? ` [${e.code}]` : '';
+      message = msg ? `${msg}${code}` : JSON.stringify(error).slice(0, 500);
+      // PostgrestError 의 부가 정보를 details 에 보존
+      if (!details) details = {};
+      details = {
+        ...details,
+        pgCode:    e.code    ?? null,
+        pgDetails: e.details ?? null,
+        pgHint:    e.hint    ?? null,
+      };
+    } else {
+      message = String(error);
+    }
 
     await admin.from('error_logs').insert({
       context,

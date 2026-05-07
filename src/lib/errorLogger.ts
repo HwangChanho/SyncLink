@@ -42,6 +42,22 @@ export interface LogErrorOptions {
   userId?: string | null;
 }
 
+/**
+ * PostgrestError / supabase-js error 직렬화. instanceof Error 못 잡는 plain
+ * object 도 message/code/details/hint 추출. 모든 service 공용 — 중복 헬퍼
+ * 제거 (Build-92 todoService 의 serializePgError 가 origin).
+ */
+export function serializePgError(err: unknown): Record<string, unknown> {
+  if (!err || typeof err !== 'object') return { raw: String(err) };
+  const e = err as Record<string, unknown>;
+  return {
+    message: e.message ?? null,
+    code:    e.code    ?? null,
+    details: e.details ?? null,
+    hint:    e.hint    ?? null,
+  };
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**

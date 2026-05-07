@@ -53,7 +53,10 @@ export async function unshareEventFromSpace(eventId: string, spaceId: string): P
     .from('event_shares')
     .delete()
     .eq('event_id', eventId)
-    .eq('space_id', spaceId) as { error: Error | null };
+    .eq('space_id', spaceId) as { error: { message?: string; code?: string; details?: string; hint?: string } | null };
 
-  if (error) throw error;
+  if (error) {
+    const detail = error.code ? ` [${error.code}]` : '';
+    throw new Error(`event_shares DELETE 실패${detail}: ${error.message ?? 'unknown'}`);
+  }
 }

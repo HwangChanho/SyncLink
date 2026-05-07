@@ -12,6 +12,7 @@
 
 import i18next from '@/lib/i18n';
 import { supabase, getCurrentUserId } from '@/lib/supabase';
+import { logError, serializePgError } from '@/lib/errorLogger';
 import type {
   Category, CreateCategoryInput, UpdateCategoryInput,
   CategoryRow,
@@ -121,7 +122,15 @@ export async function createCategory(input: CreateCategoryInput): Promise<Catego
     .select()
     .single() as { data: CategoryRow | null; error: Error | null };
 
-  if (error || !data) throw error ?? new Error('카테고리 생성에 실패했습니다.');
+  if (error || !data) {
+    void logError({
+      context: 'category.create',
+      error:   error ?? new Error('category INSERT no row'),
+      userId,
+      details: { name: input.name, supabaseError: serializePgError(error) },
+    });
+    throw error ?? new Error('카테고리 생성에 실패했습니다.');
+  }
   return toCategory(data);
 }
 
@@ -168,7 +177,15 @@ export async function updateCategory(
     .select()
     .single() as { data: CategoryRow | null; error: Error | null };
 
-  if (error || !data) throw new Error('카테고리를 수정할 수 없습니다. 기본 카테고리는 수정 불가합니다.');
+  if (error || !data) {
+    void logError({
+      context: 'category.update',
+      error:   error ?? new Error('category UPDATE no row'),
+      userId,
+      details: { categoryId, changedKeys: Object.keys(patch), supabaseError: serializePgError(error) },
+    });
+    throw new Error('카테고리를 수정할 수 없습니다. 기본 카테고리는 수정 불가합니다.');
+  }
   return toCategory(data);
 }
 
@@ -191,5 +208,13 @@ export async function deleteCategory(categoryId: string): Promise<void> {
     .eq('id', categoryId)
     .eq('user_id', userId) as { error: Error | null };
 
-  if (error) throw new Error('카테고리를 삭제할 수 없습니다. 기본 카테고리는 삭제 불가합니다.');
+  if (error) {
+    void logError({
+      context: 'category.delete',
+      error,
+      userId,
+      details: { categoryId, supabaseError: serializePgError(error) },
+    });
+    throw new Error('카테고리를 삭제할 수 없습니다. 기본 카테고리는 삭제 불가합니다.');
+  }
 }

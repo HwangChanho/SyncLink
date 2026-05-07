@@ -17,26 +17,13 @@
  */
 
 import { supabase, getCurrentUserId } from '@/lib/supabase';
-import { logError } from '@/lib/errorLogger';
+import { logError, serializePgError } from '@/lib/errorLogger';
 import type {
   Todo, TodoSummary, CreateTodoInput, UpdateTodoInput,
   TodoFilter, NoteFilter, ContentType,
   Note, CreateNoteInput, UpdateNoteInput,
   TodoRow,
 } from '@/types';
-
-// Build-92 — Tier 1 (todo CRUD) 의 Postgrest error 직렬화 헬퍼.
-// instanceof Error 안 잡히는 plain object 도 message/code/details 추출.
-function serializePgError(err: unknown): Record<string, unknown> {
-  if (!err || typeof err !== 'object') return { raw: String(err) };
-  const e = err as Record<string, unknown>;
-  return {
-    message: e.message ?? null,
-    code:    e.code    ?? null,
-    details: e.details ?? null,
-    hint:    e.hint    ?? null,
-  };
-}
 
 // supabase-js v2 workaround for missing Relationships types
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

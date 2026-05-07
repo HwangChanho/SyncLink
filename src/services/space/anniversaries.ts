@@ -4,6 +4,7 @@
  */
 
 import { getCurrentUserId } from '@/lib/supabase';
+import { logError, serializePgError } from '@/lib/errorLogger';
 import type { Anniversary, CreateAnniversaryInput, AnniversaryRow } from '@/types';
 import { supa, toAnniversary } from './_internals';
 
@@ -18,7 +19,10 @@ export async function getAllUserAnniversaries(): Promise<Anniversary[]> {
     .from('anniversaries').select('*') as {
       data: AnniversaryRow[] | null; error: Error | null;
     };
-  if (error) throw error;
+  if (error) {
+    void logError({ context: 'anniversary.getAll', error, details: { supabaseError: serializePgError(error) } });
+    throw error;
+  }
   return (rows ?? [])
     .map((r: AnniversaryRow) => toAnniversary(r))
     .sort((a: Anniversary, b: Anniversary) => a.daysFromToday - b.daysFromToday);
@@ -30,7 +34,10 @@ export async function getAnniversaries(spaceId: string): Promise<Anniversary[]> 
     .from('anniversaries').select('*').eq('space_id', spaceId) as {
       data: AnniversaryRow[] | null; error: Error | null;
     };
-  if (error) throw error;
+  if (error) {
+    void logError({ context: 'anniversary.getBySpace', error, details: { spaceId, supabaseError: serializePgError(error) } });
+    throw error;
+  }
   return (rows ?? [])
     .map((r: AnniversaryRow) => toAnniversary(r))
     .sort((a: Anniversary, b: Anniversary) => a.daysFromToday - b.daysFromToday);
@@ -56,7 +63,15 @@ export async function createAnniversary(
     .select()
     .single() as { data: AnniversaryRow | null; error: Error | null };
 
-  if (error || !row) throw error ?? new Error('기념일 생성에 실패했습니다.');
+  if (error || !row) {
+    void logError({
+      context: 'anniversary.create',
+      error:   error ?? new Error('anniversary INSERT no row'),
+      userId,
+      details: { spaceId, title: input.title, supabaseError: serializePgError(error) },
+    });
+    throw error ?? new Error('기념일 생성에 실패했습니다.');
+  }
   return toAnniversary(row);
 }
 
@@ -64,5 +79,12 @@ export async function createAnniversary(
 export async function deleteAnniversary(anniversaryId: string): Promise<void> {
   const { error } = await supa
     .from('anniversaries').delete().eq('id', anniversaryId) as { error: Error | null };
-  if (error) throw error;
+  if (error) {
+    void logError({
+      context: 'anniversary.delete',
+      error,
+      details: { anniversaryId, supabaseError: serializePgError(error) },
+    });
+    throw error;
+  }
 }
