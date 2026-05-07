@@ -29,8 +29,11 @@ pkill -f "expo run:android" 2>/dev/null || true
 pkill -f "expo start" 2>/dev/null || true
 sleep 2
 
-echo "[2/4] Metro / Expo / node_modules cache clear"
-rm -rf .expo node_modules/.cache /tmp/metro-* /tmp/haste-map-* 2>/dev/null || true
+echo "[2/4] Expo cache clear (Metro cache 는 metro 자체가 invalidate 처리 — race 회피)"
+# Build-94 — /tmp/metro-* 삭제가 metro server start 와 race 해 ENOTEMPTY
+# 로 빌드 fail. metro 의 transformer cache 는 코드 변경 시 자동 invalidate
+# 되므로 명시 삭제 안 함. .expo (expo-router 캐시) 만 정리.
+rm -rf .expo node_modules/.cache 2>/dev/null || true
 
 echo "[3/4] Gradle clean (Android native build cache)"
 ( cd android && ./gradlew clean )
