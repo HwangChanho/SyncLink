@@ -125,15 +125,20 @@ allDay: 有日期但未指定时间时为 true
 
   // Default: Korean (primary audience)
   return `
-당신은 한국어 일정 텍스트를 JSON으로 변환하는 파서입니다.
+당신은 한국어 일정 텍스트 또는 이미지를 JSON으로 변환하는 파서입니다.
 현재 시각: ${contextDatetime}
 
-반환 형식 (반드시 valid JSON 한 줄만):
+[일정 정보가 명확한 경우] 반환 형식 (valid JSON 한 줄):
 {"title":"string","startAt":"ISO8601","endAt":"ISO8601","location":null,"allDay":false,"repeatType":"none"}
+
+[이미지에서 일정 정보를 찾을 수 없거나 너무 모호한 경우]:
+{"noEventFound":true,"reason":"한 줄짜리 한국어 설명"}
 
 repeatType 가능 값: "none" | "daily" | "weekly" | "monthly" | "yearly"
 allDay: 날짜는 있으나 시간이 명시되지 않으면 true
 startAt/endAt이 불분명하면 현재 시각 기준 가장 가까운 미래 시점으로 추정.
+이미지에 일정 관련 텍스트가 전혀 없거나 단순 사진 (풍경, 셀카 등) 이면
+noEventFound=true 로 반환.
 반드시 valid JSON만 반환하세요. 설명 없음.
 `.trim();
 };
@@ -253,7 +258,25 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const jsonMatch = rawContent.text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('Claude returned no valid JSON');
 
-    const aiParsed: ParsedEventFromAI = JSON.parse(jsonMatch[0]);
+    const aiParsed: ParsedEventFromAI & { noEventFound?: boolean; reason?: string }
+      = JSON.parse(jsonMatch[0]);
+
+    // Build-101 — AI 가 이미지에서 일정 정보 못 찾으면 noEventFound=true 반환.
+    // 클라가 사용자에게 "다시 시도 또는 직접 입력" prompt 띄움.
+    if (aiParsed.noEventFound) {
+      return new Response(JSON.stringify({
+        result: {
+          parsed:    {},
+          confidence: 'low',
+          source:    'ai',
+          rawInput:  text || '(image only)',
+          processingMs: null,
+          noEventFound: true,
+          error:     aiParsed.reason || '이미지에서 일정 정보를 찾지 못했어요. 다시 시도하거나 직접 입력해주세요.',
+        },
+        tokensUsed: (message.usage?.input_tokens ?? 0) + (message.usage?.output_tokens ?? 0),
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
 
     // 5. Log usage metrics (non-blocking)
     const inputTokens = message.usage?.input_tokens ?? 0;

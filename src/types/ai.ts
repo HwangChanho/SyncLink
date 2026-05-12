@@ -85,6 +85,11 @@ export interface NLParseResult {
   processingMs: number | null;
   /** Error message if parsing failed entirely. */
   error?: string;
+  /**
+   * Build-101 — Vision NL 이 이미지에서 일정 정보를 못 찾았을 때. 클라가
+   * "다시 시도 또는 직접 입력" prompt 노출.
+   */
+  noEventFound?: boolean;
 }
 
 // ─── AI service types ─────────────────────────────────────────────────────────

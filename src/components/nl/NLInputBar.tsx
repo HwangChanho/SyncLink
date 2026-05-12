@@ -250,6 +250,23 @@ export function NLInputBar({ onEventCreated }: Props) {
       void consumeAI();
     }
 
+    // Build-101 — Vision NL 의 noEventFound: AI 가 이미지에서 일정 못 찾음.
+    // 사용자에게 명시적 prompt — 다시 시도 / 직접 입력 / 취소.
+    const noEventResult = results.find((r) => r.noEventFound);
+    if (noEventResult && results.length === 1) {
+      setInputState('idle');
+      Alert.alert(
+        t('nl.no_event_found_title', { defaultValue: '일정을 찾지 못했어요' }),
+        noEventResult.error ?? '이미지에서 일정 정보가 보이지 않아요. 다른 사진을 첨부하거나 직접 입력해주세요.',
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          { text: t('nl.attach_image', { defaultValue: '다른 사진' }), onPress: () => { void handleAttachImage(); } },
+          { text: t('nl.no_event_manual', { defaultValue: '직접 입력' }), onPress: () => router.push('/event/create') },
+        ],
+      );
+      return;
+    }
+
     // AI daily limit exceeded — show snackbar (only when ALL results
     // are low+errored; partial-success multi still proceeds).
     const firstError = results.find((r) => r.error && r.confidence === 'low');
@@ -270,7 +287,7 @@ export function NLInputBar({ onEventCreated }: Props) {
     setInputState('preview');
     // 결과 표시 시 첨부 이미지는 즉시 정리 (재호출 방지 + 미리보기 깨끗).
     if (attachedImage) setAttachedImage(null);
-  }, [text, inputState, canUseAI, consumeAI, attachedImage]);
+  }, [text, inputState, canUseAI, consumeAI, attachedImage, t, router, handleAttachImage]);
 
   /**
    * Returns true when [startAt, endAt) overlaps any existing event on
