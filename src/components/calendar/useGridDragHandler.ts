@@ -30,7 +30,7 @@
  */
 
 import { useMemo, useRef, useState } from 'react';
-import { PanResponder, type PanResponderInstance } from 'react-native';
+import { Alert, PanResponder, type PanResponderInstance } from 'react-native';
 
 import {
   computeRescheduleDelta,
@@ -272,19 +272,27 @@ export function useGridDragHandler({
         cancelLongPress();
         const candidate = candidateRef.current;
         if (!candidate) return;
-        // Build-94/96 — drag-to-reschedule 가드. 본인 소유 (isOwn) 또는
-        // owner 가 "편집 허용" 토글한 경우 (editableByMembers) 만 진입.
+        // Build-98 LEAD — 본인 소유 X + 편집 허용 X 면 명시적 Alert 후
+        // 차단. 이전엔 silent return 이라 "안 옮겨지는데?" / "옮겨지는데?"
+        // 둘 다 사용자 혼란.
         if (__DEV__) {
           // eslint-disable-next-line no-console
           console.log('[DragHandler]', {
             id:      candidate.event.id,
-            title:   candidate.event.title,
             isOwn:   candidate.event.isOwn,
             editableByMembers: candidate.event.editableByMembers,
-            blocked: !candidate.event.isOwn && !candidate.event.editableByMembers,
           });
         }
-        if (!candidate.event.isOwn && !candidate.event.editableByMembers) return;
+        if (!candidate.event.isOwn && !candidate.event.editableByMembers) {
+          candidateRef.current = null;
+          setCandidateEvent(null);
+          Alert.alert(
+            '편집 권한 없음',
+            '다른 사람이 등록한 일정이라 옮길 수 없어요.\n등록자가 "멤버 편집 허용" 을 켜면 다 같이 편집할 수 있어요.',
+            [{ text: '확인' }],
+          );
+          return;
+        }
         // Schedule drag-mode entry. If the finger moves too much before
         // this fires, onPanResponderMove cancels the timer.
         longPressTimerRef.current = setTimeout(() => {
