@@ -20,7 +20,7 @@
       "bundleIdentifier": "io.synclink.app",
       "appleTeamId": "QUVU2PY6PG",
       "newArchEnabled": false,
-      "buildNumber": "84",
+      "buildNumber": "99",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.io.synclink.app.widget"
@@ -48,6 +48,7 @@
         "backgroundColor": "#000000"
       },
       "package": "io.synclink.app",
+      "googleServicesFile": "./google-services.json",
       "versionCode": 1,
       "softwareKeyboardLayoutMode": "resize",
       "intentFilters": [
@@ -182,8 +183,8 @@
     "owner": "danielhwang",
     "runtimeVersion": "1.0.0",
     "updates": {
-      "url":             "https://u.expo.dev/c9ef6634-3221-4503-9ca0-3dee0e53ac45",
-      "enabled":         false,
+      "url": "https://u.expo.dev/c9ef6634-3221-4503-9ca0-3dee0e53ac45",
+      "enabled": false,
       "checkAutomatically": "NEVER"
     }
   }
