@@ -325,8 +325,11 @@ function makeStyles(colors: ColorTokens) {
       borderTopRightRadius: radius['2xl'],
       paddingHorizontal: spacing[5],
       paddingTop: spacing[2],
-      paddingBottom: spacing[8],
-      maxHeight: '80%',
+      // Build-100 LEAD — Android 에서 sheet 하단이 navigation bar / FreeBannerAd
+      // 영역만큼 빈 갭. 충분한 paddingBottom (12) + sheet 가 화면 bottom 까지
+      // stretch. 콘텐츠 자체는 maxHeight 80% 라 위에서 잘림.
+      paddingBottom: spacing[12],
+      maxHeight: '85%',
     },
     handle: {
       alignSelf: 'center',

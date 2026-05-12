@@ -384,7 +384,10 @@ export default function EventCreateScreen() {
    * @param field - Which date field to edit
    */
   const openPicker = useCallback((field: 'start' | 'end') => {
-    setPickerTarget(field);
+    // Build-100 LEAD: "시간 picker 가 너무 오래 걸려 연속 누르면 여러 개 중첩".
+    // setState 가 같은 값 처리 중 두 번째 탭이 들어오면 React 가 새 mount 시도.
+    // pickerTarget 이 이미 있으면 무시 — debounce 효과.
+    setPickerTarget((prev) => prev ?? field);
   }, []);
 
   /**

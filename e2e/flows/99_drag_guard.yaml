@@ -1,0 +1,11 @@
+appId: io.synclink.app
+---
+- launchApp
+- takeScreenshot: "01-launch"
+- waitForAnimationToEnd
+- tapOn:
+    id: "tab-button-calendar"
+- takeScreenshot: "02-calendar"
+- longPressOn: "테스트"
+- waitForAnimationToEnd
+- takeScreenshot: "03-alert-or-no"
