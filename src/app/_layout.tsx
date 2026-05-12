@@ -623,8 +623,13 @@ export default function RootLayout() {
         } else if (data['type'] === 'space_invite' && data['inviteCode']) {
           router.push(`/space/join?code=${encodeURIComponent(String(data['inviteCode']))}`);
         } else if (data['type'] === 'reminder' || data['type'] === 'event_reminder') {
-          // Reminder taps open the calendar tab
-          router.push('/(tabs)/calendar');
+          // Build-100 LEAD — 리마인더 푸시 클릭 시 해당 일정 detail 로
+          // 직접 이동. eventId 가 payload 에 없을 때만 캘린더 fallback.
+          if (data['eventId']) {
+            router.push(`/event/${String(data['eventId'])}`);
+          } else {
+            router.push('/(tabs)/calendar');
+          }
         }
       },
     );
