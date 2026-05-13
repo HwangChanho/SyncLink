@@ -118,13 +118,10 @@ export function ReminderPicker({
 
   return (
     <View style={styles.container}>
-      {/* Row label + chip list */}
-      <View style={styles.chipsRow}>
-        {minutesList.length === 0 ? (
-          // Placeholder text when no reminders are set
-          <Text style={styles.emptyText}>{t('reminder.none')}</Text>
-        ) : (
-          minutesList.map((min) => (
+      {/* Row label + chip list — 빈 상태일 땐 placeholder 숨김 (Add 버튼만 노출). */}
+      {minutesList.length > 0 && (
+        <View style={styles.chipsRow}>
+          {minutesList.map((min) => (
             <View key={min} style={styles.chip}>
               <Text style={styles.chipLabel}>{presetLabel(min, t)}</Text>
               {/* Remove button */}
@@ -136,9 +133,9 @@ export function ReminderPicker({
                 <Ionicons name="close-circle" size={16} color={colors.textSecondary} />
               </Pressable>
             </View>
-          ))
-        )}
-      </View>
+          ))}
+        </View>
+      )}
 
       {/* Add button */}
       <Pressable

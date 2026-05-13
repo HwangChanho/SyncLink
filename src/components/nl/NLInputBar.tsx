@@ -611,7 +611,8 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     backgroundColor: colors.background,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    gap: spacing[2],
+    // Build-102 — chip ↔ input row 간격 축소 (이전 spacing[2]).
+    gap: spacing[1],
   },
   // Free 배너 wrapper. ads/FreeBannerAd 가 자체적으로 isPro 가드를 하므로
   // 여기 스타일은 항상 적용되더라도 Pro 사용자는 자식이 null 이라 보이지
@@ -698,7 +699,9 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     flexDirection: 'row',
     gap: spacing[2],
     paddingHorizontal: spacing[1],
-    paddingVertical: spacing[1],
+    // Build-102 — chip ScrollView 자체의 vertical padding 제거. container 의
+    // gap 만으로 chip 과 input row 사이 간격을 결정해 시각적 공백 최소화.
+    paddingVertical: 0,
   },
   chip: {
     backgroundColor: colors.primaryLight,
