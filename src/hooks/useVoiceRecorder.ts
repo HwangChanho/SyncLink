@@ -16,7 +16,24 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
-import { Audio } from 'expo-av';
+
+// Lazy-require expo-av so a missing/broken native binding does not crash
+// modules that merely import this hook (planner.tsx → TodoCreateSheet →
+// TodoAttachmentSection → useVoiceRecorder). Native binding is only touched
+// when the user actually starts a recording.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let Audio: any = null;
+function loadAudio() {
+  if (Audio) return Audio;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    Audio = require('expo-av').Audio;
+  } catch (err) {
+    console.warn('[useVoiceRecorder] expo-av not available', err);
+    Audio = null;
+  }
+  return Audio;
+}
 
 /** Maximum recording length — UI hint only, hard cap enforced via auto-stop. */
 const MAX_DURATION_MS = 60_000;
@@ -47,8 +64,11 @@ export function useVoiceRecorder(): VoiceRecorderApi {
   const [lastUri,        setLastUri]        = useState<string | null>(null);
   const [lastDurationMs, setLastDurationMs] = useState(0);
 
-  const recordingRef = useRef<Audio.Recording | null>(null);
-  const soundRef     = useRef<Audio.Sound | null>(null);
+  // Recording/Sound types come from the lazy-loaded native module.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recordingRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const soundRef     = useRef<any>(null);
   const tickRef      = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Stop interval + release native resources on unmount.
@@ -60,19 +80,24 @@ export function useVoiceRecorder(): VoiceRecorderApi {
 
   // ── start ────────────────────────────────────────────────────────────────
   const start = useCallback(async () => {
+    const A = loadAudio();
+    if (!A) {
+      Alert.alert('음성 메모 사용 불가', '이 빌드는 음성 녹음 기능을 지원하지 않습니다.');
+      return;
+    }
     try {
-      const perm = await Audio.requestPermissionsAsync();
+      const perm = await A.requestPermissionsAsync();
       if (!perm.granted) {
         Alert.alert('마이크 권한 필요', '음성 메모 녹음을 위해 마이크 권한이 필요합니다. 설정에서 허용해주세요.');
         return;
       }
-      await Audio.setAudioModeAsync({
+      await A.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
       });
 
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY,
+      const { recording } = await A.Recording.createAsync(
+        A.RecordingOptionsPresets.HIGH_QUALITY,
       );
       recordingRef.current = recording;
       setIsRecording(true);
@@ -133,9 +158,12 @@ export function useVoiceRecorder(): VoiceRecorderApi {
       setIsPlaying(true);
       return;
     }
-    const { sound } = await Audio.Sound.createAsync({ uri: lastUri });
+    const A = loadAudio();
+    if (!A) return;
+    const { sound } = await A.Sound.createAsync({ uri: lastUri });
     soundRef.current = sound;
-    sound.setOnPlaybackStatusUpdate((status) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    sound.setOnPlaybackStatusUpdate((status: any) => {
       if (status.isLoaded && status.didJustFinish) {
         setIsPlaying(false);
       }

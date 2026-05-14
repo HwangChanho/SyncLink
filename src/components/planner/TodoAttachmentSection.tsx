@@ -21,8 +21,24 @@ import {
   View, Text, Pressable, Image, StyleSheet, ActionSheetIOS, Platform, Alert,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
 import { Ionicons } from '@expo/vector-icons';
+
+// Lazy-require expo-image-manipulator — release builds occasionally fail to
+// resolve the native binding at module-load time, which would crash the
+// entire planner tab. Touched only when the user picks a photo.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let ImageManipulator: any = null;
+function loadImageManipulator() {
+  if (ImageManipulator) return ImageManipulator;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    ImageManipulator = require('expo-image-manipulator');
+  } catch (err) {
+    console.warn('[TodoAttachmentSection] expo-image-manipulator unavailable', err);
+    ImageManipulator = null;
+  }
+  return ImageManipulator;
+}
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { useVoiceRecorder } from '@/hooks/useVoiceRecorder';
@@ -98,16 +114,28 @@ export function TodoAttachmentSection(props: TodoAttachmentSectionProps) {
 
     // Compress to ~1600px max edge to keep storage bills reasonable; the
     // re-encode also strips EXIF (incidental privacy win).
+    const IM = loadImageManipulator();
+    if (!IM) {
+      // Fallback — original uri/base64 without compression. Larger uploads
+      // but better than crashing the user.
+      onAddPhoto({
+        localUri: a.uri,
+        base64:   a.base64 ?? '',
+        width:    a.width,
+        height:   a.height,
+      });
+      return;
+    }
     // Resize on the longest edge only — pass either width or height to
     // ImageManipulator (passing both forces an exact-fit which distorts the
     // aspect ratio when the source is not 16:9 to begin with).
     const resize = a.width > a.height
       ? { width: 1600 }
       : { height: 1600 };
-    const compressed = await ImageManipulator.manipulateAsync(
+    const compressed = await IM.manipulateAsync(
       a.uri,
       [{ resize }],
-      { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+      { compress: 0.8, format: IM.SaveFormat.JPEG, base64: true },
     );
 
     onAddPhoto({
