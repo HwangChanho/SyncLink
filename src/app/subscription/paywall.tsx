@@ -133,9 +133,15 @@ export default function PaywallScreen() {
     getOfferings()
       .then((pkgs) => {
         if (cancelled) return;
-        setPackages(pkgs);
-        // Default selection: prefer annual (index 1), but clamp to valid range
-        setSelectedIndex(pkgs.length > 1 ? 1 : 0);
+        // Build-102 — v1.0 출시 시점에는 monthly 1개만 노출. RevenueCat
+        // default Offering 의 $rc_annual / $rc_lifetime 슬롯에 Pro Monthly
+        // product 가 잘못 attached 되어 있어 paywall 에 3개 카드가
+        // 표시됨. transaction 이력 때문에 dashboard 에서 detach 불가 →
+        // 클라이언트 필터로 monthly 만 노출. annual/lifetime 제품을 정식
+        // 등록한 뒤 이 필터를 제거하면 다시 노출.
+        const monthlyOnly = pkgs.filter((p) => p.identifier === '$rc_monthly');
+        setPackages(monthlyOnly);
+        setSelectedIndex(0);
       })
       .catch(() => {
         // Offerings unavailable (no network, SDK not initialized, etc.)
