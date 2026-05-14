@@ -105,8 +105,11 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       backgroundColor: colors.backgroundAlt,
     },
     scrollContent: {
-      padding:       spacing[4],
-      paddingBottom: spacing[20],
+      // 사용자 요청 (2026-05-15): 리스트를 상단에 더 가깝게 — 단 딱 붙지
+      // 않도록 적당한 여백 유지. 좌우 패딩은 기존 유지.
+      paddingHorizontal: spacing[4],
+      paddingTop:        spacing[2],
+      paddingBottom:     spacing[20],
     },
     loadingRow: {
       paddingVertical: spacing[6],
