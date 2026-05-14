@@ -16,11 +16,11 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "io.synclink.app",
       "appleTeamId": "QUVU2PY6PG",
       "newArchEnabled": false,
-      "buildNumber": "99",
+      "buildNumber": "105",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.io.synclink.app.widget"

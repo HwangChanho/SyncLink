@@ -1,21 +1,22 @@
 //
 //  SyncLinkWidget.swift
 //
-//  iOS / iPadOS home-screen widget for SyncLink. Reads a JSON snapshot
-//  written by the host app (src/services/widgetDataService.ts via
-//  AppGroupBridge) and renders today's events + due todos.
+//  iOS home-screen widget for SyncLink. Two families:
+//    - Small (158×158): today's events + first todo. Per-category colour
+//      dot + shared-event nickname prefix. Tap → app.
+//    - Large (338×354): weekly grid (7 columns, today highlighted) showing
+//      each day's event colour dots, plus today's event/todo list on the
+//      right. Tap → app.
 //
-//  Architecture:
-//    - Provider:    builds a Timeline of WidgetSnapshotEntry from the App
-//                   Group UserDefaults suite. We use a single 30-min refresh
-//                   so iOS can budget renders even when the host app isn't
-//                   running; the host calls WidgetCenter.reloadAllTimelines()
-//                   on actual data changes for instant updates.
-//    - Entry:       decoded WidgetSnapshot (matches the JS contract).
-//    - View:        SwiftUI layout, four families covering iPhone + iPad:
-//                     small / medium / large / extraLarge (iPad).
+//  Apple does not allow ScrollView/swipe in WidgetKit (iOS 17 only adds
+//  Button/Toggle via App Intents). View-mode switching happens by changing
+//  the widget size from the long-press menu.
 //
-//  Sprint 19 TASK-1900.
+//  Data is fed from the host app's widgetDataService.ts via App Group
+//  UserDefaults (suite `group.io.synclink.app.widget`).
+//
+//  Sprint 19 TASK-1900 (initial), 2026-05-15 rework (small + large only,
+//  weekly grid, shared prefix, per-category colours).
 //
 
 import WidgetKit
@@ -23,10 +24,12 @@ import SwiftUI
 
 // MARK: - Shared constants
 
-/// Must match `group.io.synclink.app.widget` from both entitlements files
-/// and the JS-side AppGroupBridge.write() call.
-private let APP_GROUP_SUITE = "group.io.synclink.app.widget"
-private let WIDGET_DATA_KEY = "synclink.widgetSnapshot.v1"
+// Wrapped in a caseless enum so the file contains no top-level bindings,
+// which keeps `@main` happy under stricter Swift toolchains.
+private enum WidgetConfig {
+  static let appGroupSuite = "group.io.synclink.app.widget"
+  static let widgetDataKey = "synclink.widgetSnapshot.v1"
+}
 
 // MARK: - Snapshot model (mirror of WidgetSnapshot in widgetDataService.ts)
 
@@ -50,10 +53,12 @@ private struct WidgetSnapshot: Decodable {
 }
 
 private struct WidgetEvent: Decodable, Identifiable {
-  let id:        String
-  let title:     String
-  let startTime: String
-  let color:     String
+  let id:            String
+  let title:         String
+  let startTime:     String
+  let color:         String
+  let dateKey:       String   // YYYY-MM-DD
+  let ownerNickname: String   // "" for own events
 }
 
 private struct WidgetTodo: Decodable, Identifiable {
@@ -85,21 +90,23 @@ struct Provider: TimelineProvider {
   func getTimeline(in context: Context, completion: @escaping (Timeline<SnapshotEntry>) -> Void) {
     let now = Date()
     let entry = SnapshotEntry(date: now, snapshot: loadSnapshot())
+    // 30-minute reload as a baseline; the host app calls
+    // WidgetCenter.reloadAllTimelines() on real changes for instant updates.
     let nextRefresh = Calendar.current.date(byAdding: .minute, value: 30, to: now) ?? now.addingTimeInterval(1800)
     completion(Timeline(entries: [entry], policy: .after(nextRefresh)))
   }
 
   private func loadSnapshot() -> WidgetSnapshot {
     guard
-      let defaults = UserDefaults(suiteName: APP_GROUP_SUITE),
-      let raw = defaults.string(forKey: WIDGET_DATA_KEY),
+      let defaults = UserDefaults(suiteName: WidgetConfig.appGroupSuite),
+      let raw = defaults.string(forKey: WidgetConfig.widgetDataKey),
       let data = raw.data(using: .utf8)
     else { return .empty }
     return (try? JSONDecoder().decode(WidgetSnapshot.self, from: data)) ?? .empty
   }
 }
 
-// MARK: - View
+// MARK: - Entry root view
 
 struct SyncLinkWidgetEntryView: View {
   let entry: SnapshotEntry
@@ -107,100 +114,191 @@ struct SyncLinkWidgetEntryView: View {
 
   var body: some View {
     let snap = entry.snapshot
-    VStack(alignment: .leading, spacing: 6) {
-      header
-
-      if snap.events.isEmpty && snap.todos.isEmpty {
-        Spacer()
-        Text("오늘 일정이 없어요")
-          .font(.caption)
-          .foregroundColor(.secondary)
-        Spacer()
-      } else {
-        ForEach(Array(snap.events.prefix(eventLimit))) { evt in
-          EventRow(event: evt)
-        }
-
-        if family != .systemSmall && !snap.todos.isEmpty {
-          if !snap.events.isEmpty {
-            Divider().padding(.vertical, 2)
-          }
-          ForEach(Array(snap.todos.prefix(todoLimit))) { td in
-            TodoRow(todo: td)
-          }
-        }
-
-        if snap.totals.events + snap.totals.todos > eventLimit + todoLimit {
-          let overflow = (snap.totals.events + snap.totals.todos) - (eventLimit + todoLimit)
-          Text("+\(overflow) more")
-            .font(.caption2)
-            .foregroundColor(.secondary)
-        }
-      }
-    }
-    .padding(12)
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-  }
-
-  private var header: some View {
-    HStack {
-      Text("SyncLink")
-        .font(.system(size: 12, weight: .semibold))
-        .foregroundColor(.secondary)
-      Spacer()
-      Text(todayLabel)
-        .font(.system(size: 11, weight: .medium))
-        .foregroundColor(.secondary)
-    }
-  }
-
-  private var todayLabel: String {
-    let f = DateFormatter()
-    f.locale = Locale(identifier: "ko_KR")
-    f.dateFormat = "M월 d일 (E)"
-    return f.string(from: Date())
-  }
-
-  /// Density curve covering iPhone (small/medium/large) and iPad
-  /// (extraLarge — typically 2× the cells of `large`). The exact
-  /// numbers are tuned so each family fills its grid without empty space.
-  private var eventLimit: Int {
     switch family {
-      case .systemSmall:      return 2
-      case .systemMedium:     return 3
-      case .systemLarge:      return 5
-      case .systemExtraLarge: return 8
-      default:                return 4
-    }
-  }
-
-  private var todoLimit: Int {
-    switch family {
-      case .systemSmall:      return 0
-      case .systemMedium:     return 2
-      case .systemLarge:      return 4
-      case .systemExtraLarge: return 6
-      default:                return 4
+    case .systemLarge:
+      LargeView(snapshot: snap)
+        .padding(12)
+    default:
+      SmallView(snapshot: snap)
+        .padding(12)
     }
   }
 }
 
+// MARK: - Small (158×158)
+
+private struct SmallView: View {
+  let snapshot: WidgetSnapshot
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 4) {
+      HStack {
+        Text("SyncLink")
+          .font(.system(size: 11, weight: .semibold))
+          .foregroundColor(.secondary)
+        Spacer()
+        Text(todayLabel())
+          .font(.system(size: 10, weight: .medium))
+          .foregroundColor(.secondary)
+      }
+
+      let todays = todayEvents(snapshot)
+      if todays.isEmpty && snapshot.todos.isEmpty {
+        Spacer()
+        Text("오늘 일정 없음")
+          .font(.caption2)
+          .foregroundColor(.secondary)
+        Spacer()
+      } else {
+        ForEach(Array(todays.prefix(2))) { evt in
+          EventRow(event: evt, compact: true)
+        }
+        if !snapshot.todos.isEmpty {
+          if !todays.isEmpty { Spacer().frame(height: 2) }
+          ForEach(Array(snapshot.todos.prefix(1))) { td in
+            TodoRow(todo: td)
+          }
+        }
+        if snapshot.totals.events + snapshot.totals.todos > 3 {
+          let extra = (snapshot.totals.events + snapshot.totals.todos) - 3
+          Text("+\(extra) more")
+            .font(.system(size: 9))
+            .foregroundColor(.secondary)
+        }
+      }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+  }
+}
+
+// MARK: - Large (338×354) — Weekly grid + today list
+
+private struct LargeView: View {
+  let snapshot: WidgetSnapshot
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      HStack {
+        Text("이번 주")
+          .font(.system(size: 14, weight: .semibold))
+        Spacer()
+        Text(weekRangeLabel())
+          .font(.system(size: 11))
+          .foregroundColor(.secondary)
+      }
+
+      WeekGrid(events: snapshot.events)
+        .frame(height: 110)
+
+      Divider().padding(.vertical, 1)
+
+      // Today list (shares the right side conceptually; here we stack
+      // it below the grid for clean readability inside 338×354).
+      let todays = todayEvents(snapshot)
+      if todays.isEmpty && snapshot.todos.isEmpty {
+        Text("오늘 일정 없음")
+          .font(.caption)
+          .foregroundColor(.secondary)
+      } else {
+        VStack(alignment: .leading, spacing: 3) {
+          ForEach(Array(todays.prefix(3))) { evt in
+            EventRow(event: evt, compact: false)
+          }
+          if !snapshot.todos.isEmpty {
+            if !todays.isEmpty { Spacer().frame(height: 2) }
+            ForEach(Array(snapshot.todos.prefix(2))) { td in
+              TodoRow(todo: td)
+            }
+          }
+        }
+      }
+      Spacer(minLength: 0)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+  }
+}
+
+// MARK: - Weekly grid sub-view
+
+private struct WeekGrid: View {
+  let events: [WidgetEvent]
+
+  private static let weekdays = ["일", "월", "화", "수", "목", "금", "토"]
+
+  var body: some View {
+    let days = next7Days()
+    HStack(alignment: .top, spacing: 4) {
+      ForEach(0..<days.count, id: \.self) { idx in
+        let d = days[idx]
+        let key = dateKey(d)
+        let dayEvents = events.filter { $0.dateKey == key }
+        let isToday = key == dateKey(Date())
+        VStack(spacing: 2) {
+          Text(Self.weekdays[Calendar.current.component(.weekday, from: d) - 1])
+            .font(.system(size: 9, weight: .medium))
+            .foregroundColor(.secondary)
+          ZStack {
+            if isToday {
+              Circle().fill(Color.accentColor.opacity(0.2)).frame(width: 22, height: 22)
+            }
+            Text("\(Calendar.current.component(.day, from: d))")
+              .font(.system(size: 12, weight: isToday ? .semibold : .regular))
+          }
+          VStack(spacing: 2) {
+            ForEach(Array(dayEvents.prefix(3))) { evt in
+              Circle()
+                .fill(Color(hex: evt.color))
+                .frame(width: 5, height: 5)
+            }
+            if dayEvents.count > 3 {
+              Text("+\(dayEvents.count - 3)")
+                .font(.system(size: 8))
+                .foregroundColor(.secondary)
+            }
+          }
+        }
+        .frame(maxWidth: .infinity)
+      }
+    }
+  }
+
+  private func next7Days() -> [Date] {
+    let cal = Calendar.current
+    let start = cal.startOfDay(for: Date())
+    return (0..<7).compactMap { cal.date(byAdding: .day, value: $0, to: start) }
+  }
+
+  private func dateKey(_ d: Date) -> String {
+    let f = DateFormatter()
+    f.dateFormat = "yyyy-MM-dd"
+    return f.string(from: d)
+  }
+}
+
+// MARK: - Row sub-views
+
 private struct EventRow: View {
   let event: WidgetEvent
+  let compact: Bool
   var body: some View {
     HStack(spacing: 6) {
       Circle()
         .fill(Color(hex: event.color))
-        .frame(width: 6, height: 6)
+        .frame(width: compact ? 6 : 7, height: compact ? 6 : 7)
       if !event.startTime.isEmpty {
         Text(event.startTime)
-          .font(.system(size: 11, weight: .semibold, design: .monospaced))
+          .font(.system(size: compact ? 10 : 11, weight: .semibold, design: .monospaced))
           .foregroundColor(.secondary)
       }
-      Text(event.title)
-        .font(.system(size: 12))
+      Text(displayTitle)
+        .font(.system(size: compact ? 11 : 12))
         .lineLimit(1)
     }
+  }
+  private var displayTitle: String {
+    event.ownerNickname.isEmpty
+      ? event.title
+      : "\(event.ownerNickname) · \(event.title)"
   }
 }
 
@@ -212,11 +310,41 @@ private struct TodoRow: View {
         .font(.system(size: 10))
         .foregroundColor(todo.overdue ? .red : .secondary)
       Text(todo.title)
-        .font(.system(size: 12))
+        .font(.system(size: 11))
         .lineLimit(1)
         .foregroundColor(todo.overdue ? .red : .primary)
     }
   }
+}
+
+// MARK: - Helpers
+
+private func todayEvents(_ snap: WidgetSnapshot) -> [WidgetEvent] {
+  let today = todayKey()
+  return snap.events.filter { $0.dateKey == today }
+}
+
+private func todayLabel() -> String {
+  let f = DateFormatter()
+  f.locale = Locale(identifier: "ko_KR")
+  f.dateFormat = "M/d (E)"
+  return f.string(from: Date())
+}
+
+private func weekRangeLabel() -> String {
+  let cal = Calendar.current
+  let start = cal.startOfDay(for: Date())
+  let end = cal.date(byAdding: .day, value: 6, to: start) ?? start
+  let f = DateFormatter()
+  f.locale = Locale(identifier: "ko_KR")
+  f.dateFormat = "M/d"
+  return "\(f.string(from: start)) ~ \(f.string(from: end))"
+}
+
+private func todayKey() -> String {
+  let f = DateFormatter()
+  f.dateFormat = "yyyy-MM-dd"
+  return f.string(from: Date())
 }
 
 // MARK: - Color hex helper
@@ -247,9 +375,9 @@ struct SyncLinkWidget: Widget {
       SyncLinkWidgetEntryView(entry: entry)
     }
     .configurationDisplayName("SyncLink")
-    .description("오늘의 일정과 마감 임박 할 일을 한눈에.")
-    // .systemExtraLarge is iPad-only (iOS 15+). The system silently ignores
-    // unsupported families on iPhone, so we can list them all together.
-    .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .systemExtraLarge])
+    .description("작은 위젯은 오늘 일정과 할 일을, 큰 위젯은 이번 주 달력을 보여줍니다.")
+    // iPad supportsTablet=false 인 v1.0 — extraLarge 제외. Medium 도
+    // 사용자 요구로 제거 (small + large 만 노출).
+    .supportedFamilies([.systemSmall, .systemLarge])
   }
 }

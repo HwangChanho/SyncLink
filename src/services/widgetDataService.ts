@@ -31,10 +31,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { EventSummary } from '@/types/event';
 import type { TodoSummary } from '@/types/todo';
 
-/** Maximum events surfaced in the widget. Beyond this we collapse to "+N more". */
-const MAX_WIDGET_EVENTS = 4;
+/** Maximum events surfaced in the widget today section. Beyond this we
+ *  collapse to "+N more". */
+const MAX_TODAY_EVENTS = 6;
 /** Maximum todos surfaced — same rationale. */
 const MAX_WIDGET_TODOS = 4;
+/** Window for the large widget's weekly grid (today + 6 forward). */
+const WEEK_WINDOW_DAYS = 7;
 
 /** Storage key used inside the App Group / SharedPreferences. */
 export const WIDGET_DATA_KEY = 'synclink.widgetSnapshot.v1';
@@ -56,6 +59,12 @@ export interface WidgetEvent {
   title:     string;
   startTime: string; // HH:MM (24h) or "" for all-day
   color:     string; // #RRGGBB
+  /** ISO date the event occurs (YYYY-MM-DD). Used by the large widget to
+   *  group events by weekday in its grid view. */
+  dateKey:   string;
+  /** When the event is shared from another member, the displayed prefix
+   *  (e.g. "쎄엠"). Empty string for own events. */
+  ownerNickname: string;
 }
 
 export interface WidgetTodo {
@@ -110,16 +119,25 @@ export function buildSnapshot(
 ): WidgetSnapshot {
   const todayKey = toDateKey(now);
   const todayStart = startOfDay(now);
-  const todayEnd   = endOfDay(now);
+  // Large widget needs a week's worth of events for its grid. End the
+  // window 6 days after `now` (inclusive of today = 7 days).
+  const weekEnd = new Date(now);
+  weekEnd.setDate(weekEnd.getDate() + WEEK_WINDOW_DAYS - 1);
+  const windowEnd = endOfDay(weekEnd);
 
-  // Today's events: anything whose [startAt, endAt] intersects today.
-  const todays = allEvents
-    .filter((e) => e.startAt <= todayEnd && e.endAt >= todayStart)
+  // Events whose [startAt, endAt] intersect the 7-day window starting today.
+  const inWindow = allEvents
+    .filter((e) => e.startAt <= windowEnd && e.endAt >= todayStart)
     .sort((a, b) => {
-      // All-day first, then by start time.
       if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
       return a.startAt.getTime() - b.startAt.getTime();
     });
+
+  // Subset that intersect TODAY specifically — used by both the small widget
+  // and the large widget's right-side "today list".
+  const todays = inWindow.filter((e) =>
+    e.startAt <= endOfDay(now) && e.endAt >= todayStart,
+  );
 
   // Pending todos: not done, due today or before.
   const pending = allTodos
@@ -135,14 +153,21 @@ export function buildSnapshot(
       return aDue - bDue;
     });
 
+  // Emit events for the full week window — Swift filters per family.
+  // Cap at 7×4 = 28 entries (very loose ceiling; the typical week has
+  // far fewer events and the JSON stays tiny).
+  const eventsOut = inWindow.slice(0, 28).map((e) => ({
+    id:            e.id,
+    title:         e.title,
+    startTime:     e.allDay ? '' : formatHM(e.startAt),
+    color:         e.color,
+    dateKey:       toDateKey(e.startAt),
+    ownerNickname: e.isOwn ? '' : (e.ownerNickname ?? ''),
+  }));
+
   return {
     generatedAt: now.toISOString(),
-    events: todays.slice(0, MAX_WIDGET_EVENTS).map((e) => ({
-      id:        e.id,
-      title:     e.title,
-      startTime: e.allDay ? '' : formatHM(e.startAt),
-      color:     e.color,
-    })),
+    events: eventsOut,
     todos: pending.slice(0, MAX_WIDGET_TODOS).map((t) => ({
       id:      t.id,
       title:   t.title,
@@ -152,6 +177,9 @@ export function buildSnapshot(
     totals: { events: todays.length, todos: pending.length },
   };
 }
+
+// MAX_TODAY_EVENTS exported so tests can reason about truncation policy.
+export const _WIDGET_LIMITS = { MAX_TODAY_EVENTS, MAX_WIDGET_TODOS, WEEK_WINDOW_DAYS };
 
 // ─── Platform bridges ─────────────────────────────────────────────────────────
 
