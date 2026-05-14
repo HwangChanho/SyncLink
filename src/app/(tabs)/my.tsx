@@ -31,6 +31,7 @@ import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import * as authService from '@/services/authService';
+import { manageSubscriptions } from '@/services/purchaseService';
 import { useAuthStore } from '@/stores/authStore';
 import { showAlert } from '@/lib/webAlert';
 import { logError } from '@/lib/errorLogger';
@@ -307,10 +308,11 @@ export default function MyScreen() {
           </View>
         </View>
 
-        {/* ── Subscription banner (Free plan only) ────────────────────── */}
-        {/* Sprint 31 후속 (2026-05-06): Spaces 섹션은 별도 탭 (/spaces) 으로
-            이동. SpaceCard 는 @/components/space/SpaceCard 로 추출. */}
-        {plan === 'free' && (
+        {/* ── Subscription banner ────────────────────── */}
+        {/* Free → paywall 으로 이동. Pro → Apple/Play 구독 관리 deep link
+            (App Store Guideline 3.1.2 — 자동 갱신 구독은 앱 내에서 관리 진입
+            경로 제공 필수). */}
+        {plan === 'free' ? (
           <View style={styles.section}>
             <TouchableOpacity
               style={styles.subscriptionBanner}
@@ -325,6 +327,26 @@ export default function MyScreen() {
               </View>
               <View style={styles.subscriptionCta}>
                 <Text style={styles.subscriptionCtaText}>Pro →</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.section}>
+            <TouchableOpacity
+              style={styles.subscriptionBanner}
+              onPress={() => {
+                manageSubscriptions().catch((err) => {
+                  logError({ context: 'manageSubscriptions', error: err });
+                });
+              }}
+              activeOpacity={0.85}
+            >
+              <View style={styles.subscriptionInfo}>
+                <Text style={styles.subscriptionTitle}>SyncLink Pro</Text>
+                <Text style={styles.subscriptionUsage}>구독 갱신 / 취소 관리</Text>
+              </View>
+              <View style={styles.subscriptionCta}>
+                <Text style={styles.subscriptionCtaText}>관리 →</Text>
               </View>
             </TouchableOpacity>
           </View>

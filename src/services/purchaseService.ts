@@ -133,3 +133,15 @@ export async function checkProStatus(): Promise<boolean> {
   const customerInfo = await Purchases.getCustomerInfo();
   return customerInfo.entitlements.active['pro'] !== undefined;
 }
+
+/**
+ * Open the platform-native subscription management screen.
+ * iOS  → Settings ▸ Apple ID ▸ Subscriptions (via App Store)
+ * Android → Play Store subscription page
+ *
+ * Apple App Store Guideline 3.1.2 requires that auto-renewable subscriptions
+ * provide a way for users to manage/cancel from inside the app.
+ */
+export async function manageSubscriptions(): Promise<void> {
+  await Purchases.showManageSubscriptions();
+}
