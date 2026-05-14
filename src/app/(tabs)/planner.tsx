@@ -38,6 +38,16 @@ import { DateTimeModal } from '@/components/common/DateTimeModal';
 import { makeStyles } from '@/components/planner/plannerStyles';
 import { TodoTab } from '@/components/planner/TodoTab';
 import { NotesTab } from '@/components/planner/NotesTab';
+import { AppErrorBoundary } from '@/components/common/AppErrorBoundary';
+import { logError } from '@/lib/errorLogger';
+
+// 출시 정리 — Build 103 plan 크래시 진단을 위한 임시 verbose 로그.
+// 안정화되면 false 로 토글한 뒤 한꺼번에 제거.
+const PLANNER_DEBUG = true;
+function plog(step: string, extra?: Record<string, unknown>) {
+  if (!PLANNER_DEBUG) return;
+  console.log(`[planner] ${step}`, extra ?? '');
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -46,7 +56,18 @@ type PlannerTab = 'todo' | 'notes';
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
-export default function PlannerScreen() {
+// Wrapped default export — error boundary catches any render-time throw and
+// surfaces a recoverable fallback while reporting to error_logs.
+export default function PlannerScreenWithBoundary() {
+  return (
+    <AppErrorBoundary area="planner">
+      <PlannerScreenInner />
+    </AppErrorBoundary>
+  );
+}
+
+function PlannerScreenInner() {
+  plog('PlannerScreenInner render');
   const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
@@ -84,20 +105,30 @@ export default function PlannerScreen() {
   // ── Load data on mount ───────────────────────────────────────────────────
 
   const loadCategories = useCallback(async () => {
+    plog('loadCategories.start');
     try {
       const cats = await getCategories();
+      plog('loadCategories.success', { count: cats.length });
       const map = new Map(cats.map(c => [c.id, c]));
       setCategoryMap(map);
-    } catch {
-      // Non-critical — categories are optional
+    } catch (err) {
+      logError({ context: 'planner.loadCategories', error: err }).catch(() => { /* noop */ });
     }
   }, []);
 
   useEffect(() => {
-    void fetchTodos();
-    void fetchNotes();
+    plog('mount.useEffect — kicking fetches');
+    void fetchTodos().then(() => plog('fetchTodos.resolved'))
+      .catch((err) => logError({ context: 'planner.fetchTodos', error: err }));
+    void fetchNotes().then(() => plog('fetchNotes.resolved'))
+      .catch((err) => logError({ context: 'planner.fetchNotes', error: err }));
     loadCategories();
   }, [fetchTodos, fetchNotes, loadCategories]);
+
+  // 추가 mount 진단 — todos/notes 길이 변화 추적.
+  useEffect(() => {
+    plog('todos.changed', { todoCount: todos.length, noteCount: notes.length, isLoading });
+  }, [todos.length, notes.length, isLoading]);
 
   // ── Error display ────────────────────────────────────────────────────────
 
