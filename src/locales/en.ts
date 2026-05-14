@@ -244,7 +244,12 @@ const en = {
     delete_confirm: 'This action cannot be undone. Continue?',
     edit: 'Edit Note',
     title_placeholder: 'Note title',
+    body_placeholder: 'Write freely. Add a voice memo or photo if you like.',
     save_failed: 'Failed to save note.',
+    attachments: 'Attachments',
+    attach_photo: 'Add photo',
+    attach_voice: 'Record voice',
+    attachment_limit: 'You can attach up to 5 items.',
   },
 
   space: {

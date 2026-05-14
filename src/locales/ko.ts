@@ -254,7 +254,12 @@ const ko = {
     delete_confirm: '이 작업은 되돌릴 수 없습니다. 계속하시겠습니까?',
     edit: '노트 편집',
     title_placeholder: '노트 제목을 입력해 주세요.',
+    body_placeholder: '내용을 자유롭게 적어주세요. 음성·사진도 첨부할 수 있습니다.',
     save_failed: '노트 저장에 실패했습니다.',
+    attachments: '첨부',
+    attach_photo: '사진 첨부',
+    attach_voice: '음성 녹음',
+    attachment_limit: '최대 5개까지 첨부할 수 있어요.',
   },
 
   space: {

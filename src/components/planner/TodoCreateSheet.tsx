@@ -33,6 +33,13 @@ import type { Category, CreateTodoInput, TodoPriority } from '@/types';
 import { CategoryChip } from './CategoryChip';
 import { CategoryPickerSheet } from './CategoryPickerSheet';
 import { DateTimeModal } from '@/components/common/DateTimeModal';
+import {
+  TodoAttachmentSection,
+  type PendingPhoto,
+  type PendingVoice,
+} from './TodoAttachmentSection';
+import { uploadPhoto, uploadVoice } from '@/services/todoAttachmentService';
+import { logError } from '@/lib/errorLogger';
 
 const PRIORITIES: TodoPriority[] = ['low', 'medium', 'high'];
 
@@ -42,7 +49,8 @@ export interface TodoCreateSheetProps {
   /** Category pre-selected when the sheet opens (inherited from the planner). */
   defaultCategoryId?: string | null;
   onClose: () => void;
-  onCreate: (input: CreateTodoInput) => Promise<void>;
+  /** Returns the created Todo so the sheet can upload attachments against its id. */
+  onCreate: (input: CreateTodoInput) => Promise<{ id: string } | null>;
 }
 
 export function TodoCreateSheet({
@@ -64,6 +72,11 @@ export function TodoCreateSheet({
   /** Build-65 — 시간 포함 마감 (있으면 dueDate 무시되고 dueAt 우선). */
   const [dueAt, setDueAt] = useState<Date | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Attachment staging: items are kept in memory until handleCreate finalises
+  // the parent todo and we know its id. Then they're uploaded sequentially.
+  const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
+  const [pendingVoice,  setPendingVoice]  = useState<PendingVoice | null>(null);
 
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
@@ -94,6 +107,8 @@ export function TodoCreateSheet({
       setDueDate(null);
       setDueAt(null);
       setIsSaving(false);
+      setPendingPhotos([]);
+      setPendingVoice(null);
     }
   }, [visible, defaultCategoryId]);
 
@@ -110,7 +125,7 @@ export function TodoCreateSheet({
     if (title.trim().length === 0 || isSaving) return;
     setIsSaving(true);
     try {
-      await onCreate({
+      const created = await onCreate({
         title: title.trim(),
         contentType: 'todo',
         priority,
@@ -120,11 +135,32 @@ export function TodoCreateSheet({
         // 시간 없으면 dueDate.
         ...(dueAt ? { dueAt } : (dueDate ? { dueDate } : {})),
       });
+
+      // Upload staged attachments against the new todo id. Failures don't
+      // block the close — the todo itself was saved; the user can retry
+      // attachments from the edit screen.
+      if (created?.id) {
+        for (const p of pendingPhotos) {
+          try {
+            await uploadPhoto(created.id, p.localUri, p.base64, { width: p.width, height: p.height });
+          } catch (err) {
+            logError({ context: 'TodoCreateSheet.uploadPhoto', error: err });
+          }
+        }
+        if (pendingVoice) {
+          try {
+            await uploadVoice(created.id, pendingVoice.localUri, pendingVoice.durationMs);
+          } catch (err) {
+            logError({ context: 'TodoCreateSheet.uploadVoice', error: err });
+          }
+        }
+      }
+
       onClose();
     } catch {
       setIsSaving(false);
     }
-  }, [title, memo, priority, categoryId, dueDate, dueAt, onCreate, onClose, isSaving]);
+  }, [title, memo, priority, categoryId, dueDate, dueAt, pendingPhotos, pendingVoice, onCreate, onClose, isSaving]);
 
   const resolvedCategory = categoryId ? (categoryMap.get(categoryId) ?? null) : null;
 
@@ -268,12 +304,28 @@ export function TodoCreateSheet({
                 <Text style={styles.sectionLabel}>{t('note.label')}</Text>
                 <TextInput
                   style={styles.memoInput}
-                  placeholder={t('nl.placeholder')}
+                  placeholder={t('note.body_placeholder')}
                   placeholderTextColor={colors.textPlaceholder}
                   value={memo}
                   onChangeText={setMemo}
                   multiline
                 />
+
+                {/* Attachments — photo grid + voice recorder card. Items stay
+                    local until handleCreate uploads them with the new todo id. */}
+                <View style={styles.attachmentWrap}>
+                  <TodoAttachmentSection
+                    pendingPhotos={pendingPhotos}
+                    pendingVoice={pendingVoice}
+                    uploadedAttachments={[]}
+                    onAddPhoto={(p) => setPendingPhotos(prev => [...prev, p])}
+                    onAddVoice={(v) => setPendingVoice(v)}
+                    onRemovePendingPhoto={(idx) =>
+                      setPendingPhotos(prev => prev.filter((_, i) => i !== idx))}
+                    onRemovePendingVoice={() => setPendingVoice(null)}
+                    onRemoveUploaded={() => { /* not used during create */ }}
+                  />
+                </View>
               </ScrollView>
             </View>
           </Pressable>
@@ -438,6 +490,9 @@ function makeStyles(colors: ColorTokens) {
       borderColor: colors.border,
       borderRadius: radius.md,
       paddingHorizontal: spacing[3],
+    },
+    attachmentWrap: {
+      marginTop: spacing[3],
     },
   });
 }

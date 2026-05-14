@@ -244,7 +244,12 @@ const ja = {
     delete_confirm: 'この操作は元に戻せません。続けますか？',
     edit: 'ノートを編集',
     title_placeholder: 'ノートのタイトルを入力してください',
+    body_placeholder: '内容を自由に書いてください。音声や写真も添付できます。',
     save_failed: 'ノートの保存に失敗しました。',
+    attachments: '添付',
+    attach_photo: '写真を追加',
+    attach_voice: '音声を録音',
+    attachment_limit: '添付は最大 5 件までです。',
   },
 
   space: {

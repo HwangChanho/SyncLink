@@ -244,7 +244,12 @@ const zh = {
     delete_confirm: '此操作无法撤销，是否继续？',
     edit: '编辑笔记',
     title_placeholder: '请输入笔记标题',
+    body_placeholder: '随意书写内容，也可附加语音或照片。',
     save_failed: '笔记保存失败。',
+    attachments: '附件',
+    attach_photo: '添加照片',
+    attach_voice: '录制语音',
+    attachment_limit: '最多可附加 5 个项目。',
   },
 
   space: {

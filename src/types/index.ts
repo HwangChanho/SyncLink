@@ -14,6 +14,7 @@ export type {
   EventRow, EventInsert, EventUpdate,
   EventShareRow, EventShareInsert,
   TodoRow, TodoInsert, TodoUpdate, TodoPriorityDb,
+  TodoAttachmentRow, TodoAttachmentKindDb,
   CategoryRow, CategoryInsert, CategoryUpdate,
   AnniversaryRow, AnniversaryInsert,
   AiChatLogRow, AiChatLogInsert,

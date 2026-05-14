@@ -154,6 +154,25 @@ export interface TodoRow {
 export type TodoInsert = Omit<TodoRow, 'id' | 'created_at' | 'updated_at'>;
 export type TodoUpdate = Partial<Omit<TodoRow, 'id' | 'user_id' | 'created_at'>>;
 
+// ─── TODO ATTACHMENTS ─────────────────────────────────────────────────────────
+
+/** Attachment kind: photo or voice memo. */
+export type TodoAttachmentKindDb = 'photo' | 'voice';
+
+/** Raw DB row for `todo_attachments`. Owned by single user; cascade on todo delete. */
+export interface TodoAttachmentRow {
+  id:           string;
+  todo_id:      string;
+  user_id:      string;
+  kind:         TodoAttachmentKindDb;
+  storage_path: string;
+  duration_ms:  number | null;
+  width:        number | null;
+  height:       number | null;
+  size_bytes:   number | null;
+  created_at:   string;
+}
+
 // ─── CATEGORIES ───────────────────────────────────────────────────────────────
 
 /** User-defined category for events and todos. */

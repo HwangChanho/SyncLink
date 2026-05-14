@@ -63,12 +63,13 @@ interface TodoState {
    * Create a todo or note with optimistic update.
    * Adds a temporary item immediately, then replaces with server response.
    */
-  addTodo: (input: CreateTodoInput) => Promise<void>;
+  /** Returns the created Todo on success, or null on failure (error is set in store). */
+  addTodo: (input: CreateTodoInput) => Promise<Todo | null>;
 
   /**
    * Add a note with optimistic update.
    */
-  addNote: (input: CreateNoteInput) => Promise<void>;
+  addNote: (input: CreateNoteInput) => Promise<Todo | null>;
 
   /**
    * Apply partial updates to a todo/note optimistically.
@@ -237,12 +238,14 @@ export const useTodoStore = create<TodoState>((set, get) => ({
       set(state => ({
         [key]: state[key].map(t => t.id === placeholder.id ? created : t),
       }));
+      return created;
     } catch (err) {
       // Revert optimistic change
       set(state => ({
         [key]: state[key].filter(t => t.id !== placeholder.id),
         error: err instanceof Error ? err.message : '할일 생성에 실패했습니다.',
       }));
+      return null;
     }
   },
 

@@ -364,7 +364,9 @@ export function TodoTab({
       {groups.map(({ key, category, items, label }) => {
         const incompleteTodos = items.filter(item => !item.isCompleted);
         const completedTodos  = items.filter(item => item.isCompleted);
-        const isExpanded = expandedSections.has(key);
+        // 기본 보기에서 완료 항목까지 노출 — expandedSections 는 사용자가
+        // 명시적으로 접은 section 만 기록. 의미가 반전됐지만 변수명은 유지.
+        const isExpanded = !expandedSections.has(key);
 
         return (
           <View key={key} style={styles.categorySection}>
