@@ -47,6 +47,8 @@ import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
 import { useColors } from '@/hooks/useColors';
 import { logError } from '@/lib/errorLogger';
 import { ONBOARDING_STORAGE_KEY } from '@/app/onboarding/index';
+import { useFonts } from 'expo-font';
+import { Ionicons, FontAwesome } from '@expo/vector-icons';
 
 // E2E / DEV builds: suppress RevenueCat SDK configuration warnings that appear as
 // Console Error overlays and block Maestro test interactions.
@@ -382,6 +384,17 @@ const lockStyles = StyleSheet.create({
 });
 
 export default function RootLayout() {
+  // Vector-icon fonts are normally bundled into the native app via the
+  // Expo prebuild step, but the web build expects the JS bundle to register
+  // them explicitly. Without this hook every <Ionicons /> renders as a
+  // "square with X" placeholder on Cloudflare Pages. Native platforms hit
+  // the font cache on first load and resolve instantly, so this adds no
+  // perceivable cost.
+  useFonts({
+    ...Ionicons.font,
+    ...FontAwesome.font,
+  });
+
   const { setUser, setLoading, isAuthenticated } = useAuthStore();
   const setPlan = useSubscriptionStore((s) => s.setPlan);
   const router = useRouter();
