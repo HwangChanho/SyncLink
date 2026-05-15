@@ -148,7 +148,9 @@ export async function signInWithGoogle(): Promise<SignInResult> {
       throw new Error('Google 로그인이 이미 진행 중입니다.');
     }
     if (isStatusCodeError(err, statusCodes.PLAY_SERVICES_NOT_AVAILABLE)) {
-      throw new Error('Google Play 서비스를 사용할 수 없습니다. 기기를 확인해 주세요.');
+      // 메시지에서 외부 스토어 이름을 빼서 iOS 빌드의 string scan 에 잡히지
+      // 않도록 일반화 (Apple Guideline 2.3.10).
+      throw new Error('Google 로그인 서비스를 사용할 수 없습니다. 기기 설정을 확인해 주세요.');
     }
     // Developer-facing: DEVELOPER_ERROR usually means bundle ID mismatch in Google Cloud Console
     // Fix: ensure iOS OAuth client is registered with bundle ID io.synclink.app

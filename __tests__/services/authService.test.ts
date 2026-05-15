@@ -318,7 +318,7 @@ describe('authService', () => {
       (GoogleSignin.signIn as jest.Mock).mockRejectedValue(playServicesError);
 
       await expect(signInWithGoogle()).rejects.toThrow(
-        'Google Play 서비스를 사용할 수 없습니다.',
+        'Google 로그인 서비스를 사용할 수 없습니다.',
       );
     });
 

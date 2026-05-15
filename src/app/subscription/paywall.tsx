@@ -26,8 +26,15 @@ import {
   Alert,
   SafeAreaView,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { router } from 'expo-router';
+
+// Apple Guideline 3.1.2(c): paywall must show functional links to the EULA
+// and privacy policy. App Store reviewers reject otherwise. iTunes Standard
+// EULA URL — used unless we author a custom EULA in App Store Connect.
+const EULA_URL = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
+const PRIVACY_URL = 'https://www.notion.so/34aabec15d588054bc31d0b6f5f51c0b';
 import type { PurchasesPackage } from 'react-native-purchases';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
@@ -407,6 +414,18 @@ export default function PaywallScreen() {
         <Text style={styles.legalText}>
           {t('paywall.legal')}
         </Text>
+
+        {/* App Review Guideline 3.1.2(c) — clickable EULA + Privacy policy
+            links on the paywall. Required for auto-renewable subscriptions. */}
+        <View style={styles.legalLinkRow}>
+          <TouchableOpacity onPress={() => Linking.openURL(EULA_URL)}>
+            <Text style={styles.legalLink}>{t('paywall.eula')}</Text>
+          </TouchableOpacity>
+          <Text style={styles.legalLinkDivider}>·</Text>
+          <TouchableOpacity onPress={() => Linking.openURL(PRIVACY_URL)}>
+            <Text style={styles.legalLink}>{t('paywall.privacy')}</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -614,7 +633,23 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       ...textStyles.caption,
       color:         colors.textTertiary,
       textAlign:     'center',
-      paddingBottom: spacing[4],
+      paddingBottom: spacing[3],
+    },
+    legalLinkRow: {
+      flexDirection:  'row',
+      justifyContent: 'center',
+      alignItems:     'center',
+      gap:            spacing[2],
+      paddingBottom:  spacing[4],
+    },
+    legalLink: {
+      ...textStyles.caption,
+      color:              colors.primary,
+      textDecorationLine: 'underline',
+    },
+    legalLinkDivider: {
+      ...textStyles.caption,
+      color: colors.textTertiary,
     },
   });
 }
