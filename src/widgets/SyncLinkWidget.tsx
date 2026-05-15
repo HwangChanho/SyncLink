@@ -36,9 +36,13 @@ const COLORS = {
 
 export function SyncLinkWidget({ snapshot, width, height }: Props) {
   const family = pickFamily(width, height);
-  const events = (snapshot?.events ?? []).slice(0, family.eventLimit);
-  const todos  = (snapshot?.todos  ?? []).slice(0, family.todoLimit);
-  const empty  = events.length === 0 && todos.length === 0;
+  // widgetDataService 가 7일치 events 를 한 번에 emit 하므로 여기서
+  // today 만 필터. dateKey 비교가 가장 안정적 (timezone 차이 회피).
+  const todayKey = toLocalDateKey(new Date());
+  const todaysAll = (snapshot?.events ?? []).filter((e) => e.dateKey === todayKey);
+  const events    = todaysAll.slice(0, family.eventLimit);
+  const todos     = (snapshot?.todos  ?? []).slice(0, family.todoLimit);
+  const empty     = events.length === 0 && todos.length === 0;
 
   return (
     <FlexWidget
@@ -105,7 +109,7 @@ export function SyncLinkWidget({ snapshot, width, height }: Props) {
                 />
               )}
               <TextWidget
-                text={e.title}
+                text={e.ownerNickname ? `${e.ownerNickname} · ${e.title}` : e.title}
                 maxLines={1}
                 style={{ fontSize: 12, color: COLORS.textHi, flex: 1 }}
               />
@@ -167,14 +171,23 @@ interface Family { eventLimit: number; todoLimit: number; }
  * the larger render area by surfacing more rows.
  */
 function pickFamily(width: number, height: number): Family {
+  // iOS small + large 와 paritized: 작은 영역도 todo 1개는 보여준다.
   if (width >= 480 || height >= 360) return { eventLimit: 8, todoLimit: 6 }; // tablet
   if (height >= 200)                 return { eventLimit: 4, todoLimit: 4 }; // large
   if (width >= 280)                  return { eventLimit: 3, todoLimit: 2 }; // medium
-  return                                    { eventLimit: 2, todoLimit: 0 }; // small
+  return                                    { eventLimit: 2, todoLimit: 1 }; // small
 }
 
 function formatToday(): string {
   const d = new Date();
   const days = ['일', '월', '화', '수', '목', '금', '토'];
   return `${d.getMonth() + 1}월 ${d.getDate()}일 (${days[d.getDay()]})`;
+}
+
+/** Local-time date key in YYYY-MM-DD form. Mirrors widgetDataService.toDateKey. */
+function toLocalDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }

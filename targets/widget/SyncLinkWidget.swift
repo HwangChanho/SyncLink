@@ -131,33 +131,30 @@ private struct SmallView: View {
   let snapshot: WidgetSnapshot
 
   var body: some View {
+    let todays = todayEvents(snapshot)
+    let totalRows = todays.count + snapshot.todos.count
     VStack(alignment: .leading, spacing: 4) {
-      HStack {
-        Text("SyncLink")
-          .font(.system(size: 11, weight: .semibold))
-          .foregroundColor(.secondary)
-        Spacer()
+      HStack(spacing: 4) {
         Text(todayLabel())
-          .font(.system(size: 10, weight: .medium))
-          .foregroundColor(.secondary)
+          .font(.system(size: 11, weight: .semibold))
+          .foregroundColor(.primary)
+        Spacer(minLength: 0)
       }
 
-      let todays = todayEvents(snapshot)
-      if todays.isEmpty && snapshot.todos.isEmpty {
-        Spacer()
+      if totalRows == 0 {
+        // Pin the empty-state label flush with the header so iOS WidgetKit
+        // can always size the small layout — earlier Spacer/Spacer sandwich
+        // sometimes collapsed the view in the gallery preview.
         Text("오늘 일정 없음")
-          .font(.caption2)
+          .font(.system(size: 11))
           .foregroundColor(.secondary)
-        Spacer()
+        Spacer(minLength: 0)
       } else {
         ForEach(Array(todays.prefix(2))) { evt in
           EventRow(event: evt, compact: true)
         }
-        if !snapshot.todos.isEmpty {
-          if !todays.isEmpty { Spacer().frame(height: 2) }
-          ForEach(Array(snapshot.todos.prefix(1))) { td in
-            TodoRow(todo: td)
-          }
+        ForEach(Array(snapshot.todos.prefix(1))) { td in
+          TodoRow(todo: td)
         }
         if snapshot.totals.events + snapshot.totals.todos > 3 {
           let extra = (snapshot.totals.events + snapshot.totals.todos) - 3
@@ -165,6 +162,7 @@ private struct SmallView: View {
             .font(.system(size: 9))
             .foregroundColor(.secondary)
         }
+        Spacer(minLength: 0)
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
