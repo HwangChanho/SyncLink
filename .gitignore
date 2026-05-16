@@ -94,5 +94,4 @@ credentials/
 ios/
 android/
 # Firebase config (민감 — Firebase Console 에서 재다운로드 가능)
-google-services.json
 GoogleService-Info.plist

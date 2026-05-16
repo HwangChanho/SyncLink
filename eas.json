@@ -24,6 +24,7 @@
     "production": {
       "autoIncrement": false,
       "channel": "production",
+      "environment": "production",
       "ios": {
         "image": "latest",
         "cocoapods": "1.16.2"
