@@ -135,38 +135,39 @@ private struct SmallView: View {
 
   var body: some View {
     let todays = todayEvents(snapshot)
-    let totalRows = todays.count + snapshot.todos.count
+    let first  = todays.first
+    let second = todays.count > 1 ? todays[1] : nil
+    let firstTodo = snapshot.todos.first
     VStack(alignment: .leading, spacing: 4) {
+      // Header row — date + brand. Always rendered so WidgetKit's gallery
+      // preview can size the cell.
       HStack(spacing: 4) {
         Text(todayLabel())
           .font(.system(size: 11, weight: .semibold))
           .foregroundColor(.primary)
         Spacer(minLength: 0)
+        Text("SyncLink")
+          .font(.system(size: 9, weight: .medium))
+          .foregroundColor(.secondary)
       }
 
-      if totalRows == 0 {
-        // Pin the empty-state label flush with the header so iOS WidgetKit
-        // can always size the small layout — earlier Spacer/Spacer sandwich
-        // sometimes collapsed the view in the gallery preview.
+      // Three reserved rows. Filling with placeholders when data is sparse
+      // — earlier `Spacer/Spacer` sandwich + ForEach collapsed on small
+      // and caused iOS to hide the family from the gallery preview.
+      if let evt = first {
+        EventRow(event: evt, compact: true)
+      } else {
         Text("오늘 일정 없음")
           .font(.system(size: 11))
           .foregroundColor(.secondary)
-        Spacer(minLength: 0)
-      } else {
-        ForEach(Array(todays.prefix(2))) { evt in
-          EventRow(event: evt, compact: true)
-        }
-        ForEach(Array(snapshot.todos.prefix(1))) { td in
-          TodoRow(todo: td)
-        }
-        if snapshot.totals.events + snapshot.totals.todos > 3 {
-          let extra = (snapshot.totals.events + snapshot.totals.todos) - 3
-          Text("+\(extra) more")
-            .font(.system(size: 9))
-            .foregroundColor(.secondary)
-        }
-        Spacer(minLength: 0)
       }
+      if let evt = second {
+        EventRow(event: evt, compact: true)
+      }
+      if let td = firstTodo {
+        TodoRow(todo: td)
+      }
+      Spacer(minLength: 0)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
   }
