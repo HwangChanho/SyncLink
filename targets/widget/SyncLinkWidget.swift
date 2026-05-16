@@ -57,8 +57,11 @@ private struct WidgetEvent: Decodable, Identifiable {
   let title:         String
   let startTime:     String
   let color:         String
-  let dateKey:       String   // YYYY-MM-DD
-  let ownerNickname: String   // "" for own events
+  // Optional so older JSON payloads (Build ≤105) still decode. We fall back
+  // to today's date and an empty owner so the small widget at least renders
+  // the event row without disappearing.
+  let dateKey:       String?
+  let ownerNickname: String?
 }
 
 private struct WidgetTodo: Decodable, Identifiable {
@@ -229,7 +232,8 @@ private struct WeekGrid: View {
       ForEach(0..<days.count, id: \.self) { idx in
         let d = days[idx]
         let key = dateKey(d)
-        let dayEvents = events.filter { $0.dateKey == key }
+        // 옛 JSON 호환: dateKey nil 인 이벤트는 오늘 columns 에 그룹.
+        let dayEvents = events.filter { ($0.dateKey ?? dateKey(Date())) == key }
         let isToday = key == dateKey(Date())
         VStack(spacing: 2) {
           Text(Self.weekdays[Calendar.current.component(.weekday, from: d) - 1])
@@ -294,9 +298,8 @@ private struct EventRow: View {
     }
   }
   private var displayTitle: String {
-    event.ownerNickname.isEmpty
-      ? event.title
-      : "\(event.ownerNickname) · \(event.title)"
+    let nick = event.ownerNickname ?? ""
+    return nick.isEmpty ? event.title : "\(nick) · \(event.title)"
   }
 }
 
@@ -319,7 +322,8 @@ private struct TodoRow: View {
 
 private func todayEvents(_ snap: WidgetSnapshot) -> [WidgetEvent] {
   let today = todayKey()
-  return snap.events.filter { $0.dateKey == today }
+  // dateKey nil → 옛 JSON 호환 fallback: 모든 이벤트를 today 로 간주.
+  return snap.events.filter { ($0.dateKey ?? today) == today }
 }
 
 private func todayLabel() -> String {

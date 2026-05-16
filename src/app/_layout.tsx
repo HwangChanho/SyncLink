@@ -389,8 +389,9 @@ export default function RootLayout() {
   // them explicitly. Without this hook every <Ionicons /> renders as a
   // "square with X" placeholder on Cloudflare Pages. Native platforms hit
   // the font cache on first load and resolve instantly, so this adds no
-  // perceivable cost.
-  useFonts({
+  // perceivable cost. We block first render until they resolve so we never
+  // flash the placeholder glyphs.
+  const [fontsLoaded] = useFonts({
     ...Ionicons.font,
     ...FontAwesome.font,
   });
@@ -766,7 +767,7 @@ export default function RootLayout() {
           top of the Stack so the user never sees the default-route Home
           screen flash before useAuthGuard's redirect lands.
         */}
-        {!routingReady && <AppSplash />}
+        {(!routingReady || !fontsLoaded) && <AppSplash />}
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="onboarding/index" />
           <Stack.Screen name="auth/login" />
