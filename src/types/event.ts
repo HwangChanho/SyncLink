@@ -54,6 +54,10 @@ export interface Event {
    * reschedule, edit). owner 가 등록 폼에서 토글로 결정. default false.
    */
   editableByMembers: boolean;
+  /** v1.1 — 'workout' 이면 body-parts UI 와 💪 prefix 활성. */
+  eventKind: 'general' | 'workout';
+  /** v1.1 — 'workout' kind 일 때 사용자가 기록한 운동 부위. */
+  workoutParts: ('chest' | 'back' | 'shoulders' | 'arms' | 'legs' | 'core' | 'cardio')[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -83,6 +87,8 @@ export interface EventSummary {
    * drag-to-reschedule 가드 우회 조건.
    */
   editableByMembers?: boolean;
+  /** v1.1 — 'workout' 이면 캘린더 셀에 💪 prefix 표시. default 'general'. */
+  eventKind?: 'general' | 'workout';
 }
 
 /** Payload when creating a new event (omit server-generated fields). */
@@ -111,6 +117,12 @@ export interface CreateEventInput {
    * default false (owner-only). update 시 undefined 면 기존 값 유지.
    */
   editableByMembers?: boolean;
+  /** v1.1 — 운동 일정 모드. 기본 'general'. */
+  eventKind?: 'general' | 'workout';
+  /** v1.1 — eventKind === 'workout' 일 때 사용자가 선택한 부위 코드 배열.
+   *  general 모드면 무시. saveParts 가 멱등이므로 update 시 항상 새 배열로
+   *  교체 (기존 row 모두 삭제 후 insert). */
+  workoutParts?: ('chest' | 'back' | 'shoulders' | 'arms' | 'legs' | 'core' | 'cardio')[];
 }
 
 /** Payload when updating an event. */

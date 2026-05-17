@@ -86,6 +86,20 @@ export type SpaceMemberInsert = Omit<SpaceMemberRow, 'id' | 'joined_at'>;
 export type RepeatTypeDb = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom_weekly';
 export type EventColorDb = string; // hex color
 
+/** v1.1 — discriminator for the new workout event UX flow. */
+export type EventKindDb = 'general' | 'workout';
+
+/** Anatomy buckets used by the body-silhouette picker. Matches the
+ *  `workout_part` enum in migration 037. */
+export type WorkoutPartDb =
+  | 'chest' | 'back' | 'shoulders' | 'arms' | 'legs' | 'core' | 'cardio';
+
+/** Raw DB row for the `event_workout_parts` join table. */
+export interface EventWorkoutPartRow {
+  event_id: string;
+  part:     WorkoutPartDb;
+}
+
 /** Raw DB row for the `events` table. Owned by a single user. */
 export interface EventRow {
   id: string;               // uuid
@@ -104,6 +118,8 @@ export interface EventRow {
   color: EventColorDb | null;
   /** Build-96 — true: share 받은 멤버도 UPDATE 가능. default false. */
   editable_by_members: boolean;
+  /** v1.1 — 'workout' 이면 body-parts UI 와 💪 prefix 활성. 기본 'general'. */
+  event_kind: EventKindDb;
   created_at: string;
   updated_at: string;
 }

@@ -24,6 +24,7 @@ import { useTranslation } from 'react-i18next';
 import type { Event, EventComment, ReactionSummary } from '@/types';
 import { getEventById, deleteEvent, forkSharedEvent } from '@/services/eventService';
 import { shareEventToSpace, unshareEventFromSpace } from '@/services/eventShareService';
+import { BodyParts } from '@/components/event/BodyParts';
 import {
   getReactionSummaries,
   toggleReaction,
@@ -509,6 +510,18 @@ export default function EventDetailScreen() {
           </View>
         ) : null}
 
+        {/* v1.1 — Workout body parts (read-only). 운동 일정인 경우 사용자가
+            기록한 부위를 silhouette 으로 다시 보여준다. 비어 있으면 noop. */}
+        {event.eventKind === 'workout' && (
+          <View style={styles.workoutSection}>
+            <View style={styles.workoutHeaderRow}>
+              <Text style={styles.workoutEmoji}>💪</Text>
+              <Text style={[styles.sectionPrimary, styles.sectionText]}>운동 기록</Text>
+            </View>
+            <BodyParts selected={event.workoutParts ?? []} readOnly />
+          </View>
+        )}
+
         {/* Space sharing — only owner can toggle */}
         {event.isOwn && spaces.length > 0 && (
           <View style={styles.sharingSection}>
@@ -840,6 +853,23 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     ...textStyles.bodySm,
     color: colors.textSecondary,
     marginTop: spacing[0.5],
+  },
+
+  // v1.1 — Workout body parts (read-only).
+  workoutSection: {
+    marginTop: spacing[5],
+    paddingTop: spacing[4],
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    gap: spacing[2],
+  },
+  workoutHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  workoutEmoji: {
+    fontSize: 18,
   },
 
   // Sharing section

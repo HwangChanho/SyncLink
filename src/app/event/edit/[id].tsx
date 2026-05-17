@@ -42,6 +42,7 @@ import { PlaceSearchInput } from '@/components/places/PlaceSearchInput';
 import { ReminderPicker } from '@/components/reminders/ReminderPicker';
 import { DateTimeModal } from '@/components/common/DateTimeModal';
 import { ColorPicker } from '@/components/event/ColorPicker';
+import { BodyParts } from '@/components/event/BodyParts';
 import { showAlert } from '@/lib/webAlert';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -161,6 +162,15 @@ export default function EventEditScreen() {
   /** Original event kept for diffing shares on save. */
   const [originalEvent, setOriginalEvent] = useState<Event | null>(null);
 
+  // v1.1 — 운동 일정 모드 + 부위 기록. originalEvent hydrate 시 동기화.
+  const [eventKind, setEventKind] = useState<'general' | 'workout'>('general');
+  const [workoutParts, setWorkoutParts] = useState<('chest' | 'back' | 'shoulders' | 'arms' | 'legs' | 'core' | 'cardio')[]>([]);
+  const toggleWorkoutPart = useCallback((part: typeof workoutParts[number]) => {
+    setWorkoutParts((prev) =>
+      prev.includes(part) ? prev.filter((p) => p !== part) : [...prev, part],
+    );
+  }, []);
+
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -186,6 +196,9 @@ export default function EventEditScreen() {
         ]);
         if (cancelled) return;
         setOriginalEvent(ev);
+        // v1.1 — workout mode hydration.
+        setEventKind(ev.eventKind ?? 'general');
+        setWorkoutParts(ev.workoutParts ?? []);
         // Pre-fill form fields
         setTitle(ev.title);
         setAllDay(ev.allDay);
@@ -275,6 +288,10 @@ export default function EventEditScreen() {
         // Always pass color so clearing the override (null) also persists
         color: eventColor,
         editableByMembers,
+        eventKind,
+        // workout 모드면 현재 선택을 그대로 send (saveParts 멱등). general
+        // 로 바뀐 경우 빈 배열을 보내 기존 부위 기록 정리.
+        workoutParts: eventKind === 'workout' ? workoutParts : [],
       });
 
       // 2. Compute sharing diff
@@ -486,6 +503,40 @@ export default function EventEditScreen() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
+        {/* v1.1 — 일반 / 운동 toggle. create 화면과 동일 패턴. */}
+        <View style={styles.kindToggle}>
+          {(['general', 'workout'] as const).map((kind) => {
+            const active = eventKind === kind;
+            return (
+              <Pressable
+                key={kind}
+                onPress={() => setEventKind(kind)}
+                style={[
+                  styles.kindToggleBtn,
+                  active && { backgroundColor: colors.primary },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.kindToggleText,
+                    { color: active ? colors.textInverse : colors.textSecondary },
+                  ]}
+                >
+                  {kind === 'general' ? '일반' : '💪 운동'}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        {eventKind === 'workout' && (
+          <View style={styles.bodyPartsWrap}>
+            <BodyParts
+              selected={workoutParts}
+              onToggle={toggleWorkoutPart}
+            />
+          </View>
+        )}
+
         {/* Title */}
         <TextInput
           style={styles.titleInput}
@@ -791,6 +842,36 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   scrollContent: {
     // Build-78 LEAD: 키보드 간격 축소.
     paddingBottom: spacing[3],
+  },
+
+  // v1.1 — 일반/운동 toggle (create.tsx 와 동일 디자인).
+  kindToggle: {
+    flexDirection: 'row',
+    marginHorizontal: spacing[5],
+    marginTop: spacing[3],
+    backgroundColor: colors.surface,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  kindToggleBtn: {
+    flex: 1,
+    paddingVertical: spacing[2],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  kindToggleText: {
+    ...textStyles.label,
+  },
+  bodyPartsWrap: {
+    marginHorizontal: spacing[5],
+    marginTop: spacing[3],
+    paddingVertical: spacing[3],
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
 
   titleInput: {

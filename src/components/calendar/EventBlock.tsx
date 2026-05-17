@@ -91,10 +91,14 @@ export function EventBlock({
         ellipsizeMode="tail"
       >
         {/* Build-94 — 공유 받은 이벤트면 등록자 nickname 을 prefix 로 표시.
-            "홍길동 · 회의" 형식. own event 는 prefix 없음. */}
-        {!event.isOwn && event.ownerNickname
-          ? `${event.ownerNickname} · ${translatedTitle ?? event.title}`
-          : (translatedTitle ?? event.title)}
+            "홍길동 · 회의" 형식. own event 는 prefix 없음.
+            v1.1 — eventKind === 'workout' 이면 💪 prefix 를 가장 앞에 붙여
+            운동 일정을 한눈에 구분. asset 추가 없이 system emoji 만 사용. */}
+        {(event.eventKind === 'workout' ? '💪 ' : '') + (
+          !event.isOwn && event.ownerNickname
+            ? `${event.ownerNickname} · ${translatedTitle ?? event.title}`
+            : (translatedTitle ?? event.title)
+        )}
       </Text>
 
       {!event.isOwn && (

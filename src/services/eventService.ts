@@ -23,6 +23,7 @@ import { supabase, getCurrentUserId } from '@/lib/supabase';
 import { logError } from '@/lib/errorLogger';
 import { getMemberColor } from '@/constants/colors';
 import { shareEventToSpace, unshareEventFromSpace } from '@/services/eventShareService';
+import { saveParts as saveWorkoutParts, listParts as listWorkoutParts } from '@/services/workoutPartService';
 import { cancelEventReminders } from '@/services/notificationService';
 import type {
   Event, EventSummary, CreateEventInput, UpdateEventInput,
@@ -59,6 +60,9 @@ function toEventSummary(
     ...(ownerNickname && !isOwn ? { ownerNickname } : {}),
     // Build-96 — drag 가드 우회 조건. true 면 멤버도 reschedule 가능.
     ...(row.editable_by_members ? { editableByMembers: true } : {}),
+    // v1.1 — 운동 일정 prefix(💪) 표시용. general 은 undefined 로 두면
+    // 기존 분기와 호환.
+    ...(row.event_kind === 'workout' ? { eventKind: 'workout' as const } : {}),
   };
 }
 
@@ -68,6 +72,7 @@ function toEvent(
   sharedSpaceIds: string[],
   ownerNickname: string,
   isOwn: boolean,
+  workoutParts: Event['workoutParts'] = [],
 ): Event {
   return {
     id:           row.id,
@@ -87,6 +92,8 @@ function toEvent(
     ownerNickname,
     isOwn,
     editableByMembers: row.editable_by_members ?? false,
+    eventKind:    row.event_kind ?? 'general',
+    workoutParts,
     createdAt:    new Date(row.created_at),
     updatedAt:    new Date(row.updated_at),
   };
@@ -347,11 +354,17 @@ export async function getEventById(eventId: string): Promise<Event> {
     .eq('id', row.user_id)
     .single() as { data: { nickname: string } | null; error: Error | null };
 
+  // v1.1 — workout 모드면 부위 기록도 함께 hydrate. general 모드는 빈 배열.
+  const workoutParts = row.event_kind === 'workout'
+    ? await listWorkoutParts(eventId)
+    : [];
+
   return toEvent(
     row,
     (shares ?? []).map(s => s.space_id),
     ownerRow?.nickname ?? '알 수 없음',
     row.user_id === userId,
+    workoutParts,
   );
 }
 
@@ -386,6 +399,7 @@ export async function createEvent(input: CreateEventInput): Promise<Event> {
       category_id:  input.categoryId ?? null,
       color:        input.color ?? null,
       editable_by_members: input.editableByMembers ?? false,
+      event_kind:   input.eventKind ?? 'general',
     };
     if (input.repeatType === 'custom_weekly') {
       insertPayload.repeat_weekdays = input.repeatWeekdays ?? [];
@@ -422,6 +436,21 @@ export async function createEvent(input: CreateEventInput): Promise<Event> {
       }
     }
 
+    // v1.1 — workout 모드면 부위 기록을 함께 저장. saveParts 는 멱등이라
+    // 빈 배열을 보내도 안전. 실패는 best-effort (이미 INSERT 는 성공).
+    if (input.eventKind === 'workout' && input.workoutParts && input.workoutParts.length > 0) {
+      try {
+        await saveWorkoutParts(row.id, input.workoutParts);
+      } catch (wpErr) {
+        void logError({
+          context: 'event.create.workoutParts',
+          error:   wpErr,
+          userId,
+          details: { eventId: row.id, partCount: input.workoutParts.length },
+        });
+      }
+    }
+
     // NOTE: Reminder scheduling 은 reminderService (TASK-1304) 가 caller 에서
     // 호출. 여기는 events 행만 책임.
 
@@ -455,6 +484,8 @@ export async function createEvent(input: CreateEventInput): Promise<Event> {
         ownerNickname: '',
         isOwn:         true,
         editableByMembers: input.editableByMembers ?? false,
+        eventKind:     input.eventKind ?? 'general',
+        workoutParts:  input.workoutParts ?? [],
         createdAt:     new Date(row.created_at),
         updatedAt:     new Date(row.updated_at),
       };
@@ -520,6 +551,7 @@ export async function updateEvent(eventId: string, updates: UpdateEventInput): P
     if (updates.categoryId  !== undefined) patch.category_id  = updates.categoryId ?? null;
     if (updates.color       !== undefined) patch.color        = updates.color ?? null;
     if (updates.editableByMembers !== undefined) patch.editable_by_members = updates.editableByMembers;
+    if (updates.eventKind   !== undefined) patch.event_kind   = updates.eventKind;
 
     if (Object.keys(patch).length > 0) {
       const { error } = await supa
@@ -540,6 +572,21 @@ export async function updateEvent(eventId: string, updates: UpdateEventInput): P
         ...toAdd.map(id    => shareEventToSpace(eventId, id)),
         ...toRemove.map(id => unshareEventFromSpace(eventId, id)),
       ]);
+    }
+
+    // v1.1 — workout 부위 갱신. updates.workoutParts 가 undefined 면 손대지
+    // 않고, 명시적으로 빈 배열을 보내면 전체 삭제. saveParts 가 멱등.
+    if (updates.workoutParts !== undefined) {
+      try {
+        await saveWorkoutParts(eventId, updates.workoutParts);
+      } catch (wpErr) {
+        void logError({
+          context: 'event.update.workoutParts',
+          error:   wpErr,
+          userId,
+          details: { eventId, partCount: updates.workoutParts.length },
+        });
+      }
     }
 
     const updatedEvent = await getEventById(eventId);

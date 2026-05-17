@@ -47,6 +47,7 @@ import { ReminderPicker } from '@/components/reminders/ReminderPicker';
 import { DateTimeModal } from '@/components/common/DateTimeModal';
 import { CategoryPickerSheet } from '@/components/planner/CategoryPickerSheet';
 import { ColorPicker } from '@/components/event/ColorPicker';
+import { BodyParts } from '@/components/event/BodyParts';
 import { getCategories } from '@/services/categoryService';
 import { logError } from '@/lib/errorLogger';
 import type { Category } from '@/types';
@@ -304,6 +305,18 @@ export default function EventCreateScreen() {
    * picker closes so inline creation is reflected immediately. */
   const [categoryMap, setCategoryMap]     = useState<Map<string, Category>>(new Map());
 
+  // v1.1 — 운동 일정 등록 mode. 'general' 이 기본. 'workout' 으로 바뀌면
+  // 시트 안에 BodyParts picker 가 inline 으로 노출되고 저장 시 부위 기록도
+  // 함께 persist 된다. 다른 필드(시간/카테고리/색상/메모)는 두 모드 동일하게
+  // 그대로 사용한다.
+  const [eventKind, setEventKind] = useState<'general' | 'workout'>('general');
+  const [workoutParts, setWorkoutParts] = useState<('chest' | 'back' | 'shoulders' | 'arms' | 'legs' | 'core' | 'cardio')[]>([]);
+  const toggleWorkoutPart = useCallback((part: typeof workoutParts[number]) => {
+    setWorkoutParts((prev) =>
+      prev.includes(part) ? prev.filter((p) => p !== part) : [...prev, part],
+    );
+  }, []);
+
   // Load categories once on mount + whenever the picker closes.
   useEffect(() => {
     let cancelled = false;
@@ -495,6 +508,8 @@ export default function EventCreateScreen() {
         ...(eventColor          ? { color: eventColor }                : {}),
         shareToSpaceIds: shareSpaceIds,
         editableByMembers,
+        eventKind,
+        ...(eventKind === 'workout' ? { workoutParts } : {}),
       });
 
       // Persist reminders for the newly created event (fire-and-forget; see
@@ -707,6 +722,43 @@ export default function EventCreateScreen() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
+        {/* v1.1 — 일반 / 운동 모드 토글. 같은 시트 안에서 mode 만 바뀌고
+            다른 필드는 동일하게 사용되도록 디자인 (이질감 ↓). */}
+        <View style={styles.kindToggle}>
+          {(['general', 'workout'] as const).map((kind) => {
+            const active = eventKind === kind;
+            return (
+              <Pressable
+                key={kind}
+                onPress={() => setEventKind(kind)}
+                style={[
+                  styles.kindToggleBtn,
+                  active && { backgroundColor: colors.primary },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.kindToggleText,
+                    { color: active ? colors.textInverse : colors.textSecondary },
+                  ]}
+                >
+                  {kind === 'general' ? '일반' : '💪 운동'}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* 운동 모드일 때만 BodyParts picker 노출. */}
+        {eventKind === 'workout' && (
+          <View style={styles.bodyPartsWrap}>
+            <BodyParts
+              selected={workoutParts}
+              onToggle={toggleWorkoutPart}
+            />
+          </View>
+        )}
+
         {/* Title with autocomplete from prior calendar events */}
         <View style={styles.titleWrapper}>
           <TextInput
@@ -1155,6 +1207,37 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   scrollContent: {
     // Build-78 LEAD: 키보드 / 텍스트필드 사이 간격 너무 큼. 80→12 축소.
     paddingBottom: spacing[3],
+  },
+
+  // v1.1 — 일반 / 운동 segmented toggle. 시트 가장 상단에 위치해 mode 가
+  // 일정 등록 흐름의 첫 결정임을 시각적으로 알린다.
+  kindToggle: {
+    flexDirection: 'row',
+    marginHorizontal: spacing[5],
+    marginTop: spacing[3],
+    backgroundColor: colors.surface,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  kindToggleBtn: {
+    flex: 1,
+    paddingVertical: spacing[2],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  kindToggleText: {
+    ...textStyles.label,
+  },
+  bodyPartsWrap: {
+    marginHorizontal: spacing[5],
+    marginTop: spacing[3],
+    paddingVertical: spacing[3],
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
 
   // Title input
