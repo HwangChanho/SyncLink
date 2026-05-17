@@ -1,0 +1,140 @@
+# Maestro flow — v1.0 App Store screenshot capture (5 shots)
+#
+# Run after `expo run:ios --device "iPhone 16 Pro Max"` finishes and the
+# dev build is installed. Status bar override should be set beforehand:
+#
+#   xcrun simctl status_bar booted override --time "09:41" \
+#     --batteryLevel 100 --batteryState charged --wifiBars 3 --cellularBars 4
+#
+# Execution:
+#   maestro test .maestro/flows/08_appstore_capture.yaml
+#
+# Output: ~/.maestro/tests/{timestamp}/screenshot_*.png
+# Post-process: scripts/copy-appstore-screenshots.sh moves them to ./screenshots/
+
+appId: io.synclink.app
+---
+
+# ── Launch + dev login ──────────────────────────────────────────────────────
+- launchApp:
+    stopApp: true
+
+# Dismiss notification permission dialog (may appear immediately on first run)
+- tapOn:
+    text: "허용 안 함"
+    optional: true
+- tapOn:
+    text: "허용"
+    optional: true
+
+# Dismiss ATT (App Tracking Transparency) dialog if present
+- tapOn:
+    text: "앱에 추적 금지 요청"
+    optional: true
+
+# Dismiss location permission dialog (may appear right after ATT on first run)
+- tapOn:
+    text: "앱을 사용하는 동안 허용"
+    optional: true
+- tapOn:
+    text: "한 번 허용"
+    optional: true
+
+# Dismiss "Apple 계정에 로그인" dialog if it appears (sim has no Apple ID)
+- tapOn:
+    text: "닫기"
+    optional: true
+
+# Tap email field — @synclink.test accounts auto-fill password (login.tsx:275)
+- tapOn:
+    id: "login-dev-email"
+- inputText: "e2e@synclink.test"
+- hideKeyboard
+# Apple sign-in dialog re-appears after focus events — dismiss again
+- tapOn:
+    text: "닫기"
+    optional: true
+- tapOn:
+    id: "login-dev-submit"
+# Dismiss Apple sign-in dialog if it pops one more time post-submit
+- tapOn:
+    text: "닫기"
+    optional: true
+
+# ── Post-login: notification permission + onboarding ───────────────────────
+- tapOn:
+    text: "허용 안 함"
+    optional: true
+- tapOn:
+    text: "허용"
+    optional: true
+
+# Skip onboarding — tap "건너뛰기" (top-right) by coordinate for reliability.
+# The Korean text matcher misses during animation transitions.
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn:
+    point: "89%,8%"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn:
+    text: "건너뛰기"
+    optional: true
+
+# ── Wait for home to render ────────────────────────────────────────────────
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: 01_home
+
+# ── SCREEN 2: Calendar monthly view ────────────────────────────────────────
+# Tap calendar tab by coordinate (2nd of 5 tabs, bottom). Text matcher
+# unstable during animation.
+- tapOn:
+    point: "30%,96%"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 02_calendar_month
+
+# ── SCREEN 3: NL input with text entered ───────────────────────────────────
+# Tap the NL input text field (placeholder visible)
+- tapOn:
+    text: "내일 오후 3시"
+    optional: true
+- tapOn:
+    text: "자연어로"
+    optional: true
+# Fallback — long-press anywhere then tap the input row
+- tapOn:
+    point: "50%,93%"
+- inputText: "내일 오후 3시 미팅"
+- takeScreenshot: 03_nl_input
+- hideKeyboard
+
+# ── SCREEN 4: Week view ────────────────────────────────────────────────────
+# Toggle back to calendar tab then to week view (header has 월/주/일 buttons)
+- tapOn:
+    point: "30%,96%"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn:
+    text: "주"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: 04_calendar_week
+
+# ── SCREEN 5: Wheel picker (year/month/day) ────────────────────────────────
+# Tap the date header (e.g. "2026년 5월") to open wheel picker
+- tapOn:
+    point: "50%,12%"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: 05_wheel_picker
+
+# Close picker (cleanup)
+- tapOn:
+    text: "취소"
+    optional: true
+- tapOn:
+    text: "닫기"
+    optional: true
