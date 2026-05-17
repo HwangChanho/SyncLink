@@ -173,13 +173,13 @@ private struct SmallView: View {
   }
 }
 
-// MARK: - Large (338×354) — Weekly grid + today list
+// MARK: - Large (338×354) — Weekly schedule list (월 달력 옮겨온 느낌)
 
 private struct LargeView: View {
   let snapshot: WidgetSnapshot
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
+    VStack(alignment: .leading, spacing: 6) {
       HStack {
         Text("이번 주")
           .font(.system(size: 14, weight: .semibold))
@@ -188,79 +188,25 @@ private struct LargeView: View {
           .font(.system(size: 11))
           .foregroundColor(.secondary)
       }
-
-      WeekGrid(events: snapshot.events)
-        .frame(height: 110)
-
-      Divider().padding(.vertical, 1)
-
-      // Today list (shares the right side conceptually; here we stack
-      // it below the grid for clean readability inside 338×354).
-      let todays = todayEvents(snapshot)
-      if todays.isEmpty && snapshot.todos.isEmpty {
-        Text("오늘 일정 없음")
-          .font(.caption)
-          .foregroundColor(.secondary)
-      } else {
-        VStack(alignment: .leading, spacing: 3) {
-          ForEach(Array(todays.prefix(3))) { evt in
-            EventRow(event: evt, compact: false)
-          }
-          if !snapshot.todos.isEmpty {
-            if !todays.isEmpty { Spacer().frame(height: 2) }
-            ForEach(Array(snapshot.todos.prefix(2))) { td in
-              TodoRow(todo: td)
-            }
-          }
-        }
-      }
+      WeekList(events: snapshot.events)
       Spacer(minLength: 0)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
   }
 }
 
-// MARK: - Weekly grid sub-view
+// MARK: - Week list sub-view — 7 rows, day label + per-day event titles
 
-private struct WeekGrid: View {
+private struct WeekList: View {
   let events: [WidgetEvent]
 
   private static let weekdays = ["일", "월", "화", "수", "목", "금", "토"]
 
   var body: some View {
     let days = next7Days()
-    HStack(alignment: .top, spacing: 4) {
+    VStack(alignment: .leading, spacing: 3) {
       ForEach(0..<days.count, id: \.self) { idx in
-        let d = days[idx]
-        let key = dateKey(d)
-        // 옛 JSON 호환: dateKey nil 인 이벤트는 오늘 columns 에 그룹.
-        let dayEvents = events.filter { ($0.dateKey ?? dateKey(Date())) == key }
-        let isToday = key == dateKey(Date())
-        VStack(spacing: 2) {
-          Text(Self.weekdays[Calendar.current.component(.weekday, from: d) - 1])
-            .font(.system(size: 9, weight: .medium))
-            .foregroundColor(.secondary)
-          ZStack {
-            if isToday {
-              Circle().fill(Color.accentColor.opacity(0.2)).frame(width: 22, height: 22)
-            }
-            Text("\(Calendar.current.component(.day, from: d))")
-              .font(.system(size: 12, weight: isToday ? .semibold : .regular))
-          }
-          VStack(spacing: 2) {
-            ForEach(Array(dayEvents.prefix(3))) { evt in
-              Circle()
-                .fill(Color(hex: evt.color))
-                .frame(width: 5, height: 5)
-            }
-            if dayEvents.count > 3 {
-              Text("+\(dayEvents.count - 3)")
-                .font(.system(size: 8))
-                .foregroundColor(.secondary)
-            }
-          }
-        }
-        .frame(maxWidth: .infinity)
+        DayRow(date: days[idx], events: events)
       }
     }
   }
@@ -270,8 +216,65 @@ private struct WeekGrid: View {
     let start = cal.startOfDay(for: Date())
     return (0..<7).compactMap { cal.date(byAdding: .day, value: $0, to: start) }
   }
+}
 
-  private func dateKey(_ d: Date) -> String {
+private struct DayRow: View {
+  let date:   Date
+  let events: [WidgetEvent]
+
+  private static let weekdays = ["일", "월", "화", "수", "목", "금", "토"]
+
+  var body: some View {
+    let key = dateKeyFor(date)
+    let dayEvents = events.filter { ($0.dateKey ?? dateKeyFor(Date())) == key }
+    let isToday = key == dateKeyFor(Date())
+    HStack(alignment: .top, spacing: 8) {
+      // Day label column — fixed width so titles align nicely down the rows
+      VStack(alignment: .leading, spacing: 0) {
+        Text(Self.weekdays[Calendar.current.component(.weekday, from: date) - 1])
+          .font(.system(size: 9, weight: .medium))
+          .foregroundColor(isToday ? Color.accentColor : .secondary)
+        Text("\(Calendar.current.component(.day, from: date))")
+          .font(.system(size: 13, weight: isToday ? .bold : .medium))
+          .foregroundColor(isToday ? Color.accentColor : .primary)
+      }
+      .frame(width: 24, alignment: .leading)
+
+      // Events column — title + colour dot + (compact time when present).
+      // Limit to 2 visible rows per day so 7 days fit inside 354pt height.
+      VStack(alignment: .leading, spacing: 1) {
+        if dayEvents.isEmpty {
+          Text("—")
+            .font(.system(size: 11))
+            .foregroundColor(.secondary.opacity(0.5))
+        } else {
+          ForEach(Array(dayEvents.prefix(2))) { evt in
+            HStack(spacing: 4) {
+              Circle()
+                .fill(Color(hex: evt.color))
+                .frame(width: 5, height: 5)
+              Text(displayTitle(evt))
+                .font(.system(size: 11))
+                .lineLimit(1)
+            }
+          }
+          if dayEvents.count > 2 {
+            Text("+\(dayEvents.count - 2)개 더")
+              .font(.system(size: 9))
+              .foregroundColor(.secondary)
+          }
+        }
+      }
+      Spacer(minLength: 0)
+    }
+  }
+
+  private func displayTitle(_ evt: WidgetEvent) -> String {
+    let nick = evt.ownerNickname ?? ""
+    return nick.isEmpty ? evt.title : "\(nick) · \(evt.title)"
+  }
+
+  private func dateKeyFor(_ d: Date) -> String {
     let f = DateFormatter()
     f.dateFormat = "yyyy-MM-dd"
     return f.string(from: d)
