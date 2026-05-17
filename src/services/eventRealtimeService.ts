@@ -114,9 +114,16 @@ export function subscribeToSharedEvents(
       // Build channel with three postgres_changes listeners.
       // supabase-js v2 types only expose two overloads for .on('postgres_changes')
       // before falling back to 'system' — cast to any for the third call.
+      //
+      // Per-call unique suffix so foreground-reconnect race doesn't try to
+      // join the same channel twice while the previous removeChannel() is
+      // still settling. Without this the second .on() triggers the Sentry
+      // "cannot add 'postgres_changes' callbacks for re-subscribed channel"
+      // error (top issue, 57 + 17 events / week).
+      const suffix = Math.random().toString(36).slice(2, 8);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ch = (supabase
-        .channel(`space-events:${space_id}`)
+        .channel(`space-events:${space_id}:${suffix}`)
         // New event shared to this space
         .on(
           'postgres_changes',

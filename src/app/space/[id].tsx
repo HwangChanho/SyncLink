@@ -166,8 +166,12 @@ export default function SpaceDetailScreen() {
 
   useEffect(() => {
     if (!spaceId) return;
+    // Per-mount unique channel name — see eventInteractionService.ts for
+    // the rationale (avoid Sentry "cannot add postgres_changes callbacks"
+    // race on rapid remount / deps change).
+    const suffix = Math.random().toString(36).slice(2, 8);
     const channel = supabase
-      .channel(`space-members:${spaceId}`)
+      .channel(`space-members:${spaceId}:${suffix}`)
       .on(
         'postgres_changes',
         {

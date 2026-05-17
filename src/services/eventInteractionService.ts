@@ -302,8 +302,14 @@ export function subscribeToEventInteractions(
   onReactionChange: () => void,
   onCommentChange: () => void,
 ): () => void {
-  // Use a deterministic channel name per event to avoid duplicate channels
-  const channelName = `event-interactions:${eventId}`;
+  // Per-call unique channel name so a rapid remount (StrictMode double-mount
+  // or deps-change cleanup race) doesn't try to join the same Supabase
+  // channel twice. Without this, the second .on() call inside the
+  // already-joined channel triggers
+  // "cannot add 'postgres_changes' callbacks for re-subscribed channel"
+  // — the dominant Sentry issue (57 + 17 events / week).
+  const suffix = Math.random().toString(36).slice(2, 8);
+  const channelName = `event-interactions:${eventId}:${suffix}`;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const channel = (supabase as any)

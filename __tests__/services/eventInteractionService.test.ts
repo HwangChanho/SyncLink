@@ -482,10 +482,15 @@ describe('eventInteractionService', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('subscribeToEventInteractions', () => {
-    it('eventId 기반 채널 이름으로 channel() 호출', () => {
+    it('eventId 기반 채널 이름으로 channel() 호출 (unique suffix 포함)', () => {
+      // v1.1 — 채널 이름 끝에 random suffix 가 붙어 빠른 remount 시 Supabase
+      // realtime 의 "cannot add postgres_changes callbacks for re-subscribed
+      // channel" race 를 회피한다. 정확한 suffix 는 비결정적이라 prefix 만 단언.
       subscribeToEventInteractions('event-abc', jest.fn(), jest.fn());
 
-      expect(mockChannel).toHaveBeenCalledWith('event-interactions:event-abc');
+      expect(mockChannel).toHaveBeenCalledWith(
+        expect.stringMatching(/^event-interactions:event-abc:[a-z0-9]+$/),
+      );
     });
 
     it('on()이 reactions과 comments 각각 1회씩 총 2회 호출됨', () => {
