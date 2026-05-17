@@ -28,6 +28,7 @@ import { ConfirmModal } from './ConfirmModal';
 import { QuotaExceededSheet } from '@/components/ai/QuotaExceededSheet';
 import { FreeBannerAd } from '@/components/ads/FreeBannerAd';
 import { parseNaturalLanguage, parseNaturalLanguageMulti } from '@/services/aiService';
+import { useVoicePostProcess } from '@/hooks/useVoicePostProcess';
 import { createEvent } from '@/services/eventService';
 import { logError } from '@/lib/errorLogger';
 import { useEventStore } from '@/stores/eventStore';
@@ -95,6 +96,11 @@ export function NLInputBar({ onEventCreated }: Props) {
   const [errorMsg, setErrorMsg] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
+  // v1.1 Phase 1 — STT 결과를 AI 로 후보정한 뒤 모호한 해석이 둘 이상이면
+  // 사용자가 한 번에 고를 수 있도록 chip 으로 노출. 비어있으면 chip 영역
+  // 자체를 렌더하지 않는다.
+  const [voiceAlternatives, setVoiceAlternatives] = useState<string[]>([]);
+  const { refine: refineVoice } = useVoicePostProcess();
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
    * When true, the QuotaExceededSheet is displayed instead of routing to
@@ -144,7 +150,18 @@ export function NLInputBar({ onEventCreated }: Props) {
   useEffect(() => {
     Voice.onSpeechResults = (e: SpeechResultsEvent) => {
       const recognized = e.value?.[0] ?? '';
-      if (recognized) setText(recognized);
+      if (!recognized) return;
+      // v1.1 Phase 1: STT final 결과를 즉시 setText 한 뒤, nlParser 의 결과가
+      // 'low' 일 때만 비동기로 AI 후보정을 돌린다. 응답이 도착하면 더 자연
+      // 스러운 문장으로 swap, 대안이 있으면 chip 영역에 노출. 응답 실패는
+      // silent — 사용자는 원본 transcript 그대로 send 할 수 있다.
+      setText(recognized);
+      setVoiceAlternatives([]);
+      refineVoice(recognized).then((res) => {
+        if (!res || !res.aiUsed) return;
+        if (res.best && res.best !== recognized) setText(res.best);
+        if (res.alternatives.length > 0) setVoiceAlternatives(res.alternatives);
+      });
     };
 
     Voice.onSpeechError = (_e: SpeechErrorEvent) => {
@@ -158,7 +175,7 @@ export function NLInputBar({ onEventCreated }: Props) {
     return () => {
       Voice.destroy().then(Voice.removeAllListeners).catch(() => {});
     };
-  }, []);
+  }, [refineVoice]);
 
   const handleVoiceToggle = useCallback(async () => {
     if (isListening) {
@@ -465,6 +482,31 @@ export function NLInputBar({ onEventCreated }: Props) {
           <Text style={styles.snackbarText} numberOfLines={2}>{errorMsg}</Text>
         </View>
       ) : null}
+
+      {/* v1.1 Phase 1 — STT 후보정 대안이 있을 때만 노출.
+          탭하면 그 후보로 텍스트 swap + chip 닫기. */}
+      {voiceAlternatives.length > 0 && inputState !== 'loading' && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="always"
+          contentContainerStyle={styles.chipsRow}
+        >
+          {voiceAlternatives.map((alt, i) => (
+            <Pressable
+              key={`alt-${i}`}
+              style={styles.chip}
+              onPress={() => {
+                setText(alt);
+                setVoiceAlternatives([]);
+                inputRef.current?.focus();
+              }}
+            >
+              <Text style={styles.chipText}>{alt}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
 
       {/* Free banner ad (LEAD 2026-05-03 — "기본 버전은 자연어 입력바
           하단에 배너, 프로는 안나오게"). 컴포넌트 자체에 isPro 가드가

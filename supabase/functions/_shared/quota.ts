@@ -59,6 +59,9 @@ const LIMITS: Record<string, { freeDaily: number; proHourly: number; proRequires
   // 월 5회 누적은 클라이언트 subscriptionStore에서 추가로 추적).
   // Pro: 시간당 20회 (주간 페이스).
   'recommend-free-time':  { freeDaily: 1,  proHourly: 20 },
+  // v1.1 Phase 1 — 음성 인식 결과 후보정. 짧은 disambiguate prompt (≤50
+  // tokens) 라 1회당 ¢ 미만이지만 selective 호출되도록 cap 보수적으로.
+  'disambiguate-voice':   { freeDaily: 30, proHourly: 60 },
 };
 
 /**

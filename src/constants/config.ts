@@ -76,6 +76,8 @@ export const EDGE_FUNCTIONS = {
   DATE_RECOMMEND:       'date-recommend',
   SUGGEST_DATE:         'suggest-date',
   RECOMMEND_FREE_TIME:  'recommend-free-time',
+  /** v1.1 Phase 1 — STT 전사 결과를 AI 가 한 번 보정하는 mini call. */
+  DISAMBIGUATE_VOICE:   'disambiguate-voice',
 } as const;
 
 // ─── Free Time Recommendations (PRD 4.2 Tier 3) ──────────────────────────────
