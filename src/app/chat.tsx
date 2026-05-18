@@ -3,10 +3,14 @@
  *
  * Stack.Screen 의 presentation modal 로 보여짐. ChatFab 에서 router.push('/chat')
  * 으로 진입. 닫기는 헤더의 ← 또는 swipe-down (modal default).
+ *
+ * v1.1.2 UX fix:
+ *   - 헤더-메시지 사이 상단 여백 추가 (헤더 바로 밑에 첫 메시지가 붙는 답답함 해소)
+ *   - KeyboardAvoidingView 로 키보드 올라올 때 Composer 가 가려지지 않게
  */
 
 import React from 'react';
-import { View, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable, KeyboardAvoidingView, Platform } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -43,15 +47,23 @@ export default function ChatScreen() {
             ) : null,
         }}
       />
-      <View style={[styles.content, { paddingTop: insets.top > 0 ? 0 : spacing[2] }]}>
+      <KeyboardAvoidingView
+        style={styles.content}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        // 헤더 높이만큼 offset. iOS 모달 헤더 ≈ 56pt + insets.top 일부.
+        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 16 : 0}
+      >
+        {/* 헤더 바로 밑 여백 — 첫 메시지/empty state 가 답답하게 붙지 않게. */}
+        <View style={styles.topSpacer} />
         <ChatMessageList messages={messages} isLoading={isLoading} />
         <ChatComposer />
-      </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content:   { flex: 1 },
+  container:   { flex: 1 },
+  content:     { flex: 1 },
+  topSpacer:   { height: spacing[3] },
 });
