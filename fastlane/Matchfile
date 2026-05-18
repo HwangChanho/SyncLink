@@ -1,0 +1,12 @@
+# fastlane match: 인증서·프로파일 git repo (암호화)
+#   - cert 폐기/재발급, 머신 변경 시 cert/profile 한 번에 동기화
+#   - passphrase는 .env의 MATCH_PASSWORD
+#   - git auth는 .env의 MATCH_GIT_BASIC_AUTHORIZATION
+
+git_url("https://github.com/HwangChanho/synclink-certificates")
+storage_mode("git")
+
+type("appstore")
+
+app_identifier(["io.synclink.app", "io.synclink.app.SyncLinkWidget"])
+team_id("QUVU2PY6PG")

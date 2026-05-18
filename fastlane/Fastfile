@@ -24,6 +24,15 @@ platform :ios do
     )
 
     unless options[:skip_build]
+      # 0. match: cert/profile을 git repo에서 keychain에 동기화 (readonly)
+      #    .env에 MATCH_PASSWORD + MATCH_GIT_BASIC_AUTHORIZATION 필요
+      match(
+        type:           "appstore",
+        readonly:       true,
+        app_identifier: ["io.synclink.app", "io.synclink.app.SyncLinkWidget"],
+        api_key:        api_key,
+      )
+
       # 1. 빌드 번호 자동 증가
       next_build = latest_testflight_build_number(api_key: api_key) + 1
       UI.message "빌드 번호: #{next_build}"
@@ -86,6 +95,36 @@ platform :ios do
     end
 
     UI.success "✅ TestFlight 업로드 완료!"
+  end
+
+  # ── fastlane match: 인증서/프로파일 git repo 동기화 ─────────────────────────
+  #   - sync_signing: 매 빌드 직전 호출. 기존 repo에서 cert/profile 가져와 keychain에 설치.
+  #   - migrate_signing: 한 번만 실행. 기존 portal cert/profile을 repo에 암호화 저장.
+  #     호출 후 ExportOptions.plist의 provisioningProfiles UUID를 match 발급한 새 UUID로 교체 필요.
+  lane :sync_signing do
+    api_key = app_store_connect_api_key(
+      key_id: API_KEY_ID, issuer_id: API_ISSUER, key_filepath: API_KEY_PATH, in_house: false,
+    )
+    match(
+      type:           "appstore",
+      readonly:       true,
+      app_identifier: ["io.synclink.app", "io.synclink.app.SyncLinkWidget"],
+      api_key:        api_key,
+    )
+  end
+
+  lane :migrate_signing do
+    # 최초 1회: 기존 portal cert/profile은 force_for_new_devices=false 라도 새로 발급되며,
+    # 기존 cert는 자동으로 revoke됨. Build 113까지의 IPA에는 영향 없음 (이미 서명 완료).
+    api_key = app_store_connect_api_key(
+      key_id: API_KEY_ID, issuer_id: API_ISSUER, key_filepath: API_KEY_PATH, in_house: false,
+    )
+    match(
+      type:                  "appstore",
+      app_identifier:        ["io.synclink.app", "io.synclink.app.SyncLinkWidget"],
+      force_for_new_devices: false,
+      api_key:               api_key,
+    )
   end
 
   # ── 배포용 프로파일 다운로드 ────────────────────────────────────────────────

@@ -24,6 +24,7 @@ import { logError } from '@/lib/errorLogger';
 import { getMemberColor } from '@/constants/colors';
 import { shareEventToSpace, unshareEventFromSpace } from '@/services/eventShareService';
 import { saveParts as saveWorkoutParts, listParts as listWorkoutParts } from '@/services/workoutPartService';
+import { WORKOUT_RESERVED_COLOR } from '@/components/event/ColorPicker';
 import { cancelEventReminders } from '@/services/notificationService';
 import type {
   Event, EventSummary, CreateEventInput, UpdateEventInput,
@@ -386,6 +387,14 @@ export async function createEvent(input: CreateEventInput): Promise<Event> {
     // 컬럼이 존재. 적용 안 된 환경에서 항상 INSERT payload 에 포함하면
     // PG 가 unknown column 으로 거부 → "일정을 저장하지 못했습니다"
     // 회귀가 발생한다 (LEAD 보고). custom_weekly 일 때만 키를 추가.
+    // v1.1.1 — workout 일정은 카테고리/사용자 색상 선택을 무시하고
+    // 예약 색상으로 강제. 캘린더에서 색만 보고도 운동 일정 식별 가능하게
+    // (이모지 prefix 제거와 한 쌍).
+    const resolvedColor =
+      (input.eventKind ?? 'general') === 'workout'
+        ? WORKOUT_RESERVED_COLOR
+        : (input.color ?? null);
+
     const insertPayload: Record<string, unknown> = {
       user_id:      userId,
       title:        input.title,
@@ -397,7 +406,7 @@ export async function createEvent(input: CreateEventInput): Promise<Event> {
       repeat_type:  input.repeatType ?? 'none',
       repeat_until: input.repeatUntil?.toISOString() ?? null,
       category_id:  input.categoryId ?? null,
-      color:        input.color ?? null,
+      color:        resolvedColor,
       editable_by_members: input.editableByMembers ?? false,
       event_kind:   input.eventKind ?? 'general',
     };
@@ -552,6 +561,17 @@ export async function updateEvent(eventId: string, updates: UpdateEventInput): P
     if (updates.color       !== undefined) patch.color        = updates.color ?? null;
     if (updates.editableByMembers !== undefined) patch.editable_by_members = updates.editableByMembers;
     if (updates.eventKind   !== undefined) patch.event_kind   = updates.eventKind;
+
+    // v1.1.1 — eventKind 가 workout 으로 바뀌면(또는 이미 workout 일정의
+    // 색상을 변경하려 하면) 색상을 예약 색으로 강제. 사용자가 의도해서
+    // 다른 색을 보내도 무시.
+    if (updates.eventKind === 'workout') {
+      patch.color = WORKOUT_RESERVED_COLOR;
+    } else if (updates.eventKind === 'general' && updates.color === undefined) {
+      // workout → general 전환 시 사용자가 color 를 명시 안 했으면 null 로
+      // 되돌려 카테고리 색상으로 fallback.
+      patch.color = null;
+    }
 
     if (Object.keys(patch).length > 0) {
       const { error } = await supa

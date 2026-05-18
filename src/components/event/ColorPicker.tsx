@@ -35,6 +35,17 @@ import { spacing, radius } from '@/constants/spacing';
  *
  * Derived from the HSL golden-angle sequence with manual tweaks for harmony.
  */
+/**
+ * Workout 일정 전용 예약 색상 (v1.1.1).
+ *
+ * - 사용자가 일반 카테고리/이벤트 색상으로 선택 불가 (이 색만 보면 운동 일정 시그널)
+ * - `event_kind === 'workout'` 인 이벤트의 color는 이 값으로 강제 적용
+ * - EVENT_COLOR_PALETTE 에서도 제외해 picker 충돌 방지
+ *
+ * 색상 선정: Material Red 600 (#E53935) — 다른 팔레트 색과 채도/명도 명확 구분.
+ */
+export const WORKOUT_RESERVED_COLOR = '#E53935';
+
 export const EVENT_COLOR_PALETTE: string[] = [
   '#7C3AED', // violet      — aligns with app primary
   '#DB2777', // pink
@@ -46,14 +57,16 @@ export const EVENT_COLOR_PALETTE: string[] = [
   '#0D9488', // teal
   '#0284C7', // sky-blue
   '#2563EB', // blue
-  '#7C3AED', // deep-violet (duplicate hue on small screens; users can still pick)
   '#9333EA', // purple
   '#C2410C', // burnt-orange
   '#0F766E', // deep-teal
 ];
 
-// Remove accidental duplicates while preserving order
-const PALETTE = [...new Set(EVENT_COLOR_PALETTE)];
+// Remove accidental duplicates while preserving order, and ensure the workout
+// reserved color never leaks into the user-selectable palette.
+const PALETTE = [...new Set(EVENT_COLOR_PALETTE)].filter(
+  (hex) => hex.toUpperCase() !== WORKOUT_RESERVED_COLOR.toUpperCase(),
+);
 
 // ─── Component ────────────────────────────────────────────────────────────────
 

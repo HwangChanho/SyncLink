@@ -4,9 +4,10 @@
 //  iOS home-screen widget for SyncLink. Two families:
 //    - Small (158×158): today's events + first todo. Per-category colour
 //      dot + shared-event nickname prefix. Tap → app.
-//    - Large (338×354): weekly grid (7 columns, today highlighted) showing
-//      each day's event colour dots, plus today's event/todo list on the
-//      right. Tap → app.
+//    - Large (338×354): monthly calendar grid (7 cols × 6 rows). Current
+//      month dates normal, leading/trailing days dimmed. Today highlighted
+//      with a filled accent disc. Each cell shows up to two coloured event
+//      bars; overflow collapses to "+N". Tap → app.
 //
 //  Apple does not allow ScrollView/swipe in WidgetKit (iOS 17 only adds
 //  Button/Toggle via App Intents). View-mode switching happens by changing
@@ -173,111 +174,168 @@ private struct SmallView: View {
   }
 }
 
-// MARK: - Large (338×354) — Weekly schedule list (월 달력 옮겨온 느낌)
+// MARK: - Large (338×354) — Monthly calendar grid (7 cols × 6 rows)
 
 private struct LargeView: View {
   let snapshot: WidgetSnapshot
 
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
+      // Header — yyyy.MM and short hint, mirrors Naver Calendar widget style.
       HStack {
-        Text("이번 주")
-          .font(.system(size: 14, weight: .semibold))
+        Text(monthHeaderLabel())
+          .font(.system(size: 15, weight: .bold))
         Spacer()
-        Text(weekRangeLabel())
-          .font(.system(size: 11))
+        Text("\(snapshot.totals.events)개 일정")
+          .font(.system(size: 10))
           .foregroundColor(.secondary)
       }
-      WeekList(events: snapshot.events)
+      WeekdayHeader()
+      MonthGrid(events: snapshot.events)
       Spacer(minLength: 0)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
   }
 }
 
-// MARK: - Week list sub-view — 7 rows, day label + per-day event titles
+// MARK: - Weekday header row (일~토, 일=red / 토=blue)
 
-private struct WeekList: View {
-  let events: [WidgetEvent]
-
-  private static let weekdays = ["일", "월", "화", "수", "목", "금", "토"]
+private struct WeekdayHeader: View {
+  private static let labels = ["일", "월", "화", "수", "목", "금", "토"]
 
   var body: some View {
-    let days = next7Days()
-    VStack(alignment: .leading, spacing: 3) {
-      ForEach(0..<days.count, id: \.self) { idx in
-        DayRow(date: days[idx], events: events)
+    HStack(spacing: 4) {
+      ForEach(0..<7, id: \.self) { i in
+        Text(Self.labels[i])
+          .font(.system(size: 10, weight: .medium))
+          .frame(maxWidth: .infinity)
+          .foregroundColor(weekdayColor(i))
       }
     }
   }
 
-  private func next7Days() -> [Date] {
-    let cal = Calendar.current
-    let start = cal.startOfDay(for: Date())
-    return (0..<7).compactMap { cal.date(byAdding: .day, value: $0, to: start) }
+  private func weekdayColor(_ i: Int) -> Color {
+    if i == 0 { return Color.red.opacity(0.85) }
+    if i == 6 { return Color.blue.opacity(0.85) }
+    return .secondary
   }
 }
 
-private struct DayRow: View {
-  let date:   Date
+// MARK: - 6 × 7 month grid
+
+private struct MonthGrid: View {
   let events: [WidgetEvent]
 
-  private static let weekdays = ["일", "월", "화", "수", "목", "금", "토"]
-
   var body: some View {
-    let key = dateKeyFor(date)
-    let dayEvents = events.filter { ($0.dateKey ?? dateKeyFor(Date())) == key }
-    let isToday = key == dateKeyFor(Date())
-    HStack(alignment: .top, spacing: 8) {
-      // Day label column — fixed width so titles align nicely down the rows
-      VStack(alignment: .leading, spacing: 0) {
-        Text(Self.weekdays[Calendar.current.component(.weekday, from: date) - 1])
-          .font(.system(size: 9, weight: .medium))
-          .foregroundColor(isToday ? Color.accentColor : .secondary)
-        Text("\(Calendar.current.component(.day, from: date))")
-          .font(.system(size: 13, weight: isToday ? .bold : .medium))
-          .foregroundColor(isToday ? Color.accentColor : .primary)
-      }
-      .frame(width: 24, alignment: .leading)
-
-      // Events column — title + colour dot + (compact time when present).
-      // Limit to 2 visible rows per day so 7 days fit inside 354pt height.
-      VStack(alignment: .leading, spacing: 1) {
-        if dayEvents.isEmpty {
-          Text("—")
-            .font(.system(size: 11))
-            .foregroundColor(.secondary.opacity(0.5))
-        } else {
-          ForEach(Array(dayEvents.prefix(2))) { evt in
-            HStack(spacing: 4) {
-              Circle()
-                .fill(Color(hex: evt.color))
-                .frame(width: 5, height: 5)
-              Text(displayTitle(evt))
-                .font(.system(size: 11))
-                .lineLimit(1)
-            }
-          }
-          if dayEvents.count > 2 {
-            Text("+\(dayEvents.count - 2)개 더")
-              .font(.system(size: 9))
-              .foregroundColor(.secondary)
+    let days = monthGridDays()
+    // 6 rows × 7 cols. Equal-spaced columns; vertical spacing creates the
+    // whitespace LEAD asked for (네이버 캘린더 위젯 reference).
+    VStack(spacing: 4) {
+      ForEach(0..<6, id: \.self) { row in
+        HStack(spacing: 4) {
+          ForEach(0..<7, id: \.self) { col in
+            let idx = row * 7 + col
+            DayCell(date: days[idx], events: events)
           }
         }
       }
-      Spacer(minLength: 0)
     }
   }
 
-  private func displayTitle(_ evt: WidgetEvent) -> String {
-    let nick = evt.ownerNickname ?? ""
-    return nick.isEmpty ? evt.title : "\(nick) · \(evt.title)"
+  /// 6 weeks starting at the Sunday on or before the 1st of the current month.
+  private func monthGridDays() -> [Date] {
+    let cal = Calendar.current
+    let now = Date()
+    let comps = cal.dateComponents([.year, .month], from: now)
+    guard let monthFirst = cal.date(from: comps) else { return [] }
+    let weekdayOfFirst = cal.component(.weekday, from: monthFirst) // 1=Sun
+    let gridStart = cal.date(byAdding: .day, value: -(weekdayOfFirst - 1), to: monthFirst) ?? monthFirst
+    return (0..<42).compactMap { cal.date(byAdding: .day, value: $0, to: gridStart) }
+  }
+}
+
+// MARK: - Single day cell
+
+private struct DayCell: View {
+  let date:   Date
+  let events: [WidgetEvent]
+
+  var body: some View {
+    let key = dateKeyFor(date)
+    let today = dateKeyFor(Date())
+    let isToday = key == today
+    let inCurrentMonth = Calendar.current.isDate(date, equalTo: Date(), toGranularity: .month)
+    let dayEvents = events.filter { ($0.dateKey ?? today) == key }
+
+    VStack(alignment: .leading, spacing: 2) {
+      // Day number — today highlighted with a filled accent disc.
+      HStack {
+        if isToday {
+          Text("\(Calendar.current.component(.day, from: date))")
+            .font(.system(size: 11, weight: .bold))
+            .foregroundColor(.white)
+            .frame(width: 16, height: 16)
+            .background(Circle().fill(Color.accentColor))
+        } else {
+          Text("\(Calendar.current.component(.day, from: date))")
+            .font(.system(size: 11, weight: inCurrentMonth ? .semibold : .regular))
+            .foregroundColor(dayNumberColor(date: date, inCurrentMonth: inCurrentMonth))
+        }
+        Spacer(minLength: 0)
+      }
+
+      // Up to 2 event bars; further events collapse to "+N".
+      ForEach(Array(dayEvents.prefix(2))) { evt in
+        EventBar(event: evt)
+      }
+      if dayEvents.count > 2 {
+        Text("+\(dayEvents.count - 2)")
+          .font(.system(size: 8, weight: .medium))
+          .foregroundColor(.secondary)
+          .padding(.leading, 2)
+      }
+      Spacer(minLength: 0)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+  }
+
+  private func dayNumberColor(date: Date, inCurrentMonth: Bool) -> Color {
+    let weekday = Calendar.current.component(.weekday, from: date)
+    let base: Color = {
+      if weekday == 1 { return .red }
+      if weekday == 7 { return .blue }
+      return .primary
+    }()
+    return inCurrentMonth ? base : base.opacity(0.35)
   }
 
   private func dateKeyFor(_ d: Date) -> String {
     let f = DateFormatter()
     f.dateFormat = "yyyy-MM-dd"
     return f.string(from: d)
+  }
+}
+
+// MARK: - Event bar inside a cell (coloured pill with truncated title)
+
+private struct EventBar: View {
+  let event: WidgetEvent
+  var body: some View {
+    Text(displayTitle)
+      .font(.system(size: 8, weight: .medium))
+      .lineLimit(1)
+      .truncationMode(.tail)
+      .foregroundColor(.white)
+      .padding(.horizontal, 3)
+      .padding(.vertical, 1)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(
+        RoundedRectangle(cornerRadius: 2)
+          .fill(Color(hex: event.color).opacity(0.85))
+      )
+  }
+  private var displayTitle: String {
+    event.title
   }
 }
 
@@ -337,14 +395,11 @@ private func todayLabel() -> String {
   return f.string(from: Date())
 }
 
-private func weekRangeLabel() -> String {
-  let cal = Calendar.current
-  let start = cal.startOfDay(for: Date())
-  let end = cal.date(byAdding: .day, value: 6, to: start) ?? start
+private func monthHeaderLabel() -> String {
   let f = DateFormatter()
   f.locale = Locale(identifier: "ko_KR")
-  f.dateFormat = "M/d"
-  return "\(f.string(from: start)) ~ \(f.string(from: end))"
+  f.dateFormat = "yyyy.MM"
+  return f.string(from: Date())
 }
 
 private func todayKey() -> String {
@@ -381,7 +436,7 @@ struct SyncLinkWidget: Widget {
       SyncLinkWidgetEntryView(entry: entry)
     }
     .configurationDisplayName("SyncLink")
-    .description("작은 위젯은 오늘 일정과 할 일을, 큰 위젯은 이번 주 달력을 보여줍니다.")
+    .description("작은 위젯은 오늘 일정과 할 일을, 큰 위젯은 이번 달 달력을 보여줍니다.")
     // iPad supportsTablet=false 인 v1.0 — extraLarge 제외. Medium 도
     // 사용자 요구로 제거 (small + large 만 노출).
     .supportedFamilies([.systemSmall, .systemLarge])

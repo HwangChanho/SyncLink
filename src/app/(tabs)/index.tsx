@@ -34,6 +34,7 @@ import { WeeklyReviewCard }    from '@/components/home/WeeklyReviewCard';
 import { WeatherWidget }       from '@/components/home/WeatherWidget';
 import { DateSuggestionCard }  from '@/components/home/DateSuggestionCard';
 import { UpcomingEventsCard }  from '@/components/home/UpcomingEventsCard';
+import { ChatFab }              from '@/components/chat/ChatFab';
 import { useColors } from '@/hooks/useColors';
 import { useTranslation } from 'react-i18next';
 import { spacing } from '@/constants/spacing';
@@ -178,6 +179,10 @@ export default function HomeScreen() {
 
       {/* AI natural language input bar — fixed at bottom */}
       <NLInputBar />
+
+      {/* v1.2 Phase 2 — AI 비서 채팅 진입 FAB. NLInputBar 위쪽에 오버레이.
+          5번째 탭 추가 대신 글로벌 진입점으로 분리 (가로 공간 + 디자인). */}
+      <ChatFab />
     </SafeAreaView>
   );
 }

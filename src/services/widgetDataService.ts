@@ -36,8 +36,12 @@ import type { TodoSummary } from '@/types/todo';
 const MAX_TODAY_EVENTS = 6;
 /** Maximum todos surfaced — same rationale. */
 const MAX_WIDGET_TODOS = 4;
-/** Window for the large widget's weekly grid (today + 6 forward). */
-const WEEK_WINDOW_DAYS = 7;
+/** Window for the large widget's monthly grid — 6 weeks (42 cells) is the
+ *  Naver/Apple calendar standard, covering current month plus leading/trailing
+ *  days from neighbouring months. */
+const MONTH_GRID_DAYS = 42;
+/** Hard ceiling on emitted events to keep the IPC payload tiny. */
+const MAX_GRID_EVENTS = 100;
 
 /** Storage key used inside the App Group / SharedPreferences. */
 export const WIDGET_DATA_KEY = 'synclink.widgetSnapshot.v1';
@@ -119,15 +123,19 @@ export function buildSnapshot(
 ): WidgetSnapshot {
   const todayKey = toDateKey(now);
   const todayStart = startOfDay(now);
-  // Large widget needs a week's worth of events for its grid. End the
-  // window 6 days after `now` (inclusive of today = 7 days).
-  const weekEnd = new Date(now);
-  weekEnd.setDate(weekEnd.getDate() + WEEK_WINDOW_DAYS - 1);
-  const windowEnd = endOfDay(weekEnd);
+  // Large widget shows a 6-week monthly grid. Grid starts at the Sunday on
+  // or before the 1st of the current month, ends 42 days later. Events that
+  // intersect that window are forwarded so the widget can render bars in
+  // any visible cell.
+  const monthFirst = new Date(now.getFullYear(), now.getMonth(), 1);
+  const gridStart = startOfDay(monthFirst);
+  gridStart.setDate(gridStart.getDate() - monthFirst.getDay());
+  const gridEnd = endOfDay(new Date(gridStart.getTime()));
+  gridEnd.setDate(gridStart.getDate() + MONTH_GRID_DAYS - 1);
 
-  // Events whose [startAt, endAt] intersect the 7-day window starting today.
+  // Events whose [startAt, endAt] intersect the 6-week grid window.
   const inWindow = allEvents
-    .filter((e) => e.startAt <= windowEnd && e.endAt >= todayStart)
+    .filter((e) => e.startAt <= gridEnd && e.endAt >= gridStart)
     .sort((a, b) => {
       if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
       return a.startAt.getTime() - b.startAt.getTime();
@@ -153,10 +161,9 @@ export function buildSnapshot(
       return aDue - bDue;
     });
 
-  // Emit events for the full week window — Swift filters per family.
-  // Cap at 7×4 = 28 entries (very loose ceiling; the typical week has
-  // far fewer events and the JSON stays tiny).
-  const eventsOut = inWindow.slice(0, 28).map((e) => ({
+  // Emit events for the full 6-week grid window — Swift filters per family.
+  // Capped at MAX_GRID_EVENTS to keep IPC payload tiny.
+  const eventsOut = inWindow.slice(0, MAX_GRID_EVENTS).map((e) => ({
     id:            e.id,
     title:         e.title,
     startTime:     e.allDay ? '' : formatHM(e.startAt),
@@ -179,7 +186,7 @@ export function buildSnapshot(
 }
 
 // MAX_TODAY_EVENTS exported so tests can reason about truncation policy.
-export const _WIDGET_LIMITS = { MAX_TODAY_EVENTS, MAX_WIDGET_TODOS, WEEK_WINDOW_DAYS };
+export const _WIDGET_LIMITS = { MAX_TODAY_EVENTS, MAX_WIDGET_TODOS, MONTH_GRID_DAYS, MAX_GRID_EVENTS };
 
 // ─── Platform bridges ─────────────────────────────────────────────────────────
 

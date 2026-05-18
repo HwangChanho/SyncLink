@@ -62,6 +62,12 @@ const LIMITS: Record<string, { freeDaily: number; proHourly: number; proRequires
   // v1.1 Phase 1 — 음성 인식 결과 후보정. 짧은 disambiguate prompt (≤50
   // tokens) 라 1회당 ¢ 미만이지만 selective 호출되도록 cap 보수적으로.
   'disambiguate-voice':   { freeDaily: 30, proHourly: 60 },
+  // v1.2 Phase 2 — AI 비서 Chat (Sonnet 4.6 + tool use). Sonnet 토큰이
+  // 비싸 첫 1주 hard cap. ASSISTANT_HARD_CAP 환경변수로 임시 5턴/일 까지
+  // 더 좁힐 수 있다 (배포 직후 모니터링용).
+  'assistant-chat':       { freeDaily: 10, proHourly: 40 },
+  // v1.2 Phase 3 — 캘린더 충돌 시 대안 시간 제안. Haiku, 짧은 응답.
+  'suggest-slot':         { freeDaily: 5,  proHourly: 30 },
 };
 
 /**

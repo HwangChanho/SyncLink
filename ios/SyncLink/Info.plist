@@ -41,7 +41,7 @@
       </dict>
     </array>
     <key>CFBundleVersion</key>
-    <string>112</string>
+    <string>113</string>
     <key>GADApplicationIdentifier</key>
     <string>ca-app-pub-2936938026486482~2712096301</string>
     <key>GADDelayAppMeasurementInit</key>
@@ -62,7 +62,7 @@
     <key>NSCameraUsageDescription</key>
     <string>프로필 사진 촬영에 사용됩니다.</string>
     <key>NSContactsUsageDescription</key>
-    <string>Space 멤버를 초대할 때 연락처에서 친구를 검색하기 위해 사용됩니다. 선택한 연락처만 초대 메시지를 보낼 때 일시적으로 참조합니다.</string>
+    <string>Space 멤버를 초대할 때 연락처에서 친구를 검색하는 데 사용됩니다.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>앱 잠금 기능을 위해 Face ID를 사용합니다.</string>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
