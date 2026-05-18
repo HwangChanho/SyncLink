@@ -35,6 +35,9 @@ import { WeatherWidget }       from '@/components/home/WeatherWidget';
 import { DateSuggestionCard }  from '@/components/home/DateSuggestionCard';
 import { UpcomingEventsCard }  from '@/components/home/UpcomingEventsCard';
 import { ChatFab }              from '@/components/chat/ChatFab';
+import { AISuggestionCard }     from '@/components/home/AISuggestionCard';
+import { findNextFreeSlot }     from '@/lib/freeTimeRecommend';
+import { useMemo }              from 'react';
 import { useColors } from '@/hooks/useColors';
 import { useTranslation } from 'react-i18next';
 import { spacing } from '@/constants/spacing';
@@ -64,7 +67,16 @@ export default function HomeScreen() {
   const { t } = useTranslation();
   const fetchEvents = useEventStore(s => s.fetchEvents);
   const isFetchingEvents = useEventStore(s => s.isFetching);
+  const eventsByDate = useEventStore(s => s.eventsByDate);
   const { fetchTodos, isLoading: isFetchingTodos } = useTodoStore();
+
+  // v1.2 Phase 3 — 다음 빈 슬롯 1개 탐지 (rule baseline, AI 호출 없음).
+  // eventsByDate 가 갱신되면 자동 재계산.
+  const freeSlot = useMemo(() => {
+    const flat = Object.values(eventsByDate).flat();
+    const simplified = flat.map((e) => ({ startAt: e.startAt, endAt: e.endAt }));
+    return findNextFreeSlot(simplified);
+  }, [eventsByDate]);
 
   const isRefreshing = isFetchingEvents || isFetchingTodos;
 
@@ -139,6 +151,9 @@ export default function HomeScreen() {
 
         {/* Greeting + date */}
         <HomeHeader />
+
+        {/* v1.2 Phase 3 — AI 빈 시간 활동 제안 카드. AI 호출 없이 rule baseline. */}
+        <AISuggestionCard slot={freeSlot} />
 
         {/* Current weather widget — TASK-903 */}
         <WeatherWidget />

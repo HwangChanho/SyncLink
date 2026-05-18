@@ -21,5 +21,6 @@ update public.usage_metrics
   end
   where feature_area is null;
 
+-- 008_usage_metrics.sql 의 시간 컬럼명은 called_at (created_at 아님).
 create index if not exists usage_metrics_feature_area_idx
-  on public.usage_metrics (feature_area, created_at desc);
+  on public.usage_metrics (feature_area, called_at desc);

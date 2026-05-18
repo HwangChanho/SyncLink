@@ -20,6 +20,9 @@ import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { useChatStore } from '@/stores/chatStore';
 import { sendAssistantTurn } from '@/services/assistantChatService';
+import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
+import { useSubscriptionStore } from '@/stores/subscriptionStore';
+import { router } from 'expo-router';
 
 const MAX_LEN = 500;
 
@@ -32,6 +35,14 @@ export function ChatComposer() {
   const setLoading = useChatStore((s) => s.setLoading);
   const getOutgoing = useChatStore((s) => s.getOutgoingMessages);
   const isLoading = useChatStore((s) => s.isLoading);
+  const isPro = useSubscriptionStore((s) => s.plan === 'pro');
+
+  // v1.2 마무리 — 음성 입력 통합. 결과는 input 박스에 prefill, 사용자가
+  // 검토 후 send 버튼으로 발신.
+  const speech = useSpeechRecognition({
+    language: 'ko-KR',
+    onResult: (transcript) => setText(transcript),
+  });
 
   const handleSend = useCallback(async () => {
     const trimmed = text.trim();
@@ -48,23 +59,57 @@ export function ChatComposer() {
     setLoading(false);
 
     if (error) {
-      pushAssistant(error.message);
+      // v1.2 마무리 — Pro paywall UI. quota 초과 시 메시지 + 구독 화면 안내 버튼.
+      if (error.kind === 'quota' && !isPro) {
+        pushAssistant(error.message + '\n(Pro 로 업그레이드하면 무제한)');
+        // 토스트 대신 inline 메시지로 유도. 사용자가 한 번 더 시도하지 않게.
+      } else {
+        pushAssistant(error.message);
+      }
       return;
     }
     if (result) {
       pushAssistant(result.text, result.executed);
     }
-  }, [text, isLoading, pushUser, pushAssistant, setLoading, getOutgoing]);
+  }, [text, isLoading, pushUser, pushAssistant, setLoading, getOutgoing, isPro]);
+
+  const handleUpgrade = useCallback(() => {
+    router.push('/subscription/paywall');
+  }, []);
+
+  const handleVoiceToggle = useCallback(() => {
+    if (!speech.isSupported) {
+      Alert.alert('음성 인식 미지원', '이 기기에서는 음성 입력을 사용할 수 없어요.');
+      return;
+    }
+    if (speech.isListening) {
+      void speech.stopListening();
+    } else {
+      void speech.startListening();
+    }
+  }, [speech]);
 
   const canSend = text.trim().length > 0 && !isLoading;
 
   return (
     <View style={styles.row}>
+      <Pressable
+        onPress={handleVoiceToggle}
+        style={[styles.iconBtn, speech.isListening && styles.iconBtnActive]}
+        accessibilityLabel="음성 입력"
+        disabled={isLoading}
+      >
+        <Ionicons
+          name={speech.isListening ? 'mic' : 'mic-outline'}
+          size={20}
+          color={speech.isListening ? colors.textInverse : colors.textSecondary}
+        />
+      </Pressable>
       <TextInput
         style={styles.input}
         value={text}
         onChangeText={setText}
-        placeholder="비서에게 무엇이든 물어보세요"
+        placeholder={speech.isListening ? '듣는 중…' : '비서에게 무엇이든 물어보세요'}
         placeholderTextColor={colors.textPlaceholder}
         multiline
         maxLength={MAX_LEN}
@@ -78,6 +123,11 @@ export function ChatComposer() {
       >
         <Ionicons name="send" size={18} color={canSend ? colors.textInverse : colors.textPlaceholder} />
       </Pressable>
+      {!isPro ? (
+        <Pressable onPress={handleUpgrade} style={styles.proBadge} accessibilityLabel="Pro 업그레이드">
+          <Ionicons name="star" size={12} color={colors.warning} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -115,6 +165,25 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     },
     sendBtnDisabled: {
       backgroundColor: colors.surfaceAlt,
+    },
+    iconBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surfaceAlt,
+    },
+    iconBtnActive: {
+      backgroundColor: colors.error,
+    },
+    proBadge: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.warning + '20',
     },
   });
 }

@@ -57,7 +57,9 @@ const buildSystemPrompt = (locale: string, nowIso: string): string => {
       '원칙:',
       '- 사용자가 "내일 7시 카페 약속" 같이 말하면 createEvent 도구로 등록.',
       '- "이번 주 일정 보여줘" 같이 조회 의도면 listEventsInRange 호출.',
+      '- "그 약속 한 시간 미뤄줘" / "취소해줘" 같은 후속 의도면 먼저 listEventsInRange 로 id를 찾고 updateEvent / deleteEvent.',
       '- 할 일은 createTodo. 일정과 할 일을 헷갈리지 마세요.',
+      '- deleteEvent 는 매우 신중하게. 확실하지 않으면 사용자에게 한 번 더 확인.',
       '- 모호하면 사용자에게 1번만 짧게 되묻기. 두 번 이상 되묻지 마세요.',
       '- 도구 실행 후 결과는 1-2문장으로 자연스럽게 보고 (예: "5월 20일 오후 7시 카페 약속을 추가했어요.").',
       '- 사용자가 명시적으로 요청하지 않으면 도구를 호출하지 마세요. 단순 잡담은 짧게 답.',
@@ -100,6 +102,30 @@ const TOOLS = [
         endAt:   { type: 'string' },
       },
       required: ['startAt', 'endAt'],
+    },
+  },
+  {
+    name: 'updateEvent',
+    description: '기존 일정 수정. eventId 는 listEventsInRange 결과에서 얻은 id.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        eventId:  { type: 'string', description: '수정할 일정 ID' },
+        title:    { type: 'string' },
+        startAt:  { type: 'string', description: 'ISO 8601' },
+        endAt:    { type: 'string', description: 'ISO 8601' },
+        location: { type: 'string' },
+      },
+      required: ['eventId'],
+    },
+  },
+  {
+    name: 'deleteEvent',
+    description: '일정 삭제. eventId 는 listEventsInRange 결과에서 얻은 id. 신중히.',
+    input_schema: {
+      type: 'object',
+      properties: { eventId: { type: 'string' } },
+      required: ['eventId'],
     },
   },
   {
@@ -162,6 +188,34 @@ async function runTool(
       }).select('id, title').single();
       if (error) return { ok: false, summary: `할 일 생성 실패: ${error.message}` };
       return { ok: true, summary: `"${data.title}" 할 일 추가됨`, data };
+    }
+
+    if (toolName === 'updateEvent') {
+      const patch: Record<string, unknown> = {};
+      if (input.title    !== undefined) patch.title    = input.title;
+      if (input.startAt  !== undefined) patch.start_at = input.startAt;
+      if (input.endAt    !== undefined) patch.end_at   = input.endAt;
+      if (input.location !== undefined) patch.location = input.location;
+      if (Object.keys(patch).length === 0) {
+        return { ok: false, summary: '수정할 내용이 없어요' };
+      }
+      const { data, error } = await userClient
+        .from('events')
+        .update(patch)
+        .eq('id', input.eventId as string)
+        .select('id, title')
+        .single();
+      if (error) return { ok: false, summary: `일정 수정 실패: ${error.message}` };
+      return { ok: true, summary: `"${data.title}" 일정 수정됨`, data };
+    }
+
+    if (toolName === 'deleteEvent') {
+      const { error } = await userClient
+        .from('events')
+        .delete()
+        .eq('id', input.eventId as string);
+      if (error) return { ok: false, summary: `일정 삭제 실패: ${error.message}` };
+      return { ok: true, summary: '일정이 삭제됐어요' };
     }
 
     return { ok: false, summary: `unknown tool: ${toolName}` };

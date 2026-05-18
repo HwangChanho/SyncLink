@@ -83,6 +83,8 @@ async function runBatch(
   weekEnd: Date,
 ): Promise<Response> {
   let processed = 0;
+  const pushMessages: Array<{ to: string; title: string; body: string; data: Record<string, unknown> }> = [];
+
   for (const userId of userIds) {
     try {
       const summary = await reviewOneUser(adminClient, anthropic, userId, weekStart, weekEnd);
@@ -99,13 +101,50 @@ async function runBatch(
           onConflict: 'user_id,week_start',
         });
         processed++;
+
+        // v1.2 마무리 — Expo push notification 발송용 메시지 수집.
+        // push_tokens 테이블에서 사용자의 token 조회.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: tokens } = await (adminClient as any)
+          .from('push_tokens')
+          .select('token')
+          .eq('user_id', userId);
+        if (tokens && tokens.length > 0) {
+          for (const t of tokens as Array<{ token: string }>) {
+            pushMessages.push({
+              to: t.token,
+              title: '주간 회고가 도착했어요',
+              body: summary.slice(0, 80),
+              data: { type: 'weekly_review', userId },
+            });
+          }
+        }
       }
     } catch (e) {
-      // 한 사용자 실패가 배치 전체를 중단하지 않도록 격리.
       console.error('[weekly-review-batch] user error', userId, e);
     }
   }
-  return new Response(JSON.stringify({ processed, total: userIds.length }), {
+
+  // Expo push 100개 단위 chunk 전송 (Expo push API 제한).
+  if (pushMessages.length > 0) {
+    try {
+      const chunks: typeof pushMessages[] = [];
+      for (let i = 0; i < pushMessages.length; i += 100) {
+        chunks.push(pushMessages.slice(i, i + 100));
+      }
+      for (const chunk of chunks) {
+        await fetch('https://exp.host/--/api/v2/push/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(chunk),
+        });
+      }
+    } catch (e) {
+      console.error('[weekly-review-batch] push send error', e);
+    }
+  }
+
+  return new Response(JSON.stringify({ processed, total: userIds.length, pushed: pushMessages.length }), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
   });
