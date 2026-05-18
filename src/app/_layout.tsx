@@ -787,6 +787,8 @@ export default function RootLayout() {
           <Stack.Screen name="settings/app-lock" options={{ presentation: 'modal' }} />
           {/* Sprint 15 TASK-1510 — 4-digit PIN settings screen. */}
           <Stack.Screen name="settings/pin" options={{ presentation: 'modal' }} />
+          {/* v1.2 Phase 2 — AI 비서 모달. ChatFab → router.push('/chat'). */}
+          <Stack.Screen name="chat" options={{ presentation: 'modal', headerShown: true, title: 'AI 비서' }} />
         </Stack>
       </SafeAreaProvider>
       </View>

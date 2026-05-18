@@ -13,8 +13,9 @@
  */
 
 import React, { useCallback, useState } from 'react';
-import { View, TextInput, Pressable, StyleSheet, Alert } from 'react-native';
+import { View, TextInput, Pressable, StyleSheet, Alert, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
@@ -30,6 +31,12 @@ export function ChatComposer() {
   const colors = useColors();
   const styles = makeStyles(colors);
   const [text, setText] = useState('');
+  // v1.2 마무리 — Pro 전용 사진 첨부. base64 + mediaType 페어로 보관.
+  const [attachedImage, setAttachedImage] = useState<{
+    uri: string;
+    base64: string;
+    mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
+  } | null>(null);
   const pushUser = useChatStore((s) => s.pushUser);
   const pushAssistant = useChatStore((s) => s.pushAssistant);
   const setLoading = useChatStore((s) => s.setLoading);
@@ -44,6 +51,37 @@ export function ChatComposer() {
     onResult: (transcript) => setText(transcript),
   });
 
+  const handleAttachImage = useCallback(async () => {
+    if (!isPro) {
+      Alert.alert(
+        'Pro 전용 기능',
+        '사진 첨부는 Pro 구독자만 사용할 수 있어요.',
+        [
+          { text: '취소', style: 'cancel' },
+          { text: 'Pro 보기', onPress: () => router.push('/subscription/paywall') },
+        ],
+      );
+      return;
+    }
+    if (isLoading) return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes:    ImagePicker.MediaTypeOptions.Images,
+      base64:        true,
+      quality:       0.6,
+      allowsEditing: false,
+    });
+    if (result.canceled) return;
+    const asset = result.assets[0];
+    if (!asset?.base64) return;
+    const ext = asset.uri.split('.').pop()?.toLowerCase();
+    const mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' =
+      ext === 'png' ? 'image/png' :
+      ext === 'webp' ? 'image/webp' :
+      ext === 'gif' ? 'image/gif' :
+      'image/jpeg';
+    setAttachedImage({ uri: asset.uri, base64: asset.base64, mediaType });
+  }, [isPro, isLoading]);
+
   const handleSend = useCallback(async () => {
     const trimmed = text.trim();
     if (!trimmed || isLoading) return;
@@ -52,10 +90,15 @@ export function ChatComposer() {
       return;
     }
     setText('');
-    pushUser(trimmed);
+    const image = attachedImage;
+    setAttachedImage(null);
+    pushUser(trimmed + (image ? ' [사진 첨부]' : ''));
     setLoading(true);
     const outgoing = getOutgoing();
-    const { result, error } = await sendAssistantTurn({ messages: outgoing });
+    const { result, error } = await sendAssistantTurn({
+      messages: outgoing,
+      ...(image ? { image: { base64: image.base64, mediaType: image.mediaType } } : {}),
+    });
     setLoading(false);
 
     if (error) {
@@ -71,7 +114,7 @@ export function ChatComposer() {
     if (result) {
       pushAssistant(result.text, result.executed);
     }
-  }, [text, isLoading, pushUser, pushAssistant, setLoading, getOutgoing, isPro]);
+  }, [text, isLoading, pushUser, pushAssistant, setLoading, getOutgoing, isPro, attachedImage]);
 
   const handleUpgrade = useCallback(() => {
     router.push('/subscription/paywall');
@@ -92,7 +135,20 @@ export function ChatComposer() {
   const canSend = text.trim().length > 0 && !isLoading;
 
   return (
-    <View style={styles.row}>
+    <View>
+      {attachedImage ? (
+        <View style={styles.imagePreviewWrap}>
+          <Image source={{ uri: attachedImage.uri }} style={styles.imagePreview} />
+          <Pressable
+            onPress={() => setAttachedImage(null)}
+            style={styles.imageRemove}
+            accessibilityLabel="첨부 사진 제거"
+          >
+            <Ionicons name="close-circle" size={20} color={colors.textInverse} />
+          </Pressable>
+        </View>
+      ) : null}
+      <View style={styles.row}>
       <Pressable
         onPress={handleVoiceToggle}
         style={[styles.iconBtn, speech.isListening && styles.iconBtnActive]}
@@ -104,6 +160,14 @@ export function ChatComposer() {
           size={20}
           color={speech.isListening ? colors.textInverse : colors.textSecondary}
         />
+      </Pressable>
+      <Pressable
+        onPress={handleAttachImage}
+        style={[styles.iconBtn, !isPro && styles.iconBtnLocked]}
+        accessibilityLabel="사진 첨부 (Pro)"
+        disabled={isLoading}
+      >
+        <Ionicons name="image-outline" size={20} color={isPro ? colors.textSecondary : colors.textPlaceholder} />
       </Pressable>
       <TextInput
         style={styles.input}
@@ -128,6 +192,7 @@ export function ChatComposer() {
           <Ionicons name="star" size={12} color={colors.warning} />
         </Pressable>
       ) : null}
+      </View>
     </View>
   );
 }
@@ -184,6 +249,33 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: colors.warning + '20',
+    },
+    iconBtnLocked: {
+      opacity: 0.5,
+    },
+    imagePreviewWrap: {
+      alignSelf: 'flex-start',
+      marginLeft: spacing[3],
+      marginTop: spacing[2],
+      position: 'relative',
+    },
+    imagePreview: {
+      width: 64,
+      height: 64,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    imageRemove: {
+      position: 'absolute',
+      top: -6,
+      right: -6,
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      backgroundColor: colors.textPrimary,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
   });
 }

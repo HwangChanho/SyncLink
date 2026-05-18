@@ -147,20 +147,24 @@ const TOOLS = [
 
 async function runTool(
   userClient: ReturnType<typeof createClient>,
+  userId: string,
   toolName: string,
   input: Record<string, unknown>,
 ): Promise<{ ok: boolean; summary: string; data?: unknown }> {
   try {
     if (toolName === 'createEvent') {
-      const startAt = String(input.title ? input.startAt : '');
+      // RLS fix — events 테이블의 INSERT 정책은 user_id = auth.uid() 조건.
+      // payload 에 user_id 명시 안 하면 default null → policy 위반.
+      const startAt = String(input.startAt ?? '');
       const endAt = (input.endAt as string | undefined) ?? '';
       const finalEnd = endAt || new Date(new Date(startAt).getTime() + 60 * 60 * 1000).toISOString();
       const { data, error } = await userClient.from('events').insert({
-        title:     input.title,
-        start_at:  startAt,
-        end_at:    finalEnd,
-        all_day:   input.allDay ?? false,
-        location:  input.location ?? null,
+        user_id:     userId,
+        title:       input.title,
+        start_at:    startAt,
+        end_at:      finalEnd,
+        all_day:     input.allDay ?? false,
+        location:    input.location ?? null,
         description: input.description ?? null,
       }).select('id, title, start_at').single();
       if (error) return { ok: false, summary: `일정 생성 실패: ${error.message}` };
@@ -181,9 +185,10 @@ async function runTool(
 
     if (toolName === 'createTodo') {
       const { data, error } = await userClient.from('todos').insert({
-        title:     input.title,
-        due_date:  input.dueDate ?? null,
-        priority:  input.priority ?? 'medium',
+        user_id:      userId,
+        title:        input.title,
+        due_date:     input.dueDate ?? null,
+        priority:     input.priority ?? 'medium',
         is_completed: false,
       }).select('id, title').single();
       if (error) return { ok: false, summary: `할 일 생성 실패: ${error.message}` };
@@ -363,7 +368,7 @@ Deno.serve(async (req: Request) => {
     // 각 도구 실행 후 tool_result 로 한 번에 묶어서 next user 메시지.
     const toolResults: Array<{ type: 'tool_result'; tool_use_id: string; content: string }> = [];
     for (const tb of toolUseBlocks as Array<{ id: string; name: string; input: Record<string, unknown> }>) {
-      const result = await runTool(userClient, tb.name, tb.input ?? {});
+      const result = await runTool(userClient, user.id, tb.name, tb.input ?? {});
       executed.push({ tool: tb.name, ok: result.ok, summary: result.summary });
       toolResults.push({
         type: 'tool_result',

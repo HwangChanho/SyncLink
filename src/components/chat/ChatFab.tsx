@@ -35,7 +35,7 @@ export function ChatFab({ visible = true }: ChatFabProps) {
         onPress={handlePress}
         accessibilityLabel="AI 비서 열기"
       >
-        <Ionicons name="sparkles" size={22} color={colors.textInverse} />
+        <Ionicons name="sparkles" size={18} color={colors.textInverse} />
       </Pressable>
     </View>
   );
@@ -45,13 +45,14 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   return StyleSheet.create({
     wrap: {
       position: 'absolute',
-      right: spacing[4],
-      bottom: spacing[6],
+      right: spacing[3],
+      // v1.1.2 UX fix — NLInputBar 의 전송 버튼을 가리지 않게 더 위로 + 더 작게.
+      bottom: spacing[16],
     },
     fab: {
-      width: 56,
-      height: 56,
-      borderRadius: 28,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
       backgroundColor: colors.primary,
       alignItems: 'center',
       justifyContent: 'center',

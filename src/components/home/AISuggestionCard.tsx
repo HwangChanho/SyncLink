@@ -26,10 +26,15 @@ interface Props {
 export function AISuggestionCard({ slot }: Props) {
   const colors = useColors();
   const styles = makeStyles(colors);
-  const [hidden, setHidden] = useState(true);
+  // 초기엔 보이는 상태로 시작 — useEffect 가 dismissed 체크 후 숨기는 게
+  // 정상 사용자에게 flicker 없는 경로. 이전 코드는 hidden=true 로 시작해서
+  // dismissed 체크 race 때문에 카드가 영구 안 보이는 케이스가 있었음.
+  const [hidden, setHidden] = useState(false);
 
   useEffect(() => {
-    void isDismissed(CATEGORY_KEY).then((d) => setHidden(d));
+    void isDismissed(CATEGORY_KEY).then((d) => {
+      if (d) setHidden(true);
+    });
   }, []);
 
   const handleDismiss = useCallback(() => {
