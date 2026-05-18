@@ -13,13 +13,31 @@
  * Plan: docs/plans/2026-05-17-workout-event-type.md
  */
 
-import { useCallback, useMemo } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
-import Svg, { Path, Circle, Ellipse } from 'react-native-svg';
+import { useCallback } from 'react';
+import { View, Text, Pressable, StyleSheet, Image } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import type { WorkoutPartDb } from '@/types';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { WORKOUT_RESERVED_COLOR } from '@/components/event/ColorPicker';
+
+// v1.1.2 — SVG path 합성을 폐기하고 실제 인체 일러스트 PNG (magnific.com
+// 무료 자산, attribution: docs/CREDITS.md) 위에 절대 위치 hit area 로
+// 부위별 탭을 받는 구조. tintColor 로 라이트/다크 모드 자동 적용.
+const BODY_IMAGE = require('../../../assets/anatomy/body-front-alpha.png');
+
+/**
+ * 부위별 hit area 좌표 (이미지 비율 기준 0-1).
+ * 이미지 크기: 511×740 (1:1.448). 영역은 시각적으로 가까운 신체부위에
+ * 맞춰 측정. 토글 결과는 같은 영역 위 빨강 반투명 overlay 로 시각화.
+ */
+const HIT_AREAS: Record<Exclude<WorkoutPartDb, 'back' | 'cardio'>, { top: number; left: number; width: number; height: number }> = {
+  shoulders: { top: 0.13, left: 0.22, width: 0.56, height: 0.08 },
+  chest:     { top: 0.21, left: 0.30, width: 0.40, height: 0.13 },
+  arms:      { top: 0.18, left: 0.00, width: 1.00, height: 0.44 }, // 좌+우 팔 영역 통합 (중앙 부분은 chest/core 우선)
+  core:      { top: 0.34, left: 0.34, width: 0.32, height: 0.18 },
+  legs:      { top: 0.52, left: 0.20, width: 0.60, height: 0.45 },
+};
 
 /** Body parts the silhouette renders as tappable regions on the canvas. */
 const SILHOUETTE_PARTS: WorkoutPartDb[] = ['chest', 'shoulders', 'arms', 'core', 'legs'];
@@ -44,9 +62,8 @@ export interface BodyPartsProps {
 }
 
 /**
- * Stylised silhouette. Each region is a separate SVG <Path>/<Circle> so we
- * can independently colour the selected ones. Coordinates are tuned for a
- * 200×320 viewBox; the parent should give the component a fixed height.
+ * 인체 일러스트 PNG (alpha) + 절대 위치 hit area. tintColor 로 라이트/다크
+ * 모드 자동 색 적용. 선택된 부위는 위에 빨강 반투명 overlay.
  */
 export function BodyParts({ selected, onToggle, readOnly }: BodyPartsProps) {
   const colors = useColors();
@@ -64,102 +81,41 @@ export function BodyParts({ selected, onToggle, readOnly }: BodyPartsProps) {
     [onToggle, readOnly],
   );
 
-  // Cache the per-part fill colour so SVG re-renders are cheap.
-  const fill = useMemo(() => {
-    const base = colors.surface;
-    const active = colors.primary;
-    const dim = colors.surface;
-    return {
-      base,
-      active,
-      dim,
-      stroke: colors.border,
-    };
-  }, [colors]);
-
-  // Helper to pick fill for a part — readOnly mode uses the same logic
-  // but without the dim hover affordance.
-  const fillFor = (part: WorkoutPartDb) =>
-    isSelected(part) ? fill.active : fill.base;
-
   return (
     <View style={styles.container}>
-      <View style={styles.svgWrap}>
-        <Svg width="100%" height="100%" viewBox="0 0 200 340">
-          {/* v1.1.1 — boxy 도형에서 곡선 anatomy 차트 스타일로 리워크.
-              머리·목·어깨 라인 라운드 처리, 가슴→허리 잘록, 팔·다리는
-              위쪽이 굵고 아래로 가면서 좁아지는 자연스러운 비율. 각 region 의
-              hit area 는 그대로 onPress 로 부위 토글. */}
+      <View style={styles.imageWrap}>
+        {/* 인체 silhouette — tintColor 로 다크/라이트 모드 자동 색 적용.
+            alpha PNG 이라 배경은 자동 투명. */}
+        <Image
+          source={BODY_IMAGE}
+          style={[styles.bodyImage, { tintColor: colors.textPrimary }]}
+          resizeMode="contain"
+        />
 
-          {/* Head — slightly smaller + softer placement so neck/shoulder
-              proportions feel natural. */}
-          <Circle cx={100} cy={28} r={18} fill={fill.base} stroke={fill.stroke} strokeWidth={1.5} />
-
-          {/* Neck (cosmetic). */}
-          <Path
-            d="M90 46 L110 46 L113 60 L87 60 Z"
-            fill={fill.base}
-            stroke={fill.stroke}
-            strokeWidth={1.5}
-          />
-
-          {/* Shoulders — rounded yoke. Curves over the chest line for an
-              anatomy-chart silhouette. */}
-          <Path
-            onPress={() => handleTap('shoulders')}
-            d="M42 78 Q70 60 100 60 Q130 60 158 78 Q160 88 152 95 Q126 84 100 84 Q74 84 48 95 Q40 88 42 78 Z"
-            fill={fillFor('shoulders')}
-            stroke={fill.stroke}
-            strokeWidth={1.5}
-          />
-
-          {/* Chest — rounded pectoral block. Wider at the top, tucks in
-              toward the waist via the cubic curve. */}
-          <Path
-            onPress={() => handleTap('chest')}
-            d="M58 95 Q62 92 75 94 L125 94 Q138 92 142 95 L138 145 Q100 152 62 145 Z"
-            fill={fillFor('chest')}
-            stroke={fill.stroke}
-            strokeWidth={1.5}
-          />
-
-          {/* Core — abdomen narrows toward the hips. */}
-          <Path
-            onPress={() => handleTap('core')}
-            d="M62 145 Q100 152 138 145 L132 198 Q100 204 68 198 Z"
-            fill={fillFor('core')}
-            stroke={fill.stroke}
-            strokeWidth={1.5}
-          />
-
-          {/* Arms — tapered limbs (wider at the shoulder, narrow at the
-              wrist). Single combined path with M between the two arms so
-              they share the same fill / hit handler. */}
-          <Path
-            onPress={() => handleTap('arms')}
-            d="M28 90 Q22 92 26 105 L34 195 Q34 202 42 202 Q52 202 54 195 L58 100 Q56 92 50 92 Z
-               M172 90 Q178 92 174 105 L166 195 Q166 202 158 202 Q148 202 146 195 L142 100 Q144 92 150 92 Z"
-            fill={fillFor('arms')}
-            stroke={fill.stroke}
-            strokeWidth={1.5}
-          />
-
-          {/* Legs — thighs wider at the hip, calves narrow at the ankle. */}
-          <Path
-            onPress={() => handleTap('legs')}
-            d="M68 198 Q70 200 76 200 L96 200 Q98 202 96 215 L88 320 Q88 326 80 326 Q72 326 70 320 L66 218 Z
-               M104 200 L124 200 Q130 200 132 198 L134 218 L130 320 Q128 326 120 326 Q112 326 112 320 L104 215 Q102 202 104 200 Z"
-            fill={fillFor('legs')}
-            stroke={fill.stroke}
-            strokeWidth={1.5}
-          />
-
-          {/* Subtle face dots — purely cosmetic so the silhouette doesn't
-              look like a blob. */}
-          <Ellipse cx={93} cy={26} rx={1.8} ry={2.2} fill={fill.stroke} />
-          <Ellipse cx={107} cy={26} rx={1.8} ry={2.2} fill={fill.stroke} />
-          <Path d="M94 36 Q100 39 106 36" stroke={fill.stroke} strokeWidth={1} fill="none" />
-        </Svg>
+        {/* 각 부위 hit area + 활성 시 빨강 overlay (WORKOUT_RESERVED_COLOR).
+            % 좌표 → flex 컨테이너에 절대 위치로 변환. */}
+        {(Object.entries(HIT_AREAS) as Array<[Exclude<WorkoutPartDb, 'back' | 'cardio'>, typeof HIT_AREAS['chest']]>).map(
+          ([part, rect]) => {
+            const active = isSelected(part);
+            return (
+              <Pressable
+                key={part}
+                onPress={() => handleTap(part)}
+                disabled={readOnly}
+                style={[
+                  styles.hitArea,
+                  {
+                    top:    `${rect.top * 100}%`,
+                    left:   `${rect.left * 100}%`,
+                    width:  `${rect.width * 100}%`,
+                    height: `${rect.height * 100}%`,
+                  },
+                  active && { backgroundColor: WORKOUT_RESERVED_COLOR + '55' },
+                ]}
+              />
+            );
+          },
+        )}
       </View>
 
       {/* Chip row for back + cardio. Same accent colour as silhouette
@@ -206,10 +162,19 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       gap: spacing[2],
       alignItems: 'center',
     },
-    svgWrap: {
+    imageWrap: {
       width: '100%',
       maxWidth: 220,
-      height: 300,
+      aspectRatio: 511 / 740,
+      position: 'relative',
+    },
+    bodyImage: {
+      width: '100%',
+      height: '100%',
+    },
+    hitArea: {
+      position: 'absolute',
+      borderRadius: radius.md,
     },
     chipRow: {
       flexDirection: 'row',
