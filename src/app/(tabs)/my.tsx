@@ -19,8 +19,8 @@ import {
   TextInput,
   ActivityIndicator,
 } from 'react-native';
-// expo-image provides better caching and performance than React Native's Image (TASK-701)
-import { Image } from 'expo-image';
+// v1.2.3 — expo-image 가 일부 빌드에서 mount 실패 → 표준 RN Image 로 fallback.
+import { Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';

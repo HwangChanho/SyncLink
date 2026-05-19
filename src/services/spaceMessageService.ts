@@ -14,7 +14,7 @@
  * Realtime: subscribeToSpace(space_id, onNew, onDelete) → cleanup 콜백 반환.
  */
 
-import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { supabase, getCurrentUserId } from '@/lib/supabase';
 
 export interface SpaceMessage {
@@ -83,14 +83,12 @@ export async function sendImageMessage(spaceId: string, localUri: string): Promi
   const userId = await getCurrentUserId();
   if (!userId) throw new Error('User is not authenticated.');
 
-  // 압축
-  const ctx = ImageManipulator.manipulate(localUri);
-  ctx.resize({ width: 1024 });
-  const rendered = await ctx.renderAsync();
-  const manipulated = await rendered.saveAsync({
-    compress: 0.8,
-    format:   SaveFormat.JPEG,
-  });
+  // 압축 — 옛 manipulateAsync API (호환성 안정).
+  const manipulated = await manipulateAsync(
+    localUri,
+    [{ resize: { width: 1024 } }],
+    { compress: 0.8, format: SaveFormat.JPEG },
+  );
 
   // 임시 메시지 id 미리 생성 — Storage path 에 사용 (DB INSERT 후 RETURNING 받기 전).
   const msgId = crypto.randomUUID();

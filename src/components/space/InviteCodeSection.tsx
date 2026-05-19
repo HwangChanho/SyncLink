@@ -36,7 +36,7 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import { Image } from 'expo-image';
+import { Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import type { useColors } from '@/hooks/useColors';

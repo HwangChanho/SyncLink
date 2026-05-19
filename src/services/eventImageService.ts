@@ -19,7 +19,7 @@
  * @see supabase/migrations (event_images table)
  */
 
-import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { supabase, getCurrentUserId } from '@/lib/supabase';
 
 /** 최대 첨부 개수 — UI 가드 + DB position unique 와 함께 작동. */
@@ -90,15 +90,13 @@ export async function uploadEventImage(
     throw new Error(`position 은 0..${MAX_EVENT_IMAGES - 1} 범위여야 합니다.`);
   }
 
-  // 1) 압축 — long-edge MAX_DIMENSION 으로 다운스케일, JPEG 0.8 quality.
-  //    원본이 이미 작으면 ImageManipulator 가 그대로 보존.
-  const ctx = ImageManipulator.manipulate(localUri);
-  ctx.resize({ width: MAX_DIMENSION });
-  const renderedImage = await ctx.renderAsync();
-  const manipulated = await renderedImage.saveAsync({
-    compress: JPEG_QUALITY,
-    format:   SaveFormat.JPEG,
-  });
+  // 1) 압축 — long-edge MAX_DIMENSION. manipulateAsync 옛 API 사용
+  //    (v13 builder API 호환성 이슈로 release build 에서 fail 가능).
+  const manipulated = await manipulateAsync(
+    localUri,
+    [{ resize: { width: MAX_DIMENSION } }],
+    { compress: JPEG_QUALITY, format: SaveFormat.JPEG },
+  );
 
   // 2) URI → ArrayBuffer (React Native fetch → blob → arrayBuffer).
   //    Supabase JS SDK 는 RN 환경에서 ArrayBuffer 권장.

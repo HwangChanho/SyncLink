@@ -24,7 +24,7 @@ import {
   Platform,
 } from 'react-native';
 // expo-image provides better caching and performance than React Native's Image (TASK-701)
-import { Image } from 'expo-image';
+import { Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';

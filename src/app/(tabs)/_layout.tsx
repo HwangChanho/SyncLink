@@ -131,7 +131,7 @@ export default function TabLayout() {
           tabBarButtonTestID: 'tab-button-planner',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
-              name={focused ? 'checkbox' : 'checkbox-outline'}
+              name={focused ? 'list' : 'list-outline'}
               size={22}
               color={color}
             />
