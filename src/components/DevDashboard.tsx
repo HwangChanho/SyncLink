@@ -31,8 +31,8 @@ import {
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
-import { getUsageDashboard } from '@/services/usageMetricsService';
-import type { UsageDashboard, UsagePeriodStats } from '@/services/usageMetricsService';
+import { getUsageDashboard, getCostByFeatureArea } from '@/services/usageMetricsService';
+import type { UsageDashboard, UsagePeriodStats, FeatureAreaCost } from '@/services/usageMetricsService';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -103,6 +103,8 @@ export function DevDashboard() {
 
   /** Loaded dashboard data; null until the first successful fetch. */
   const [dashboard, setDashboard] = useState<UsageDashboard | null>(null);
+  /** v1.2 Phase 5 — feature_area 별 월간 cost breakdown. */
+  const [areaCosts, setAreaCosts] = useState<FeatureAreaCost[]>([]);
   /** True while the network request is in flight. */
   const [isLoading, setIsLoading] = useState(false);
   /** Error message when fetch fails; null on success or before first fetch. */
@@ -118,8 +120,12 @@ export function DevDashboard() {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const data = await getUsageDashboard();
+      const [data, areas] = await Promise.all([
+        getUsageDashboard(),
+        getCostByFeatureArea(),
+      ]);
       setDashboard(data);
+      setAreaCosts(areas);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to load usage data.';
       setErrorMessage(msg);
@@ -177,6 +183,20 @@ export function DevDashboard() {
           <PeriodCard label="Today"      stats={dashboard.today} />
           <PeriodCard label="This Week"  stats={dashboard.week}  />
           <PeriodCard label="This Month" stats={dashboard.month} />
+        </View>
+      )}
+
+      {/* v1.2 Phase 5 — feature_area 별 월간 breakdown */}
+      {areaCosts.length > 0 && (
+        <View style={styles.areaBlock}>
+          <Text style={styles.areaTitle}>By Feature Area (30d)</Text>
+          {areaCosts.map((a) => (
+            <View key={a.feature_area} style={styles.areaRow}>
+              <Text style={styles.areaName}>{a.feature_area}</Text>
+              <Text style={styles.areaCalls}>{a.calls} calls</Text>
+              <Text style={styles.areaCost}>${a.estimatedCostUsd.toFixed(3)}</Text>
+            </View>
+          ))}
         </View>
       )}
 
@@ -317,6 +337,41 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     refreshingText: {
       ...textStyles.caption,
       color: colors.textTertiary,
+    },
+    areaBlock: {
+      marginTop: spacing[3],
+      padding: spacing[3],
+      borderRadius: radius.md,
+      backgroundColor: colors.surfaceAlt,
+      gap: spacing[1],
+    },
+    areaTitle: {
+      ...textStyles.labelSm,
+      color: colors.textSecondary,
+      marginBottom: spacing[1],
+    },
+    areaRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: spacing[2],
+    },
+    areaName: {
+      ...textStyles.bodySm,
+      color: colors.textPrimary,
+      flex: 1,
+    },
+    areaCalls: {
+      ...textStyles.caption,
+      color: colors.textTertiary,
+      minWidth: 60,
+      textAlign: 'right',
+    },
+    areaCost: {
+      ...textStyles.labelSm,
+      color: colors.textPrimary,
+      minWidth: 60,
+      textAlign: 'right',
     },
   });
 }

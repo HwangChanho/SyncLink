@@ -86,6 +86,13 @@ interface UsageMetricsRow {
   output_tokens: number;
   cost_usd:      number;
   called_at:     string;  // ISO 8601 timestamp
+  feature_area?: string | null;  // v1.2 Phase 5 — 카테고리 (voice/chat/context_card/auto_review/other)
+}
+
+export interface FeatureAreaCost {
+  feature_area: string;
+  calls:        number;
+  estimatedCostUsd: number;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -176,7 +183,7 @@ export async function getUsageDashboard(): Promise<UsageDashboard> {
   // RLS ensures only this user's rows are returned (no eq('user_id') needed).
   const { data, error } = await supabase
     .from('usage_metrics')
-    .select('model, input_tokens, output_tokens, cost_usd, called_at')
+    .select('model, input_tokens, output_tokens, cost_usd, called_at, feature_area')
     .gte('called_at', monthAgo)
     .order('called_at', { ascending: false });
 
@@ -198,4 +205,36 @@ export async function getUsageDashboard(): Promise<UsageDashboard> {
     week:  aggregateRows(weekRows),
     month: aggregateRows(monthRows),
   };
+}
+
+/**
+ * v1.2 Phase 5 — feature_area 별 비용 집계.
+ *
+ * usage_metrics.feature_area 컬럼 (migration 036) 기준으로 카테고리별
+ * 호출 수 + 추정 비용 반환. DevDashboard 에서 voice/chat/context/auto_review
+ * 영역별로 비교 가능.
+ */
+export async function getCostByFeatureArea(windowMs: number = ONE_MONTH_MS): Promise<FeatureAreaCost[]> {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error('User is not authenticated.');
+
+  const since = windowStart(windowMs);
+  const { data, error } = await supabase
+    .from('usage_metrics')
+    .select('feature_area, cost_usd')
+    .gte('called_at', since);
+  if (error) throw error;
+
+  const rows = (data ?? []) as Array<{ feature_area: string | null; cost_usd: number }>;
+  const buckets = new Map<string, { calls: number; cost: number }>();
+  for (const r of rows) {
+    const key = r.feature_area ?? 'other';
+    const cur = buckets.get(key) ?? { calls: 0, cost: 0 };
+    cur.calls += 1;
+    cur.cost  += r.cost_usd ?? 0;
+    buckets.set(key, cur);
+  }
+  return [...buckets.entries()]
+    .map(([feature_area, v]) => ({ feature_area, calls: v.calls, estimatedCostUsd: v.cost }))
+    .sort((a, b) => b.estimatedCostUsd - a.estimatedCostUsd);
 }
