@@ -28,6 +28,7 @@ import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { getWeeklyReview } from '@/services/aiService';
+import { supabase } from '@/lib/supabase';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -129,6 +130,33 @@ export function WeeklyReviewCard() {
   // Load on mount (cache hit likely, no usage consumed)
   useEffect(() => {
     void loadReview(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // v1.2 Phase 4 마무리 — weekly_reviews 테이블의 batch result 가 있으면
+  // 우선 표시. 일요일 21:00 KST pg_cron 이 만든 결과를 manual flow 전에
+  // 노출 → 사용자가 별도 호출 없이도 자동 회고 받음.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data } = await (supabase as any)
+          .from('weekly_reviews')
+          .select('summary, week_start, created_at')
+          .order('week_start', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (cancelled) return;
+        if (data?.summary && !review) {
+          setReview(data.summary);
+          setGeneratedAt(new Date(data.created_at));
+        }
+      } catch {
+        // batch table 없거나 권한 거부 — manual flow 로 fallback.
+      }
+    })();
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

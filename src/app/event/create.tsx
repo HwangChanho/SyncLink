@@ -38,6 +38,7 @@ import {
 } from '@/services/eventService';
 import { updateReminders } from '@/services/reminderService';
 import { useEventStore } from '@/stores/eventStore';
+import { ConflictSuggestionCard } from '@/components/calendar/ConflictSuggestionCard';
 import { useSpaceStore } from '@/stores/spaceStore';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
@@ -177,6 +178,8 @@ export default function EventCreateScreen() {
   } = useLocalSearchParams<{ date?: string; startHour?: string; startMinute?: string }>();
   const router = useRouter();
   const { upsertEvent } = useEventStore();
+  // v1.2.x — ConflictSuggestionCard 데이터 source. 같은 날 이벤트 추출.
+  const eventsByDate = useEventStore(s => s.eventsByDate);
   const { spaces, fetchMySpaces } = useSpaceStore();
 
   // Sprint 27 R1 — IDEA-013 defensive sync:
@@ -722,6 +725,16 @@ export default function EventCreateScreen() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
+        {/* v1.2.x — 시간 입력 후 같은 시간대에 다른 일정 있으면 대안 카드 노출. */}
+        <ConflictSuggestionCard
+          proposed={title ? { title, startAt, endAt } : null}
+          busySlots={(() => {
+            const dk = startAt.toISOString().slice(0, 10);
+            return (eventsByDate[dk] ?? []).map(e => ({ startAt: e.startAt, endAt: e.endAt }));
+          })()}
+          onSelectAlternative={(s, e) => { setStartAt(s); setEndAt(e); }}
+        />
+
         {/* v1.1 — 일반 / 운동 모드 토글. 같은 시트 안에서 mode 만 바뀌고
             다른 필드는 동일하게 사용되도록 디자인 (이질감 ↓). */}
         <View style={styles.kindToggle}>
