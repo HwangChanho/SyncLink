@@ -36,6 +36,7 @@ import { DateSuggestionCard }  from '@/components/home/DateSuggestionCard';
 import { UpcomingEventsCard }  from '@/components/home/UpcomingEventsCard';
 import { ChatFab }              from '@/components/chat/ChatFab';
 import { AISuggestionCard }     from '@/components/home/AISuggestionCard';
+import { ImportCalendarCard }   from '@/components/home/ImportCalendarCard';
 import { findNextFreeSlot }     from '@/lib/freeTimeRecommend';
 import { useMemo }              from 'react';
 import { useColors } from '@/hooks/useColors';
@@ -154,6 +155,9 @@ export default function HomeScreen() {
 
         {/* v1.2 Phase 3 — AI 빈 시간 활동 제안 카드. AI 호출 없이 rule baseline. */}
         <AISuggestionCard slot={freeSlot} />
+
+        {/* v1.2.2 — 다른 캘린더 사진으로 일정 가져오기 (AI Vision). */}
+        <ImportCalendarCard />
 
         {/* Current weather widget — TASK-903 */}
         <WeatherWidget />
