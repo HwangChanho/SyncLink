@@ -28,7 +28,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import * as Location from 'expo-location';
-import type { RepeatType } from '@/types';
+import type { RepeatType, WorkoutPartDb } from '@/types';
 import {
   createEvent,
   findConflictingEvents,
@@ -49,6 +49,8 @@ import { DateTimeModal } from '@/components/common/DateTimeModal';
 import { CategoryPickerSheet } from '@/components/planner/CategoryPickerSheet';
 import { ColorPicker } from '@/components/event/ColorPicker';
 import { BodyParts } from '@/components/event/BodyParts';
+import { EventImagePicker } from '@/components/event/EventImagePicker';
+import { uploadEventImage } from '@/services/eventImageService';
 import { getCategories } from '@/services/categoryService';
 import { logError } from '@/lib/errorLogger';
 import type { Category } from '@/types';
@@ -312,8 +314,15 @@ export default function EventCreateScreen() {
   // 시트 안에 BodyParts picker 가 inline 으로 노출되고 저장 시 부위 기록도
   // 함께 persist 된다. 다른 필드(시간/카테고리/색상/메모)는 두 모드 동일하게
   // 그대로 사용한다.
-  const [eventKind, setEventKind] = useState<'general' | 'workout'>('general');
-  const [workoutParts, setWorkoutParts] = useState<('chest' | 'back' | 'shoulders' | 'arms' | 'legs' | 'core' | 'cardio')[]>([]);
+  const [eventKind, setEventKind] = useState<'general' | 'workout' | 'running'>('general');
+  const [workoutParts, setWorkoutParts] = useState<WorkoutPartDb[]>([]);
+  // v1.1.2 — 첨부 이미지 로컬 URI 5장. 저장 시 createEvent 후 업로드.
+  const [imageUris, setImageUris] = useState<string[]>([]);
+  // v1.1.2 — running 일 때 거리/페이스. distance 는 km 단위 float, pace 는
+  // "분:초/km" UI 입력값을 초 단위로 변환해 보관.
+  const [distanceKm,     setDistanceKm]     = useState<string>('');
+  const [paceMinutes,    setPaceMinutes]    = useState<string>('');
+  const [paceSeconds,    setPaceSeconds]    = useState<string>('');
   const toggleWorkoutPart = useCallback((part: typeof workoutParts[number]) => {
     setWorkoutParts((prev) =>
       prev.includes(part) ? prev.filter((p) => p !== part) : [...prev, part],
@@ -513,6 +522,13 @@ export default function EventCreateScreen() {
         editableByMembers,
         eventKind,
         ...(eventKind === 'workout' ? { workoutParts } : {}),
+        ...(eventKind === 'running' ? {
+          // 빈 문자열 → null, 그 외 정상 파싱. 페이스 = 분*60 + 초.
+          distanceKm: distanceKm.trim() ? Number(distanceKm) : null,
+          avgPaceSeconds: paceMinutes.trim() || paceSeconds.trim()
+            ? (Number(paceMinutes || '0') * 60 + Number(paceSeconds || '0'))
+            : null,
+        } : {}),
       });
 
       // Persist reminders for the newly created event (fire-and-forget; see
@@ -522,6 +538,16 @@ export default function EventCreateScreen() {
           .catch((remindErr) => {
             console.warn('[EventCreate] updateReminders failed (non-fatal):', remindErr);
           });
+      }
+
+      // v1.1.2 — 첨부 이미지 업로드 (fire-and-forget). 실패해도 일정은 이미
+      // 생성됐으므로 UX 차단 안 하고 로그만 남김.
+      if (imageUris.length > 0) {
+        void Promise.all(
+          imageUris.map((uri, idx) => uploadEventImage(newEvent.id, uri, idx)),
+        ).catch((uploadErr) => {
+          console.warn('[EventCreate] image upload failed (non-fatal):', uploadErr);
+        });
       }
 
       // Optimistically add to store so calendar reflects the new event immediately
@@ -735,11 +761,12 @@ export default function EventCreateScreen() {
           onSelectAlternative={(s, e) => { setStartAt(s); setEndAt(e); }}
         />
 
-        {/* v1.1 — 일반 / 운동 모드 토글. 같은 시트 안에서 mode 만 바뀌고
-            다른 필드는 동일하게 사용되도록 디자인 (이질감 ↓). */}
+        {/* v1.1.2 — 일반 / 헬스 / 러닝 3단 토글. 같은 시트 안에서 mode 만
+            바뀌고 다른 필드는 공통 사용. 헬스→BodyParts, 러닝→거리/페이스. */}
         <View style={styles.kindToggle}>
-          {(['general', 'workout'] as const).map((kind) => {
+          {(['general', 'workout', 'running'] as const).map((kind) => {
             const active = eventKind === kind;
+            const label = kind === 'general' ? '일반' : kind === 'workout' ? '헬스' : '러닝';
             return (
               <Pressable
                 key={kind}
@@ -755,14 +782,14 @@ export default function EventCreateScreen() {
                     { color: active ? colors.textInverse : colors.textSecondary },
                   ]}
                 >
-                  {kind === 'general' ? '일반' : '운동'}
+                  {label}
                 </Text>
               </Pressable>
             );
           })}
         </View>
 
-        {/* 운동 모드일 때만 BodyParts picker 노출. */}
+        {/* 헬스 모드일 때만 BodyParts picker 노출. */}
         {eventKind === 'workout' && (
           <View style={styles.bodyPartsWrap}>
             <BodyParts
@@ -771,6 +798,53 @@ export default function EventCreateScreen() {
             />
           </View>
         )}
+
+        {/* 러닝 모드일 때 거리(km) + 평균 페이스(분/km) 입력. */}
+        {eventKind === 'running' && (
+          <View style={styles.runningWrap}>
+            <View style={styles.runningRow}>
+              <Text style={styles.runningLabel}>거리</Text>
+              <TextInput
+                value={distanceKm}
+                onChangeText={setDistanceKm}
+                keyboardType="decimal-pad"
+                placeholder="0.0"
+                placeholderTextColor={colors.textTertiary}
+                style={styles.runningInput}
+              />
+              <Text style={styles.runningUnit}>km</Text>
+            </View>
+            <View style={styles.runningRow}>
+              <Text style={styles.runningLabel}>평균 페이스</Text>
+              <TextInput
+                value={paceMinutes}
+                onChangeText={setPaceMinutes}
+                keyboardType="number-pad"
+                placeholder="5"
+                placeholderTextColor={colors.textTertiary}
+                style={styles.runningInputSm}
+                maxLength={2}
+              />
+              <Text style={styles.runningUnit}>분</Text>
+              <TextInput
+                value={paceSeconds}
+                onChangeText={setPaceSeconds}
+                keyboardType="number-pad"
+                placeholder="30"
+                placeholderTextColor={colors.textTertiary}
+                style={styles.runningInputSm}
+                maxLength={2}
+              />
+              <Text style={styles.runningUnit}>초 / km</Text>
+            </View>
+          </View>
+        )}
+
+        {/* v1.1.2 — 일정 이미지 첨부 (모든 kind 공통, max 5장). 저장 시 압축 + 업로드. */}
+        <View style={styles.imagePickerWrap}>
+          <Text style={styles.imagePickerLabel}>사진 첨부</Text>
+          <EventImagePicker uris={imageUris} onChange={setImageUris} />
+        </View>
 
         {/* Title with autocomplete from prior calendar events */}
         <View style={styles.titleWrapper}>
@@ -1251,6 +1325,71 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+
+  // v1.1.2 — running 모드 입력 폼
+  runningWrap: {
+    marginHorizontal: spacing[5],
+    marginTop: spacing[3],
+    padding: spacing[4],
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing[3],
+  },
+  runningRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  runningLabel: {
+    ...textStyles.bodyMd,
+    color: colors.textPrimary,
+    minWidth: 90,
+  },
+  runningInput: {
+    flex: 1,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    color: colors.textPrimary,
+    backgroundColor: colors.backgroundAlt,
+    fontSize: 16,
+  },
+  runningInputSm: {
+    width: 48,
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[2],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    color: colors.textPrimary,
+    backgroundColor: colors.backgroundAlt,
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  runningUnit: {
+    ...textStyles.bodyMd,
+    color: colors.textSecondary,
+  },
+
+  // v1.1.2 이미지 첨부
+  imagePickerWrap: {
+    marginHorizontal: spacing[5],
+    marginTop: spacing[3],
+    padding: spacing[4],
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing[2],
+  },
+  imagePickerLabel: {
+    ...textStyles.label,
+    color: colors.textPrimary,
   },
 
   // Title input

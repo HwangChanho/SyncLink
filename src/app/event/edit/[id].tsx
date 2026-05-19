@@ -22,7 +22,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import type { Event, RepeatType } from '@/types';
+import type { Event, RepeatType, WorkoutPartDb } from '@/types';
 import {
   getEventById,
   updateEvent,
@@ -43,6 +43,8 @@ import { ReminderPicker } from '@/components/reminders/ReminderPicker';
 import { DateTimeModal } from '@/components/common/DateTimeModal';
 import { ColorPicker } from '@/components/event/ColorPicker';
 import { BodyParts } from '@/components/event/BodyParts';
+import { EventImagePicker } from '@/components/event/EventImagePicker';
+import { listEventImages, uploadEventImage, deleteEventImage } from '@/services/eventImageService';
 import { showAlert } from '@/lib/webAlert';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -163,8 +165,16 @@ export default function EventEditScreen() {
   const [originalEvent, setOriginalEvent] = useState<Event | null>(null);
 
   // v1.1 — 운동 일정 모드 + 부위 기록. originalEvent hydrate 시 동기화.
-  const [eventKind, setEventKind] = useState<'general' | 'workout'>('general');
-  const [workoutParts, setWorkoutParts] = useState<('chest' | 'back' | 'shoulders' | 'arms' | 'legs' | 'core' | 'cardio')[]>([]);
+  const [eventKind, setEventKind] = useState<'general' | 'workout' | 'running'>('general');
+  const [workoutParts, setWorkoutParts] = useState<WorkoutPartDb[]>([]);
+  // v1.1.2 — running 거리/페이스. hydrate 시 originalEvent.distanceKm/avgPaceSeconds 에서 동기화.
+  const [distanceKm,  setDistanceKm]  = useState<string>('');
+  const [paceMinutes, setPaceMinutes] = useState<string>('');
+  const [paceSeconds, setPaceSeconds] = useState<string>('');
+  // v1.1.2 — 첨부 이미지 (로컬 URI 신규 + remote URL 기존 혼합).
+  const [imageUris, setImageUris] = useState<string[]>([]);
+  // 원본 (hydrate 시점) 이미지 — diff 계산 위해 보관.
+  const [originalImages, setOriginalImages] = useState<{ id: string; url: string; position: number }[]>([]);
   const toggleWorkoutPart = useCallback((part: typeof workoutParts[number]) => {
     setWorkoutParts((prev) =>
       prev.includes(part) ? prev.filter((p) => p !== part) : [...prev, part],
@@ -190,15 +200,27 @@ export default function EventEditScreen() {
       setIsLoading(true);
       setLoadError(null);
       try {
-        const [ev, reminders] = await Promise.all([
+        const [ev, reminders, images] = await Promise.all([
           getEventById(id),
           getReminders(id).catch(() => []), // non-fatal: fall back to empty
+          listEventImages(id).catch(() => []), // v1.1.2 — 이미지 hydrate, 실패 시 빈 배열
         ]);
         if (cancelled) return;
         setOriginalEvent(ev);
-        // v1.1 — workout mode hydration.
+        // v1.1 — workout/running mode hydration.
         setEventKind(ev.eventKind ?? 'general');
         setWorkoutParts(ev.workoutParts ?? []);
+        // v1.1.2 — running 거리/페이스 hydration.
+        setDistanceKm(ev.distanceKm != null ? String(ev.distanceKm) : '');
+        if (ev.avgPaceSeconds != null) {
+          setPaceMinutes(String(Math.floor(ev.avgPaceSeconds / 60)));
+          setPaceSeconds(String(ev.avgPaceSeconds % 60));
+        }
+        // v1.1.2 — 이미지 hydrate (remote URL 형태). 사용자가 X 누르거나
+        // 새 이미지 추가 시 imageUris 가 바뀌고, 저장 시 originalImages 와
+        // diff 해서 삭제/업로드 결정.
+        setImageUris(images.map((i) => i.url));
+        setOriginalImages(images.map((i) => ({ id: i.id, url: i.url, position: i.position })));
         // Pre-fill form fields
         setTitle(ev.title);
         setAllDay(ev.allDay);
@@ -292,6 +314,29 @@ export default function EventEditScreen() {
         // workout 모드면 현재 선택을 그대로 send (saveParts 멱등). general
         // 로 바뀐 경우 빈 배열을 보내 기존 부위 기록 정리.
         workoutParts: eventKind === 'workout' ? workoutParts : [],
+        // v1.1.2 — running 일 때만 거리/페이스 send. 그 외 kind 면 null.
+        distanceKm: eventKind === 'running'
+          ? (distanceKm.trim() ? Number(distanceKm) : null)
+          : null,
+        avgPaceSeconds: eventKind === 'running'
+          ? (paceMinutes.trim() || paceSeconds.trim()
+              ? (Number(paceMinutes || '0') * 60 + Number(paceSeconds || '0'))
+              : null)
+          : null,
+      });
+
+      // v1.1.2 — 이미지 diff 처리 (fire-and-forget):
+      // 1) originalImages 에 있는 URL 중 imageUris 에 없는 것 → 삭제
+      // 2) imageUris 의 file:// (로컬) URI → 신규 업로드
+      // 3) https:// 인 기존 URL 은 무시 (변경 없음)
+      const removed = originalImages.filter((o) => !imageUris.includes(o.url));
+      const newLocalUris = imageUris.filter((u) => u.startsWith('file://'));
+      const stableRemoteCount = imageUris.length - newLocalUris.length;
+      void Promise.all([
+        ...removed.map((r) => deleteEventImage({ id: r.id, eventId: id, url: r.url, position: r.position, createdAt: new Date(0) })),
+        ...newLocalUris.map((uri, idx) => uploadEventImage(id, uri, stableRemoteCount + idx)),
+      ]).catch((err) => {
+        console.warn('[EventEdit] image sync failed (non-fatal):', err);
       });
 
       // 2. Compute sharing diff
@@ -503,10 +548,11 @@ export default function EventEditScreen() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        {/* v1.1 — 일반 / 운동 toggle. create 화면과 동일 패턴. */}
+        {/* v1.1.2 — 일반 / 헬스 / 러닝 3단 toggle. create 화면과 동일. */}
         <View style={styles.kindToggle}>
-          {(['general', 'workout'] as const).map((kind) => {
+          {(['general', 'workout', 'running'] as const).map((kind) => {
             const active = eventKind === kind;
+            const label = kind === 'general' ? '일반' : kind === 'workout' ? '헬스' : '러닝';
             return (
               <Pressable
                 key={kind}
@@ -522,7 +568,7 @@ export default function EventEditScreen() {
                     { color: active ? colors.textInverse : colors.textSecondary },
                   ]}
                 >
-                  {kind === 'general' ? '일반' : '운동'}
+                  {label}
                 </Text>
               </Pressable>
             );
@@ -536,6 +582,51 @@ export default function EventEditScreen() {
             />
           </View>
         )}
+        {eventKind === 'running' && (
+          <View style={styles.runningWrap}>
+            <View style={styles.runningRow}>
+              <Text style={styles.runningLabel}>거리</Text>
+              <TextInput
+                value={distanceKm}
+                onChangeText={setDistanceKm}
+                keyboardType="decimal-pad"
+                placeholder="0.0"
+                placeholderTextColor={colors.textTertiary}
+                style={styles.runningInput}
+              />
+              <Text style={styles.runningUnit}>km</Text>
+            </View>
+            <View style={styles.runningRow}>
+              <Text style={styles.runningLabel}>평균 페이스</Text>
+              <TextInput
+                value={paceMinutes}
+                onChangeText={setPaceMinutes}
+                keyboardType="number-pad"
+                placeholder="5"
+                placeholderTextColor={colors.textTertiary}
+                style={styles.runningInputSm}
+                maxLength={2}
+              />
+              <Text style={styles.runningUnit}>분</Text>
+              <TextInput
+                value={paceSeconds}
+                onChangeText={setPaceSeconds}
+                keyboardType="number-pad"
+                placeholder="30"
+                placeholderTextColor={colors.textTertiary}
+                style={styles.runningInputSm}
+                maxLength={2}
+              />
+              <Text style={styles.runningUnit}>초 / km</Text>
+            </View>
+          </View>
+        )}
+
+        {/* v1.1.2 — 이미지 첨부 (모든 kind 공통) */}
+        <View style={styles.imagePickerWrap}>
+          <Text style={styles.imagePickerLabel}>사진 첨부</Text>
+          <EventImagePicker uris={imageUris} onChange={setImageUris} />
+        </View>
 
         {/* Title */}
         <TextInput
@@ -872,6 +963,69 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  // v1.1.2 running 입력 폼
+  runningWrap: {
+    marginHorizontal: spacing[5],
+    marginTop: spacing[3],
+    padding: spacing[4],
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing[3],
+  },
+  runningRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  runningLabel: {
+    ...textStyles.bodyMd,
+    color: colors.textPrimary,
+    minWidth: 90,
+  },
+  runningInput: {
+    flex: 1,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    color: colors.textPrimary,
+    backgroundColor: colors.backgroundAlt,
+    fontSize: 16,
+  },
+  runningInputSm: {
+    width: 48,
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[2],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    color: colors.textPrimary,
+    backgroundColor: colors.backgroundAlt,
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  runningUnit: {
+    ...textStyles.bodyMd,
+    color: colors.textSecondary,
+  },
+  // v1.1.2 이미지 첨부
+  imagePickerWrap: {
+    marginHorizontal: spacing[5],
+    marginTop: spacing[3],
+    padding: spacing[4],
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing[2],
+  },
+  imagePickerLabel: {
+    ...textStyles.label,
+    color: colors.textPrimary,
   },
 
   titleInput: {

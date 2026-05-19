@@ -24,7 +24,7 @@ import { logError } from '@/lib/errorLogger';
 import { getMemberColor } from '@/constants/colors';
 import { shareEventToSpace, unshareEventFromSpace } from '@/services/eventShareService';
 import { saveParts as saveWorkoutParts, listParts as listWorkoutParts } from '@/services/workoutPartService';
-import { WORKOUT_RESERVED_COLOR } from '@/components/event/ColorPicker';
+import { WORKOUT_RESERVED_COLOR, RUNNING_RESERVED_COLOR } from '@/components/event/ColorPicker';
 import { cancelEventReminders } from '@/services/notificationService';
 import type {
   Event, EventSummary, CreateEventInput, UpdateEventInput,
@@ -64,6 +64,7 @@ function toEventSummary(
     // v1.1 — 운동 일정 prefix(💪) 표시용. general 은 undefined 로 두면
     // 기존 분기와 호환.
     ...(row.event_kind === 'workout' ? { eventKind: 'workout' as const } : {}),
+    ...(row.event_kind === 'running' ? { eventKind: 'running' as const } : {}),
   };
 }
 
@@ -95,6 +96,9 @@ function toEvent(
     editableByMembers: row.editable_by_members ?? false,
     eventKind:    row.event_kind ?? 'general',
     workoutParts,
+    // v1.1.2 — running 일 때만 의미. 그 외 null.
+    distanceKm:    row.distance_km ?? null,
+    avgPaceSeconds: row.avg_pace_seconds ?? null,
     createdAt:    new Date(row.created_at),
     updatedAt:    new Date(row.updated_at),
   };
@@ -391,8 +395,8 @@ export async function createEvent(input: CreateEventInput): Promise<Event> {
     // 예약 색상으로 강제. 캘린더에서 색만 보고도 운동 일정 식별 가능하게
     // (이모지 prefix 제거와 한 쌍).
     const resolvedColor =
-      (input.eventKind ?? 'general') === 'workout'
-        ? WORKOUT_RESERVED_COLOR
+      input.eventKind === 'workout' ? WORKOUT_RESERVED_COLOR
+        : input.eventKind === 'running' ? RUNNING_RESERVED_COLOR
         : (input.color ?? null);
 
     const insertPayload: Record<string, unknown> = {
@@ -409,6 +413,9 @@ export async function createEvent(input: CreateEventInput): Promise<Event> {
       color:        resolvedColor,
       editable_by_members: input.editableByMembers ?? false,
       event_kind:   input.eventKind ?? 'general',
+      // v1.1.2 — running 일 때만 기록. 그 외는 명시적으로 null.
+      distance_km:      input.eventKind === 'running' ? (input.distanceKm ?? null) : null,
+      avg_pace_seconds: input.eventKind === 'running' ? (input.avgPaceSeconds ?? null) : null,
     };
     if (input.repeatType === 'custom_weekly') {
       insertPayload.repeat_weekdays = input.repeatWeekdays ?? [];
@@ -561,15 +568,22 @@ export async function updateEvent(eventId: string, updates: UpdateEventInput): P
     if (updates.color       !== undefined) patch.color        = updates.color ?? null;
     if (updates.editableByMembers !== undefined) patch.editable_by_members = updates.editableByMembers;
     if (updates.eventKind   !== undefined) patch.event_kind   = updates.eventKind;
+    // v1.1.2 — running 일 때만 distance/pace 세팅, 그 외 kind 전환 시 null.
+    if (updates.distanceKm     !== undefined) patch.distance_km      = updates.distanceKm;
+    if (updates.avgPaceSeconds !== undefined) patch.avg_pace_seconds = updates.avgPaceSeconds;
+    if (updates.eventKind !== undefined && updates.eventKind !== 'running') {
+      patch.distance_km      = null;
+      patch.avg_pace_seconds = null;
+    }
 
-    // v1.1.1 — eventKind 가 workout 으로 바뀌면(또는 이미 workout 일정의
-    // 색상을 변경하려 하면) 색상을 예약 색으로 강제. 사용자가 의도해서
-    // 다른 색을 보내도 무시.
+    // v1.1.1 — eventKind 별 예약 색상 강제. 사용자가 다른 색을 보내도 무시.
+    // workout → 빨강, running → 파랑, general 전환 시 사용자가 color 명시
+    // 안 했으면 null 로 되돌려 카테고리 색상 fallback.
     if (updates.eventKind === 'workout') {
       patch.color = WORKOUT_RESERVED_COLOR;
+    } else if (updates.eventKind === 'running') {
+      patch.color = RUNNING_RESERVED_COLOR;
     } else if (updates.eventKind === 'general' && updates.color === undefined) {
-      // workout → general 전환 시 사용자가 color 를 명시 안 했으면 null 로
-      // 되돌려 카테고리 색상으로 fallback.
       patch.color = null;
     }
 

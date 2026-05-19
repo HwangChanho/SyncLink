@@ -44,7 +44,12 @@ import { spacing, radius } from '@/constants/spacing';
  *
  * 색상 선정: Material Red 600 (#E53935) — 다른 팔레트 색과 채도/명도 명확 구분.
  */
-export const WORKOUT_RESERVED_COLOR = '#E53935';
+// v1.1.2 — 헬스/러닝 등 활동(activity) 일정은 모두 같은 연한 갈색으로 통일.
+// 일반(general) 일정과 시각적으로 분리하되 둘 사이 식별은 캘린더 테두리 +
+// 이벤트 상세 화면의 입력 필드(BodyParts vs 거리/페이스)로 처리.
+// Material Brown 400 (#A1887F) — 다른 팔레트의 어떤 색과도 명확히 구분.
+export const WORKOUT_RESERVED_COLOR = '#A1887F';
+export const RUNNING_RESERVED_COLOR = '#A1887F';
 
 export const EVENT_COLOR_PALETTE: string[] = [
   '#7C3AED', // violet      — aligns with app primary
@@ -64,8 +69,11 @@ export const EVENT_COLOR_PALETTE: string[] = [
 
 // Remove accidental duplicates while preserving order, and ensure the workout
 // reserved color never leaks into the user-selectable palette.
+const RESERVED_COLORS = [WORKOUT_RESERVED_COLOR, RUNNING_RESERVED_COLOR].map(
+  (c) => c.toUpperCase(),
+);
 const PALETTE = [...new Set(EVENT_COLOR_PALETTE)].filter(
-  (hex) => hex.toUpperCase() !== WORKOUT_RESERVED_COLOR.toUpperCase(),
+  (hex) => !RESERVED_COLORS.includes(hex.toUpperCase()),
 );
 
 // ─── Component ────────────────────────────────────────────────────────────────

@@ -87,12 +87,16 @@ export type RepeatTypeDb = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 
 export type EventColorDb = string; // hex color
 
 /** v1.1 — discriminator for the new workout event UX flow. */
-export type EventKindDb = 'general' | 'workout';
+export type EventKindDb = 'general' | 'workout' | 'running';
 
 /** Anatomy buckets used by the body-silhouette picker. Matches the
  *  `workout_part` enum in migration 037. */
 export type WorkoutPartDb =
-  | 'chest' | 'back' | 'shoulders' | 'arms' | 'legs' | 'core' | 'cardio';
+  | 'chest' | 'back' | 'shoulders' | 'arms' | 'legs' | 'core' | 'cardio'
+  // v1.1.2 — 세분화: 어깨 사이 승모, 하체를 허벅지·종아리로 분리.
+  // `legs` 는 backwards-compat 으로 enum 에 유지 (옛 데이터 표시용),
+  // 신규 UI 는 thighs/calves 로 분리 저장.
+  | 'trapezius' | 'thighs' | 'calves';
 
 /** Raw DB row for the `event_workout_parts` join table. */
 export interface EventWorkoutPartRow {
@@ -118,8 +122,12 @@ export interface EventRow {
   color: EventColorDb | null;
   /** Build-96 — true: share 받은 멤버도 UPDATE 가능. default false. */
   editable_by_members: boolean;
-  /** v1.1 — 'workout' 이면 body-parts UI 와 💪 prefix 활성. 기본 'general'. */
+  /** v1.1 — 'workout' = 헬스, 'running' = 러닝, 'general' = 기본. */
   event_kind: EventKindDb;
+  /** v1.1.2 — running 일 때 사용자가 기록한 거리 (km). nullable. */
+  distance_km: number | null;
+  /** v1.1.2 — running 일 때 평균 페이스를 초 단위로 저장 (분/km 계산용). nullable. */
+  avg_pace_seconds: number | null;
   created_at: string;
   updated_at: string;
 }

@@ -49,7 +49,7 @@ export function AISuggestionCard({ slot }: Props) {
   return (
     <View style={styles.card}>
       <View style={styles.iconWrap}>
-        <Ionicons name="sparkles" size={18} color={colors.primary} />
+        <Ionicons name="sparkles" size={20} color={colors.textInverse} />
       </View>
       <View style={styles.body}>
         <Text style={styles.title}>{slot.suggestion}</Text>
@@ -86,7 +86,7 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       borderRadius: 16,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.primary + '15',
+      backgroundColor: colors.primary,
     },
     body: { flex: 1 },
     title: { ...(textStyles.body as object), color: colors.textPrimary, fontWeight: '600' },

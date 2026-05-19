@@ -70,6 +70,10 @@ export function EventBlock({
   const alphaSuffix = event.isOwn ? 'CC' : '4D';
   const bgColor = `${event.color}${alphaSuffix}`;
 
+  // v1.1.2 — 헬스/러닝 일정은 시각 식별을 강화하기 위해 모든 변에 테두리.
+  // 일반 일정은 기존대로 왼쪽 accent bar 만.
+  const isActivityKind = event.eventKind === 'workout' || event.eventKind === 'running';
+
   return (
     <View
       testID="event-block"
@@ -82,6 +86,10 @@ export function EventBlock({
           height: blockHeight,
           left: `${leftFraction * 100}%`,
           width: `${widthFraction * 100}%`,
+        },
+        isActivityKind && {
+          borderWidth: 1.5,
+          borderColor: event.color,
         },
       ]}
     >

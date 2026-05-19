@@ -25,6 +25,8 @@ import type { Event, EventComment, ReactionSummary } from '@/types';
 import { getEventById, deleteEvent, forkSharedEvent } from '@/services/eventService';
 import { shareEventToSpace, unshareEventFromSpace } from '@/services/eventShareService';
 import { BodyParts } from '@/components/event/BodyParts';
+import { EventImagePicker } from '@/components/event/EventImagePicker';
+import { listEventImages } from '@/services/eventImageService';
 import {
   getReactionSummaries,
   toggleReaction,
@@ -89,6 +91,8 @@ export default function EventDetailScreen() {
   const { user } = useAuthStore();
 
   const [event, setEvent] = useState<Event | null>(null);
+  // v1.1.2 — 첨부 이미지 URL 목록 (remote). 상세 화면은 read-only 갤러리.
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -123,8 +127,12 @@ export default function EventDetailScreen() {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await getEventById(id);
+      const [data, images] = await Promise.all([
+        getEventById(id),
+        listEventImages(id).catch(() => []),
+      ]);
       setEvent(data);
+      setImageUrls(images.map((i) => i.url));
     } catch (err) {
       setError(err instanceof Error ? err.message : t('event.load_failed'));
     } finally {
@@ -510,14 +518,46 @@ export default function EventDetailScreen() {
           </View>
         ) : null}
 
-        {/* v1.1 — Workout body parts (read-only). 운동 일정인 경우 사용자가
-            기록한 부위를 silhouette 으로 다시 보여준다. 비어 있으면 noop. */}
+        {/* v1.1.2 — 첨부 이미지 read-only 갤러리. */}
+        {imageUrls.length > 0 && (
+          <View style={styles.workoutSection}>
+            <View style={styles.workoutHeaderRow}>
+              <Text style={[styles.sectionPrimary, styles.sectionText]}>첨부 사진</Text>
+            </View>
+            <EventImagePicker uris={imageUrls} readOnly />
+          </View>
+        )}
+
+        {/* v1.1 — 헬스 일정: 기록한 부위 silhouette read-only. */}
         {event.eventKind === 'workout' && (
           <View style={styles.workoutSection}>
             <View style={styles.workoutHeaderRow}>
-              <Text style={[styles.sectionPrimary, styles.sectionText]}>운동 기록</Text>
+              <Text style={[styles.sectionPrimary, styles.sectionText]}>헬스 기록</Text>
             </View>
             <BodyParts selected={event.workoutParts ?? []} readOnly />
+          </View>
+        )}
+
+        {/* v1.1.2 — 러닝 일정: 거리 + 평균 페이스 read-only. */}
+        {event.eventKind === 'running' && (
+          <View style={styles.workoutSection}>
+            <View style={styles.workoutHeaderRow}>
+              <Text style={[styles.sectionPrimary, styles.sectionText]}>러닝 기록</Text>
+            </View>
+            <View style={styles.runningStatRow}>
+              <Text style={styles.runningStatLabel}>거리</Text>
+              <Text style={styles.runningStatValue}>
+                {event.distanceKm != null ? `${event.distanceKm} km` : '—'}
+              </Text>
+            </View>
+            <View style={styles.runningStatRow}>
+              <Text style={styles.runningStatLabel}>평균 페이스</Text>
+              <Text style={styles.runningStatValue}>
+                {event.avgPaceSeconds != null
+                  ? `${Math.floor(event.avgPaceSeconds / 60)}분 ${event.avgPaceSeconds % 60}초 / km`
+                  : '—'}
+              </Text>
+            </View>
           </View>
         )}
 
@@ -861,6 +901,21 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     borderTopWidth: 1,
     borderTopColor: colors.border,
     gap: spacing[2],
+  },
+  // v1.1.2 — 러닝 기록 read-only row
+  runningStatRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: spacing[2],
+  },
+  runningStatLabel: {
+    ...(textStyles.body as object),
+    color: colors.textSecondary,
+  },
+  runningStatValue: {
+    ...(textStyles.body as object),
+    color: colors.textPrimary,
+    fontWeight: '600',
   },
   workoutHeaderRow: {
     flexDirection: 'row',
