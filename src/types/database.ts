@@ -23,6 +23,8 @@ export interface UserRow {
   notification_settings: NotificationSettings;
   /** v1.2.0 — ISO 3166-1 alpha-2. 캘린더 공휴일/지역 포맷에 사용. default 'KR'. */
   country_code: string;
+  /** v1.2.3 — 새 일정 생성 시 자동 적용할 기본 리마인더 분 단위 배열. default [10]. */
+  default_reminder_minutes: number[];
   created_at: string;       // ISO-8601 timestamp
   updated_at: string;
 }

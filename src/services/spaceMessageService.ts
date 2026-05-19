@@ -208,6 +208,58 @@ export async function getUnreadCounts(): Promise<Record<string, number>> {
   return out;
 }
 
+/**
+ * v1.2.3 — 메시지 검색. body 텍스트 substring + tags 항목 매칭.
+ * RLS 가 Space 멤버 가시성 검증.
+ */
+export async function searchMessages(spaceId: string, query: string): Promise<SpaceMessage[]> {
+  const q = query.trim();
+  if (q.length === 0) return [];
+  // body ILIKE + tags array overlap. or() 로 OR 합성.
+  const { data, error } = await supabase
+    .from('space_messages')
+    .select('id, space_id, sender_id, body, image_url, tags, created_at')
+    .eq('space_id', spaceId)
+    .or(`body.ilike.%${q}%,tags.cs.{${q}}`)
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (error) return [];
+  return (data ?? []).map((r) => toMessage(r as SpaceMessageRow));
+}
+
+/**
+ * v1.2.3 — typing indicator broadcast.
+ * 사용자가 input 에 글을 쓰는 동안 1초마다 호출 → 다른 멤버 화면에 "OO 입력 중".
+ * Realtime broadcast 채널 사용 (DB 비용 0).
+ */
+export function broadcastTyping(spaceId: string, nickname: string): void {
+  const channel = supabase.channel(`typing:${spaceId}`, { config: { broadcast: { self: false } } });
+  void channel.subscribe((status) => {
+    if (status === 'SUBSCRIBED') {
+      void channel.send({ type: 'broadcast', event: 'typing', payload: { nickname, at: Date.now() } });
+      // 1.5초 후 unsubscribe — 다음 broadcast 시 재구독.
+      setTimeout(() => { void supabase.removeChannel(channel); }, 1500);
+    }
+  });
+}
+
+/**
+ * v1.2.3 — typing indicator 구독. 1.5초 안에 같은 사용자에서 신호 안 오면
+ * fade out. 반환된 unsubscribe 호출하면 cleanup.
+ */
+export function subscribeToTyping(
+  spaceId: string,
+  onTyping: (nickname: string) => void,
+): () => void {
+  const channel = supabase.channel(`typing:${spaceId}`)
+    .on('broadcast', { event: 'typing' }, (payload) => {
+      const nick = (payload?.payload as { nickname?: string })?.nickname;
+      if (nick) onTyping(nick);
+    })
+    .subscribe();
+  return () => { void supabase.removeChannel(channel); };
+}
+
 /** 채팅 화면 진입 시 호출 — last_read_at 을 now() 로 갱신해 badge 0 으로. */
 export async function markSpaceAsRead(spaceId: string): Promise<void> {
   const userId = await getCurrentUserId();

@@ -18,6 +18,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useEventForm } from '@/hooks/useEventForm';
+import { useAuthStore } from '@/stores/authStore';
 import {
   View, Text, TextInput, ScrollView, Switch, Pressable,
   ActivityIndicator, StyleSheet, Platform, KeyboardAvoidingView,
@@ -251,9 +252,12 @@ export default function EventCreateScreen() {
     return { initialStart: start, initialEnd: end };
   }, [dateParam, startHourParam, startMinuteParam]);
 
+  // v1.2.3 — 사용자가 설정한 기본 리마인더 분 단위 배열 (default [10]).
+  const defaultReminderMinutes = useAuthStore((s) => s.user?.default_reminder_minutes) ?? [10];
   const { state: form, setters, helpers } = useEventForm({
     startAt: initialStart,
     endAt:   initialEnd,
+    reminderMinutes: defaultReminderMinutes,
   });
   const {
     title, allDay, startAt, endAt, repeatType, repeatWeekdays,

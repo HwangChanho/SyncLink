@@ -26,7 +26,8 @@ import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import {
   listMessages, sendTextMessage, sendImageMessage, deleteMessage,
-  subscribeToSpace, markSpaceAsRead, type SpaceMessage,
+  subscribeToSpace, markSpaceAsRead, searchMessages,
+  broadcastTyping, subscribeToTyping, type SpaceMessage,
 } from '@/services/spaceMessageService';
 
 export default function SpaceChatScreen() {
@@ -40,6 +41,14 @@ export default function SpaceChatScreen() {
   const [composer, setComposer] = useState('');
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
+  // v1.2.3 — 메시지 검색.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SpaceMessage[] | null>(null);
+  // v1.2.3 — typing indicator.
+  const [typingNick, setTypingNick] = useState<string | null>(null);
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypingSentRef = useRef<number>(0);
 
   // ── 초기 hydrate + read 표시 ────────────────────────────────────────────
   useEffect(() => {
@@ -68,6 +77,18 @@ export default function SpaceChatScreen() {
     if (!id || messages.length === 0) return;
     void markSpaceAsRead(id);
   }, [id, messages.length]);
+
+  // v1.2.3 — typing indicator 구독.
+  useEffect(() => {
+    if (!id) return;
+    const unsub = subscribeToTyping(id, (nick) => {
+      if (nick === user?.nickname) return; // 본인 신호는 무시
+      setTypingNick(nick);
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+      typingTimerRef.current = setTimeout(() => setTypingNick(null), 2000);
+    });
+    return unsub;
+  }, [id, user?.nickname]);
 
   // ── Realtime 구독 ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -196,8 +217,45 @@ export default function SpaceChatScreen() {
         <Pressable onPress={() => router.back()} style={styles.back}>
           <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>채팅</Text>
-        <View style={styles.back} />
+        {searchOpen ? (
+          <TextInput
+            value={searchQuery}
+            onChangeText={async (v) => {
+              setSearchQuery(v);
+              if (!id) return;
+              if (v.trim().length === 0) {
+                setSearchResults(null);
+                return;
+              }
+              const rows = await searchMessages(id, v);
+              setSearchResults(rows);
+            }}
+            placeholder="메시지 검색"
+            placeholderTextColor={colors.textTertiary}
+            autoFocus
+            style={styles.searchInput}
+          />
+        ) : (
+          <Text style={styles.headerTitle}>채팅</Text>
+        )}
+        <Pressable
+          onPress={() => {
+            const next = !searchOpen;
+            setSearchOpen(next);
+            if (!next) {
+              setSearchQuery('');
+              setSearchResults(null);
+            }
+          }}
+          style={styles.back}
+          accessibilityLabel="메시지 검색"
+        >
+          <Ionicons
+            name={searchOpen ? 'close' : 'search'}
+            size={22}
+            color={colors.textPrimary}
+          />
+        </Pressable>
       </View>
 
       <KeyboardAvoidingView
@@ -211,12 +269,28 @@ export default function SpaceChatScreen() {
           </View>
         ) : (
           <FlatList
-            data={messages}
+            data={searchResults ?? messages}
             keyExtractor={(m) => m.id}
             renderItem={renderItem}
             inverted
             contentContainerStyle={styles.listContent}
+            ListEmptyComponent={
+              searchResults !== null ? (
+                <Text style={{ textAlign: 'center', padding: 20, color: colors.textTertiary }}>
+                  검색 결과가 없어요
+                </Text>
+              ) : null
+            }
           />
+        )}
+
+        {/* v1.2.3 — typing indicator. 다른 멤버 입력 중일 때 composer 위. */}
+        {typingNick && (
+          <View style={{ paddingHorizontal: 12, paddingVertical: 4 }}>
+            <Text style={{ fontSize: 11, color: colors.textTertiary }}>
+              {typingNick} 님이 입력 중…
+            </Text>
+          </View>
         )}
 
         <View style={styles.composer}>
@@ -230,7 +304,16 @@ export default function SpaceChatScreen() {
           </Pressable>
           <TextInput
             value={composer}
-            onChangeText={setComposer}
+            onChangeText={(v) => {
+              setComposer(v);
+              // v1.2.3 — typing broadcast (1초 throttle).
+              if (!id || !user?.nickname) return;
+              const now = Date.now();
+              if (now - lastTypingSentRef.current > 1000 && v.length > 0) {
+                lastTypingSentRef.current = now;
+                broadcastTyping(id, user.nickname);
+              }
+            }}
             placeholder="메시지 입력…"
             placeholderTextColor={colors.textTertiary}
             multiline
@@ -267,6 +350,18 @@ function makeStyles(colors: ColorTokens) {
     },
     back: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
     headerTitle: { ...textStyles.h3, color: colors.textPrimary },
+    searchInput: {
+      flex: 1,
+      marginHorizontal: spacing[2],
+      paddingHorizontal: spacing[3],
+      paddingVertical: spacing[1],
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      color: colors.textPrimary,
+      backgroundColor: colors.backgroundAlt,
+      fontSize: 14,
+    },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     listContent: { padding: spacing[3], gap: spacing[2] },
     row: { gap: 2, maxWidth: '85%' },
