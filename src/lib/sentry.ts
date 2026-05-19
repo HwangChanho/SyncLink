@@ -27,7 +27,11 @@ export function initSentry(): void {
     environment: process.env.EXPO_PUBLIC_APP_ENV ?? 'development',
     release,
     dist: String(buildNumber),
-    enableNative: false, // Native SDK requires sentry.properties org/project — disabled until configured
+    // v1.2.0 — Android 크래시 트래킹 enable (EAS env 에 DSN 등록 완료).
+    // sentry.properties 의 org/project 는 build-time source map upload 용이고,
+    // runtime native crash 송신은 DSN 만으로 동작. SENTRY_DISABLE_AUTO_UPLOAD
+    // (eas.json) 가 build 시 sentry-cli 호출을 무력화하므로 빌드 실패 없음.
+    enableNative: true,
     tracesSampleRate: 0.2,
     // Ignore non-actionable errors
     ignoreErrors: ['Network request failed', 'AbortError'],
