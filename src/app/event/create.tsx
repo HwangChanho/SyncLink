@@ -742,7 +742,7 @@ export default function EventCreateScreen() {
                     { color: active ? colors.textInverse : colors.textSecondary },
                   ]}
                 >
-                  {kind === 'general' ? '일반' : '💪 운동'}
+                  {kind === 'general' ? '일반' : '운동'}
                 </Text>
               </Pressable>
             );

@@ -23,8 +23,9 @@ import { WORKOUT_RESERVED_COLOR } from '@/components/event/ColorPicker';
 
 // v1.1.2 — SVG path 합성을 폐기하고 실제 인체 일러스트 PNG (magnific.com
 // 무료 자산, attribution: docs/CREDITS.md) 위에 절대 위치 hit area 로
-// 부위별 탭을 받는 구조. tintColor 로 라이트/다크 모드 자동 적용.
-const BODY_IMAGE = require('../../../assets/anatomy/body-front-alpha.png');
+// 부위별 탭을 받는 구조. teal grid 배경 + 흰색 silhouette 원본 그대로
+// 사용 — 다크/라이트 모드 모두 grid 가 충분한 contrast 제공.
+const BODY_IMAGE = require('../../../assets/anatomy/body-front.png');
 
 /**
  * 부위별 hit area 좌표 (이미지 비율 기준 0-1).
@@ -88,7 +89,7 @@ export function BodyParts({ selected, onToggle, readOnly }: BodyPartsProps) {
             alpha PNG 이라 배경은 자동 투명. */}
         <Image
           source={BODY_IMAGE}
-          style={[styles.bodyImage, { tintColor: colors.textPrimary }]}
+          style={styles.bodyImage}
           resizeMode="contain"
         />
 

@@ -515,7 +515,6 @@ export default function EventDetailScreen() {
         {event.eventKind === 'workout' && (
           <View style={styles.workoutSection}>
             <View style={styles.workoutHeaderRow}>
-              <Text style={styles.workoutEmoji}>💪</Text>
               <Text style={[styles.sectionPrimary, styles.sectionText]}>운동 기록</Text>
             </View>
             <BodyParts selected={event.workoutParts ?? []} readOnly />
