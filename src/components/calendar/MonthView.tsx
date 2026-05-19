@@ -279,30 +279,70 @@ export function MonthView({
     return out;
   }, [weeks, cellWidth]);
 
-  // Chip-level rects: only for detailed-density; compact-density (dots)
-  // shows multiple events as a single dot row, so individual hit-test
-  // isn't meaningful — drag is disabled in compact mode.
+  // v1.1.3 — Multi-day 연속 bar 지원.
+  //
+  // 주(week) 단위로 같은 event.id 가 연속한 날짜에 등장하면 하나의 span bar
+  // 로 묶어 가로로 길게 그린다. 카카오/네이버 캘린더 스타일.
+  //
+  // 알고리즘:
+  //  1. 각 주마다 event.id 별 첫·마지막 등장 dayIdx 추출 (startCol/endCol).
+  //  2. 다일 우선 정렬 (span 큰 것 먼저), 같은 span 이면 startCol 오름차순.
+  //  3. row packing — 각 row 의 마지막 endCol 을 기억해, 새 그룹의 startCol
+  //     이 그것보다 크면 같은 row 재사용. 충돌 시 다음 row.
+  //  4. MAX_BARS 초과 row 는 visible 에서 제외 (overflow +N 라벨로 별도 표시).
+  //
+  // dateKey 는 첫 등장 날짜 — useMonthDragHandler 가 이 key 로 cell 매핑.
   const eventLayouts = useMemo<MonthEventLayout[]>(() => {
     if (cellWidth <= 0 || density !== 'detailed') return [];
     const out: MonthEventLayout[] = [];
     weeks.forEach((week, weekIdx) => {
+      // 1) 주별 event 그룹 추출.
+      const groups = new Map<string, { startCol: number; endCol: number; event: EventSummary }>();
+      const order: string[] = [];
       week.forEach((d, dayIdx) => {
         const key = toDateKey(d);
-        const dayEvents = (eventsByDate[key] ?? []);
-        // Only the first MAX_BARS chips are visible in the cell; the rest
-        // collapse into "+N" overflow text and aren't draggable.
-        dayEvents.slice(0, MAX_BARS).forEach((e, chipIdx) => {
-          // Cell layout offsets: paddingTop(4) + DATE_CIRCLE(30) +
-          //   barStack.marginTop(2) = 36 → first chip top
-          // Each subsequent chip: itemBar.height(13) + barStack.gap(1) = 14
-          out.push({
-            event: e,
-            dateKey: key,
-            left:   dayIdx  * cellWidth + 2,           // barStack horizontal padding
-            top:    weekIdx * CELL_HEIGHT + 36 + chipIdx * 14,
-            width:  cellWidth - 4,                     // 2px padding each side
-            height: 13,
-          });
+        (eventsByDate[key] ?? []).forEach((e) => {
+          const exist = groups.get(e.id);
+          if (!exist) {
+            groups.set(e.id, { startCol: dayIdx, endCol: dayIdx, event: e });
+            order.push(e.id);
+          } else if (dayIdx > exist.endCol) {
+            // 같은 event 가 같은 주에서 더 늦은 날짜에 등장하면 endCol 확장.
+            // 중간 빠진 날(예: 화~목인데 수가 빠짐)도 안전하게 max 로 확장.
+            exist.endCol = dayIdx;
+          }
+        });
+      });
+
+      // 2) 다일 우선 정렬.
+      const sorted = [...order].sort((a, b) => {
+        const A = groups.get(a)!;
+        const B = groups.get(b)!;
+        const spanA = A.endCol - A.startCol;
+        const spanB = B.endCol - B.startCol;
+        if (spanA !== spanB) return spanB - spanA;
+        return A.startCol - B.startCol;
+      });
+
+      // 3) row packing.
+      const rowEndCols: number[] = []; // rowEndCols[chipIdx] = 그 row 의 마지막 점유 endCol
+      sorted.forEach((eventId) => {
+        const spec = groups.get(eventId)!;
+        let chipIdx = rowEndCols.findIndex((endCol) => spec.startCol > endCol);
+        if (chipIdx === -1) {
+          chipIdx = rowEndCols.length;
+          rowEndCols.push(-1);
+        }
+        rowEndCols[chipIdx] = spec.endCol;
+        if (chipIdx >= MAX_BARS) return; // 4) overflow 는 별도 +N 라벨
+
+        out.push({
+          event: spec.event,
+          dateKey: toDateKey(week[spec.startCol]),
+          left:   spec.startCol * cellWidth + 2,
+          top:    weekIdx * CELL_HEIGHT + 36 + chipIdx * 14,
+          width:  (spec.endCol - spec.startCol + 1) * cellWidth - 4,
+          height: 13,
         });
       });
     });
@@ -583,37 +623,39 @@ export function MonthView({
                    - detailed: Apple-Calendar-style coloured bars with title
                    - compact:  small colour dots only (overview / mobile)
                 */}
+                {/* v1.1.3 — event 는 cell 외부 절대 위치 layer 에서 multi-day
+                    span bar 로 렌더. cell 내부에는 todo + anniversary 만 표시.
+                    cell 안 barStack 의 top 위치는 event layer 가 차지하는
+                    MAX_BARS 줄 만큼 아래로 밀어 시각적 충돌 방지. */}
                 {dayItems.length > 0 && density === 'detailed' && (() => {
-                  // Build-77 LEAD: dense 한 날 (6+) 은 bar 2개 + "+N" 으로
-                  // cell 여백 확보. 일반 (≤5) 은 3 + "+N" 유지.
-                  const visibleBars = dayItems.length > 5 ? 2 : MAX_BARS;
-                  const hidden = Math.max(0, dayItems.length - visibleBars);
+                  const nonEvent = dayItems.filter((it) => it.kind !== 'event');
+                  if (nonEvent.length === 0) return null;
+                  const visibleBars = nonEvent.length > 5 ? 2 : MAX_BARS;
+                  const hidden = Math.max(0, nonEvent.length - visibleBars);
                   return (
-                    // LEAD 2026-04-28: 다른 월(leading/trailing) 일정은 연하게.
-                    <View style={[styles.barStack, !isCurrentMonth && styles.dimItems]}>
-                      {dayItems.slice(0, visibleBars).map((it) => (
+                    <View
+                      style={[
+                        styles.barStack,
+                        // event layer 가 차지하는 row 수만큼 아래로 밀어 겹치지 않게.
+                        { marginTop: 2 + MAX_BARS * 14 },
+                        !isCurrentMonth && styles.dimItems,
+                      ]}
+                    >
+                      {nonEvent.slice(0, visibleBars).map((it) => (
                         <View
                           key={it.id}
                           testID="event-bar"
                           style={[
                             styles.itemBar,
-                            it.kind === 'event'
-                              ? { backgroundColor: it.color }
-                              : {
-                                  backgroundColor: it.color + '22',
-                                  borderLeftWidth: 3,
-                                  borderLeftColor: it.color,
-                                },
+                            {
+                              backgroundColor: it.color + '22',
+                              borderLeftWidth: 3,
+                              borderLeftColor: it.color,
+                            },
                           ]}
                         >
                           <Text
-                            style={[
-                              styles.itemBarText,
-                              it.kind === 'event'
-                                // textPrimary adapts: gray-900 in light, white in dark
-                                ? { color: colors.textPrimary }
-                                : { color: it.color },
-                            ]}
+                            style={[styles.itemBarText, { color: it.color }]}
                             numberOfLines={1}
                           >
                             {it.title}
@@ -646,6 +688,46 @@ export function MonthView({
           })}
         </View>
       ))}
+
+      {/* v1.1.3 — Multi-day event 절대 위치 layer.
+          eventLayouts 는 주별 span 으로 묶인 layout 이라 한 다일 event 가
+          한 bar 로 보임. pointerEvents="box-none" → cell tap 은 통과시키고
+          chip 자체만 tap. */}
+      {density === 'detailed' && (
+        <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+          {eventLayouts.map((layout) => {
+            const it = layout.event;
+            const isSpan = layout.width > cellWidth - 4 + 1; // 다일 여부 ( +1 epsilon)
+            const title = translatedTitles.get(it.id) ?? it.title;
+            return (
+              <View
+                key={`${layout.dateKey}-${it.id}`}
+                pointerEvents="none"
+                style={[
+                  styles.itemBar,
+                  {
+                    position: 'absolute',
+                    left:   layout.left,
+                    top:    layout.top,
+                    width:  layout.width,
+                    height: layout.height,
+                    backgroundColor: it.color,
+                  },
+                  isSpan && styles.spanBar,
+                ]}
+                testID="event-bar"
+              >
+                <Text
+                  style={[styles.itemBarText, { color: colors.textPrimary }]}
+                  numberOfLines={1}
+                >
+                  {title}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      )}
 
       {/* Long-press in progress — bright ring around the candidate chip
           so the user gets immediate feedback before the long-press fires. */}
@@ -919,6 +1001,11 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     paddingHorizontal: 3,
     justifyContent: 'center',
     overflow: 'hidden',
+  },
+  // v1.1.3 — multi-day span bar (가로로 긴 형태). 단일일과 시각 구분 위해
+  // 모서리 라운드 조금 더 + (필요 시) 추후 시작/종료/중간 셀별 분기 가능.
+  spanBar: {
+    borderRadius: 4,
   },
   itemBarText: {
     fontSize: 9,

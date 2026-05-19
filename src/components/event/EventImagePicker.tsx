@@ -31,9 +31,11 @@ interface Props {
   onChange?: (next: string[]) => void;
   /** true 면 추가/삭제 버튼 안 보이고 탭 비활성. 상세 화면용. */
   readOnly?: boolean;
+  /** 썸네일 탭 시 호출. read-only 상세 화면에서 lightbox 열기 용. */
+  onImagePress?: (index: number) => void;
 }
 
-export function EventImagePicker({ uris, onChange, readOnly }: Props) {
+export function EventImagePicker({ uris, onChange, readOnly, onImagePress }: Props) {
   const colors = useColors();
   const styles = makeStyles(colors);
 
@@ -69,7 +71,14 @@ export function EventImagePicker({ uris, onChange, readOnly }: Props) {
   return (
     <View style={styles.grid}>
       {uris.map((uri, idx) => (
-        <View key={`${uri}-${idx}`} style={styles.cell}>
+        <Pressable
+          key={`${uri}-${idx}`}
+          style={styles.cell}
+          onPress={onImagePress ? () => onImagePress(idx) : undefined}
+          disabled={!onImagePress}
+          accessibilityRole={onImagePress ? 'button' : undefined}
+          accessibilityLabel={onImagePress ? `이미지 ${idx + 1} 크게 보기` : undefined}
+        >
           <Image source={{ uri }} style={styles.thumb} resizeMode="cover" />
           {!readOnly && (
             <Pressable
@@ -82,7 +91,7 @@ export function EventImagePicker({ uris, onChange, readOnly }: Props) {
               <Ionicons name="close" size={14} color={colors.textInverse} />
             </Pressable>
           )}
-        </View>
+        </Pressable>
       ))}
       {canAddMore && (
         <Pressable

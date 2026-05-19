@@ -26,6 +26,7 @@ import { getEventById, deleteEvent, forkSharedEvent } from '@/services/eventServ
 import { shareEventToSpace, unshareEventFromSpace } from '@/services/eventShareService';
 import { BodyParts } from '@/components/event/BodyParts';
 import { EventImagePicker } from '@/components/event/EventImagePicker';
+import { EventImageGallery } from '@/components/event/EventImageGallery';
 import { listEventImages } from '@/services/eventImageService';
 import {
   getReactionSummaries,
@@ -93,6 +94,8 @@ export default function EventDetailScreen() {
   const [event, setEvent] = useState<Event | null>(null);
   // v1.1.2 — 첨부 이미지 URL 목록 (remote). 상세 화면은 read-only 갤러리.
   const [imageUrls, setImageUrls] = useState<string[]>([]);
+  // v1.1.3 — lightbox 표시 index. null = 닫힘. 0 이상 = 그 index 부터 확대.
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -518,13 +521,17 @@ export default function EventDetailScreen() {
           </View>
         ) : null}
 
-        {/* v1.1.2 — 첨부 이미지 read-only 갤러리. */}
+        {/* v1.1.2 — 첨부 이미지 read-only 갤러리. 썸네일 탭 → lightbox. */}
         {imageUrls.length > 0 && (
           <View style={styles.workoutSection}>
             <View style={styles.workoutHeaderRow}>
               <Text style={[styles.sectionPrimary, styles.sectionText]}>첨부 사진</Text>
             </View>
-            <EventImagePicker uris={imageUrls} readOnly />
+            <EventImagePicker
+              uris={imageUrls}
+              readOnly
+              onImagePress={(idx) => setLightboxIdx(idx)}
+            />
           </View>
         )}
 
@@ -756,6 +763,14 @@ export default function EventDetailScreen() {
         )}
       </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* v1.1.3 — 첨부 사진 lightbox. 썸네일 탭 시 setLightboxIdx(idx). */}
+      <EventImageGallery
+        uris={imageUrls}
+        visible={lightboxIdx !== null}
+        initialIndex={lightboxIdx ?? 0}
+        onClose={() => setLightboxIdx(null)}
+      />
     </SafeAreaView>
   );
 }

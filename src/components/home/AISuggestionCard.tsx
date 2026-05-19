@@ -48,9 +48,6 @@ export function AISuggestionCard({ slot }: Props) {
 
   return (
     <View style={styles.card}>
-      <View style={styles.iconWrap}>
-        <Ionicons name="sparkles" size={20} color={colors.textInverse} />
-      </View>
       <View style={styles.body}>
         <Text style={styles.title}>{slot.suggestion}</Text>
         <Text style={styles.sub}>빈 시간: {range}</Text>
@@ -79,14 +76,6 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       borderColor: colors.border,
       marginHorizontal: spacing[4],
       marginVertical: spacing[2],
-    },
-    iconWrap: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.primary,
     },
     body: { flex: 1 },
     title: { ...(textStyles.body as object), color: colors.textPrimary, fontWeight: '600' },

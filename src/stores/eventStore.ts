@@ -121,17 +121,38 @@ export const useEventStore = create<EventState>((set, _get) => ({
     try {
       const events = await getEventsInRange(range);
 
-      // Bucket events by startAt date key (YYYY-MM-DD)
-      // Events spanning multiple days are recorded only on their start date
-      // for simplicity; multi-day events can be expanded in a future sprint.
+      // v1.1.3 — Multi-day expansion. 일정이 여러 날 걸쳐있으면 시작일부터
+      // 종료일까지 매일 cell 에 같은 EventSummary 를 등록 → MonthView 가
+      // 주(week) 단위로 grouping 해 가로 span bar 로 렌더.
+      //
+      // 시간 있는 일정도 endAt 이 다음 날 새벽이면 다일로 간주. 자정에서
+      // 정확히 끝나면 한 날짜로 한정. allDay 는 endAt 이 23:59:59 이므로
+      // 자연스럽게 마지막 일자 포함.
       const byDate: Record<string, EventSummary[]> = {};
+      const dayMs = 24 * 60 * 60 * 1000;
       for (const event of events) {
-        const dateKey = localDateKey(event.startAt);
-        const existing = byDate[dateKey];
-        if (existing === undefined) {
-          byDate[dateKey] = [event];
-        } else {
-          existing.push(event);
+        const startKey = localDateKey(event.startAt);
+        const endKey   = localDateKey(event.endAt);
+        if (startKey === endKey) {
+          (byDate[startKey] ??= []).push(event);
+          continue;
+        }
+        // 다일 — 자정 단위로 cursor 이동. 무한 loop 방어: endAt < startAt
+        // 이거나 한 달 넘는 비정상 데이터는 startKey 만 등록 후 skip.
+        const cursor = new Date(event.startAt);
+        cursor.setHours(0, 0, 0, 0);
+        const last = new Date(event.endAt);
+        last.setHours(0, 0, 0, 0);
+        if (last < cursor) {
+          (byDate[startKey] ??= []).push(event);
+          continue;
+        }
+        let iter = 0;
+        while (cursor <= last && iter < 366) {
+          const k = localDateKey(cursor);
+          (byDate[k] ??= []).push(event);
+          cursor.setTime(cursor.getTime() + dayMs);
+          iter += 1;
         }
       }
 
