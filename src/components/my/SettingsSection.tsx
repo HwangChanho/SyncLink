@@ -98,6 +98,19 @@ export function SettingsSection() {
         </TouchableOpacity>
         <View style={menu.menuDivider} />
 
+        {/* v1.2.0 — 국가 (공휴일 표시 + 지역 포맷). */}
+        <TouchableOpacity
+          style={menu.menuItem}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onPress={() => router.push('/settings/country' as any)}
+          activeOpacity={0.7}
+          testID="settings-button-country"
+        >
+          <Text style={menu.menuItemText}>국가</Text>
+          <Text style={menu.menuItemChevron}>›</Text>
+        </TouchableOpacity>
+        <View style={menu.menuDivider} />
+
         {/* Build-81 — 계정 (로그아웃 + 회원탈퇴) 화면. 기존 my.tsx
             inline AccountSection 대체 — 화면 설정 / 앱 잠금 패턴 동일. */}
         <TouchableOpacity

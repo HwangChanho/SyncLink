@@ -327,18 +327,19 @@ export function makeSpaceDetailStyles(colors: ReturnType<typeof useColors>) {
     marginTop: spacing[4],
   },
   leaveButton: {
-    paddingVertical: spacing[4],
+    // v1.1.4 — 버튼/폰트 크기 축소 (LEAD 피드백: dangerZone 버튼이 너무 큼).
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[4],
     alignItems: 'center',
-    borderRadius: radius.xl,
+    alignSelf: 'center',
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.error,
-    // Build-92 — 같은 dangerZone 안 두 버튼 (관리자 변경 + 탈퇴) 사이 여백.
-    // 첫 버튼은 마진 0 (View 의 marginTop 가 영역 시작), 두 번째 버튼이
-    // 위와 분리되도록 marginTop. siblings 모두 같은 값이라 OR 처리.
     marginTop: spacing[3],
   },
   leaveButtonText: {
-    ...textStyles.labelLg,
+    // labelLg → labelSm 로 축소.
+    ...textStyles.labelSm,
     color: colors.error,
   },
   // Error state

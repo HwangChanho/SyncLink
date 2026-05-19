@@ -25,6 +25,9 @@ import { useColors } from '@/hooks/useColors';
 import { useTranslatedTitles } from '@/hooks/useTranslatedTitles';
 import { spacing } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { contrastingTextColor } from '@/lib/colorContrast';
+import { useAuthStore } from '@/stores/authStore';
+import { getHolidaysByDate, type CountryCode } from '@/services/holidayService';
 import {
   useMonthDragHandler,
   type MonthCellLayout,
@@ -220,6 +223,11 @@ export function MonthView({
   }, [year, month]);
 
   const today = new Date();
+
+  // v1.2.0 — 사용자 country 기반 공휴일. authStore.user.country_code 변경 시
+  // 자동 재계산. 빈 dict 면 표시 없음.
+  const country = (useAuthStore((s) => s.user?.country_code) ?? 'KR') as CountryCode;
+  const holidaysByDate = useMemo(() => getHolidaysByDate(country), [country]);
 
   // Sprint 19 TASK-1907 — translated titles for events visible in this
   // month (Pro + non-default locale only). Cache-only: we never invoke the
@@ -554,14 +562,18 @@ export function MonthView({
             const dayEvents = eventsByDate[dateKey] ?? [];
             const dayTodos = todosByDate?.[dateKey] ?? [];
             const dayAnniversaries = anniversariesByDate?.[dateKey] ?? [];
-            // Merge events + todos + anniversaries 한 strip. Build-91 —
-            // anniversary 는 항상 표시 (Space 단위 공유 기념일 — 무조건 노출).
-            // 색은 핫핑크 계열로 events/todos 와 시각적으로 구분.
+            // v1.2.0 — 사용자 국가 공휴일. read-only, 핫핑크와 다른 빨강(#DC2626).
+            const dayHolidays = holidaysByDate[dateKey] ?? [];
+            // Merge events + todos + anniversaries + holidays 한 strip.
             const dayItems: MonthViewItem[] = [
+              ...dayHolidays.map((h): MonthViewItem => ({
+                id:    `hol-${dateKey}-${h.name}`,
+                title: h.name,
+                color: '#DC2626', // red-600 — 공휴일 표준 빨강
+                kind:  'event',
+              })),
               ...dayEvents.map((e): MonthViewItem => ({
                 id: e.id,
-                // Prefer the cached translation when one is available — falls
-                // back to the original title when not Pro / locale matches.
                 title: translatedTitles.get(e.id) ?? e.title,
                 color: e.color,
                 kind: 'event',
@@ -570,8 +582,8 @@ export function MonthView({
               ...dayAnniversaries.map((a): MonthViewItem => ({
                 id:    `anniv-${a.id}`,
                 title: `🎉 ${a.title}`,
-                color: '#EC4899', // Tailwind pink-500 — anniversary signature
-                kind:  'event',   // bar style 은 event 와 동일
+                color: '#EC4899',
+                kind:  'event',
               })),
             ];
 
@@ -718,7 +730,7 @@ export function MonthView({
                 testID="event-bar"
               >
                 <Text
-                  style={[styles.itemBarText, { color: colors.textPrimary }]}
+                  style={[styles.itemBarText, { color: contrastingTextColor(it.color) }]}
                   numberOfLines={1}
                 >
                   {title}

@@ -21,6 +21,8 @@ export interface UserRow {
   push_token: string | null;
   push_enabled: boolean;    // master switch for push notifications (005_push_tokens.sql)
   notification_settings: NotificationSettings;
+  /** v1.2.0 — ISO 3166-1 alpha-2. 캘린더 공휴일/지역 포맷에 사용. default 'KR'. */
+  country_code: string;
   created_at: string;       // ISO-8601 timestamp
   updated_at: string;
 }

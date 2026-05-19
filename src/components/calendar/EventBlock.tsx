@@ -14,6 +14,7 @@ import type { EventSummary } from '@/types';
 import { useColors } from '@/hooks/useColors';
 import { radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { contrastingTextColor } from '@/lib/colorContrast';
 
 /** Smallest height that still renders legibly (1-line title). */
 const MIN_HEIGHT = 22;
@@ -94,7 +95,7 @@ export function EventBlock({
       ]}
     >
       <Text
-        style={styles.title}
+        style={[styles.title, { color: contrastingTextColor(event.color) }]}
         numberOfLines={showSubtitle ? 2 : 1}
         ellipsizeMode="tail"
       >

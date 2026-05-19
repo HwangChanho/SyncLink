@@ -151,7 +151,22 @@ async function sendExpoChunk(
 
 // ─── Main handler ────────────────────────────────────────────────────────────
 
-Deno.serve(async (): Promise<Response> => {
+Deno.serve(async (req: Request): Promise<Response> => {
+  // v1.1.4 — pg_cron 이 service_role JWT 대신 DISPATCH_SECRET 헤더로 호출.
+  // (vault 에 service_role_key 를 박지 않기 위함 — weekly-review-batch 와
+  // 동일 패턴.) Authorization: Bearer <DISPATCH_SECRET> 형식.
+  const dispatchSecret = Deno.env.get('DISPATCH_SECRET') ?? '';
+  if (dispatchSecret) {
+    const auth = req.headers.get('Authorization') ?? '';
+    const token = auth.replace(/^Bearer\s+/i, '');
+    if (token !== dispatchSecret) {
+      return new Response(
+        JSON.stringify({ error: 'unauthorized' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+  }
+
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
