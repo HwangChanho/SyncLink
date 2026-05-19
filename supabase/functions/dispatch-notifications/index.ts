@@ -37,7 +37,7 @@ const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type NotificationType = 'event_added' | 'event_updated' | 'event_deleted';
+type NotificationType = 'event_added' | 'event_updated' | 'event_deleted' | 'message_received';
 
 interface QueueRow {
   id: string;
@@ -94,6 +94,9 @@ interface ExpoPushResponse {
 function buildMessage(row: QueueRow): { title: string; body: string } {
   const actor = row.payload.actor_nickname?.trim() || '멤버';
   const eventTitle = row.payload.title?.trim();
+  // v1.2.0 메신저용 payload 키.
+  const spaceName = (row.payload as { space_name?: string }).space_name?.trim();
+  const preview   = (row.payload as { preview?: string }).preview?.trim();
 
   switch (row.type) {
     case 'event_added':
@@ -116,6 +119,11 @@ function buildMessage(row: QueueRow): { title: string; body: string } {
         body: eventTitle
           ? `${actor}님이 일정 "${eventTitle}"을(를) 삭제했어요`
           : `${actor}님이 일정을 삭제했어요`,
+      };
+    case 'message_received':
+      return {
+        title: spaceName ? `${spaceName} · ${actor}` : actor,
+        body:  preview && preview.length > 0 ? preview : '새 메시지',
       };
   }
 }

@@ -629,7 +629,17 @@ export default function SpaceDetailScreen() {
           <Text style={styles.closeText}>{t('common.close')}</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>{space.name}</Text>
-        <View style={styles.closeButton} />
+        {/* v1.2.0 — Space 채팅 진입점. 헤더 우측 끝에 붙도록 inline width
+            (closeButton 의 minWidth 44 와 별개) + alignItems flex-end. */}
+        <TouchableOpacity
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onPress={() => router.push(`/space/${space.id}/chat` as any)}
+          style={{ width: 32, alignItems: 'flex-end' }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityLabel="채팅"
+        >
+          <Ionicons name="chatbubble-outline" size={22} color={colors.textPrimary} />
+        </TouchableOpacity>
       </View>
 
       {isActionLoading && (
