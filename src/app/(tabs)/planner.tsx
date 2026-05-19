@@ -40,6 +40,7 @@ import { TodoTab } from '@/components/planner/TodoTab';
 import { NotesTab } from '@/components/planner/NotesTab';
 import { AppErrorBoundary } from '@/components/common/AppErrorBoundary';
 import { logError } from '@/lib/errorLogger';
+import { PrioritySuggestionCard } from '@/components/planner/PrioritySuggestionCard';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -207,6 +208,9 @@ function PlannerScreenInner() {
           ))}
         </View>
       )}
+
+      {/* v1.2 Phase 3 — overdue + high priority hint 카드 */}
+      {activeTab === 'todo' ? <PrioritySuggestionCard todos={todos} /> : null}
 
       {/* Content */}
       <KeyboardAvoidingView
