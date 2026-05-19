@@ -19,6 +19,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Share,
+  Switch,
   TextInput,
   Platform,
 } from 'react-native';
@@ -32,6 +33,7 @@ import { supabase } from '@/lib/supabase';
 import { useColors } from '@/hooks/useColors';
 import { makeSpaceDetailStyles } from '@/components/space/spaceDetailStyles';
 import * as spaceService from '@/services/spaceService';
+import { getSpaceNotificationsEnabled, setSpaceNotificationsEnabled } from '@/services/spaceMessageService';
 import { showAlert } from '@/lib/webAlert';
 import { EditSpaceModal } from '@/components/space/EditSpaceModal';
 import { ContactPickerModal } from '@/components/space/ContactPickerModal';
@@ -61,6 +63,8 @@ export default function SpaceDetailScreen() {
   const [isLoading, setIsLoading] = useState(!space);
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // v1.2.1 — Space 알림 토글.
+  const [notifEnabled, setNotifEnabled] = useState<boolean>(true);
 
   // ─── Free time finder state (TASK-203) ───────────────────────────────────
 
@@ -132,6 +136,8 @@ export default function SpaceDetailScreen() {
     try {
       const loaded = await fetchSpaceById(spaceId);
       setSpace(loaded);
+      // v1.2.1 — 알림 토글 hydrate.
+      void getSpaceNotificationsEnabled(spaceId).then(setNotifEnabled);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('space.load_failed'));
     } finally {
@@ -908,6 +914,22 @@ export default function SpaceDetailScreen() {
             )
           )}
         </SectionCard>
+
+        {/* v1.2.1 — Space 채널별 알림 토글 (dangerZone 위) */}
+        <View style={styles.dangerZone}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8 }}>
+            <Text style={{ color: colors.textPrimary, fontSize: 14 }}>알림 받기</Text>
+            <Switch
+              value={notifEnabled}
+              onValueChange={async (v) => {
+                setNotifEnabled(v);
+                await setSpaceNotificationsEnabled(space.id, v);
+              }}
+              trackColor={{ false: colors.border, true: colors.primaryLight }}
+              thumbColor={notifEnabled ? colors.primary : colors.surface}
+            />
+          </View>
+        </View>
 
         {/* Danger zone */}
         <View style={styles.dangerZone}>

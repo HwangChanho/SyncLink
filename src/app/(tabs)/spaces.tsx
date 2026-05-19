@@ -6,7 +6,7 @@
  * 컴포넌트로 추출 (`@/components/space/SpaceCard`).
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -23,16 +23,20 @@ import { useSpaceStore } from '@/stores/spaceStore';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { SpaceCard } from '@/components/space/SpaceCard';
+import { getUnreadCounts } from '@/services/spaceMessageService';
 
 export default function SpacesScreen() {
   const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
   const { spaces, fetchMySpaces, isLoading } = useSpaceStore();
+  // v1.2.1 — Space 별 안 본 메시지 수.
+  const [unread, setUnread] = useState<Record<string, number>>({});
 
   // Tab mount 시 + focus 마다 재조회 (다른 탭에서 변경된 경우 동기화)
   useEffect(() => {
     fetchMySpaces();
+    void getUnreadCounts().then(setUnread);
   }, [fetchMySpaces]);
 
   const isEmpty = !isLoading && spaces.length === 0;
@@ -71,6 +75,7 @@ export default function SpacesScreen() {
               <SpaceCard
                 key={space.id}
                 space={space}
+                unreadCount={unread[space.id] ?? 0}
                 onPress={() => router.push(`/space/${space.id}`)}
               />
             ))}

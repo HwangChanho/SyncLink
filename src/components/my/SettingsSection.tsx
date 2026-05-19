@@ -111,6 +111,19 @@ export function SettingsSection() {
         </TouchableOpacity>
         <View style={menu.menuDivider} />
 
+        {/* v1.2.1 — 운동 통계 (헬스 부위별 + 러닝 주별). */}
+        <TouchableOpacity
+          style={menu.menuItem}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onPress={() => router.push('/stats/fitness' as any)}
+          activeOpacity={0.7}
+          testID="settings-button-fitness-stats"
+        >
+          <Text style={menu.menuItemText}>운동 통계</Text>
+          <Text style={menu.menuItemChevron}>›</Text>
+        </TouchableOpacity>
+        <View style={menu.menuDivider} />
+
         {/* Build-81 — 계정 (로그아웃 + 회원탈퇴) 화면. 기존 my.tsx
             inline AccountSection 대체 — 화면 설정 / 앱 잠금 패턴 동일. */}
         <TouchableOpacity

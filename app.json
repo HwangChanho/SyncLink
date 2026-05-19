@@ -2,7 +2,7 @@
   "expo": {
     "name": "SyncLink",
     "slug": "synclink",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "orientation": "portrait",
     "icon": "./images/SyncDayLogo.png",
     "scheme": "synclink",
@@ -20,7 +20,7 @@
       "bundleIdentifier": "io.synclink.app",
       "appleTeamId": "QUVU2PY6PG",
       "newArchEnabled": false,
-      "buildNumber": "120",
+      "buildNumber": "121",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.io.synclink.app.widget"

@@ -560,11 +560,16 @@ export function MonthView({
             const isSunday = dayIdx === 0;
             const dateKey = toDateKey(date);
             const dayEvents = eventsByDate[dateKey] ?? [];
-            const dayTodos = todosByDate?.[dateKey] ?? [];
+            // v1.2.1 — dayTodos 를 dayItems 에 합치지 않으므로 추출 제거.
+            // 부모는 여전히 todosByDate 를 prop 으로 전달할 수 있지만 무시함.
+            // (todosByDate prop 자체는 backward-compat 으로 유지.)
+            // const dayTodos = todosByDate?.[dateKey] ?? [];
             const dayAnniversaries = anniversariesByDate?.[dateKey] ?? [];
             // v1.2.0 — 사용자 국가 공휴일. read-only, 핫핑크와 다른 빨강(#DC2626).
             const dayHolidays = holidaysByDate[dateKey] ?? [];
-            // Merge events + todos + anniversaries + holidays 한 strip.
+            // v1.2.1 — 할일(todo)은 캘린더에 노출하지 않음 (LEAD 결정).
+            // dayTodos 는 더 이상 dayItems 에 합쳐지지 않음. 플래너 탭 전용.
+            // Merge events + anniversaries + holidays 한 strip.
             const dayItems: MonthViewItem[] = [
               ...dayHolidays.map((h): MonthViewItem => ({
                 id:    `hol-${dateKey}-${h.name}`,
@@ -578,7 +583,6 @@ export function MonthView({
                 color: e.color,
                 kind: 'event',
               })),
-              ...dayTodos,
               ...dayAnniversaries.map((a): MonthViewItem => ({
                 id:    `anniv-${a.id}`,
                 title: `🎉 ${a.title}`,

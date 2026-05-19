@@ -26,7 +26,7 @@ import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import {
   listMessages, sendTextMessage, sendImageMessage, deleteMessage,
-  subscribeToSpace, type SpaceMessage,
+  subscribeToSpace, markSpaceAsRead, type SpaceMessage,
 } from '@/services/spaceMessageService';
 
 export default function SpaceChatScreen() {
@@ -41,7 +41,7 @@ export default function SpaceChatScreen() {
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // ── 초기 hydrate ────────────────────────────────────────────────────────
+  // ── 초기 hydrate + read 표시 ────────────────────────────────────────────
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
@@ -57,8 +57,17 @@ export default function SpaceChatScreen() {
         setLoading(false);
       }
     });
+    // v1.2.1 — 진입 시 last_read_at 갱신 (unread badge 0).
+    void markSpaceAsRead(id);
     return () => { cancelled = true; };
   }, [id]);
+
+  // 새 메시지 도착 시에도 (포커스 유지 상태면) read 처리 — chat 화면이 떠 있는
+  // 동안 도착한 메시지는 곧장 본 것으로 간주.
+  useEffect(() => {
+    if (!id || messages.length === 0) return;
+    void markSpaceAsRead(id);
+  }, [id, messages.length]);
 
   // ── Realtime 구독 ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -72,6 +81,10 @@ export default function SpaceChatScreen() {
       },
       (deletedId) => {
         setMessages((prev) => prev.filter((m) => m.id !== deletedId));
+      },
+      // v1.2.1 — UPDATE 이벤트 (AI 자동 태그 결과) 반영.
+      (updated) => {
+        setMessages((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
       },
     );
     return unsubscribe;
@@ -158,6 +171,16 @@ export default function SpaceChatScreen() {
           )}
           {item.imageUrl && (
             <Image source={{ uri: item.imageUrl }} style={styles.image} resizeMode="cover" />
+          )}
+          {/* v1.2.1 — AI 자동 태그 chip */}
+          {item.tags && item.tags.length > 0 && (
+            <View style={styles.tagsRow}>
+              {item.tags.map((tag, i) => (
+                <View key={i} style={styles.tagChip}>
+                  <Text style={styles.tagText}>#{tag}</Text>
+                </View>
+              ))}
+            </View>
           )}
         </View>
         <Text style={styles.time}>
@@ -264,6 +287,24 @@ function makeStyles(colors: ColorTokens) {
       height: 200,
       borderRadius: radius.md,
       marginTop: spacing[1],
+    },
+    tagsRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 4,
+      marginTop: 4,
+    },
+    tagChip: {
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 6,
+      // mine(보라)/other(흰색) 두 bubble 에서 모두 보이도록 반투명 검정.
+      backgroundColor: 'rgba(0,0,0,0.18)',
+    },
+    tagText: {
+      ...textStyles.caption,
+      fontSize: 10,
+      color: '#FFFFFF',
     },
     time: { ...textStyles.caption, color: colors.textTertiary },
     composer: {
