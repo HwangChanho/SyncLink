@@ -150,7 +150,19 @@ async function runTool(
   userId: string,
   toolName: string,
   input: Record<string, unknown>,
+  dryRun: boolean,
 ): Promise<{ ok: boolean; summary: string; data?: unknown }> {
+  // v1.2.x — dry-run 모드: actual mutation 건너뛰고 의도만 회신.
+  // 환경변수 ASSISTANT_DRY_RUN=true 또는 요청 dryRun:true 일 때 활성.
+  // 배포 직후 1주 안전망 (잘못된 createEvent / deleteEvent 차단).
+  if (dryRun && (toolName === 'createEvent' || toolName === 'updateEvent' || toolName === 'deleteEvent' || toolName === 'createTodo')) {
+    const intent = toolName === 'createEvent' ? `일정 추가 예정: ${input.title} (${input.startAt})`
+      : toolName === 'updateEvent' ? `일정 수정 예정: ${input.eventId}`
+      : toolName === 'deleteEvent' ? `일정 삭제 예정: ${input.eventId}`
+      : `할 일 추가 예정: ${input.title}`;
+    return { ok: true, summary: `[확인 모드] ${intent}`, data: { dryRun: true } };
+  }
+
   try {
     if (toolName === 'createEvent') {
       // RLS fix — events 테이블의 INSERT 정책은 user_id = auth.uid() 조건.
@@ -321,6 +333,9 @@ Deno.serve(async (req: Request) => {
   }
   const anthropic = new Anthropic({ apiKey });
 
+  // v1.2.x — dry-run 모드. 환경변수 또는 요청에서 활성 가능.
+  const dryRun = Deno.env.get('ASSISTANT_DRY_RUN') === 'true';
+
   const nowIso = body.clientNowIso ?? new Date().toISOString();
   const systemText = buildSystemPrompt(body.locale ?? 'ko', nowIso);
 
@@ -368,7 +383,7 @@ Deno.serve(async (req: Request) => {
     // 각 도구 실행 후 tool_result 로 한 번에 묶어서 next user 메시지.
     const toolResults: Array<{ type: 'tool_result'; tool_use_id: string; content: string }> = [];
     for (const tb of toolUseBlocks as Array<{ id: string; name: string; input: Record<string, unknown> }>) {
-      const result = await runTool(userClient, user.id, tb.name, tb.input ?? {});
+      const result = await runTool(userClient, user.id, tb.name, tb.input ?? {}, dryRun);
       executed.push({ tool: tb.name, ok: result.ok, summary: result.summary });
       toolResults.push({
         type: 'tool_result',
