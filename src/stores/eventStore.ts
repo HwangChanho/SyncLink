@@ -192,19 +192,13 @@ export const useEventStore = create<EventState>((set, _get) => ({
 
   upsertEvent: (event) =>
     set((state) => {
-      // Get the local date key for this event's new start date (TASK-005)
-      const newDateKey = localDateKey(event.startAt);
+      // v1.2.5 — 다일 expansion 일관성 유지.
+      // 다일 일정을 drag 로 이동했을 때 startAt cell 만 갱신하면 length 가
+      // 한 날로 줄어든 것처럼 보이는 회귀가 있었음. fetchEvents 의 expansion
+      // 알고리즘과 동일하게 startAt..endAt 모든 dateKey 에 같은 EventSummary
+      // 를 등록.
 
-      // Build a fresh eventsByDate map:
-      //  1. Remove the event from ANY existing bucket (handles the case where
-      //     the event has been moved to a different day — we must evict it from
-      //     its original date bucket, not just add it to the new one).
-      //  2. Insert/replace in the new date bucket.
-      //
-      // Without step 1, dragging an event from Jan 12 → Jan 13 would leave a
-      // stale ghost copy on Jan 12 while the new copy appears on Jan 13, making
-      // the UI appear as if the event never moved. (Bug: drag visual works but
-      // reschedule looks ineffective because old slot is still occupied.)
+      // 1) 기존 dateKey 들에서 이 event 제거.
       const withoutEvent = Object.fromEntries(
         Object.entries(state.eventsByDate).map(([date, events]) => [
           date,
@@ -212,12 +206,27 @@ export const useEventStore = create<EventState>((set, _get) => ({
         ]),
       );
 
-      const existing = withoutEvent[newDateKey] ?? [];
-      const updated = [...existing, event];
+      // 2) startAt..endAt 모든 dateKey 에 다시 추가.
+      const startKey = localDateKey(event.startAt);
+      const endKey   = localDateKey(event.endAt);
+      const merged: typeof state.eventsByDate = { ...withoutEvent };
+      if (startKey === endKey) {
+        merged[startKey] = [...(merged[startKey] ?? []), event];
+      } else {
+        const cursor = new Date(event.startAt);
+        cursor.setHours(0, 0, 0, 0);
+        const last = new Date(event.endAt);
+        last.setHours(0, 0, 0, 0);
+        let iter = 0;
+        while (cursor <= last && iter < 366) {
+          const k = localDateKey(cursor);
+          merged[k] = [...(merged[k] ?? []), event];
+          cursor.setTime(cursor.getTime() + 24 * 60 * 60 * 1000);
+          iter += 1;
+        }
+      }
 
-      return {
-        eventsByDate: { ...withoutEvent, [newDateKey]: updated },
-      };
+      return { eventsByDate: merged };
     }),
 
   removeEvent: (eventId) =>
