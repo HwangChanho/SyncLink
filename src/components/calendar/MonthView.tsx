@@ -348,7 +348,8 @@ export function MonthView({
           event: spec.event,
           dateKey: toDateKey(week[spec.startCol]),
           left:   spec.startCol * cellWidth + 2,
-          top:    weekIdx * CELL_HEIGHT + 36 + chipIdx * 14,
+          // v1.1.4 — 36 → 48 (+12). 날짜 숫자 아래 holiday label 자리 확보.
+          top:    weekIdx * CELL_HEIGHT + 48 + chipIdx * 14,
           width:  (spec.endCol - spec.startCol + 1) * cellWidth - 4,
           height: 13,
         });
@@ -565,18 +566,19 @@ export function MonthView({
             // (todosByDate prop 자체는 backward-compat 으로 유지.)
             // const dayTodos = todosByDate?.[dateKey] ?? [];
             const dayAnniversaries = anniversariesByDate?.[dateKey] ?? [];
-            // v1.2.0 — 사용자 국가 공휴일. read-only, 핫핑크와 다른 빨강(#DC2626).
+            // v1.2.0 — 사용자 국가 공휴일·기념일. read-only.
+            // v1.1.4 fix: events 가 외부 absolute layer (eventLayouts) 로 옮겨가
+            // 면서 holiday 가 어디에도 안 그려지던 회귀. 이제는 dayItems 와
+            // 분리해 cell 안 날짜 숫자 바로 밑에 작은 텍스트로 렌더.
+            // 휴일 (off !== false) → 날짜 숫자 빨강 / 비휴일 기념일 → 그대로.
+            // 텍스트는 항상 검정.
             const dayHolidays = holidaysByDate[dateKey] ?? [];
+            const isHoliday   = dayHolidays.length > 0;
+            const isOffDay    = dayHolidays.some((h) => h.off !== false);
             // v1.2.1 — 할일(todo)은 캘린더에 노출하지 않음 (LEAD 결정).
             // dayTodos 는 더 이상 dayItems 에 합쳐지지 않음. 플래너 탭 전용.
-            // Merge events + anniversaries + holidays 한 strip.
+            // Merge events + anniversaries 한 strip. (holidays 는 별도)
             const dayItems: MonthViewItem[] = [
-              ...dayHolidays.map((h): MonthViewItem => ({
-                id:    `hol-${dateKey}-${h.name}`,
-                title: h.name,
-                color: '#DC2626', // red-600 — 공휴일 표준 빨강
-                kind:  'event',
-              })),
               ...dayEvents.map((e): MonthViewItem => ({
                 id: e.id,
                 title: translatedTitles.get(e.id) ?? e.title,
@@ -625,7 +627,10 @@ export function MonthView({
                     style={[
                       styles.dateText,
                       !isCurrentMonth && styles.dimText,
-                      isSunday && !isToday && styles.sundayText,
+                      // v1.1.4 — 휴일 (off !== false) 만 빨간날.
+                      // 비휴일 기념일은 날짜 색 그대로, 텍스트만 밑에.
+                      isOffDay && !isToday && !isSelected && styles.holidayDateText,
+                      isSunday && !isToday && !isSelected && styles.sundayText,
                       isToday && styles.todayText,
                       isSelected && !isToday && styles.selectedText,
                     ]}
@@ -633,6 +638,25 @@ export function MonthView({
                     {date.getDate()}
                   </Text>
                 </View>
+
+                {/* v1.1.4 — 공휴일 이름 (날짜 숫자 바로 밑, 일반 일정보다 작게).
+                    여러 공휴일이 같은 날 겹치는 경우는 줄바꿈으로 표시. */}
+                {isHoliday && (
+                  <View style={styles.holidayLabelWrap} pointerEvents="none">
+                    {dayHolidays.map((h) => (
+                      <Text
+                        key={`hol-${h.name}`}
+                        style={[
+                          styles.holidayLabel,
+                          !isCurrentMonth && styles.dimText,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {h.name}
+                      </Text>
+                    ))}
+                  </View>
+                )}
 
                 {/*
                   Two densities:
@@ -889,7 +913,9 @@ export function MonthView({
 // Cell height: expanded vs the previous 60px default so the Apple-Calendar-
 // style colour bars (title + up to 3 of them) have room without crowding
 // the day number. Comes out to roughly 6 × 82 = 492 px of grid body.
-const CELL_HEIGHT = 82;
+// v1.1.4 — holiday label (날짜 숫자 아래 빨간 텍스트) 자리 12px 확보로
+// 기존 70 → 82 → 94. event chip absolute top 도 같은 폭만큼 push.
+const CELL_HEIGHT = 94;
 const DATE_CIRCLE = 30;
 
 /**
@@ -973,6 +999,23 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   },
   sundayText: {
     color: colors.accent,
+  },
+  // v1.1.4 — 공휴일 빨간날. red-600 (#DC2626). 일요일과 톤 일치.
+  holidayDateText: {
+    color: '#DC2626',
+  },
+  // v1.1.4 — 공휴일·기념일 이름 표시 (날짜 숫자 바로 밑).
+  // 일반 일정 itemBarText 보다 한 단계 작은 size + 줄간격 빠듯하게.
+  // 사용자 명세 — 텍스트는 검정 (빨강 X). 날짜 숫자만 휴일이면 빨강.
+  holidayLabelWrap: {
+    marginTop: 1,
+    paddingHorizontal: 2,
+  },
+  holidayLabel: {
+    fontSize: 9,
+    lineHeight: 11,
+    color: colors.textPrimary,
+    fontWeight: '500',
   },
   todayText: {
     color: colors.textInverse,

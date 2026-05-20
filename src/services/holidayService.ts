@@ -20,8 +20,13 @@ export type CountryCode = 'KR' | 'US' | 'JP' | 'other';
 export interface Holiday {
   /** YYYY-MM-DD (local date). */
   date: string;
-  /** 한국어/현지어 공휴일 이름. */
+  /** 한국어/현지어 공휴일·기념일 이름. */
   name: string;
+  /**
+   * 휴일 여부 (쉬는날 / "빨간날"). 명시 안 됨 = true (휴일) 로 간주.
+   * v1.1.4 — 비휴일 기념일 (예: 어버이날, 식목일) 데이터 추가 시 false 명시.
+   */
+  off?: boolean;
 }
 
 interface HolidayBundle {
