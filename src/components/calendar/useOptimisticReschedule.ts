@@ -76,6 +76,34 @@ export function useOptimisticReschedule(
       return;
     }
 
+    // v1.2.6 — 다일 일정 drag 시 확인 alert (LEAD 요청).
+    // 다일 일정은 expansion 으로 모든 cell 에 같은 EventSummary 가 등록돼
+    // 있어 어느 cell 을 잡고 옮겨도 startAt/endAt 이 통째로 shift 된다.
+    // 사용자가 "오늘 한 칸만 옮기는 줄" 알고 drag 하는 사고 방지용 안전판.
+    // 판별: startAt 과 endAt 의 device-local Y/M/D 가 다르면 다일.
+    const s = originalEvent.startAt;
+    const e = originalEvent.endAt;
+    const isMultiDay =
+      s.getFullYear() !== e.getFullYear() ||
+      s.getMonth()    !== e.getMonth()    ||
+      s.getDate()     !== e.getDate();
+
+    if (isMultiDay) {
+      const confirmed = await new Promise<boolean>((resolve) => {
+        Alert.alert(
+          '다일 일정 이동',
+          '여러 날에 걸친 일정이라 모든 날의 시간이 함께 변경됩니다.\n계속할까요?',
+          [
+            { text: '취소', style: 'cancel', onPress: () => resolve(false) },
+            { text: '이동', style: 'default', onPress: () => resolve(true) },
+          ],
+          { cancelable: false },
+        );
+      });
+
+      if (!confirmed) return;
+    }
+
     const optimisticEvent: EventSummary = {
       ...originalEvent,
       startAt: payload.newStartAt,
