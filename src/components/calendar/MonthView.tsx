@@ -18,7 +18,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable, Alert, ScrollView } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { EventSummary } from '@/types';
 import { useColors } from '@/hooks/useColors';
@@ -348,10 +348,10 @@ export function MonthView({
           event: spec.event,
           dateKey: toDateKey(week[spec.startCol]),
           left:   spec.startCol * cellWidth + 2,
-          // v1.1.4 — 36 → 48 (+12). 날짜 숫자 아래 holiday label 자리 확보.
-          top:    weekIdx * CELL_HEIGHT + 48 + chipIdx * 14,
+          // v1.1.4 — 2줄 줄바꿈 대응. CHIP_TOP/CHIP_ROW 상수 사용.
+          top:    weekIdx * CELL_HEIGHT + CHIP_TOP + chipIdx * CHIP_ROW,
           width:  (spec.endCol - spec.startCol + 1) * cellWidth - 4,
-          height: 13,
+          height: CHIP_HEIGHT,
         });
       });
     });
@@ -541,8 +541,13 @@ export function MonthView({
         ))}
       </View>
 
-      {/* Date rows — wrapped in a measured View so the drag hook can
-          translate page touches into grid-local coordinates. */}
+      {/* v1.1.4 — 6주 grid 합계가 화면을 넘으면 세로 scroll. cell 크게 키워도
+          잘림 없음. drag-to-reschedule pan 은 그대로 동작. */}
+      <ScrollView
+        style={styles.gridScroll}
+        contentContainerStyle={styles.gridScrollContent}
+        showsVerticalScrollIndicator={false}
+      >
       <View
         ref={gridRef}
         style={styles.gridRoot}
@@ -650,7 +655,7 @@ export function MonthView({
                           styles.holidayLabel,
                           !isCurrentMonth && styles.dimText,
                         ]}
-                        numberOfLines={1}
+                        numberOfLines={2}
                       >
                         {h.name}
                       </Text>
@@ -677,7 +682,7 @@ export function MonthView({
                       style={[
                         styles.barStack,
                         // event layer 가 차지하는 row 수만큼 아래로 밀어 겹치지 않게.
-                        { marginTop: 2 + MAX_BARS * 14 },
+                        { marginTop: 2 + MAX_BARS * CHIP_ROW },
                         !isCurrentMonth && styles.dimItems,
                       ]}
                     >
@@ -691,12 +696,13 @@ export function MonthView({
                               backgroundColor: it.color + '22',
                               borderLeftWidth: 3,
                               borderLeftColor: it.color,
+                              minHeight: CHIP_HEIGHT,
                             },
                           ]}
                         >
                           <Text
                             style={[styles.itemBarText, { color: it.color }]}
-                            numberOfLines={1}
+                            numberOfLines={2}
                           >
                             {it.title}
                           </Text>
@@ -759,7 +765,7 @@ export function MonthView({
               >
                 <Text
                   style={[styles.itemBarText, { color: contrastingTextColor(it.color) }]}
-                  numberOfLines={1}
+                  numberOfLines={2}
                 >
                   {title}
                 </Text>
@@ -790,6 +796,7 @@ export function MonthView({
         );
       })()}
       </View>
+      </ScrollView>
 
       {/* Build-54 — targeting toolbar. Shown while the user is choosing
           a destination cell. Title surfaces the picked event; the cancel
@@ -913,10 +920,15 @@ export function MonthView({
 // Cell height: expanded vs the previous 60px default so the Apple-Calendar-
 // style colour bars (title + up to 3 of them) have room without crowding
 // the day number. Comes out to roughly 6 × 82 = 492 px of grid body.
-// v1.1.4 — holiday label (날짜 숫자 아래 빨간 텍스트) 자리 12px 확보로
-// 기존 70 → 82 → 94. event chip absolute top 도 같은 폭만큼 push.
-const CELL_HEIGHT = 94;
+// v1.1.4 — cell 크게 + event chip 2줄 줄바꿈 허용으로 텍스트 짤림 해소.
+// 94 → 150. 6주 grid 합계 = 900px → 외부 ScrollView 로 wrap (화면 fit 외).
+const CELL_HEIGHT = 150;
 const DATE_CIRCLE = 30;
+// event chip absolute layer 의 chip 1줄 높이 + 줄간격.
+const CHIP_HEIGHT  = 26;
+const CHIP_SPACING = 2;
+const CHIP_TOP     = 60; // dateCircle(30) + holidayLabel 2줄(~22) + margin
+const CHIP_ROW     = CHIP_HEIGHT + CHIP_SPACING; // 28
 
 /**
  * Dynamic styles factory — receives current theme color tokens.
@@ -1054,10 +1066,12 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     paddingHorizontal: 2,
     gap: 2,
   },
+  // v1.1.4 — height 13 → 26 (2줄 줄바꿈). minHeight 로 1줄일 땐 줄어듦.
   itemBar: {
-    height: 13,
-    borderRadius: 2,
+    minHeight: 13,
+    borderRadius: 3,
     paddingHorizontal: 3,
+    paddingVertical: 1,
     justifyContent: 'center',
     overflow: 'hidden',
   },
@@ -1067,8 +1081,8 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     borderRadius: 4,
   },
   itemBarText: {
-    fontSize: 9,
-    lineHeight: 11,
+    fontSize: 10,
+    lineHeight: 12,
   },
   compactDot: {
     width: 6,
@@ -1086,6 +1100,13 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   // against this container.
   gridRoot: {
     position: 'relative',
+  },
+  // v1.1.4 — 외부 세로 ScrollView. 6주 * cellHeight 가 화면 넘을 때 스크롤.
+  gridScroll: {
+    flex: 1,
+  },
+  gridScrollContent: {
+    flexGrow: 1,
   },
   candidateRing: {
     position: 'absolute',
