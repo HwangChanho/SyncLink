@@ -423,6 +423,8 @@ const ko = {
     onboarding_title: '어떻게 불러드릴까요?',
     onboarding_subtitle: '함께 일정을 공유할 때 사용할 닉네임을 설정해 주세요.\n나중에 My 탭에서 언제든 변경할 수 있습니다.',
     onboarding_skip: '나중에 설정하기',
+    onboarding_country_label: '캘린더 국가',
+    onboarding_country_hint: '선택한 국가의 공휴일이 캘린더에 표시돼요. 여행 가실 땐 설정에서 변경할 수 있어요.',
     avatar_permission: '아바타를 변경하려면 사진 접근 권한이 필요합니다. 설정에서 허용해 주세요.',
     avatar_failed: '아바타 업로드에 실패했습니다.',
     theme: {

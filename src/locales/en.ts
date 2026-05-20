@@ -412,6 +412,8 @@ const en = {
     onboarding_title: 'What should we call you?',
     onboarding_subtitle: 'Set a nickname to use when sharing schedules.\nYou can change it anytime in the My tab.',
     onboarding_skip: 'Set up later',
+    onboarding_country_label: 'Calendar country',
+    onboarding_country_hint: 'Holidays of the selected country appear on your calendar. Switch any time from settings when you travel.',
     avatar_permission: 'Photo access is required to change your avatar. Please allow it in Settings.',
     avatar_failed: 'Failed to upload avatar.',
     theme: {

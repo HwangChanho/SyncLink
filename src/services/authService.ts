@@ -522,7 +522,7 @@ export async function getUserProfile(userId: string): Promise<UserRow | null> {
  * @returns Updated UserRow
  */
 export async function updateProfile(
-  updates: Partial<Pick<UserRow, 'nickname' | 'avatar_url' | 'notification_settings'>>,
+  updates: Partial<Pick<UserRow, 'nickname' | 'avatar_url' | 'notification_settings' | 'country_code'>>,
 ): Promise<UserRow> {
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) throw new Error('로그인이 필요합니다.');

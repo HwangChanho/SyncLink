@@ -409,6 +409,8 @@ const ja = {
     onboarding_title: 'なんとお呼びしますか？',
     onboarding_subtitle: '予定を共有するときに使うニックネームを設定してください。\nマイタブでいつでも変更できます。',
     onboarding_skip: '後で設定する',
+    onboarding_country_label: 'カレンダーの国',
+    onboarding_country_hint: '選択した国の祝日がカレンダーに表示されます。旅行時は設定からいつでも変更できます。',
     avatar_permission: 'アバターを変更するには写真へのアクセス権限が必要です。設定で許可してください。',
     avatar_failed: 'アバターのアップロードに失敗しました。',
     theme: {

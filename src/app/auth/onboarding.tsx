@@ -18,6 +18,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -27,10 +28,12 @@ import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { updateProfile } from '@/services/authService';
 import { useAuthStore } from '@/stores/authStore';
+import { SUPPORTED_COUNTRIES, type CountryCode } from '@/services/holidayService';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const NICKNAME_MAX_LENGTH = 20;
+const DEFAULT_COUNTRY: CountryCode = 'KR';
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -40,6 +43,7 @@ export default function OnboardingScreen() {
   const styles = makeStyles(colors);
 
   const [nickname, setNickname] = useState('');
+  const [country, setCountry] = useState<CountryCode>(DEFAULT_COUNTRY);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { setUser } = useAuthStore();
@@ -63,10 +67,16 @@ export default function OnboardingScreen() {
     setErrorMessage(null);
 
     try {
-      const updatedUser = await updateProfile({ nickname: trimmed });
-      setUser(updatedUser); // sync store with new nickname
+      // v1.1.4 — nickname + country_code 한 번에 저장. country 는 캘린더 공휴일·지역
+      // 포맷에 즉시 반영. DB default 'KR' 이지만 명시 저장으로 setUser 가 받는
+      // UserRow 도 최신 country 를 포함하게 함 (다른 화면이 reactive).
+      const updatedUser = await updateProfile({
+        nickname:     trimmed,
+        country_code: country,
+      });
+      setUser(updatedUser);
     } catch {
-      // Silently proceed — user can update nickname later in My tab (TASK-102)
+      // Silently proceed — user can update later in My tab (TASK-102) / /settings/country
     } finally {
       setIsSaving(false);
     }
@@ -75,8 +85,18 @@ export default function OnboardingScreen() {
     router.replace('/(tabs)');
   }
 
-  /** Skips nickname setup entirely — goes straight to the main app. */
-  function handleSkip() {
+  /**
+   * 닉네임을 건너뛰는 경우에도 선택한 country 는 보존 (skip 직전까지 사용자가
+   * 직접 고른 값). 호출 실패해도 DB default 'KR' 가 살아있어 안전.
+   */
+  async function handleSkip() {
+    if (isSaving) return;
+    try {
+      const updatedUser = await updateProfile({ country_code: country });
+      setUser(updatedUser);
+    } catch {
+      // 무시 — /(tabs) 로 진입. 사용자는 나중에 /settings/country 에서 변경 가능.
+    }
     router.replace('/(tabs)');
   }
 
@@ -126,6 +146,43 @@ export default function OnboardingScreen() {
           {errorMessage !== null && (
             <Text style={styles.errorText}>{errorMessage}</Text>
           )}
+
+          {/* ── Country picker ───────────────────────────────────────── */}
+          {/* v1.1.4 — 회원가입 시 국가 입력 → 캘린더 공휴일 즉시 적용.
+              여행 등으로 변경하고 싶을 땐 /settings/country 에서 동일 UI. */}
+          <View style={styles.countrySection}>
+            <Text style={styles.countryLabel}>
+              {t('profile.onboarding_country_label', { defaultValue: '캘린더 국가' })}
+            </Text>
+            <Text style={styles.countryHint}>
+              {t('profile.onboarding_country_hint', {
+                defaultValue: '선택한 국가의 공휴일이 캘린더에 표시돼요. 설정에서 언제든 변경할 수 있어요.',
+              })}
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.countryRow}
+            >
+              {SUPPORTED_COUNTRIES.map((opt) => {
+                const active = opt.code === country;
+                return (
+                  <TouchableOpacity
+                    key={opt.code}
+                    onPress={() => setCountry(opt.code)}
+                    style={[styles.countryChip, active && styles.countryChipActive]}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    testID={`onboarding-country-${opt.code.toLowerCase()}`}
+                  >
+                    <Text style={[styles.countryChipText, active && styles.countryChipTextActive]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
 
           {/* ── CTA buttons ──────────────────────────────────────────── */}
           <View style={styles.buttons}>
@@ -235,6 +292,47 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     ...textStyles.bodySm,
     color: colors.error,
     marginBottom: spacing[4],
+  },
+
+  // Country picker
+  countrySection: {
+    marginTop: spacing[6],
+  },
+  countryLabel: {
+    ...textStyles.bodySm,
+    color: colors.textPrimary,
+    fontWeight: '600',
+    marginBottom: spacing[1],
+  },
+  countryHint: {
+    ...textStyles.caption,
+    color: colors.textTertiary,
+    marginBottom: spacing[3],
+    lineHeight: 18,
+  },
+  countryRow: {
+    gap: spacing[2],
+    paddingRight: spacing[4],
+  },
+  countryChip: {
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[2],
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  countryChipActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary,
+  },
+  countryChipText: {
+    ...textStyles.bodySm,
+    color: colors.textSecondary,
+  },
+  countryChipTextActive: {
+    color: colors.textInverse,
+    fontWeight: '600',
   },
 
   // Buttons

@@ -412,6 +412,8 @@ const zh = {
     onboarding_title: '我们该怎么称呼您？',
     onboarding_subtitle: '设置共享日程时使用的昵称。\n您可以随时在"我的"标签中修改。',
     onboarding_skip: '稍后设置',
+    onboarding_country_label: '日历国家',
+    onboarding_country_hint: '所选国家的节假日将显示在日历中。旅行时可在设置中随时切换。',
     avatar_permission: '更改头像需要照片访问权限，请在设置中允许。',
     avatar_failed: '头像上传失败。',
     theme: {
