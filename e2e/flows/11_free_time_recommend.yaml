@@ -1,6 +1,12 @@
-# 11_free_time_recommend — 캘린더 빈 시간 보기 + BottomSheet 추천 활동 표시
+# 11_free_time_recommend — DEPRECATED (2026-05-20)
 #
-# 목적:
+# Build-81 에서 캘린더 free-time 토글이 의도적으로 제거되고 Space 화면 전용
+# (src/app/space/[id].tsx:451 handleFindFreeTime) 으로 이전됨. 본 flow 의
+# calendar-button-free-time testID 는 사라진 UI 를 참조하므로 영구 SKIP.
+# Space 진입 패턴 신규 flow 가 필요하면 30_space_free_time.yaml 같은 이름으로
+# 새로 작성한다. ISSUE-021 (closed) 참조.
+#
+# 원래 목적 (참조용):
 #   1. 로그인 → 캘린더 탭 도달
 #   2. "빈 시간 보기" 토글 버튼 탭 (testID: calendar-button-free-time)
 #   3. 빈 시간 overlay/hint 표시 확인 (testID: free-time-hint)
