@@ -173,7 +173,7 @@ export function ChatComposer() {
         style={styles.input}
         value={text}
         onChangeText={setText}
-        placeholder={speech.isListening ? '듣는 중…' : '비서에게 무엇이든 물어보세요'}
+        placeholder={speech.isListening ? '듣는 중…' : '내 일정에 대해 분석/질문하기'}
         placeholderTextColor={colors.textPlaceholder}
         multiline
         maxLength={MAX_LEN}

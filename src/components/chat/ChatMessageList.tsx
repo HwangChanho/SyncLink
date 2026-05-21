@@ -36,9 +36,18 @@ export function ChatMessageList({ messages, isLoading }: Props) {
       contentContainerStyle={styles.content}
     >
       {messages.length === 0 ? (
+        // v1.1.5 — 컨셉 전환. 단순 일정 등록 (NLInputBar 와 겹침) → 내 일정
+        // 분석 + 인사이트 추출 중심.
         <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>무엇을 도와드릴까요?</Text>
-          <Text style={styles.emptyHint}>예: "내일 오후 7시 카페 약속 추가해줘"</Text>
+          <Text style={styles.emptyTitle}>내 일정에서 무엇을 알아볼까요?</Text>
+          <Text style={styles.emptyHint}>일정 데이터를 분석해 패턴과 인사이트를 찾아드려요.</Text>
+          <View style={styles.examplesWrap}>
+            <Text style={styles.exampleItem}>· 이번 주에 가장 많이 만난 사람은?</Text>
+            <Text style={styles.exampleItem}>· 이번 달 운동 빈도와 부위 분포 분석해줘</Text>
+            <Text style={styles.exampleItem}>· 다음 주 가장 바쁜 날과 빈 시간은?</Text>
+            <Text style={styles.exampleItem}>· 최근 한 달 가장 자주한 카테고리는?</Text>
+            <Text style={styles.exampleItem}>· 지난 3개월 수면·러닝 추세 요약해줘</Text>
+          </View>
         </View>
       ) : null}
 
@@ -94,9 +103,29 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   return StyleSheet.create({
     container: { flex: 1 },
     content: { padding: spacing[4], gap: spacing[3] },
-    empty: { alignItems: 'center', paddingVertical: spacing[10] },
-    emptyTitle: { ...(textStyles.h3 as object), color: colors.textPrimary, marginBottom: spacing[2] },
-    emptyHint: { ...(textStyles.body as object), color: colors.textTertiary },
+    empty: { alignItems: 'center', paddingVertical: spacing[8], paddingHorizontal: spacing[4] },
+    emptyTitle: {
+      ...(textStyles.h3 as object),
+      color: colors.textPrimary,
+      marginBottom: spacing[2],
+      textAlign: 'center',
+    },
+    emptyHint: {
+      ...(textStyles.bodySm as object),
+      color: colors.textTertiary,
+      textAlign: 'center',
+      marginBottom: spacing[5],
+    },
+    examplesWrap: {
+      alignSelf: 'stretch',
+      gap: spacing[2],
+      paddingHorizontal: spacing[2],
+    },
+    exampleItem: {
+      ...(textStyles.bodySm as object),
+      color: colors.textSecondary,
+      lineHeight: 20,
+    },
 
     bubbleWrap: { gap: spacing[1] },
     bubbleWrapUser: { alignItems: 'flex-end' },
