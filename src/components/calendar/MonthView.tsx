@@ -561,11 +561,15 @@ export function MonthView({
 
   return (
     <View style={styles.container}>
-      {/* Day-of-week header */}
+      {/* Day-of-week header. v1.1.5 — 일요일 빨강 / 토요일 파랑. */}
       <View style={styles.dowRow}>
         {DOW_LABELS.map((label, idx) => (
           <View key={label} style={styles.dowCell}>
-            <Text style={[styles.dowLabel, idx === 0 && styles.sundayText]}>
+            <Text style={[
+              styles.dowLabel,
+              idx === 0 && styles.sundayText,
+              idx === 6 && styles.saturdayText,
+            ]}>
               {label}
             </Text>
           </View>
@@ -597,7 +601,8 @@ export function MonthView({
             const isCurrentMonth = date.getMonth() === month;
             const isToday = isSameDay(date, today);
             const isSelected = isSameDay(date, selectedDate);
-            const isSunday = dayIdx === 0;
+            const isSunday   = dayIdx === 0;
+            const isSaturday = dayIdx === 6;
             const dateKey = toDateKey(date);
             const dayEvents = eventsByDate[dateKey] ?? [];
             // v1.2.1 — dayTodos 를 dayItems 에 합치지 않으므로 추출 제거.
@@ -669,7 +674,8 @@ export function MonthView({
                       // v1.1.4 — 휴일 (off !== false) 만 빨간날.
                       // 비휴일 기념일은 날짜 색 그대로, 텍스트만 밑에.
                       isOffDay && !isToday && !isSelected && styles.holidayDateText,
-                      isSunday && !isToday && !isSelected && styles.sundayText,
+                      isSunday   && !isToday && !isSelected && styles.sundayText,
+                      isSaturday && !isToday && !isSelected && styles.saturdayText,
                       isToday && styles.todayText,
                       isSelected && !isToday && styles.selectedText,
                     ]}
@@ -1045,10 +1051,14 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   dimItems: {
     opacity: 0.4,
   },
+  // v1.1.5 — 일요일 빨강, 토요일 파랑. 한국 캘린더 표준 컬러 규칙.
   sundayText: {
-    color: colors.accent,
+    color: '#DC2626',
   },
-  // v1.1.4 — 공휴일 빨간날. red-600 (#DC2626). 일요일과 톤 일치.
+  saturdayText: {
+    color: '#2563EB',
+  },
+  // v1.1.4 — 공휴일 빨간날. 일요일과 톤 일치.
   holidayDateText: {
     color: '#DC2626',
   },
