@@ -624,6 +624,7 @@ const ja = {
     headline: 'すべての機能を無制限で利用',
     features: [
       'AI 自然語イベント無制限',
+      '外部カレンダー無制限同期 (Google·Apple)',
       '毎週のウィークリーレビュー',
       'Space 無制限',
       'AI 日程提案',

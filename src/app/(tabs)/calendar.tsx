@@ -95,6 +95,24 @@ export default function CalendarScreen() {
   /** Whether the category filter sheet is open. */
   const [catFilterVisible, setCatFilterVisible] = useState(false);
 
+  // v1.1.5 — Source filter (외부 캘린더 sync). 'all' | 'native' | 'google'.
+  // 사용자가 본인 일정만 / 또는 가져온 일정만 보고 싶을 때. chip UI 는 Sprint 2
+  // 정식 디자인 후 추가 — 현재는 state 만 유지, default 'all'.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [sourceFilter, _setSourceFilter] = useState<'all' | 'native' | 'google'>('all');
+  const sourceFilteredEvents = useMemo(() => {
+    if (sourceFilter === 'all') return displayEventsByDate;
+    const out: typeof displayEventsByDate = {};
+    for (const [k, list] of Object.entries(displayEventsByDate)) {
+      out[k] = list.filter((e) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const origin = (e as any).origin ?? 'native';
+        return sourceFilter === 'google' ? origin === 'google' : origin === 'native';
+      });
+    }
+    return out;
+  }, [displayEventsByDate, sourceFilter]);
+
   /** Density mode: detailed bars with titles, or compact colour dots.
    * Build-69 — toggle UI 제거 (⋯ 메뉴 단순화). 'detailed' 고정. setter
    * 미사용. */
@@ -352,7 +370,7 @@ export default function CalendarScreen() {
 
   // ─── Events for current day (DayView) ────────────────────────────────────
 
-  const todayEvents: EventSummary[] = displayEventsByDate[toDateKey(selectedDate)] ?? [];
+  const todayEvents: EventSummary[] = sourceFilteredEvents[toDateKey(selectedDate)] ?? [];
 
   // ─── Render ──────────────────────────────────────────────────────────────────
 
@@ -412,7 +430,7 @@ export default function CalendarScreen() {
               onEmptyDatePress={handleEmptyDatePress}
               currentMonth={selectedDate}
               selectedDate={selectedDate}
-              eventsByDate={displayEventsByDate}
+              eventsByDate={sourceFilteredEvents}
               todosByDate={todosByDate}
               anniversariesByDate={anniversariesByDate}
               onDragModeChange={handleChildDragModeChange}
@@ -428,7 +446,7 @@ export default function CalendarScreen() {
           {viewMode === 'week' && (
             <WeekView
               selectedDate={selectedDate}
-              eventsByDate={displayEventsByDate}
+              eventsByDate={sourceFilteredEvents}
               onEventPress={handleEventPress}
               // 일자 헤더 탭 = day mode 진입 (drill-down).
               onDateSelect={(date) => {
