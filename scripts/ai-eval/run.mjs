@@ -33,6 +33,16 @@ function verify(scenario, response) {
   const tools = (response.executed ?? []).map((e) => e.tool);
   const expect = scenario.expect ?? {};
 
+  // v1.1.5 — fallback 응답 강제 FAIL. 이전엔 fallback 텍스트에 키워드가
+  // 우연히 들어가면 PASS 로 통과될 위험이 있었음. 명시적 noResponse flag
+  // 또는 fallback 문구 매치로 잡음.
+  if (response.noResponse === true) {
+    reasons.push('noResponse=true (model produced no final text)');
+  }
+  if ((response.text ?? '').startsWith('응답을 받지 못했어요')) {
+    reasons.push('fallback text detected — model produced no usable answer');
+  }
+
   if (expect.tools) {
     for (const t of expect.tools) {
       if (!tools.includes(t)) reasons.push(`expected tool "${t}" missing (got [${tools.join(',') || 'none'}])`);

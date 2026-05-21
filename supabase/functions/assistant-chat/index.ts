@@ -42,6 +42,12 @@ interface ChatResponse {
   /** 실행된 도구 + 결과 요약 (UI 에서 "일정이 생성되었습니다" 카드 표시용). */
   executed: Array<{ tool: string; ok: boolean; summary: string }>;
   tokensUsed: number;
+  /**
+   * v1.1.5 — 모델이 끝내 텍스트를 못 만들어 fallback 으로 응답한 경우 true.
+   * 자동 회귀(run.mjs) 가 fallback 을 "PASS 처럼 보이는 FAIL" 로 잘못 잡지
+   * 않도록 명시적 신호. 클라이언트 UI 는 무시해도 OK.
+   */
+  noResponse?: boolean;
 }
 
 // ─── System prompt ────────────────────────────────────────────────────────────
@@ -504,6 +510,7 @@ Deno.serve(async (req: Request) => {
     text: finalText || '응답을 받지 못했어요. 다시 시도해 주세요.',
     executed,
     tokensUsed,
+    ...(finalText ? {} : { noResponse: true }),
   };
 
   // usage_metrics 기록 (cost 추적, Phase 5 feature_area 포함).
