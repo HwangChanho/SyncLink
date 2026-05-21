@@ -17,6 +17,8 @@
     "test:e2e:launch": "maestro test e2e/flows/00_launch.yaml",
     "test:e2e:golden": "maestro test e2e/flows/05_golden_path.yaml",
     "test:e2e:studio": "maestro studio",
+    "ai:eval": "node scripts/ai-eval/run.mjs",
+    "ai:chat": "node scripts/ai-eval/playground.mjs",
     "test:e2e:ios-sim": "TEST_EMAIL=e2e-ios-sim-pro@synclink.test TEST_PASSWORD=e2etest1234 maestro test e2e/flows/",
     "test:e2e:critical": "TEST_EMAIL=e2e-ios-sim-pro@synclink.test TEST_PASSWORD=e2etest1234 maestro test e2e/flows/00_launch.yaml e2e/flows/01_login_dev.yaml e2e/flows/02_tab_navigation.yaml e2e/flows/03_event_create.yaml e2e/flows/04_planner_todo.yaml e2e/flows/05_golden_path.yaml e2e/flows/10_golden_path_login.yaml",
     "release:ios": "./scripts/release-ios.sh",

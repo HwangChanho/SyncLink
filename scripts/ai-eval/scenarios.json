@@ -1,0 +1,81 @@
+[
+  {
+    "name": "기본 조회 — 이번 주 일정",
+    "user": "이번 주 일정 보여줘",
+    "expect": {
+      "tools": ["listEventsInRange"],
+      "containsAny": ["주", "일정"]
+    }
+  },
+  {
+    "name": "분석 — 가장 많이 만난 사람",
+    "user": "이번 주에 가장 많이 만난 사람은?",
+    "expect": {
+      "tools": ["listEventsInRange"],
+      "containsAny": ["만났", "회", "명", "데이터"]
+    }
+  },
+  {
+    "name": "분석 — 운동 빈도/부위",
+    "user": "이번 달 운동 빈도와 부위 분포 분석해줘",
+    "expect": {
+      "tools": ["listEventsInRange"],
+      "containsAny": ["운동", "헬스", "회", "데이터"]
+    }
+  },
+  {
+    "name": "분석 — 다음 주 바쁜 날과 빈 시간",
+    "user": "다음 주 가장 바쁜 날과 빈 시간은?",
+    "expect": {
+      "tools": ["listEventsInRange"],
+      "containsAny": ["바쁜", "빈", "비어", "데이터"]
+    }
+  },
+  {
+    "name": "분석 — 카테고리 빈도",
+    "user": "최근 한 달 가장 자주한 카테고리는?",
+    "expect": {
+      "tools": ["listEventsInRange"],
+      "containsAny": ["카테고리", "자주", "회", "데이터"]
+    }
+  },
+  {
+    "name": "분석 — 장기 추세",
+    "user": "지난 3개월 수면·러닝 추세 요약해줘",
+    "expect": {
+      "tools": ["listEventsInRange"],
+      "containsAny": ["수면", "러닝", "추세", "데이터"]
+    }
+  },
+  {
+    "name": "명시적 등록 (보조 역할 검증) — dryRun 대신 dev 계정 격리",
+    "user": "내일 오후 7시 카페 약속 추가해줘",
+    "expect": {
+      "tools": ["createEvent"]
+    },
+    "skipMutate": true
+  },
+  {
+    "name": "잡담 — 도구 호출 없음",
+    "user": "안녕!",
+    "expect": {
+      "toolsExclude": ["createEvent", "deleteEvent", "updateEvent", "createTodo"],
+      "maxTextLength": 80
+    }
+  },
+  {
+    "name": "모호한 의도 — 1번만 되묻기",
+    "user": "그거 좀 옮겨줘",
+    "expect": {
+      "toolsExclude": ["deleteEvent"],
+      "containsAny": ["어떤", "무엇", "?", "구체"]
+    }
+  },
+  {
+    "name": "한 번에 다중 분석",
+    "user": "이번 주 내 일정 한 줄 요약 + 빈 시간 추천해줘",
+    "expect": {
+      "tools": ["listEventsInRange"]
+    }
+  }
+]
