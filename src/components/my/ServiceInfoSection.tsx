@@ -81,7 +81,7 @@ export function ServiceInfoSection() {
         <View style={menu.menuDivider} />
         <View style={menu.menuItem}>
           <Text style={menu.menuItemText}>앱 버전</Text>
-          <Text style={menu.menuItemValue}>{APP_VERSION} ({BUILD_NUMBER})</Text>
+          <Text style={menu.menuItemValue}>{APP_VERSION}</Text>
         </View>
       </View>
     </View>
