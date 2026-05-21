@@ -111,6 +111,19 @@ export function SettingsSection() {
         </TouchableOpacity>
         <View style={menu.menuDivider} />
 
+        {/* v1.1.5 — 외부 캘린더 연결 (Google import). */}
+        <TouchableOpacity
+          style={menu.menuItem}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onPress={() => router.push('/settings/external-calendars' as any)}
+          activeOpacity={0.7}
+          testID="settings-button-external-calendars"
+        >
+          <Text style={menu.menuItemText}>외부 캘린더 연결</Text>
+          <Text style={menu.menuItemChevron}>›</Text>
+        </TouchableOpacity>
+        <View style={menu.menuDivider} />
+
         {/* v1.2.1 — 운동 통계 (헬스 부위별 + 러닝 주별). */}
         <TouchableOpacity
           style={menu.menuItem}
