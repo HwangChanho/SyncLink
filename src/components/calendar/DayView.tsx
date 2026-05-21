@@ -131,7 +131,11 @@ export function DayView({
   const styles = makeStyles(colors);
 
   const scrollRef = useRef<ScrollView>(null);
-  const layouts = computeLayout(events);
+  // v1.1.4 fix — 종일(allDay) event 가 layout cluster 에 포함되면 같은 cluster
+  // 의 timed event 가 column 분할(1/2 widthFraction)로 오른쪽 절반에 밀리는
+  // 회귀. 종일은 상단 banner 에서 별도로 렌더하므로 layout 계산 input 에서
+  // 제외해 cluster 분할 영향 없음.
+  const layouts = computeLayout(events.filter((e) => !e.allDay));
   // Each layout's widthFraction is 1/N where N is the size of the
   // overlap-column group it belongs to. Rounding the reciprocal gives us
   // the maximum number of columns we need to make room for so the

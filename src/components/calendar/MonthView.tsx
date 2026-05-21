@@ -300,62 +300,93 @@ export function MonthView({
   //  4. MAX_BARS 초과 row 는 visible 에서 제외 (overflow +N 라벨로 별도 표시).
   //
   // dateKey 는 첫 등장 날짜 — useMonthDragHandler 가 이 key 로 cell 매핑.
-  const eventLayouts = useMemo<MonthEventLayout[]>(() => {
-    if (cellWidth <= 0 || density !== 'detailed') return [];
-    const out: MonthEventLayout[] = [];
-    weeks.forEach((week, weekIdx) => {
-      // 1) 주별 event 그룹 추출.
-      const groups = new Map<string, { startCol: number; endCol: number; event: EventSummary }>();
-      const order: string[] = [];
-      week.forEach((d, dayIdx) => {
-        const key = toDateKey(d);
-        (eventsByDate[key] ?? []).forEach((e) => {
-          const exist = groups.get(e.id);
-          if (!exist) {
-            groups.set(e.id, { startCol: dayIdx, endCol: dayIdx, event: e });
-            order.push(e.id);
-          } else if (dayIdx > exist.endCol) {
-            // 같은 event 가 같은 주에서 더 늦은 날짜에 등장하면 endCol 확장.
-            // 중간 빠진 날(예: 화~목인데 수가 빠짐)도 안전하게 max 로 확장.
-            exist.endCol = dayIdx;
-          }
+  // v1.1.4 — 동적 row height. 일정 적은 주는 작게, 많은 주는 max 까지.
+  // weekChipCounts 와 cumulativeWeekTop 을 같이 산출해 layout.top 을
+  // 정확한 grid-local y 로 채움 (drag hitTest 호환).
+  const { eventLayouts, weekHeights } = useMemo<{
+    eventLayouts: MonthEventLayout[];
+    weekHeights: number[];
+  }>(() => {
+    // 1) 각 주의 packed chip 정보 먼저 산출 (top 은 아직 미정).
+    type PackedChip = {
+      event: EventSummary;
+      dateKey: string;
+      left: number;
+      chipIdx: number;
+      width: number;
+    };
+    const perWeekChips: PackedChip[][] = weeks.map(() => []);
+    const chipCounts: number[] = weeks.map(() => 0);
+
+    if (cellWidth > 0 && density === 'detailed') {
+      weeks.forEach((week, weekIdx) => {
+        const groups = new Map<string, { startCol: number; endCol: number; event: EventSummary }>();
+        const order: string[] = [];
+        week.forEach((d, dayIdx) => {
+          const key = toDateKey(d);
+          (eventsByDate[key] ?? []).forEach((e) => {
+            const exist = groups.get(e.id);
+            if (!exist) {
+              groups.set(e.id, { startCol: dayIdx, endCol: dayIdx, event: e });
+              order.push(e.id);
+            } else if (dayIdx > exist.endCol) {
+              exist.endCol = dayIdx;
+            }
+          });
         });
+        const sorted = [...order].sort((a, b) => {
+          const A = groups.get(a)!;
+          const B = groups.get(b)!;
+          const spanA = A.endCol - A.startCol;
+          const spanB = B.endCol - B.startCol;
+          if (spanA !== spanB) return spanB - spanA;
+          return A.startCol - B.startCol;
+        });
+        const rowEndCols: number[] = [];
+        sorted.forEach((eventId) => {
+          const spec = groups.get(eventId)!;
+          let chipIdx = rowEndCols.findIndex((endCol) => spec.startCol > endCol);
+          if (chipIdx === -1) {
+            chipIdx = rowEndCols.length;
+            rowEndCols.push(-1);
+          }
+          rowEndCols[chipIdx] = spec.endCol;
+          if (chipIdx >= MAX_BARS) return; // overflow 는 +N 표시
+          perWeekChips[weekIdx]!.push({
+            event: spec.event,
+            dateKey: toDateKey(week[spec.startCol]!),
+            left:    spec.startCol * cellWidth + 2,
+            chipIdx,
+            width:   (spec.endCol - spec.startCol + 1) * cellWidth - 4,
+          });
+        });
+        chipCounts[weekIdx] = Math.min(rowEndCols.length, MAX_BARS);
       });
+    }
 
-      // 2) 다일 우선 정렬.
-      const sorted = [...order].sort((a, b) => {
-        const A = groups.get(a)!;
-        const B = groups.get(b)!;
-        const spanA = A.endCol - A.startCol;
-        const spanB = B.endCol - B.startCol;
-        if (spanA !== spanB) return spanB - spanA;
-        return A.startCol - B.startCol;
-      });
+    // 2) 주별 height: 기본 + chip 행 수 * CHIP_ROW.
+    const heights = chipCounts.map((c) => WEEK_MIN_HEIGHT + c * CHIP_ROW);
 
-      // 3) row packing.
-      const rowEndCols: number[] = []; // rowEndCols[chipIdx] = 그 row 의 마지막 점유 endCol
-      sorted.forEach((eventId) => {
-        const spec = groups.get(eventId)!;
-        let chipIdx = rowEndCols.findIndex((endCol) => spec.startCol > endCol);
-        if (chipIdx === -1) {
-          chipIdx = rowEndCols.length;
-          rowEndCols.push(-1);
-        }
-        rowEndCols[chipIdx] = spec.endCol;
-        if (chipIdx >= MAX_BARS) return; // 4) overflow 는 별도 +N 라벨
+    // 3) 누적 top — week 의 grid-local 시작 y.
+    const cum: number[] = [0];
+    for (let i = 0; i < heights.length; i++) cum.push((cum[i] ?? 0) + (heights[i] ?? 0));
 
+    // 4) chip 의 실제 top = 누적 + CHIP_TOP + chipIdx * CHIP_ROW.
+    const out: MonthEventLayout[] = [];
+    perWeekChips.forEach((chips, weekIdx) => {
+      chips.forEach((c) => {
         out.push({
-          event: spec.event,
-          dateKey: toDateKey(week[spec.startCol]),
-          left:   spec.startCol * cellWidth + 2,
-          // v1.1.4 — 2줄 줄바꿈 대응. CHIP_TOP/CHIP_ROW 상수 사용.
-          top:    weekIdx * CELL_HEIGHT + CHIP_TOP + chipIdx * CHIP_ROW,
-          width:  (spec.endCol - spec.startCol + 1) * cellWidth - 4,
-          height: CHIP_HEIGHT,
+          event:   c.event,
+          dateKey: c.dateKey,
+          left:    c.left,
+          top:     (cum[weekIdx] ?? 0) + CHIP_TOP + c.chipIdx * CHIP_ROW,
+          width:   c.width,
+          height:  CHIP_HEIGHT,
         });
       });
     });
-    return out;
+
+    return { eventLayouts: out, weekHeights: heights };
   }, [weeks, eventsByDate, cellWidth, density]);
 
   // ── Targeting (drop-target) state — Build-54 redesign ───────────────────
@@ -558,7 +589,10 @@ export function MonthView({
         {...panHandlers}
       >
       {weeks.map((week, weekIdx) => (
-        <View key={weekIdx} style={styles.weekRow}>
+        <View
+          key={weekIdx}
+          style={[styles.weekRow, { height: weekHeights[weekIdx] ?? WEEK_MIN_HEIGHT }]}
+        >
           {week.map((date, dayIdx) => {
             const isCurrentMonth = date.getMonth() === month;
             const isToday = isSameDay(date, today);
@@ -920,15 +954,17 @@ export function MonthView({
 // Cell height: expanded vs the previous 60px default so the Apple-Calendar-
 // style colour bars (title + up to 3 of them) have room without crowding
 // the day number. Comes out to roughly 6 × 82 = 492 px of grid body.
-// v1.1.4 — cell 크게 + event chip 2줄 줄바꿈 허용으로 텍스트 짤림 해소.
-// 94 → 150. 6주 grid 합계 = 900px → 외부 ScrollView 로 wrap (화면 fit 외).
-const CELL_HEIGHT = 150;
-const DATE_CIRCLE = 30;
-// event chip absolute layer 의 chip 1줄 높이 + 줄간격.
-const CHIP_HEIGHT  = 26;
-const CHIP_SPACING = 2;
-const CHIP_TOP     = 60; // dateCircle(30) + holidayLabel 2줄(~22) + margin
-const CHIP_ROW     = CHIP_HEIGHT + CHIP_SPACING; // 28
+// v1.1.4 — 동적 row height. 일정 0개인 주 = WEEK_MIN_HEIGHT,
+// 일정 많은 주 = WEEK_MIN_HEIGHT + MAX_BARS * CHIP_ROW (최대).
+// 화면 fit 안 되면 외부 ScrollView 에서 세로 스크롤.
+const WEEK_MIN_HEIGHT = 72;     // dateCircle(30) + holidayLabel 2줄 자리(28) + 여유(14)
+const DATE_CIRCLE     = 30;
+const CHIP_HEIGHT     = 26;     // event chip 1줄 height (2줄 줄바꿈 대응)
+const CHIP_SPACING    = 2;
+const CHIP_TOP        = 60;     // dateCircle 끝 + holidayLabel 2줄 끝 + margin
+const CHIP_ROW        = CHIP_HEIGHT + CHIP_SPACING; // 28
+// fixed fallback (cell 안 todo/anniversary barStack 위치 등 일부 곳 유지).
+const CELL_HEIGHT     = WEEK_MIN_HEIGHT + 3 * CHIP_ROW; // 156
 
 /**
  * Dynamic styles factory — receives current theme color tokens.
@@ -956,9 +992,9 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     ...textStyles.labelSm,
     color: colors.textSecondary,
   },
+  // v1.1.4 — height 는 inline 으로 weekHeights[weekIdx] 주입 (dynamic).
   weekRow: {
     flexDirection: 'row',
-    height: CELL_HEIGHT,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
