@@ -6,13 +6,22 @@
  */
 
 import { Linking, Platform, Text, TouchableOpacity, View } from 'react-native';
+import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import { useAuthStore } from '@/stores/authStore';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { makeMenuStyles } from './menuStyles';
 
-const APP_VERSION = '1.0.0';
+// v1.1.5 — app.json 의 version/buildNumber 자동 추출. 매 release 마다 수동
+// 갱신할 필요 X. native 빌드 시점의 값이 박힘 (OTA 후엔 OTA 시점 코드는
+// 같지만 native version 은 빌드 시점 그대로).
+const APP_VERSION  = Constants.expoConfig?.version ?? '?';
+const BUILD_NUMBER =
+  (Platform.OS === 'ios'
+    ? Constants.expoConfig?.ios?.buildNumber
+    : Constants.expoConfig?.android?.versionCode?.toString())
+  ?? '?';
 const CONTACT_EMAIL = 'cksgh0316@gmail.com';
 
 export function ServiceInfoSection() {
@@ -39,7 +48,7 @@ export function ServiceInfoSection() {
       `Plan: ${plan}`,
       `Push: ${user?.push_enabled ? 'on' : 'off'} (token: ${user?.push_token ? 'registered' : 'none'})`,
       `Platform: ${Platform.OS} ${Platform.Version}`,
-      `App Version: ${APP_VERSION} (build ${Platform.OS === 'ios' ? '101' : '101'})`,
+      `App Version: ${APP_VERSION} (build ${BUILD_NUMBER})`,
       '──────────────────',
     ].join('\n');
     const body = encodeURIComponent(diagnostic);
@@ -72,7 +81,7 @@ export function ServiceInfoSection() {
         <View style={menu.menuDivider} />
         <View style={menu.menuItem}>
           <Text style={menu.menuItemText}>앱 버전</Text>
-          <Text style={menu.menuItemValue}>{APP_VERSION}</Text>
+          <Text style={menu.menuItemValue}>{APP_VERSION} ({BUILD_NUMBER})</Text>
         </View>
       </View>
     </View>

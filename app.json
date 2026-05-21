@@ -200,11 +200,12 @@
       }
     },
     "owner": "danielhwang",
-    "runtimeVersion": "1.0.0",
+    "runtimeVersion": { "policy": "appVersion" },
     "updates": {
       "url": "https://u.expo.dev/c9ef6634-3221-4503-9ca0-3dee0e53ac45",
-      "enabled": false,
-      "checkAutomatically": "NEVER"
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
     }
   }
 }
