@@ -256,6 +256,23 @@ function buildEvents(userId, catId) {
     });
   }
 
+  // 8) 수면 — 지난 14일 매일 (23:30~07:30). 추세 분석 검증용.
+  for (let i = 1; i <= 14; i++) {
+    const sleepStart = daysAgo(i, 23, 30);
+    const sleepEnd   = daysAgo(i - 1, 7, 30);
+    // 변동: 평일 8h, 주말 9h 가량 — 일관 패턴
+    events.push({
+      user_id:     userId,
+      title:       '수면',
+      description: desc(`sleep-${i}`),
+      start_at:    iso(sleepStart),
+      end_at:      iso(sleepEnd),
+      all_day:     false,
+      category_id: catId('취미'),
+      event_kind:  'general',
+    });
+  }
+
   // 8) 미래 (다음 주 분석용) — 가장 바쁜 날 만들기
   // 다음 화요일에 4건 몰아 넣음
   const tueOffset = ((9 - new Date().getDay()) % 7) || 7; // 다음 화요일

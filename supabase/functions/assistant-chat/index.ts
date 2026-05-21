@@ -221,15 +221,57 @@ async function runTool(
     }
 
     if (toolName === 'listEventsInRange') {
+      // v1.1.5 — 분석 비서 컨셉 대응. event_kind/all_day/category/location/
+      // description/운동 데이터까지 노출해 모델이 패턴/빈도/추세를 더 정확
+      // 하게 추출할 수 있게. limit 20 → 80 (한 달 데이터 분석 시 부족).
       const { data, error } = await userClient
         .from('events')
-        .select('id, title, start_at, end_at')
+        .select(
+          'id, title, start_at, end_at, all_day, event_kind, ' +
+          'distance_km, avg_pace_seconds, location, description, ' +
+          'category:categories(name)',
+        )
         .gte('start_at', input.startAt as string)
         .lte('end_at',   input.endAt as string)
         .order('start_at', { ascending: true })
-        .limit(20);
+        .limit(80);
       if (error) return { ok: false, summary: `조회 실패: ${error.message}` };
-      return { ok: true, summary: `${data?.length ?? 0}개 일정 조회`, data };
+
+      // event_workout_parts join 별도 (PostgREST nested resource).
+      const ids = (data ?? []).filter((e) => e.event_kind === 'workout').map((e) => e.id);
+      let partsByEvent: Record<string, string[]> = {};
+      if (ids.length > 0) {
+        const { data: parts } = await userClient
+          .from('event_workout_parts')
+          .select('event_id, part')
+          .in('event_id', ids);
+        partsByEvent = (parts ?? []).reduce<Record<string, string[]>>((acc, p) => {
+          (acc[p.event_id as string] ??= []).push(p.part as string);
+          return acc;
+        }, {});
+      }
+
+      // 모델이 읽기 쉽게 정리. category 는 객체 → 이름만, workout_parts 는 join.
+      const compact = (data ?? []).map((e) => ({
+        id:       e.id,
+        title:    e.title,
+        start_at: e.start_at,
+        end_at:   e.end_at,
+        all_day:  e.all_day,
+        kind:     e.event_kind,
+        ...(e.event_kind === 'running' && {
+          distance_km:      e.distance_km,
+          avg_pace_seconds: e.avg_pace_seconds,
+        }),
+        ...(e.event_kind === 'workout' && partsByEvent[e.id] && {
+          workout_parts: partsByEvent[e.id],
+        }),
+        ...(e.location    && { location:    e.location }),
+        ...(e.description && { description: e.description }),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ...((e as any).category?.name && { category: (e as any).category.name }),
+      }));
+      return { ok: true, summary: `${compact.length}개 일정 조회`, data: compact };
     }
 
     if (toolName === 'createTodo') {
@@ -387,37 +429,41 @@ Deno.serve(async (req: Request) => {
   const executed: ChatResponse['executed'] = [];
   let tokensUsed = 0;
 
-  // Multi-step tool loop — 최대 4 스텝.
+  // Multi-step tool loop — v1.1.5 개선:
+  //  - 최대 4 → 6 step (다중 분석 시나리오는 listEventsInRange 를 범위별로
+  //    분할 호출하는 경우가 흔함).
+  //  - text block 매 step 누적 — Claude 가 tool_use 와 text 를 같이 반환하면
+  //    이전엔 text 무시됐음.
+  //  - loop 끝나도 finalText 비어있으면 도구 결과 정리하라는 "force-finalize"
+  //    한 번 더 호출 (도구 비활성화).
+  //  - max_tokens 800 → 1200 — 분석 응답이 잘리던 케이스.
+  const MAX_STEPS = 6;
   let finalText = '';
-  for (let step = 0; step < 4; step++) {
+  for (let step = 0; step < MAX_STEPS; step++) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const response: any = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 800,
+      max_tokens: 1200,
       system: system as never,
       tools: TOOLS as never,
       messages,
     });
     tokensUsed += (response.usage?.input_tokens ?? 0) + (response.usage?.output_tokens ?? 0);
 
-    // tool_use 블록 추출.
     const toolUseBlocks = (response.content as Array<{ type: string }>).filter(
       (b) => b.type === 'tool_use',
     );
     const textBlocks = (response.content as Array<{ type: string; text?: string }>).filter(
       (b) => b.type === 'text',
     );
+    // 매 step text 누적 (다음 turn 도 text 가 또 올 수 있으니 마지막 비어있어도 보존).
+    const stepText = textBlocks.map((b) => b.text ?? '').join('\n').trim();
+    if (stepText) finalText = stepText;
 
-    if (toolUseBlocks.length === 0) {
-      // 최종 답.
-      finalText = textBlocks.map((b) => b.text ?? '').join('\n').trim();
-      break;
-    }
+    if (toolUseBlocks.length === 0) break;
 
-    // assistant 메시지를 히스토리에 추가 (tool_use 포함).
     messages.push({ role: 'assistant', content: response.content as never });
 
-    // 각 도구 실행 후 tool_result 로 한 번에 묶어서 next user 메시지.
     const toolResults: Array<{ type: 'tool_result'; tool_use_id: string; content: string }> = [];
     for (const tb of toolUseBlocks as Array<{ id: string; name: string; input: Record<string, unknown> }>) {
       const result = await runTool(userClient, user.id, tb.name, tb.input ?? {}, dryRun);
@@ -429,6 +475,29 @@ Deno.serve(async (req: Request) => {
       });
     }
     messages.push({ role: 'user', content: toolResults as never });
+  }
+
+  // Force-finalize: loop 횟수 초과로 빠져나왔는데 마지막 step 이 tool_use 였다면
+  // finalText 가 누적된 이전 텍스트일 뿐 "정리된 응답" 이 아닐 수 있음. 도구
+  // 없이 한 번 더 호출해 모은 데이터로 결론 작성하게 강제.
+  if (!finalText) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const wrapUp: any = await anthropic.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 800,
+        system: system as never,
+        // tools 생략 → 모델이 새 도구 호출 못 함.
+        messages,
+      });
+      tokensUsed += (wrapUp.usage?.input_tokens ?? 0) + (wrapUp.usage?.output_tokens ?? 0);
+      const wrapText = (wrapUp.content as Array<{ type: string; text?: string }>)
+        .filter((b) => b.type === 'text')
+        .map((b) => b.text ?? '').join('\n').trim();
+      if (wrapText) finalText = wrapText;
+    } catch {
+      // wrapUp 실패는 무시 — 아래 fallback 메시지로.
+    }
   }
 
   const responseBody: ChatResponse = {
