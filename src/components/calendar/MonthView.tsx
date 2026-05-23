@@ -39,8 +39,11 @@ import { applyDelta } from '@/lib/calendarGeometry';
 import { deleteEvent } from '@/services/eventService';
 import { useEventStore } from '@/stores/eventStore';
 
-/** Maximum bars to show per day cell before collapsing to "+N". */
-const MAX_BARS = 3;
+/** Maximum bars to show per day cell before collapsing to "+N".
+ *  v1.2.6 — 하이브리드 룰 (옵션 C): 1~5 그대로 표시 (행 동적 확장),
+ *  6+ 이면 5번째까지 표시 + "+N" 라벨. 일상의 4~5 케이스에서 day view
+ *  진입 없이 모두 보이게 + 극단(7+) 에서도 grid 깨지지 않음. */
+const MAX_BARS = 5;
 
 const DOW_LABELS = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
@@ -303,9 +306,10 @@ export function MonthView({
   // v1.1.4 — 동적 row height. 일정 적은 주는 작게, 많은 주는 max 까지.
   // weekChipCounts 와 cumulativeWeekTop 을 같이 산출해 layout.top 을
   // 정확한 grid-local y 로 채움 (drag hitTest 호환).
-  const { eventLayouts, weekHeights } = useMemo<{
+  const { eventLayouts, weekHeights, perDayHiddenEventCount } = useMemo<{
     eventLayouts: MonthEventLayout[];
     weekHeights: number[];
+    perDayHiddenEventCount: Record<string, number>;
   }>(() => {
     // 1) 각 주의 packed chip 정보 먼저 산출 (top 은 아직 미정).
     type PackedChip = {
@@ -317,6 +321,9 @@ export function MonthView({
     };
     const perWeekChips: PackedChip[][] = weeks.map(() => []);
     const chipCounts: number[] = weeks.map(() => 0);
+    // v1.2.6 — 셀별 overflow 누적. chipIdx >= MAX_BARS 인 event 가 차지한
+    // 모든 날짜 키에 +1. 셀 안 "+N" 라벨 카운트 source.
+    const perDayHidden: Record<string, number> = {};
 
     if (cellWidth > 0 && density === 'detailed') {
       weeks.forEach((week, weekIdx) => {
@@ -351,7 +358,15 @@ export function MonthView({
             rowEndCols.push(-1);
           }
           rowEndCols[chipIdx] = spec.endCol;
-          if (chipIdx >= MAX_BARS) return; // overflow 는 +N 표시
+          if (chipIdx >= MAX_BARS) {
+            // overflow: event 가 차지한 모든 날짜 키에 hidden count +1.
+            // 같은 셀에 여러 overflow event 가 있으면 합쳐서 +N 표시.
+            for (let col = spec.startCol; col <= spec.endCol; col++) {
+              const k = toDateKey(week[col]!);
+              perDayHidden[k] = (perDayHidden[k] ?? 0) + 1;
+            }
+            return;
+          }
           perWeekChips[weekIdx]!.push({
             event: spec.event,
             dateKey: toDateKey(week[spec.startCol]!),
@@ -386,7 +401,7 @@ export function MonthView({
       });
     });
 
-    return { eventLayouts: out, weekHeights: heights };
+    return { eventLayouts: out, weekHeights: heights, perDayHiddenEventCount: perDayHidden };
   }, [weeks, eventsByDate, cellWidth, density]);
 
   // ── Targeting (drop-target) state — Build-54 redesign ───────────────────
@@ -708,52 +723,25 @@ export function MonthView({
                    - detailed: Apple-Calendar-style coloured bars with title
                    - compact:  small colour dots only (overview / mobile)
                 */}
-                {/* v1.1.3 — event 는 cell 외부 절대 위치 layer 에서 multi-day
-                    span bar 로 렌더. cell 내부에는 todo + anniversary 만 표시.
-                    cell 안 barStack 의 top 위치는 event layer 가 차지하는
-                    MAX_BARS 줄 만큼 아래로 밀어 시각적 충돌 방지. */}
-                {dayItems.length > 0 && density === 'detailed' && (() => {
-                  const nonEvent = dayItems.filter((it) => it.kind !== 'event');
-                  if (nonEvent.length === 0) return null;
-                  const visibleBars = nonEvent.length > 5 ? 2 : MAX_BARS;
-                  const hidden = Math.max(0, nonEvent.length - visibleBars);
-                  return (
-                    <View
-                      style={[
-                        styles.barStack,
-                        // event layer 가 차지하는 row 수만큼 아래로 밀어 겹치지 않게.
-                        { marginTop: 2 + MAX_BARS * CHIP_ROW },
-                        !isCurrentMonth && styles.dimItems,
-                      ]}
-                    >
-                      {nonEvent.slice(0, visibleBars).map((it) => (
-                        <View
-                          key={it.id}
-                          testID="event-bar"
-                          style={[
-                            styles.itemBar,
-                            {
-                              backgroundColor: it.color + '22',
-                              borderLeftWidth: 3,
-                              borderLeftColor: it.color,
-                              minHeight: CHIP_HEIGHT,
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={[styles.itemBarText, { color: it.color }]}
-                            numberOfLines={2}
-                          >
-                            {it.title}
-                          </Text>
-                        </View>
-                      ))}
-                      {hidden > 0 && (
-                        <Text style={styles.overflowLabel}>+{hidden}</Text>
-                      )}
-                    </View>
-                  );
-                })()}
+                {/* v1.2.6 — overflow indicator. 그 셀에 chipIdx >= MAX_BARS 로
+                    잘려나간 event 수를 useMemo 에서 누적해 둠. detailed density
+                    에서만 표시. 위치 = event chip layer 의 MAX_BARS 째 슬롯
+                    (그 슬롯에 들어갈 6번째 chip 자리에 "+N" 라벨).
+                    탭은 셀 onPress 가 받아 day view 진입. */}
+                {density === 'detailed' && (perDayHiddenEventCount[dateKey] ?? 0) > 0 && (
+                  <View
+                    style={[
+                      styles.overflowSlot,
+                      { top: CHIP_TOP + (MAX_BARS - 1) * CHIP_ROW },
+                      !isCurrentMonth && styles.dimItems,
+                    ]}
+                    pointerEvents="none"
+                  >
+                    <Text style={styles.overflowLabel}>
+                      +{perDayHiddenEventCount[dateKey]}
+                    </Text>
+                  </View>
+                )}
 
                 {dayItems.length > 0 && density === 'compact' && (
                   <View style={styles.dotRow}>
@@ -1088,6 +1076,17 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     alignItems: 'center',
     marginTop: spacing[0.5],
     height: 8,
+  },
+  // v1.2.6 — overflow "+N" 라벨 컨테이너. 셀 안 절대 위치, event chip
+  // layer 의 MAX_BARS 째 슬롯에 정렬. pointerEvents='none' 이라 탭은
+  // 셀 onPress 로 흘러감.
+  overflowSlot: {
+    position: 'absolute',
+    left: 2,
+    right: 2,
+    height: CHIP_HEIGHT,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   // Build-77 — overflow indicator pill 스타일. 작은 둥근 배경 + bold.
   overflowLabel: {
