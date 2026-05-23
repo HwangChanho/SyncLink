@@ -933,34 +933,44 @@ export function MonthView({
         <Pressable style={styles.pickerBackdrop} onPress={() => setViewPickerEvents(null)}>
           <Pressable style={styles.pickerCard} onPress={() => undefined}>
             <Text style={styles.pickerHeaderText}>{t('common.preview', '일정 보기')}</Text>
-            <Text style={styles.pickerHeaderHint}>탭하면 상세 / 편집 화면으로 이동해요</Text>
-            {viewPickerEvents?.map((evt) => {
-              const startH = String(evt.startAt.getHours()).padStart(2, '0');
-              const startM = String(evt.startAt.getMinutes()).padStart(2, '0');
-              return (
-                <Pressable
-                  key={evt.id}
-                  style={({ pressed }) => [
-                    styles.pickerItem,
-                    pressed && styles.pickerItemHi,
-                  ]}
-                  onPress={() => {
-                    setViewPickerEvents(null);
-                    onEventPress?.(evt);
-                  }}
-                >
-                  <View style={[styles.pickerColorBar, { backgroundColor: evt.color }]} />
-                  <View style={{ flex: 1, marginLeft: 8 }}>
-                    <Text style={styles.pickerItemTitle} numberOfLines={1}>
-                      {translatedTitles.get(evt.id) ?? evt.title}
-                    </Text>
-                    <Text style={styles.pickerItemTime}>
-                      {evt.allDay ? '하루 종일' : `${startH}:${startM}`}
-                    </Text>
-                  </View>
-                </Pressable>
-              );
-            })}
+            <Text style={styles.pickerHeaderHint}>
+              {viewPickerEvents?.length ?? 0}개 일정 · 탭하면 상세 / 편집 화면으로 이동해요
+            </Text>
+            {/* v1.2.6 — picker 안 ScrollView 로 N개 다 노출 보장. 5+ event
+                셀(+N 표시) 클릭 시 화면 밖으로 잘리던 회귀 fix. */}
+            <ScrollView
+              style={styles.pickerScroll}
+              contentContainerStyle={{ paddingBottom: 4 }}
+              showsVerticalScrollIndicator
+            >
+              {viewPickerEvents?.map((evt, idx) => {
+                const startH = String(evt.startAt.getHours()).padStart(2, '0');
+                const startM = String(evt.startAt.getMinutes()).padStart(2, '0');
+                return (
+                  <Pressable
+                    key={`${evt.id}-${idx}`}
+                    style={({ pressed }) => [
+                      styles.pickerItem,
+                      pressed && styles.pickerItemHi,
+                    ]}
+                    onPress={() => {
+                      setViewPickerEvents(null);
+                      onEventPress?.(evt);
+                    }}
+                  >
+                    <View style={[styles.pickerColorBar, { backgroundColor: evt.color }]} />
+                    <View style={{ flex: 1, marginLeft: 8 }}>
+                      <Text style={styles.pickerItemTitle} numberOfLines={1}>
+                        {translatedTitles.get(evt.id) ?? evt.title}
+                      </Text>
+                      <Text style={styles.pickerItemTime}>
+                        {evt.allDay ? '하루 종일' : `${startH}:${startM}`}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>
@@ -1265,6 +1275,8 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   pickerCard: {
     width: '100%',
     maxWidth: 320,
+    // v1.2.6 — 화면 70% cap. picker 가 화면 밖 안 나가게.
+    maxHeight: '70%',
     backgroundColor: colors.background,
     borderRadius: 14,
     paddingVertical: 12,
@@ -1274,6 +1286,10 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     shadowOpacity: 0.2,
     shadowRadius: 16,
     elevation: 12,
+  },
+  // v1.2.6 — picker 내 ScrollView. 헤더 2줄 + bottom padding 제외 잔여.
+  pickerScroll: {
+    flexGrow: 0,
   },
   pickerHeaderText: {
     ...textStyles.labelLg,
