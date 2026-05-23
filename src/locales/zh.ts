@@ -627,7 +627,6 @@ const zh = {
     headline: '无限制使用所有功能',
     features: [
       'AI 自然语言日程无限制',
-      '外部日历无限同步 (Google·Apple)',
       '每周周报',
       'Space 无限制',
       'AI 日期推荐',

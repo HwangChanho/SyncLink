@@ -641,7 +641,6 @@ const ko = {
     headline: '모든 기능을 제한 없이 사용하세요',
     features: [
       'AI 자연어 일정 무제한',
-      '외부 캘린더 무제한 동기화 (Google·Apple)',
       '주간 리뷰 매주',
       'Space 무제한',
       '날짜 추천 AI',

@@ -111,7 +111,12 @@ export function SettingsSection() {
         </TouchableOpacity>
         <View style={menu.menuDivider} />
 
-        {/* v1.1.5 — 외부 캘린더 연결 (Google import). */}
+        {/* v1.1.5 — 외부 캘린더 연결 (Google import).
+            Google OAuth verification (sensitive scope = calendar.readonly)
+            데모 비디오·브랜딩 게이트 부담으로 메뉴 노출 일시 보류.
+            화면/서비스/Edge Function/migration 044·045 는 유지 — verification
+            통과 후 이 블록 주석 해제만 하면 즉시 복귀 가능. */}
+        {/*
         <TouchableOpacity
           style={menu.menuItem}
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -123,6 +128,7 @@ export function SettingsSection() {
           <Text style={menu.menuItemChevron}>›</Text>
         </TouchableOpacity>
         <View style={menu.menuDivider} />
+        */}
 
         {/* v1.2.1 — 운동 통계 (헬스 부위별 + 러닝 주별). */}
         <TouchableOpacity
