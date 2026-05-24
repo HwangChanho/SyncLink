@@ -40,10 +40,11 @@ fastlane/README.md
 # Metro
 .metro-health-check*
 
-# Env
+# Env — 모든 .env 변형 ignore. placeholder (.env.example) 만 예외.
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+!.env.sample
 
 # IDE
 .vscode/
@@ -95,3 +96,14 @@ ios/
 android/
 # Firebase config (민감 — Firebase Console 에서 재다운로드 가능)
 GoogleService-Info.plist
+google-services.json
+
+# 기타 민감 정보 — 흔히 빠지는 패턴 보강
+*.cer
+*.crt
+*.pfx
+service-account*.json
+*-credentials.json
+auth-token*
+AuthKey_*
+.npmrc
