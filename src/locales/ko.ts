@@ -98,6 +98,7 @@ const ko = {
     home: '홈',
     calendar: '캘린더',
     planner: '플래너',
+    analytics: '분석',
     spaces: '스페이스',
     my: '내 정보',
   },

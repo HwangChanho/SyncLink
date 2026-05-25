@@ -138,6 +138,21 @@ export default function TabLayout() {
           ),
         }}
       />
+      {/* Sprint 1 (AI 분석 대시보드) — v1.2.7 */}
+      <Tabs.Screen
+        name="analytics"
+        options={{
+          title: t('tabs.analytics', { defaultValue: '분석' }),
+          tabBarButtonTestID: 'tab-button-analytics',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? 'analytics' : 'analytics-outline'}
+              size={22}
+              color={color}
+            />
+          ),
+        }}
+      />
       <Tabs.Screen
         name="spaces"
         options={{
