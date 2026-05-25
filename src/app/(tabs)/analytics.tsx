@@ -26,7 +26,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PieChart, BarChart } from 'react-native-chart-kit';
 import { Dimensions } from 'react-native';
+import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
+import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import {
@@ -70,6 +73,7 @@ function formatMinutes(min: number): string {
 export default function AnalyticsScreen() {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isPro = useSubscriptionStore((s) => s.plan === 'pro');
 
   const [preset, setPreset] = useState<Preset>('month');
   const [stats, setStats] = useState<EventStats | null>(null);
@@ -221,9 +225,8 @@ export default function AnalyticsScreen() {
               />
             </View>
 
-            {/* 시간대 분포 — 4분할 heat map. Pro 게이트는 Phase 4 에서. */}
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>시간대 분포</Text>
+            {/* 시간대 분포 — Pro. 4분할 heat map. Free 는 잠금 overlay. */}
+            <ProGate isPro={isPro} styles={styles} colors={colors} title="시간대 분포">
               <View style={styles.bucketRow}>
                 {stats.byHourBucket.map((b) => {
                   const max = Math.max(...stats.byHourBucket.map((x) => x.count), 1);
@@ -248,14 +251,69 @@ export default function AnalyticsScreen() {
               <Text style={styles.bucketCaption}>
                 아침 5–12시 · 낮 12–17시 · 저녁 17–22시 · 밤 22–5시
               </Text>
-            </View>
+            </ProGate>
 
-            {/* AI 인사이트 — Phase 3. Edge Function 호출 결과 (자연어 2~3 문장). */}
-            <AIInsightCard stats={stats} styles={styles} colors={colors} />
+            {/* AI 인사이트 — Pro. Edge Function 호출은 Pro 일 때만. */}
+            {isPro ? (
+              <AIInsightCard stats={stats} styles={styles} colors={colors} />
+            ) : (
+              <ProGate isPro={false} styles={styles} colors={colors} title="AI 인사이트">
+                <Text style={styles.insightBody}>
+                  AI 가 당신의 일정 패턴을 분석해 자연어 인사이트와 액션 제안을 드려요.
+                </Text>
+              </ProGate>
+            )}
           </>
         ) : null}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+/**
+ * Pro 게이트 wrapper. isPro 면 자식 그대로, Free 면 blur overlay + 자물쇠
+ * + paywall CTA. 카드 외형은 동일하게 유지.
+ */
+function ProGate({
+  isPro,
+  title,
+  styles,
+  colors,
+  children,
+}: {
+  isPro: boolean;
+  title: string;
+  styles: ReturnType<typeof makeStyles>;
+  colors: ReturnType<typeof useColors>;
+  children: React.ReactNode;
+}) {
+  if (isPro) {
+    return (
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>{title}</Text>
+        {children}
+      </View>
+    );
+  }
+  return (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={() => router.push('/subscription/paywall')}
+      style={styles.card}
+    >
+      <View style={styles.insightHeader}>
+        <Text style={styles.cardTitle}>{title}</Text>
+        <View style={styles.proBadge}>
+          <Ionicons name="star" size={10} color={colors.textInverse} />
+          <Text style={styles.proBadgeText}>PRO</Text>
+        </View>
+      </View>
+      <View style={styles.gateLocked}>{children}</View>
+      <View style={styles.gateCta}>
+        <Text style={styles.gateCtaText}>탭하면 Pro 로 잠금 해제</Text>
+        <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+      </View>
+    </TouchableOpacity>
   );
 }
 
@@ -564,6 +622,38 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     insightLoadingText: {
       ...textStyles.body,
       color: colors.textSecondary,
+    },
+    proBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      paddingHorizontal: spacing[2],
+      paddingVertical: 2,
+      borderRadius: radius.full,
+      backgroundColor: colors.primary,
+    },
+    proBadgeText: {
+      ...textStyles.caption,
+      color: colors.textInverse,
+      fontWeight: '700',
+      fontSize: 10,
+    },
+    gateLocked: {
+      opacity: 0.4,
+    },
+    gateCta: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing[1],
+      paddingTop: spacing[2],
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+    },
+    gateCtaText: {
+      ...textStyles.caption,
+      color: colors.primary,
+      fontWeight: '700',
     },
     lockedCard: {
       opacity: 0.85,

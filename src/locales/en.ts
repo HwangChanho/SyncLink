@@ -629,6 +629,7 @@ const en = {
     headline: 'Unlock all features without limits',
     features: [
       'Unlimited AI natural language events',
+      'Unlimited AI insights (time-of-day · pattern analysis)',
       'Weekly review every week',
       'Unlimited Spaces',
       'AI date suggestions',
