@@ -24,6 +24,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { PieChart, BarChart } from 'react-native-gifted-charts';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
@@ -132,51 +133,97 @@ export default function AnalyticsScreen() {
               </View>
             </View>
 
-            {/* 카테고리 비중 (text list — 차트는 다음 step) */}
+            {/* 카테고리 비중 — 도넛 차트 + range list */}
             <View style={styles.card}>
               <Text style={styles.cardTitle}>카테고리 비중</Text>
               {stats.byCategory.length === 0 ? (
                 <Text style={styles.emptyText}>이 기간에 등록된 일정이 없어요</Text>
               ) : (
-                stats.byCategory.slice(0, 5).map((cat) => {
-                  const pct = stats.totalCount > 0 ? Math.round((cat.count / stats.totalCount) * 100) : 0;
-                  return (
-                    <View key={cat.categoryId ?? '__none__'} style={styles.catRow}>
-                      <View style={[styles.catDot, { backgroundColor: cat.color }]} />
-                      <Text style={styles.catName} numberOfLines={1}>
-                        {cat.name}
-                      </Text>
-                      <Text style={styles.catCount}>
-                        {cat.count}개 · {pct}%
-                      </Text>
-                    </View>
-                  );
-                })
+                <View style={styles.donutWrap}>
+                  <PieChart
+                    donut
+                    radius={70}
+                    innerRadius={45}
+                    innerCircleColor={colors.surface}
+                    data={stats.byCategory.slice(0, 6).map((c) => ({
+                      value: c.count,
+                      color: c.color,
+                    }))}
+                    centerLabelComponent={() => (
+                      <View style={styles.donutCenter}>
+                        <Text style={styles.donutCenterValue}>{stats.totalCount}</Text>
+                        <Text style={styles.donutCenterLabel}>건</Text>
+                      </View>
+                    )}
+                  />
+                  <View style={styles.legendWrap}>
+                    {stats.byCategory.slice(0, 5).map((cat) => {
+                      const pct = stats.totalCount > 0
+                        ? Math.round((cat.count / stats.totalCount) * 100)
+                        : 0;
+                      return (
+                        <View key={cat.categoryId ?? '__none__'} style={styles.catRow}>
+                          <View style={[styles.catDot, { backgroundColor: cat.color }]} />
+                          <Text style={styles.catName} numberOfLines={1}>
+                            {cat.name}
+                          </Text>
+                          <Text style={styles.catCount}>{pct}%</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
               )}
             </View>
 
-            {/* 요일 분포 (text bars — 임시) */}
+            {/* 요일 분포 — gifted-charts BarChart */}
             <View style={styles.card}>
               <Text style={styles.cardTitle}>요일 분포</Text>
-              {stats.byDayOfWeek.map((d) => {
-                const max = Math.max(...stats.byDayOfWeek.map((x) => x.count), 1);
-                const w = `${(d.count / max) * 100}%` as const;
-                return (
-                  <View key={d.dow} style={styles.dowRow}>
-                    <Text style={styles.dowLabel}>{DOW_LABELS[d.dow]}</Text>
-                    <View style={styles.dowBarBg}>
-                      <View style={[styles.dowBarFill, { width: w }]} />
-                    </View>
-                    <Text style={styles.dowCount}>{d.count}</Text>
-                  </View>
-                );
-              })}
+              <BarChart
+                data={stats.byDayOfWeek.map((d) => ({
+                  value: d.count,
+                  label: DOW_LABELS[d.dow] ?? '',
+                  frontColor:
+                    d.dow === 0 ? '#EF4444' : d.dow === 6 ? '#3B82F6' : colors.primary,
+                }))}
+                barWidth={22}
+                spacing={12}
+                hideRules
+                xAxisThickness={0}
+                yAxisThickness={0}
+                yAxisTextStyle={{ color: colors.textSecondary, fontSize: 10 }}
+                xAxisLabelTextStyle={{ color: colors.textSecondary, fontSize: 11 }}
+                noOfSections={4}
+                isAnimated
+                maxValue={Math.max(...stats.byDayOfWeek.map((d) => d.count), 4)}
+              />
             </View>
 
-            {/* Pro 잠금 카드 placeholder */}
+            {/* 시간대 분포 — Pro placeholder (다음 step 에서 활성화) */}
             <View style={[styles.card, styles.lockedCard]}>
-              <Text style={styles.cardTitle}>시간대 분포 · 운동 인사이트 · AI 코멘트</Text>
-              <Text style={styles.lockedText}>Pro 에서 사용할 수 있어요</Text>
+              <Text style={styles.cardTitle}>시간대 분포</Text>
+              <View style={styles.bucketRow}>
+                {stats.byHourBucket.map((b) => {
+                  const max = Math.max(...stats.byHourBucket.map((x) => x.count), 1);
+                  const intensity = b.count / max;
+                  return (
+                    <View key={b.bucket} style={styles.bucketCol}>
+                      <View
+                        style={[
+                          styles.bucketBox,
+                          { backgroundColor: colors.primary, opacity: 0.15 + intensity * 0.85 },
+                        ]}
+                      >
+                        <Text style={styles.bucketCount}>{b.count}</Text>
+                      </View>
+                      <Text style={styles.bucketLabel}>
+                        {b.bucket === 'morning' ? '아침' : b.bucket === 'afternoon' ? '낮' : b.bucket === 'evening' ? '저녁' : '밤'}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+              <Text style={styles.lockedText}>운동 인사이트 · AI 코멘트는 Pro 에서 만나요</Text>
             </View>
           </>
         ) : null}
@@ -289,6 +336,28 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       textAlign: 'center',
       paddingVertical: spacing[3],
     },
+    donutWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing[3],
+    },
+    donutCenter: {
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    donutCenterValue: {
+      ...textStyles.h2,
+      color: colors.textPrimary,
+      fontWeight: '700',
+    },
+    donutCenterLabel: {
+      ...textStyles.caption,
+      color: colors.textSecondary,
+    },
+    legendWrap: {
+      flex: 1,
+      gap: spacing[1.5] ?? 6,
+    },
     catRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -335,12 +404,39 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       width: 24,
       textAlign: 'right',
     },
+    bucketRow: {
+      flexDirection: 'row',
+      gap: spacing[2],
+    },
+    bucketCol: {
+      flex: 1,
+      alignItems: 'center',
+      gap: spacing[1],
+    },
+    bucketBox: {
+      width: '100%',
+      aspectRatio: 1,
+      borderRadius: radius.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    bucketCount: {
+      ...textStyles.h3,
+      color: colors.textInverse,
+      fontWeight: '700',
+    },
+    bucketLabel: {
+      ...textStyles.caption,
+      color: colors.textSecondary,
+    },
     lockedCard: {
-      opacity: 0.6,
+      opacity: 0.85,
     },
     lockedText: {
-      ...textStyles.body,
+      ...textStyles.caption,
       color: colors.textSecondary,
+      textAlign: 'center',
+      marginTop: spacing[2],
     },
   });
 }
