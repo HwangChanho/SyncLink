@@ -68,6 +68,9 @@ const LIMITS: Record<string, { freeDaily: number; proHourly: number; proRequires
   'assistant-chat':       { freeDaily: 10, proHourly: 40 },
   // v1.2 Phase 3 — 캘린더 충돌 시 대안 시간 제안. Haiku, 짧은 응답.
   'suggest-slot':         { freeDaily: 5,  proHourly: 30 },
+  // v1.2.7 — AI 분석 대시보드 자연어 인사이트. Haiku, 1회당 ~$0.001.
+  // Free 일 1회 (preset 변경 시 trigger 라 cap 보수적), Pro 시간당 10.
+  'generate-insights':    { freeDaily: 1,  proHourly: 10 },
 };
 
 /**

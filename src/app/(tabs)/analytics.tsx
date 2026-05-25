@@ -24,7 +24,8 @@ import {
   RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { PieChart, BarChart } from 'react-native-gifted-charts';
+import { PieChart, BarChart } from 'react-native-chart-kit';
+import { Dimensions } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
@@ -33,10 +34,28 @@ import {
   presetRange,
   type EventStats,
 } from '@/services/analyticsService';
+import { generateInsight, type InsightResult } from '@/services/insightsService';
 
 type Preset = 'week' | 'month' | 'quarter';
 
 const DOW_LABELS = ['일', '월', '화', '수', '목', '금', '토'] as const;
+
+/** 화면 너비 - 카드 좌우 padding 32. chart 가 카드 안 꽉 채우게. */
+const chartWidth = Dimensions.get('window').width - 64;
+
+/** chart-kit 공통 config — 테마 색 반영. */
+function chartConfig(colors: ReturnType<typeof useColors>) {
+  return {
+    backgroundColor: 'transparent',
+    backgroundGradientFrom: colors.surface,
+    backgroundGradientTo: colors.surface,
+    decimalPlaces: 0,
+    color: (opacity = 1) => `rgba(124, 58, 237, ${opacity})`,
+    labelColor: () => colors.textSecondary,
+    barPercentage: 0.65,
+    propsForBackgroundLines: { stroke: 'transparent' },
+  };
+}
 
 /**
  * 분(minutes) → "Nh Mm" 또는 "Nm" 사람이 읽는 포맷.
@@ -133,28 +152,29 @@ export default function AnalyticsScreen() {
               </View>
             </View>
 
-            {/* 카테고리 비중 — 도넛 차트 + range list */}
+            {/* 카테고리 비중 — chart-kit PieChart + legend */}
             <View style={styles.card}>
               <Text style={styles.cardTitle}>카테고리 비중</Text>
               {stats.byCategory.length === 0 ? (
                 <Text style={styles.emptyText}>이 기간에 등록된 일정이 없어요</Text>
               ) : (
-                <View style={styles.donutWrap}>
+                <>
                   <PieChart
-                    donut
-                    radius={70}
-                    innerRadius={45}
-                    innerCircleColor={colors.surface}
                     data={stats.byCategory.slice(0, 6).map((c) => ({
-                      value: c.count,
-                      color: c.color,
+                      name:            c.name,
+                      population:      c.count,
+                      color:           c.color,
+                      legendFontColor: colors.textSecondary,
+                      legendFontSize:  11,
                     }))}
-                    centerLabelComponent={() => (
-                      <View style={styles.donutCenter}>
-                        <Text style={styles.donutCenterValue}>{stats.totalCount}</Text>
-                        <Text style={styles.donutCenterLabel}>건</Text>
-                      </View>
-                    )}
+                    width={chartWidth}
+                    height={180}
+                    chartConfig={chartConfig(colors)}
+                    accessor="population"
+                    backgroundColor="transparent"
+                    paddingLeft="0"
+                    absolute={false}
+                    hasLegend={false}
                   />
                   <View style={styles.legendWrap}>
                     {stats.byCategory.slice(0, 5).map((cat) => {
@@ -167,40 +187,42 @@ export default function AnalyticsScreen() {
                           <Text style={styles.catName} numberOfLines={1}>
                             {cat.name}
                           </Text>
-                          <Text style={styles.catCount}>{pct}%</Text>
+                          <Text style={styles.catCount}>
+                            {cat.count}개 · {pct}%
+                          </Text>
                         </View>
                       );
                     })}
                   </View>
-                </View>
+                </>
               )}
             </View>
 
-            {/* 요일 분포 — gifted-charts BarChart */}
+            {/* 요일 분포 — chart-kit BarChart */}
             <View style={styles.card}>
               <Text style={styles.cardTitle}>요일 분포</Text>
               <BarChart
-                data={stats.byDayOfWeek.map((d) => ({
-                  value: d.count,
-                  label: DOW_LABELS[d.dow] ?? '',
-                  frontColor:
-                    d.dow === 0 ? '#EF4444' : d.dow === 6 ? '#3B82F6' : colors.primary,
-                }))}
-                barWidth={22}
-                spacing={12}
-                hideRules
-                xAxisThickness={0}
-                yAxisThickness={0}
-                yAxisTextStyle={{ color: colors.textSecondary, fontSize: 10 }}
-                xAxisLabelTextStyle={{ color: colors.textSecondary, fontSize: 11 }}
-                noOfSections={4}
-                isAnimated
-                maxValue={Math.max(...stats.byDayOfWeek.map((d) => d.count), 4)}
+                data={{
+                  labels: stats.byDayOfWeek.map((d) => DOW_LABELS[d.dow] ?? ''),
+                  datasets: [{
+                    data: stats.byDayOfWeek.map((d) => d.count),
+                  }],
+                }}
+                width={chartWidth}
+                height={180}
+                yAxisLabel=""
+                yAxisSuffix=""
+                fromZero
+                showValuesOnTopOfBars
+                withHorizontalLabels={false}
+                withInnerLines={false}
+                chartConfig={chartConfig(colors)}
+                style={{ marginLeft: -spacing[3] }}
               />
             </View>
 
-            {/* 시간대 분포 — Pro placeholder (다음 step 에서 활성화) */}
-            <View style={[styles.card, styles.lockedCard]}>
+            {/* 시간대 분포 — 4분할 heat map. Pro 게이트는 Phase 4 에서. */}
+            <View style={styles.card}>
               <Text style={styles.cardTitle}>시간대 분포</Text>
               <View style={styles.bucketRow}>
                 {stats.byHourBucket.map((b) => {
@@ -223,12 +245,85 @@ export default function AnalyticsScreen() {
                   );
                 })}
               </View>
-              <Text style={styles.lockedText}>운동 인사이트 · AI 코멘트는 Pro 에서 만나요</Text>
+              <Text style={styles.bucketCaption}>
+                아침 5–12시 · 낮 12–17시 · 저녁 17–22시 · 밤 22–5시
+              </Text>
             </View>
+
+            {/* AI 인사이트 — Phase 3. Edge Function 호출 결과 (자연어 2~3 문장). */}
+            <AIInsightCard stats={stats} styles={styles} colors={colors} />
           </>
         ) : null}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+/**
+ * AI 인사이트 카드.
+ *
+ * stats 가 바뀔 때마다 자동 호출 (preset 변경 trigger). 응답 = 자연어 코멘트
+ * + 액션 제안. 일일 quota 초과 시 안내 텍스트.
+ */
+function AIInsightCard({
+  stats,
+  styles,
+  colors,
+}: {
+  stats: EventStats;
+  styles: ReturnType<typeof makeStyles>;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const [insight, setInsight] = useState<InsightResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setInsight(null);
+    generateInsight(stats)
+      .then((res) => {
+        if (!cancelled) setInsight(res);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : '인사이트를 받지 못했어요.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [stats]);
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.insightHeader}>
+        <Text style={styles.cardTitle}>AI 인사이트</Text>
+        <View style={styles.insightBadge}>
+          <Text style={styles.insightBadgeText}>BETA</Text>
+        </View>
+      </View>
+      {loading ? (
+        <View style={styles.insightLoadingRow}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={styles.insightLoadingText}>분석 중이에요…</Text>
+        </View>
+      ) : error ? (
+        <Text style={styles.errorText}>{error}</Text>
+      ) : insight?.quotaExceeded ? (
+        <Text style={styles.lockedText}>
+          오늘 무료 인사이트 한도를 모두 사용했어요. Pro 로 무제한 사용할 수 있어요.
+        </Text>
+      ) : insight ? (
+        <>
+          <Text style={styles.insightBody}>{insight.comment}</Text>
+          {insight.suggestion ? (
+            <Text style={styles.insightAction}>💡 {insight.suggestion}</Text>
+          ) : null}
+        </>
+      ) : null}
+    </View>
   );
 }
 
@@ -427,6 +522,47 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     },
     bucketLabel: {
       ...textStyles.caption,
+      color: colors.textSecondary,
+    },
+    bucketCaption: {
+      ...textStyles.caption,
+      color: colors.textTertiary,
+      textAlign: 'center',
+    },
+    insightHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing[2],
+    },
+    insightBadge: {
+      paddingHorizontal: spacing[2],
+      paddingVertical: 2,
+      borderRadius: radius.full,
+      backgroundColor: colors.primary,
+    },
+    insightBadgeText: {
+      ...textStyles.caption,
+      color: colors.textInverse,
+      fontWeight: '700',
+      fontSize: 10,
+    },
+    insightBody: {
+      ...textStyles.body,
+      color: colors.textPrimary,
+      lineHeight: 22,
+    },
+    insightAction: {
+      ...textStyles.caption,
+      color: colors.primary,
+      fontWeight: '700',
+    },
+    insightLoadingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing[2],
+    },
+    insightLoadingText: {
+      ...textStyles.body,
       color: colors.textSecondary,
     },
     lockedCard: {
