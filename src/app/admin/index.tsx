@@ -5,13 +5,15 @@
  *   - 웹:    https://synclink.pages.dev/admin
  *   - 모바일: synclink://admin
  *
- * 보안 (마이그레이션 047):
+ * 보안 (마이그레이션 050 — 세션 토큰):
  *   - supabase auth 와 완전 분리. admin_credentials 테이블 사용.
- *   - 진입 = username/password 폼 → admin_verify RPC 검증
- *   - 통계 = admin_get_stats RPC (매 호출에 자격 증명 전달)
- *   - AsyncStorage (web=localStorage) 에 자격 증명 저장 → 재진입 시 자동 로그인
+ *   - 진입 = username/password 폼 → admin_login RPC → 10시간 token 발급
+ *   - 통계/사용자 RPC = token 만 전송 (평문 password 저장 X)
+ *   - AsyncStorage 에 { token, expiresAt, username } 저장
+ *   - expires_at 경과 또는 세션 무효 응답 시 자동 logout + 로그인 폼 노출
+ *   - 서버: rate limit 5fail/5min lockout, pg_cron 매일 02시 cleanup
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -30,13 +32,12 @@ import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import {
   adminLogin,
+  adminLogout,
   getAdminStats,
   getAdminUsers,
-  getSavedCredentials,
-  saveCredentials,
-  clearCredentials,
+  getSavedSession,
   type AdminStats,
-  type AdminCredentials,
+  type AdminSession,
   type AdminUsersResult,
   type UsersSort,
 } from '@/services/adminService';
@@ -45,41 +46,92 @@ type Days = 1 | 7 | 30;
 
 const chartWidth = Dimensions.get('window').width - 64;
 
+/** "5시간 23분 남음" / "12분 남음" / "곧 만료" 포맷. */
+function formatRemaining(ms: number): string {
+  if (ms <= 0) return '만료됨';
+  const totalMin = Math.floor(ms / 60_000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h <= 0) return `${m}분 남음`;
+  return `${h}시간 ${m}분 남음`;
+}
+
 export default function AdminDashboard() {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  // null = 자격 증명 확인 전 (AsyncStorage 로딩 중), 객체 = 로그인 완료.
-  const [creds, setCreds] = useState<AdminCredentials | null>(null);
-  const [credsChecked, setCredsChecked] = useState(false);
+  const [session, setSession] = useState<AdminSession | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
   const [days, setDays] = useState<Days>(7);
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [remainingMs, setRemainingMs] = useState<number>(0);
+  const expireTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ─── 1) 저장된 자격 증명 자동 로그인 ──────────────────────────────────
+  // ─── 자동 로그아웃 헬퍼 ───────────────────────────────────────────────
+  const doLogout = useCallback(async (reason?: string) => {
+    if (expireTimer.current) {
+      clearTimeout(expireTimer.current);
+      expireTimer.current = null;
+    }
+    await adminLogout(session?.token ?? null);
+    setSession(null);
+    setStats(null);
+    setError(reason ?? null);
+  }, [session?.token]);
+
+  // ─── 1) 저장된 세션 자동 복구 ─────────────────────────────────────────
   useEffect(() => {
-    getSavedCredentials()
-      .then((saved) => {
-        if (saved) setCreds(saved);
-      })
-      .finally(() => setCredsChecked(true));
+    getSavedSession()
+      .then((saved) => { if (saved) setSession(saved); })
+      .finally(() => setSessionChecked(true));
   }, []);
 
+  // ─── 만료 타이머 — 세션 변경 시 정확히 expires_at 에 자동 logout ──────
+  useEffect(() => {
+    if (expireTimer.current) {
+      clearTimeout(expireTimer.current);
+      expireTimer.current = null;
+    }
+    if (!session) {
+      setRemainingMs(0);
+      return;
+    }
+    const tick = () => {
+      const left = new Date(session.expiresAt).getTime() - Date.now();
+      setRemainingMs(Math.max(0, left));
+      if (left <= 0) {
+        doLogout('세션이 만료되었어요. 다시 로그인해주세요.');
+      }
+    };
+    tick();
+    // 1분마다 남은 시간 표시 갱신.
+    const interval = setInterval(tick, 60_000);
+    // 절대 만료 시각에 정확히 한 번 더 trigger.
+    const left = new Date(session.expiresAt).getTime() - Date.now();
+    if (left > 0) {
+      expireTimer.current = setTimeout(() => {
+        doLogout('세션이 만료되었어요. 다시 로그인해주세요.');
+      }, left);
+    }
+    return () => {
+      clearInterval(interval);
+      if (expireTimer.current) clearTimeout(expireTimer.current);
+    };
+  }, [session, doLogout]);
+
   // ─── 2) stats fetch ────────────────────────────────────────────────────
-  const fetchStats = async (c: AdminCredentials) => {
+  const fetchStats = async (token: string) => {
     setError(null);
     try {
-      const res = await getAdminStats(c, days);
+      const res = await getAdminStats(token, days);
       setStats(res);
     } catch (err) {
       const msg = err instanceof Error ? err.message : '통계를 불러오지 못했습니다.';
-      // 권한 에러 = 저장된 자격 증명이 만료/변경됨 → 로그아웃.
-      if (msg.includes('permission denied') || msg.includes('invalid credentials')) {
-        await clearCredentials();
-        setCreds(null);
-        setError('자격 증명이 만료되었어요. 다시 로그인해주세요.');
+      if (/invalid or expired session|permission denied/i.test(msg)) {
+        await doLogout('세션이 만료되었어요. 다시 로그인해주세요.');
       } else {
         setError(msg);
       }
@@ -90,27 +142,23 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
-    if (creds) {
+    if (session) {
       setLoading(true);
-      fetchStats(creds);
+      fetchStats(session.token);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [creds, days]);
+  }, [session, days]);
 
   const onRefresh = () => {
-    if (!creds) return;
+    if (!session) return;
     setRefreshing(true);
-    fetchStats(creds);
+    fetchStats(session.token);
   };
 
-  const onLogout = async () => {
-    await clearCredentials();
-    setCreds(null);
-    setStats(null);
-  };
+  const onLogout = () => doLogout();
 
-  // ─── 3) 자격 증명 로딩 중 ──────────────────────────────────────────────
-  if (!credsChecked) {
+  // ─── 3) 세션 로딩 중 ──────────────────────────────────────────────────
+  if (!sessionChecked) {
     return (
       <View style={hardStyles.lightSafe}>
         <View style={hardStyles.center}>
@@ -119,8 +167,8 @@ export default function AdminDashboard() {
       </View>
     );
   }
-  if (!creds) {
-    return <AdminLoginGate onSuccess={(c) => setCreds(c)} prefilledError={error} />;
+  if (!session) {
+    return <AdminLoginGate onSuccess={(s) => setSession(s)} prefilledError={error} />;
   }
 
   // ─── 4) 대시보드 본문 ──────────────────────────────────────────────────
@@ -136,7 +184,9 @@ export default function AdminDashboard() {
             <Text style={styles.logoutText}>로그아웃</Text>
           </TouchableOpacity>
         </View>
-        <Text style={styles.userBadge}>{creds.username}</Text>
+        <Text style={styles.userBadge}>
+          {session.username} · 세션 만료 {formatRemaining(remainingMs)}
+        </Text>
 
         {/* 기간 segment */}
         <View style={styles.segment}>
@@ -160,7 +210,7 @@ export default function AdminDashboard() {
         ) : error ? (
           <View style={styles.center}>
             <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity onPress={() => creds && fetchStats(creds)} style={styles.retryBtn}>
+            <TouchableOpacity onPress={() => session && fetchStats(session.token)} style={styles.retryBtn}>
               <Text style={styles.retryText}>다시 시도</Text>
             </TouchableOpacity>
           </View>
@@ -250,7 +300,7 @@ export default function AdminDashboard() {
             )}
 
             {/* 사용자 목록 카드 */}
-            <UsersCard creds={creds} styles={styles} colors={colors} />
+            <UsersCard token={session.token} styles={styles} colors={colors} />
           </>
         ) : null}
       </ScrollView>
@@ -268,7 +318,7 @@ function AdminLoginGate({
   onSuccess,
   prefilledError,
 }: {
-  onSuccess: (c: AdminCredentials) => void;
+  onSuccess: (s: AdminSession) => void;
   prefilledError?: string | null;
 }) {
   const [username, setUsername] = useState('');
@@ -284,16 +334,19 @@ function AdminLoginGate({
     }
     setLoading(true);
     try {
-      const ok = await adminLogin(username.trim(), password);
-      if (!ok) {
-        setError('아이디 또는 비밀번호가 올바르지 않아요.');
-        return;
-      }
-      const creds: AdminCredentials = { username: username.trim(), password };
-      await saveCredentials(creds);
-      onSuccess(creds);
+      const session = await adminLogin(username.trim(), password);
+      // 평문 password 는 함수 종료와 함께 GC. AsyncStorage 에는 token 만 저장됨.
+      onSuccess(session);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '로그인에 실패했어요.');
+      const msg = err instanceof Error ? err.message : '로그인에 실패했어요.';
+      // 서버 메시지 매핑 — 사용자 친화 표현.
+      if (/too many attempts/i.test(msg)) {
+        setError('로그인 시도가 너무 많아요. 5분 후 다시 시도해주세요.');
+      } else if (/invalid credentials/i.test(msg)) {
+        setError('아이디 또는 비밀번호가 올바르지 않아요.');
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -461,11 +514,11 @@ const hardStyles = StyleSheet.create({
  * 사용자 목록 카드. 정렬 (recent/active/usage) 토글 + 행 50개.
  */
 function UsersCard({
-  creds,
+  token,
   styles,
   colors,
 }: {
-  creds: AdminCredentials;
+  token: string;
   styles: ReturnType<typeof makeStyles>;
   colors: ReturnType<typeof useColors>;
 }) {
@@ -478,12 +531,12 @@ function UsersCard({
     let cancelled = false;
     setLoading(true);
     setError(null);
-    getAdminUsers(creds, sort, 50)
+    getAdminUsers(token, sort, 50)
       .then((res) => { if (!cancelled) setData(res); })
       .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : '사용자 목록을 불러오지 못했어요.'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [creds, sort]);
+  }, [token, sort]);
 
   return (
     <View style={styles.card}>

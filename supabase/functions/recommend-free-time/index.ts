@@ -90,6 +90,8 @@ interface RecommendResponse {
   fromCache: boolean;
   /** 'rule': 룰 baseline만 사용, 'ai': Claude 호출 결과 포함 */
   source: 'rule' | 'ai';
+  /** v1.2.7 — quota 초과로 룰 fallback 사용했음을 클라에 알림. */
+  quotaExceeded?: boolean;
 }
 
 /**
@@ -459,14 +461,16 @@ Deno.serve(async (req: Request) => {
     });
 
     if (!quota.allowed) {
-      // Quota 초과 시 룰 결과로 graceful degradation (에러 대신)
+      // Quota 초과 시 룰 결과로 graceful degradation (에러 대신).
+      // v1.2.7: quotaExceeded 플래그 추가 — 클라가 재시도 루프 안 돌게.
       const response: RecommendResponse = {
         recommendations: ruleRecommendations,
         fromCache:        false,
         source:           'rule',
+        quotaExceeded:    true,
       };
       return new Response(JSON.stringify(response), {
-        status:  200,  // 사용자 입장에서는 정상 응답 (룰로 대체)
+        status:  200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Quota-Reason': quota.reason ?? 'quota' },
       });
     }

@@ -19,7 +19,7 @@ import { createClient } from 'npm:@supabase/supabase-js';
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const MODEL = 'claude-haiku-4-5';
 const MAX_TOKENS = 80;
-const DAILY_CAP = 10;
+// v1.2.7 — DAILY_CAP 제거 (_shared/quota.ts 의 'analyze-image' 한도 사용).
 
 interface Body {
   messageId?: string;
@@ -54,16 +54,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   const admin = createClient(supabaseUrl, serviceRoleKey);
 
-  // 일 한도 — feature_area='image_tag' 카운트.
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { count: usedToday } = await admin
-    .from('usage_metrics')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', userId)
-    .eq('feature_area', 'image_tag')
-    .gte('called_at', since);
-  if ((usedToday ?? 0) >= DAILY_CAP) {
-    return json({ error: 'daily limit', limit: DAILY_CAP }, 429);
+  // v1.2.7 — 통일된 _shared/quota.ts 게이트로 전환. 이전엔 자체 카운트
+  // (DAILY_CAP) 만 있어 Pro 시간당 cap 없음 → 1시간에 수십회 호출 시
+  // Haiku Vision 비용 폭증 가능했음. 이제 quota.ts 의 LIMITS 등록값
+  // (free 5/일, pro 15/시간) 강제.
+  // @ts-ignore — Deno path resolves at deploy time.
+  const { enforceQuota } = await import('../_shared/quota.ts');
+  const quota = await enforceQuota({
+    adminClient: admin, userId, functionName: 'analyze-image',
+  });
+  if (!quota.allowed) {
+    return json({ error: 'quota_exceeded', reason: quota.reason }, 429);
   }
 
   // 메시지 fetch + 소유권 검증.

@@ -68,6 +68,8 @@ const LIMITS: Record<string, { freeDaily: number; proHourly: number; proRequires
   'assistant-chat':       { freeDaily: 10, proHourly: 40 },
   // v1.2 Phase 3 — 캘린더 충돌 시 대안 시간 제안. Haiku, 짧은 응답.
   'suggest-slot':         { freeDaily: 5,  proHourly: 30 },
+  // v1.2.7 — 이벤트 이미지 분석 (Haiku Vision). 비용 ~10× 텍스트. cap 보수적.
+  'analyze-image':        { freeDaily: 5,  proHourly: 15 },
   // v1.2.7 — AI 분석 대시보드 자연어 인사이트. Haiku, 1회당 ~$0.001.
   // Free 일 1회 (preset 변경 시 trigger 라 cap 보수적), Pro 시간당 10.
   'generate-insights':    { freeDaily: 1,  proHourly: 10 },
@@ -118,8 +120,11 @@ export async function enforceQuota(args: {
   const { adminClient, userId, functionName } = args;
   const limits = LIMITS[functionName];
   if (!limits) {
-    // Unknown function — be permissive but log so we notice.
-    return { allowed: true, plan: 'free', remaining: Infinity };
+    // v1.2.7 보안 강화: 미등록 함수는 거절 (allowlist 방식).
+    // 이전엔 permissive 였는데 새 함수 LIMITS 등록 누락 시 quota 우회 가능
+    // → 비용 폭증 위험. 이제는 명시 등록 안 된 함수 호출 시 즉시 차단.
+    console.warn(`[quota] unknown function: ${functionName} — request blocked`);
+    return { allowed: false, plan: 'free', remaining: 0, reason: 'quota_free_daily' };
   }
 
   const plan = await getPlan(adminClient, userId);
