@@ -152,17 +152,21 @@ function useAuthGuard(): { routingReady: boolean } {
 
     const inAuthGroup    = segments[0] === 'auth';
     const inOnboarding   = segments[0] === 'onboarding';
+    // v1.2.7 — 관리자 대시보드 (/admin/...) 는 가드 우회. 자체 isAdmin
+    // RPC 가드 + 비-로그인 시 로그인 안내 자체 처리.
+    const inAdmin        = segments[0] === 'admin';
 
     // Compute the target path without immediately calling replace()
     let target: string | null = null;
     if (isAuthenticated) {
       // Post-login: new users must see onboarding before /(tabs)
-      if (!onboardingDone && !inOnboarding) target = '/onboarding';
+      if (!onboardingDone && !inOnboarding && !inAdmin) target = '/onboarding';
       else if (onboardingDone && (inAuthGroup || inOnboarding)) target = '/(tabs)';
     } else {
       // Unauthenticated: always send to login. Onboarding never appears
       // before auth (avoids re-running onboarding after account deletion).
-      if (!inAuthGroup) target = '/auth/login';
+      // /admin 은 예외 — 화면 자체에서 로그인 안내.
+      if (!inAuthGroup && !inAdmin) target = '/auth/login';
     }
 
     // Guard: skip if we already replaced to the same target in the previous render.
@@ -186,9 +190,14 @@ function useAuthGuard(): { routingReady: boolean } {
   const inAuthGroup  = segs[0] === 'auth';
   const inOnboarding = segs[0] === 'onboarding';
   const inTabs       = segs[0] === '(tabs)' || segs.length === 0;
+  // v1.2.7 — /admin/* 은 어떤 인증 상태에서도 routedCorrectly = true.
+  // 자체 가드 (isAdmin RPC + 화면 내 비-로그인 안내) 가 처리.
+  const inAdminRoute = segs[0] === 'admin';
   let routedCorrectly = false;
   if (hydrated) {
-    if (isAuthenticated) {
+    if (inAdminRoute) {
+      routedCorrectly = true;
+    } else if (isAuthenticated) {
       routedCorrectly = onboardingDone ? !inAuthGroup && !inOnboarding : inOnboarding;
     } else {
       routedCorrectly = inAuthGroup;

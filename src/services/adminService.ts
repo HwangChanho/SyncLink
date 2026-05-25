@@ -1,12 +1,21 @@
 /**
- * adminService — 관리자 대시보드 (`/admin/dashboard`) 전용.
+ * adminService — 관리자 대시보드 전용 (별도 인증).
  *
- * 모든 함수는 SECURITY DEFINER RPC 를 거치며, RPC 안에서 app_admins 화이트
- * 리스트 가드. 비-관리자가 호출하면 permission denied raise → 에러.
+ * supabase auth 와 완전 분리. admin_credentials 테이블의 username/password
+ * 로 검증. 매 RPC 호출에 자격 증명 전달.
+ *
+ * 저장: AsyncStorage (web 에서는 localStorage 로 polyfill 됨).
  */
 import { supabase } from '@/lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-/** RPC get_admin_stats 의 응답 shape. */
+const STORAGE_KEY = 'admin-credentials';
+
+export interface AdminCredentials {
+  username: string;
+  password: string;
+}
+
 export interface AdminStats {
   days: number;
   since: string;
@@ -15,7 +24,7 @@ export interface AdminStats {
     users: number;
     in_tok: number;
     out_tok: number;
-    est_usd: number;
+    usd: number;
   };
   users: {
     total_users: number;
@@ -27,14 +36,14 @@ export interface AdminStats {
     users: number;
     in_tok: number;
     out_tok: number;
-    avg_ms: number;
-    est_usd: number;
+    usd: number;
   }>;
   by_day: Array<{
     day: string;
     calls: number;
     users: number;
     out_tok: number;
+    usd: number;
   }>;
   by_day_function: Array<{
     function_name: string;
@@ -43,24 +52,58 @@ export interface AdminStats {
   }>;
 }
 
+/** 저장된 admin 자격 증명 읽기. null = 미저장. */
+export async function getSavedCredentials(): Promise<AdminCredentials | null> {
+  try {
+    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.username === 'string' && typeof parsed?.password === 'string') {
+      return parsed as AdminCredentials;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** username/password 저장 (로그인 성공 직후). */
+export async function saveCredentials(creds: AdminCredentials): Promise<void> {
+  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(creds));
+}
+
+/** 저장 삭제 (로그아웃). */
+export async function clearCredentials(): Promise<void> {
+  await AsyncStorage.removeItem(STORAGE_KEY);
+}
+
 /**
- * 호출자가 admin (app_admins 화이트리스트 매칭) 인지 확인.
- * 화면 진입 가드 UX 용 — 서버 측 진짜 가드는 RPC 안에 있다.
+ * username/password 검증. RPC `admin_verify` 호출.
+ * @returns true = 일치, false = 불일치
  */
-export async function isAdmin(): Promise<boolean> {
+export async function adminLogin(username: string, password: string): Promise<boolean> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any).rpc('is_admin');
-  if (error) return false;
+  const { data, error } = await (supabase as any).rpc('admin_verify', {
+    p_username: username,
+    p_password: password,
+  });
+  if (error) throw error;
   return Boolean(data);
 }
 
 /**
- * 관리자 통계.
- * @param days 집계 기간 (default 7)
+ * 통계 조회. RPC `admin_get_stats` 호출 — username/password 가 함께 전송됨.
  */
-export async function getAdminStats(days = 7): Promise<AdminStats> {
+export async function getAdminStats(
+  creds: AdminCredentials,
+  days = 7,
+): Promise<AdminStats> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any).rpc('get_admin_stats', { days });
+  const { data, error } = await (supabase as any).rpc('admin_get_stats', {
+    p_username: creds.username,
+    p_password: creds.password,
+    days,
+  });
   if (error) throw error;
   if (!data) throw new Error('관리자 통계가 비어있어요.');
   return data as AdminStats;
