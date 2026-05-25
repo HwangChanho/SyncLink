@@ -31,11 +31,14 @@ import { textStyles } from '@/constants/typography';
 import {
   adminLogin,
   getAdminStats,
+  getAdminUsers,
   getSavedCredentials,
   saveCredentials,
   clearCredentials,
   type AdminStats,
   type AdminCredentials,
+  type AdminUsersResult,
+  type UsersSort,
 } from '@/services/adminService';
 
 type Days = 1 | 7 | 30;
@@ -245,6 +248,9 @@ export default function AdminDashboard() {
                 />
               </View>
             )}
+
+            {/* 사용자 목록 카드 */}
+            <UsersCard creds={creds} styles={styles} colors={colors} />
           </>
         ) : null}
       </ScrollView>
@@ -451,6 +457,98 @@ const hardStyles = StyleSheet.create({
   },
 });
 
+/**
+ * 사용자 목록 카드. 정렬 (recent/active/usage) 토글 + 행 50개.
+ */
+function UsersCard({
+  creds,
+  styles,
+  colors,
+}: {
+  creds: AdminCredentials;
+  styles: ReturnType<typeof makeStyles>;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const [sort, setSort] = useState<UsersSort>('recent');
+  const [data, setData] = useState<AdminUsersResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    getAdminUsers(creds, sort, 50)
+      .then((res) => { if (!cancelled) setData(res); })
+      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : '사용자 목록을 불러오지 못했어요.'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [creds, sort]);
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.headerRow}>
+        <Text style={styles.cardTitle}>사용자 ({data?.total ?? '…'})</Text>
+      </View>
+
+      {/* 정렬 segment */}
+      <View style={styles.segment}>
+        {([
+          { k: 'recent', label: '최근 가입' },
+          { k: 'active', label: '활성' },
+          { k: 'usage',  label: 'AI 호출' },
+        ] as const).map(({ k, label }) => (
+          <TouchableOpacity
+            key={k}
+            onPress={() => setSort(k)}
+            style={[styles.segmentBtn, sort === k && styles.segmentBtnActive]}
+          >
+            <Text style={[styles.segmentText, sort === k && styles.segmentTextActive]}>
+              {label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {loading ? (
+        <ActivityIndicator color={colors.primary} style={{ paddingVertical: spacing[3] }} />
+      ) : error ? (
+        <Text style={styles.errorText}>{error}</Text>
+      ) : data && data.rows.length > 0 ? (
+        <View style={styles.tableWrap}>
+          {data.rows.map((u) => (
+            <View key={u.id} style={styles.userRow}>
+              <View style={styles.userMain}>
+                <View style={styles.userTitleRow}>
+                  <Text style={styles.userName} numberOfLines={1}>
+                    {u.nickname || '(닉네임 없음)'}
+                  </Text>
+                  {u.subscription_plan === 'pro' && (
+                    <View style={styles.proPill}>
+                      <Text style={styles.proPillText}>PRO</Text>
+                    </View>
+                  )}
+                  {u.country_code && (
+                    <Text style={styles.userCountry}>{u.country_code}</Text>
+                  )}
+                </View>
+                <Text style={styles.userEmail} numberOfLines={1}>
+                  {u.email ?? '—'}
+                </Text>
+                <Text style={styles.userMeta}>
+                  가입 {u.created_at.slice(0, 10)} · 일정 {u.event_count} · AI {u.ai_calls}회 · ${u.total_cost_usd}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      ) : (
+        <Text style={styles.emptyText}>사용자가 없어요</Text>
+      )}
+    </View>
+  );
+}
+
 function Stat({ label, value, styles }: { label: string; value: string; styles: ReturnType<typeof makeStyles> }) {
   return (
     <View style={styles.stat}>
@@ -546,5 +644,50 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     cell: { ...textStyles.caption, color: colors.textPrimary },
     cellName: { flex: 2 },
     cellNum: { flex: 1, textAlign: 'right' },
+    userRow: {
+      paddingVertical: 10,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+    },
+    userMain: {
+      gap: 2,
+    },
+    userTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    userName: {
+      ...textStyles.body,
+      color: colors.textPrimary,
+      fontWeight: '700',
+      flexShrink: 1,
+    },
+    proPill: {
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      borderRadius: radius.full,
+      backgroundColor: colors.primary,
+    },
+    proPillText: {
+      ...textStyles.caption,
+      color: colors.textInverse,
+      fontWeight: '700',
+      fontSize: 9,
+    },
+    userCountry: {
+      ...textStyles.caption,
+      color: colors.textTertiary,
+      fontSize: 10,
+    },
+    userEmail: {
+      ...textStyles.caption,
+      color: colors.textSecondary,
+    },
+    userMeta: {
+      ...textStyles.caption,
+      color: colors.textTertiary,
+      fontSize: 11,
+    },
   });
 }

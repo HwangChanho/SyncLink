@@ -108,3 +108,48 @@ export async function getAdminStats(
   if (!data) throw new Error('관리자 통계가 비어있어요.');
   return data as AdminStats;
 }
+
+// ─── Users 목록 ──────────────────────────────────────────────────────────
+
+export type UsersSort = 'recent' | 'active' | 'usage';
+
+export interface AdminUserRow {
+  id: string;
+  nickname: string | null;
+  email: string | null;
+  subscription_plan: 'free' | 'pro' | null;
+  country_code: string | null;
+  created_at: string;
+  event_count: number;
+  ai_calls: number;
+  last_event_at: string | null;
+  total_cost_usd: number;
+}
+
+export interface AdminUsersResult {
+  sort: UsersSort;
+  limit: number;
+  total: number;
+  rows: AdminUserRow[];
+}
+
+/**
+ * 사용자 목록 조회 (최대 200).
+ * 정렬: 'recent' (가입순) / 'active' (최근 일정 활동순) / 'usage' (AI 호출순)
+ */
+export async function getAdminUsers(
+  creds: AdminCredentials,
+  sort: UsersSort = 'recent',
+  limit = 50,
+): Promise<AdminUsersResult> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc('admin_get_users', {
+    p_username: creds.username,
+    p_password: creds.password,
+    p_limit: limit,
+    p_sort: sort,
+  });
+  if (error) throw error;
+  if (!data) throw new Error('사용자 목록이 비어있어요.');
+  return data as AdminUsersResult;
+}
