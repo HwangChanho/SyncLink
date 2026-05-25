@@ -190,5 +190,60 @@ Deno.serve(async (req: Request): Promise<Response> => {
     userId, plan, evtType: evt.type, eventId: evt.id,
   });
 
+  // v1.2.7 — 새 Pro 구독자 알림 (LEAD email). INITIAL_PURCHASE 만 트리거 —
+  // 갱신 (RENEWAL) 은 noise 라 skip. 사용자 nickname/email 까지 본문에 포함.
+  if (plan === 'pro' && evt.type === 'INITIAL_PURCHASE') {
+    try {
+      // 사용자 정보 fetch.
+      const { data: u } = await admin
+        .from('users')
+        .select('nickname, country_code, created_at')
+        .eq('id', userId)
+        .maybeSingle();
+      const { data: au } = await admin.auth.admin.getUserById(userId);
+      const userEmail = au?.user?.email ?? '(unknown)';
+
+      // @ts-ignore — Deno path resolves at deploy time.
+      const { sendAdminEmail } = await import('../_shared/email.ts');
+      await sendAdminEmail({
+        subject: `🎉 새 Pro 구독자 — ${u?.nickname ?? '(닉네임 없음)'}`,
+        html: `
+          <div style="font-family: system-ui, -apple-system, sans-serif; max-width:520px; padding:24px;">
+            <h2 style="color:#7C3AED; margin:0 0 16px;">🎉 새 Pro 구독자가 생겼어요</h2>
+            <table style="border-collapse:collapse; width:100%;">
+              <tr><td style="padding:6px 0; color:#6B7280;">닉네임</td>
+                  <td style="padding:6px 0;"><b>${escapeHtml(u?.nickname ?? '-')}</b></td></tr>
+              <tr><td style="padding:6px 0; color:#6B7280;">이메일</td>
+                  <td style="padding:6px 0;">${escapeHtml(userEmail)}</td></tr>
+              <tr><td style="padding:6px 0; color:#6B7280;">국가</td>
+                  <td style="padding:6px 0;">${escapeHtml(u?.country_code ?? '-')}</td></tr>
+              <tr><td style="padding:6px 0; color:#6B7280;">가입일</td>
+                  <td style="padding:6px 0;">${(u?.created_at ?? '').slice(0, 10)}</td></tr>
+              <tr><td style="padding:6px 0; color:#6B7280;">RevenueCat event</td>
+                  <td style="padding:6px 0; color:#9CA3AF; font-family:monospace; font-size:12px;">
+                    ${escapeHtml(evt.type)} · ${escapeHtml(evt.id ?? '')}
+                  </td></tr>
+            </table>
+            <p style="margin-top:24px; color:#9CA3AF; font-size:12px;">
+              SyncLink 관리자 대시보드: <a href="https://synclink.pages.dev/admin">/admin</a>
+            </p>
+          </div>
+        `,
+      });
+    } catch (err) {
+      await logToDb('revenuecat-webhook.notify_email', err, { userId, evtType: evt.type });
+    }
+  }
+
   return ok({ status: 'ok', plan, event_id: evt.id });
 });
+
+/** 매우 단순한 HTML escape — script 주입 방지. */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
