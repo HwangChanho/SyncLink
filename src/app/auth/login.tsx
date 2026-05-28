@@ -171,12 +171,13 @@ export default function LoginScreen() {
           </TouchableOpacity>
 
           {/*
-            Apple — iOS 전용. Build-80 LEAD: web/Android 에서 Apple 버튼
-            제거. Apple Service ID + Web Domain 등록 / Android Apple
-            OAuth flow 모두 v1.0 미지원. iOS native AppleAuthentication
-            만 활성.
+            Apple — v1.2.9: web/Android 도 활성. iOS 는 native
+            AppleAuthentication, web/Android 는 Supabase OAuth redirect
+            (signInWithApple 내부에서 분기 처리).
+            ⚠ 실작동 위해 Supabase Dashboard 에서 Apple provider 설정 필요
+            (Service ID + 도메인 + 키 등록).
           */}
-          {Platform.OS === 'ios' && (
+          {(
             <TouchableOpacity
               style={[styles.button, styles.appleButton, isLoading && styles.disabled]}
               onPress={() => handleSignIn('apple')}

@@ -362,6 +362,40 @@ export async function signInWithApple(): Promise<SignInResult> {
     return {} as SignInResult;
   }
 
+  // v1.2.9 — Android: expo-apple-authentication 미지원. Supabase OAuth +
+  // expo-web-browser 의 openAuthSessionAsync 로 in-app browser 흐름.
+  // (iOS 와 흐름 다름 — iOS 는 native sheet, Android 는 web redirect.)
+  if (Platform.OS === 'android') {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const WebBrowser = require('expo-web-browser');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Linking = require('expo-linking');
+    const redirectTo = Linking.createURL('/auth/callback');
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'apple',
+      options: { redirectTo, skipBrowserRedirect: true },
+    });
+    if (error) throw error;
+    if (!data?.url) throw new Error('Apple OAuth URL 생성 실패');
+
+    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+    if (result.type !== 'success' || !result.url) {
+      throw new Error('cancelled');
+    }
+    // callback URL 의 fragment 에서 token 추출 후 Supabase session 복원.
+    const fragment = result.url.split('#')[1] ?? '';
+    const params = new URLSearchParams(fragment);
+    const access_token = params.get('access_token');
+    const refresh_token = params.get('refresh_token');
+    if (!access_token || !refresh_token) {
+      throw new Error('Apple OAuth 토큰을 받지 못했습니다.');
+    }
+    const { data: sessData, error: sessErr } = await supabase.auth.setSession({ access_token, refresh_token });
+    if (sessErr) throw sessErr;
+    if (!sessData.session) throw new Error('세션 생성 실패');
+    return buildSignInResult(sessData.session);
+  }
+
   const credential = await AppleAuthentication.signInAsync({
     requestedScopes: [
       AppleAuthentication.AppleAuthenticationScope.FULL_NAME,

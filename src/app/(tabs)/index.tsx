@@ -34,7 +34,6 @@ import { WeeklyReviewCard }    from '@/components/home/WeeklyReviewCard';
 import { WeatherWidget }       from '@/components/home/WeatherWidget';
 import { DateSuggestionCard }  from '@/components/home/DateSuggestionCard';
 import { UpcomingEventsCard }  from '@/components/home/UpcomingEventsCard';
-import { ChatFab }              from '@/components/chat/ChatFab';
 import { AISuggestionCard }     from '@/components/home/AISuggestionCard';
 import { ImportCalendarCard }   from '@/components/home/ImportCalendarCard';
 import { findNextFreeSlot }     from '@/lib/freeTimeRecommend';
@@ -196,12 +195,10 @@ export default function HomeScreen() {
         <SpaceActivityFeed />
       </ScrollView>
 
-      {/* AI natural language input bar — fixed at bottom */}
+      {/* AI natural language input bar — fixed at bottom.
+          v1.2.9 — NLInputBar 안에 AI 비서 sparkles 버튼이 통합되어 별도 FAB
+          (ChatFab) 제거. 단일 진입점으로 UI 단순화. */}
       <NLInputBar />
-
-      {/* v1.2 Phase 2 — AI 비서 채팅 진입 FAB. NLInputBar 위쪽에 오버레이.
-          5번째 탭 추가 대신 글로벌 진입점으로 분리 (가로 공간 + 디자인). */}
-      <ChatFab />
     </SafeAreaView>
   );
 }
