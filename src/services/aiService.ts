@@ -196,16 +196,19 @@ async function callEdgeFunction(
  * single-event helper so callers can use either uniformly.
  */
 export async function parseNaturalLanguageMulti(text: string): Promise<NLParseResult[]> {
-  const local = parseMultiple(text);
-  // If the splitter actually produced multiple segments and at least one
-  // is usable, return local results directly — even when individual
-  // segments are 'low', because the user explicitly enumerated events.
-  if (local.length > 1) {
-    const anyUsable = local.some((r) => r.confidence !== 'low');
-    if (anyUsable) return local;
+  // v1.2.9 — AI-only 정책. 단, 콤마/세미콜론으로 명시 enumeration 한 경우만
+  // 로컬 splitter 로 분할 후 각 segment 를 AI 로 개별 파싱.
+  // (multi-event AI parsing 은 follow-up — 현재는 splitter + AI per-segment.)
+  const hasMultiSeparator = /[,;]|그리고\s|\sand\s/i.test(text);
+  if (hasMultiSeparator) {
+    const local = parseMultiple(text);
+    if (local.length > 1) {
+      // 각 segment 의 rawInput 을 AI 에 다시 보내 정확도 향상.
+      const results = await Promise.all(local.map((r) => parseNaturalLanguage(r.rawInput || text)));
+      return results;
+    }
   }
-  // Single segment (or all-low multi) → use the AI fallback path.
-  // This still returns one event; multi-event AI parsing is a follow-up.
+  // 단일 입력 → AI 로 1회 파싱.
   const single = await parseNaturalLanguage(text);
   return [single];
 }
@@ -219,19 +222,20 @@ export async function parseNaturalLanguage(
 ): Promise<NLParseResult> {
   const hasImage = !!options?.imageBase64;
 
-  // Step 1 & 2: local parse first — image 첨부 시엔 의미 없으므로 skip.
-  if (!hasImage) {
-    const localResult = parseLocally(text);
-    if (localResult.confidence !== 'low') {
-      return localResult;
-    }
-  }
+  // v1.2.9 — LEAD 결정: 로컬 정규식 파서를 제거하고 모든 입력을 AI 로
+  // 통일. 이유: regex 가 "6~9시" 같은 경계 패턴을 자주 놓치고 (시 첫 숫자
+  // 누락 → endHour 만 시작점으로 잡힘) title 잔여물도 흘림. AI 통일 시
+  // 일관된 품질 + UX. 비용 영향 ~$10/월 (100 사용자 기준) 으로 미미.
+  // parseLocally 는 quota 도달 시 graceful fallback 으로만 사용.
 
   // Step 3: client-side daily limit (text 만). image 한도는 server quota 가
   // 별도 (parse-event-vision: free 2/day). 클라이언트에선 굳이 사전 차단 X.
+  // v1.2.9 — quota 초과 시 로컬 파서로 graceful degrade (사용자 차단 대신).
   if (!hasImage) {
     const usage = await readUsageRecord();
     if (usage.callCount >= FREE_AI_DAILY_LIMIT) {
+      const localFallback = parseLocally(text);
+      if (localFallback.confidence !== 'low') return localFallback;
       return {
         parsed: {},
         confidence: 'low',

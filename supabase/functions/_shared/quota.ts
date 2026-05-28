@@ -38,7 +38,7 @@ export interface QuotaResult {
   /** Remaining calls in the current window (after this would-be call). */
   remaining: number;
   /** When non-null, the i18n-friendly machine reason the call is blocked. */
-  reason?: 'quota_free_daily' | 'quota_pro_hourly' | 'pro_required' | 'auth';
+  reason?: 'quota_free_daily' | 'quota_pro_hourly' | 'quota_pro_daily' | 'pro_required' | 'auth';
 }
 
 /**
@@ -47,8 +47,11 @@ export interface QuotaResult {
  * - Pro:  generous hourly cap so normal use never hits it but a runaway
  *         loop can only burn ~ N × hourly × 24 calls per day.
  */
-const LIMITS: Record<string, { freeDaily: number; proHourly: number; proRequiresPaid?: boolean }> = {
-  'parse-event':          { freeDaily: 5,  proHourly: 60 },
+const LIMITS: Record<string, { freeDaily: number; proHourly: number; proDaily?: number; proRequiresPaid?: boolean }> = {
+  // v1.2.9 — local 정규식 파서 제거 + AI-only 전환. abuser 1명이 봇으로
+  // 시간당 60×24h 돌릴 수 없도록 proDaily cap 추가. Free 도 5→10 (정상
+  // 사용자 cap 도달 빈발 방지).
+  'parse-event':          { freeDaily: 10, proHourly: 30, proDaily: 100 },
   // 사진 첨부 NL — Sonnet vision 사용으로 텍스트 대비 비용 ~10× 높아 free
   // 1일 2회 (LEAD 결정 2026-05-06). Pro 도 hourly 보수적으로.
   'parse-event-vision':   { freeDaily: 2,  proHourly: 20 },
@@ -135,12 +138,22 @@ export async function enforceQuota(args: {
 
   const now = Date.now();
   if (plan === 'pro') {
-    // Pro: hourly window
+    // Pro: hourly window + (optional) daily cap.
+    // v1.2.9 — proDaily 정의된 함수는 24h cap 도 검사. abuser 보호.
     const since = new Date(now - 60 * 60 * 1000).toISOString();
     const used = await countRecentCalls(adminClient, userId, functionName, since);
     const cap = limits.proHourly;
     if (used >= cap) {
       return { allowed: false, plan, remaining: 0, reason: 'quota_pro_hourly' };
+    }
+    if (limits.proDaily !== undefined) {
+      const todayUTC = new Date(now);
+      todayUTC.setUTCHours(0, 0, 0, 0);
+      const usedToday = await countRecentCalls(adminClient, userId, functionName, todayUTC.toISOString());
+      if (usedToday >= limits.proDaily) {
+        return { allowed: false, plan, remaining: 0, reason: 'quota_pro_daily' };
+      }
+      return { allowed: true, plan, remaining: Math.min(cap - used, limits.proDaily - usedToday) - 1 };
     }
     return { allowed: true, plan, remaining: cap - used - 1 };
   }
