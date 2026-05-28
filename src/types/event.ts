@@ -93,6 +93,14 @@ export interface EventSummary {
   editableByMembers?: boolean;
   /** v1.1 — 'workout' = 헬스, 'running' = 러닝. */
   eventKind?: 'general' | 'workout' | 'running';
+  /**
+   * v1.2.9 — recurrence expansion 메타데이터. 캘린더 cell 에 매 occurrence
+   * 표시하기 위해 stores/eventStore.fetchEvents 에서 expandRecurrence 가
+   * 참조한다. 'none' / null 이면 expansion 없이 원본만 표시.
+   */
+  repeatType?: string | null;
+  repeatWeekdays?: number[] | null;
+  repeatUntil?: Date | null;
 }
 
 /** Payload when creating a new event (omit server-generated fields). */

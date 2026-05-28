@@ -65,6 +65,13 @@ function toEventSummary(
     // 기존 분기와 호환.
     ...(row.event_kind === 'workout' ? { eventKind: 'workout' as const } : {}),
     ...(row.event_kind === 'running' ? { eventKind: 'running' as const } : {}),
+    // v1.2.9 — recurrence expansion 메타데이터. eventStore.fetchEvents 가
+    // expandRecurrence 호출 시 사용. row 가 repeat 정보 없으면 undefined.
+    ...(row.repeat_type && row.repeat_type !== 'none' ? { repeatType: row.repeat_type } : {}),
+    ...(Array.isArray(row.repeat_weekdays) && row.repeat_weekdays.length > 0
+      ? { repeatWeekdays: row.repeat_weekdays }
+      : {}),
+    ...(row.repeat_until ? { repeatUntil: new Date(row.repeat_until) } : {}),
   };
 }
 
@@ -130,12 +137,17 @@ export async function getEventsInRange(range: DateRange): Promise<EventSummary[]
   const endIso   = range.end.toISOString();
 
   // ─── 1. Own events in range ─────────────────────────────────────────────
+  // v1.2.9 — 반복 일정은 start_at 이 range 이전이라도 occurrence 가 range
+  // 안에 떨어질 수 있어 별도 OR 절로 포함. 단 repeat_until 가 range.start
+  // 이전이면 제외 (이미 끝난 반복).
   const { data: ownRows, error: ownError } = await supa
     .from('events')
     .select('*')
     .eq('user_id', userId)
-    .lte('start_at', endIso)
-    .gte('end_at', startIso)
+    .or(
+      `and(start_at.lte.${endIso},end_at.gte.${startIso}),` +
+      `and(repeat_type.neq.none,start_at.lte.${endIso},or(repeat_until.is.null,repeat_until.gte.${startIso}))`,
+    )
     .order('start_at') as { data: EventRow[] | null; error: Error | null };
 
   if (ownError) throw ownError;

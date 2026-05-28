@@ -158,12 +158,14 @@ allDay: 有日期但未指定时间时为 true
 {"noEventFound":true,"reason":"한 줄짜리 한국어 설명"}
 
 repeatType 가능 값: "none" | "daily" | "weekly" | "monthly" | "yearly" | "custom_weekly"
-- "custom_weekly": 여러 요일 반복 ("평일", "주 5일", "월~금", "매주 월수금" 등)
+- "weekly": **단순 "매주"** (요일 명시 없음). startAt 요일에 매주 반복.
+  예 "매주 회의" / "회사 6~9시 매주" → repeatType="weekly", weeklyDays=null
+- "custom_weekly": **여러 요일 명시** ("평일", "주 5일", "월~금", "매주 월수금")
   weeklyDays = 요일 숫자 배열 (0=일, 1=월, 2=화, 3=수, 4=목, 5=금, 6=토)
-  예 "평일 9시부터 오후 6시까지" → repeatType="custom_weekly", weeklyDays=[1,2,3,4,5], startAt/endAt 은 다음 가장 가까운 평일의 09:00/18:00
-  예 "주 5일 9-6시" → 같음
+  ⚠ custom_weekly 를 쓸 거면 weeklyDays 가 **반드시 1개 이상** 있어야 한다.
+    "매주" 만 있고 요일 명시 없으면 절대 custom_weekly 쓰지 말고 "weekly" 사용.
+  예 "평일 9시부터 오후 6시까지" → repeatType="custom_weekly", weeklyDays=[1,2,3,4,5]
   예 "매주 월수금 운동" → repeatType="custom_weekly", weeklyDays=[1,3,5]
-- "weekly": 매주 같은 단일 요일 반복 (startAt 요일과 동일).
 - 그 외 weeklyDays 는 null.
 
 allDay: 날짜는 있으나 시간이 명시되지 않으면 true
@@ -377,6 +379,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const titleNormalized = typeof aiParsed.title === 'string'
       ? (aiParsed.title.trim().length > 25 ? aiParsed.title.trim().slice(0, 25) + '…' : aiParsed.title.trim())
       : aiParsed.title;
+
+    // v1.2.9 — 모델이 단순 "매주" 를 custom_weekly + 빈 배열 weeklyDays 로
+    // 반환하던 회귀 (캘린더 렌더링 시 occurrence 0 → 미노출).
+    // weeklyDays 가 비어 있거나 invalid 면 repeat_type 를 'weekly' 로 강등.
+    const weeklyDaysValid = Array.isArray(aiParsed.weeklyDays)
+      ? aiParsed.weeklyDays.filter((n: unknown) => typeof n === 'number' && n >= 0 && n <= 6)
+      : [];
+    if (aiParsed.repeatType === 'custom_weekly' && weeklyDaysValid.length === 0) {
+      aiParsed.repeatType = 'weekly';
+      aiParsed.weeklyDays = null;
+    }
     const startNormalized = ensureOffset(aiParsed.startAt);
     let endNormalized = ensureOffset(aiParsed.endAt);
     if (startNormalized && endNormalized) {

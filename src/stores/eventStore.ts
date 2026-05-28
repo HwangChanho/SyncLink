@@ -17,6 +17,7 @@
 import { create } from 'zustand';
 import type { EventSummary, DateRange } from '@/types';
 import { getEventsInRange, getEventById } from '@/services/eventService';
+import { expandRecurrence } from '@/lib/recurrence';
 import { subscribeToEvents as realtimeSubscribeToEvents } from '@/services/eventRealtimeService';
 
 /**
@@ -119,7 +120,19 @@ export const useEventStore = create<EventState>((set, _get) => ({
 
     set({ isFetching: true, error: null });
     try {
-      const events = await getEventsInRange(range);
+      const rawEvents = await getEventsInRange(range);
+
+      // v1.2.9 — recurrence expansion: 반복 일정 (weekly / custom_weekly /
+      // daily / monthly / yearly) 을 range 안의 각 occurrence 로 펼침.
+      // 원본 1 row → 다수의 ephemeral EventSummary (id 에 ::YYYY-MM-DD suffix).
+      const events: EventSummary[] = [];
+      for (const ev of rawEvents) {
+        if (ev.repeatType && ev.repeatType !== 'none') {
+          events.push(...expandRecurrence(ev, range.start, range.end));
+        } else {
+          events.push(ev);
+        }
+      }
 
       // v1.1.3 — Multi-day expansion. 일정이 여러 날 걸쳐있으면 시작일부터
       // 종료일까지 매일 cell 에 같은 EventSummary 를 등록 → MonthView 가

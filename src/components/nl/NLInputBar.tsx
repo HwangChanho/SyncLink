@@ -421,14 +421,29 @@ export function NLInputBar({ onEventCreated }: Props) {
           ? titleCandidate.slice(0, 25) + '…'
           : titleCandidate;
 
+      // v1.2.9 — custom_weekly + weeklyDays 빈 배열 회귀 가드 (서버에서 1차 처리,
+      // 클라에서 belt-and-suspenders 2차 처리). 빈 배열이면 weekly 로 강등.
+      const resolvedRepeatType = (() => {
+        const rt = p.repeatType?.value;
+        if (rt === 'custom_weekly') {
+          const days = p.weeklyDays?.value ?? [];
+          if (days.length === 0) return 'weekly';
+        }
+        return rt;
+      })();
+
       const createInput = {
         title:      safeTitle,
         startAt,
         endAt,
         ...(p.allDay?.value ? { allDay: true } as const : {}),
         ...(p.location?.value ? { location: p.location.value } : {}),
-        ...(p.repeatType?.value && p.repeatType.value !== 'none'
-          ? { repeatType: p.repeatType.value }
+        ...(resolvedRepeatType && resolvedRepeatType !== 'none'
+          ? { repeatType: resolvedRepeatType }
+          : {}),
+        // custom_weekly 인 경우 weeklyDays 도 함께 전달 (createEvent 가 사용).
+        ...(resolvedRepeatType === 'custom_weekly' && p.weeklyDays?.value?.length
+          ? { repeatWeekdays: p.weeklyDays.value }
           : {}),
         // v1.2.9 — ConfirmModal 의 ColorPicker 에서 고른 색을 전달.
         // null 이면 createEvent 가 category/default 색 적용.
