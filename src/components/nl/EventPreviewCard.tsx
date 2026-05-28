@@ -34,6 +34,10 @@ interface Props {
   selectedSpaceIds?: string[];
   /** 스페이스 선택 변경 콜백. */
   onSpacesChange?: (ids: string[]) => void;
+  /** v1.2.9 — 반복 일정 종료일 (null = 무기한). repeat_type !== 'none' 일 때만 의미. */
+  repeatUntil?: Date | null;
+  /** 반복 종료일 변경 콜백 (값 또는 null=무기한). 미제공이면 picker 비노출. */
+  onRepeatUntilChange?: (date: Date | null) => void;
 }
 
 // v1.2.9 — title 에 reserved kind 가 보이면 색상이 시스템 고정이라 picker 숨김.
@@ -137,6 +141,8 @@ export function EventPreviewCard({
   spaces,
   selectedSpaceIds,
   onSpacesChange,
+  repeatUntil,
+  onRepeatUntilChange,
 }: Props) {
   // Resolve active theme colors for dark mode support (TASK-700)
   const { t } = useTranslation();
@@ -234,6 +240,54 @@ export function EventPreviewCard({
         <View style={styles.colorSection}>
           <Text style={styles.colorLabel}>색상</Text>
           <ColorPicker value={selectedColor ?? null} onChange={onColorChange} />
+        </View>
+      )}
+
+      {/* v1.2.9 — 반복 일정 데드라인. repeat_type !== 'none' 일 때만 노출.
+          LEAD 요청: "연속적인 일정 등록할 때는 무조건 데드라인 한 번 되물어보게".
+          chip 선택: 1개월 / 3개월 / 6개월 / 1년 / 무기한. 기본 1년. */}
+      {onRepeatUntilChange && parsed.repeatType?.value && parsed.repeatType.value !== 'none' && (
+        <View style={styles.colorSection}>
+          <Text style={styles.colorLabel}>
+            언제까지 반복? {repeatUntil ? `(${repeatUntil.toLocaleDateString('ko-KR')})` : '(무기한)'}
+          </Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+            {[
+              { label: '1개월', months: 1 },
+              { label: '3개월', months: 3 },
+              { label: '6개월', months: 6 },
+              { label: '1년', months: 12 },
+              { label: '무기한', months: null },
+            ].map((opt) => {
+              const isSel = opt.months === null
+                ? repeatUntil === null
+                : (() => {
+                    if (!repeatUntil) return false;
+                    const expected = new Date(parsed.startAt?.value ?? new Date());
+                    expected.setMonth(expected.getMonth() + opt.months);
+                    return Math.abs(repeatUntil.getTime() - expected.getTime()) < 24 * 3600 * 1000;
+                  })();
+              return (
+                <Pressable
+                  key={opt.label}
+                  onPress={() => {
+                    if (opt.months === null) {
+                      onRepeatUntilChange(null);
+                    } else {
+                      const d = new Date(parsed.startAt?.value ?? new Date());
+                      d.setMonth(d.getMonth() + opt.months);
+                      onRepeatUntilChange(d);
+                    }
+                  }}
+                  style={[styles.spaceChip, isSel && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSel }}
+                >
+                  <Text style={[styles.spaceChipText, isSel && { color: colors.textInverse }]}>{opt.label}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
         </View>
       )}
 

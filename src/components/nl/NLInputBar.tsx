@@ -404,7 +404,11 @@ export function NLInputBar({ onEventCreated }: Props) {
 
   // ── Confirm: create event and close (or advance queue) ────────────────────
 
-  const handleConfirm = useCallback(async (chosenColor: string | null = null, spaceIds: string[] = []) => {
+  const handleConfirm = useCallback(async (
+    chosenColor: string | null = null,
+    spaceIds: string[] = [],
+    repeatUntil: Date | null = null,
+  ) => {
     if (!parseResult) return;
     // v1.2.9 — 더블탭/중복 트리거 방지. 이미 saving 진행 중이면 무시.
     // (DB 에 같은 일정 2개 row 가 0.7s 간격으로 들어가던 회귀 원인.)
@@ -458,6 +462,10 @@ export function NLInputBar({ onEventCreated }: Props) {
         // custom_weekly 인 경우 weeklyDays 도 함께 전달 (createEvent 가 사용).
         ...(resolvedRepeatType === 'custom_weekly' && p.weeklyDays?.value?.length
           ? { repeatWeekdays: p.weeklyDays.value }
+          : {}),
+        // v1.2.9 — 반복 일정 데드라인. null = 무기한 (필드 미전달).
+        ...(resolvedRepeatType && resolvedRepeatType !== 'none' && repeatUntil
+          ? { repeatUntil }
           : {}),
         // v1.2.9 — ConfirmModal 의 ColorPicker 에서 고른 색을 전달.
         // null 이면 createEvent 가 category/default 색 적용.
@@ -546,7 +554,9 @@ export function NLInputBar({ onEventCreated }: Props) {
     }
     setParseResult(null);
     setInputState('idle');
-    // Keep input text so the user can re-submit after editing
+    // v1.2.9 — LEAD: "미리보기에서 나가도 텍스트 클리어".
+    // (이전엔 재제출 편의를 위해 유지했으나 사용자 피드백상 클리어가 더 자연스러움.)
+    setText('');
   }, [pendingResults]);
 
   // ── Render ──────────────────────────────────────────────────────────────────

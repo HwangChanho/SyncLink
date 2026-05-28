@@ -25,10 +25,10 @@ interface Props {
   /** The parse result to display in the preview card. */
   result: NLParseResult;
   /**
-   * v1.2.9 — "확인" 콜백. ColorPicker 색상 + 선택된 스페이스 id 배열을 함께 전달.
-   * color: null = auto/default. spaceIds: [] = 비공개.
+   * v1.2.9 — "확인" 콜백. color + spaceIds + repeatUntil 모두 전달.
+   * color: null = auto/default. spaceIds: [] = 비공개. repeatUntil: null = 무기한.
    */
-  onConfirm: (color: string | null, spaceIds: string[]) => void;
+  onConfirm: (color: string | null, spaceIds: string[], repeatUntil: Date | null) => void;
   /** 사용자 스페이스 목록 (caller 에서 load). 비어 있으면 picker 숨김. */
   spaces?: SpaceSummary[];
   /** Called when the user taps "직접 입력" (navigate to create form). */
@@ -45,13 +45,24 @@ export function ConfirmModal({ visible, result, onConfirm, onEdit, onDismiss, sp
   const colors = useColors();
   const styles = makeStyles(colors);
 
-  // v1.2.9 — 선택된 색상 + 스페이스 (모달이 다시 열릴 때마다 reset).
+  // v1.2.9 — 선택된 색상 + 스페이스 + 반복 데드라인 (모달이 다시 열릴 때마다 reset).
+  // 반복 데드라인 기본 = 시작일 + 1년 (LEAD: "연속적인 일정 데드라인 무조건 묻기").
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [selectedSpaceIds, setSelectedSpaceIds] = useState<string[]>([]);
+  const [selectedRepeatUntil, setSelectedRepeatUntil] = useState<Date | null>(null);
   useEffect(() => {
     if (visible) {
       setSelectedColor(null);
       setSelectedSpaceIds([]);
+      // 반복 일정이면 기본 1년 후로 사전 설정 (사용자가 chip 으로 변경 가능).
+      const rt = result.parsed.repeatType?.value;
+      if (rt && rt !== 'none') {
+        const d = new Date(result.parsed.startAt?.value ?? new Date());
+        d.setFullYear(d.getFullYear() + 1);
+        setSelectedRepeatUntil(d);
+      } else {
+        setSelectedRepeatUntil(null);
+      }
     }
   }, [visible, result]);
 
@@ -77,6 +88,8 @@ export function ConfirmModal({ visible, result, onConfirm, onEdit, onDismiss, sp
             {...(spaces !== undefined ? { spaces } : {})}
             selectedSpaceIds={selectedSpaceIds}
             onSpacesChange={setSelectedSpaceIds}
+            repeatUntil={selectedRepeatUntil}
+            onRepeatUntilChange={setSelectedRepeatUntil}
           />
 
           {/* Action buttons. Build-75 — 사용자: "AI 일정 등록할때 취소도
@@ -100,7 +113,7 @@ export function ConfirmModal({ visible, result, onConfirm, onEdit, onDismiss, sp
             </Pressable>
             <Pressable
               style={[styles.button, styles.confirmButton]}
-              onPress={() => onConfirm(selectedColor, selectedSpaceIds)}
+              onPress={() => onConfirm(selectedColor, selectedSpaceIds, selectedRepeatUntil)}
               accessibilityRole="button"
               accessibilityLabel={t('common.a11y_confirm')}
             >

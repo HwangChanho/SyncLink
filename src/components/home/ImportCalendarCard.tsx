@@ -14,22 +14,37 @@
  *   - 일 5건까지 (quota.ts 의 assistant-chat 한도 공유)
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View, Text, Pressable, Alert, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors, type ColorTokens } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { sendAssistantTurn } from '@/services/assistantChatService';
 import { useEventStore } from '@/stores/eventStore';
 
+// v1.2.9 — LEAD: "다른 캘린더 사진으로 가져오기" 카드에 X 닫기 기능 추가.
+// 닫으면 영구 hidden (AsyncStorage key). 다시 보려면 설정 같은 데서 reset 필요.
+const STORAGE_KEY = 'home.importCard.dismissed';
+
 export function ImportCalendarCard() {
   const colors = useColors();
   const styles = makeStyles(colors);
   const [busy, setBusy] = useState(false);
+  const [dismissed, setDismissed] = useState<boolean | null>(null);
   const refetchEvents = useEventStore((s) => s.fetchEvents);
+
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_KEY).then((v) => setDismissed(v === '1'));
+  }, []);
+
+  const handleDismiss = useCallback(async () => {
+    setDismissed(true);
+    await AsyncStorage.setItem(STORAGE_KEY, '1');
+  }, []);
 
   const handlePick = useCallback(async () => {
     if (busy) return;
@@ -95,6 +110,9 @@ export function ImportCalendarCard() {
     }
   }, [busy, refetchEvents]);
 
+  // v1.2.9 — 닫힌 상태면 카드 자체 미렌더.
+  if (dismissed) return null;
+
   return (
     <Pressable
       onPress={handlePick}
@@ -117,6 +135,18 @@ export function ImportCalendarCard() {
           {busy ? 'AI 가 사진을 읽고 있어요' : '월간 스크린샷 1장이면 끝'}
         </Text>
       </View>
+      {/* v1.2.9 — 닫기 버튼. event propagation 차단해 카드 onPress 안 트리거. */}
+      {!busy && (
+        <Pressable
+          onPress={(e) => { e.stopPropagation(); handleDismiss(); }}
+          hitSlop={8}
+          style={styles.closeButton}
+          accessibilityRole="button"
+          accessibilityLabel="카드 닫기"
+        >
+          <Ionicons name="close" size={18} color={colors.textTertiary} />
+        </Pressable>
+      )}
     </Pressable>
   );
 }
@@ -143,5 +173,9 @@ function makeStyles(colors: ColorTokens) {
     body: { flex: 1 },
     title: { ...textStyles.body, color: colors.textPrimary, fontWeight: '600' },
     sub:   { ...textStyles.bodySm, color: colors.textTertiary, marginTop: 2 },
+    closeButton: {
+      width: 24, height: 24,
+      alignItems: 'center', justifyContent: 'center',
+    },
   });
 }
