@@ -36,7 +36,7 @@ import { DateSuggestionCard }  from '@/components/home/DateSuggestionCard';
 import { UpcomingEventsCard }  from '@/components/home/UpcomingEventsCard';
 import { AISuggestionCard }     from '@/components/home/AISuggestionCard';
 import { ImportCalendarCard }   from '@/components/home/ImportCalendarCard';
-import { findNextFreeSlot }     from '@/lib/freeTimeRecommend';
+import { findNextFreeSlot, deriveRecentStats } from '@/lib/freeTimeRecommend';
 import { useMemo }              from 'react';
 import { useColors } from '@/hooks/useColors';
 import { useTranslation } from 'react-i18next';
@@ -75,7 +75,14 @@ export default function HomeScreen() {
   const freeSlot = useMemo(() => {
     const flat = Object.values(eventsByDate).flat();
     const simplified = flat.map((e) => ({ startAt: e.startAt, endAt: e.endAt }));
-    return findNextFreeSlot(simplified);
+    // v1.2.9 — 최근 패턴 stats 함께 전달해 인사이트 기반 suggestion 생성.
+    const stats = deriveRecentStats(flat.map((e) => ({
+      startAt: e.startAt,
+      endAt: e.endAt,
+      ...(e.title ? { title: e.title } : {}),
+      ...(e.eventKind ? { eventKind: e.eventKind } : {}),
+    })));
+    return findNextFreeSlot(simplified, new Date(), stats);
   }, [eventsByDate]);
 
   const isRefreshing = isFetchingEvents || isFetchingTodos;
