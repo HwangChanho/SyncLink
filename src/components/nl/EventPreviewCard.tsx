@@ -15,11 +15,27 @@ import type { NLParseResult, Confidence } from '@/types';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { ColorPicker, WORKOUT_RESERVED_COLOR, RUNNING_RESERVED_COLOR } from '@/components/event/ColorPicker';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Props {
   result: NLParseResult;
+  /**
+   * v1.2.9 — 미리보기에서 선택한 색상 (null = auto/default).
+   * 운동/러닝 같이 reserved color 가 강제되는 케이스에는 picker 미노출.
+   */
+  selectedColor?: string | null;
+  /** Color 변경 콜백. 미제공이면 picker 자체 비노출. */
+  onColorChange?: (color: string | null) => void;
+}
+
+// v1.2.9 — title 에 reserved kind 가 보이면 색상이 시스템 고정이라 picker 숨김.
+// 워크아웃/러닝은 createEvent 가 WORKOUT_RESERVED_COLOR / RUNNING_RESERVED_COLOR 로 강제.
+const RESERVED_KIND_RE = /운동|헬스|gym|workout|러닝|running|달리기|마라톤|조깅/i;
+function isReservedKindTitle(title: string | undefined | null): boolean {
+  if (!title) return false;
+  return RESERVED_KIND_RE.test(title);
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -108,13 +124,24 @@ function SourceBadge({ source, confidence }: BadgeProps) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function EventPreviewCard({ result }: Props) {
+export function EventPreviewCard({ result, selectedColor, onColorChange }: Props) {
   // Resolve active theme colors for dark mode support (TASK-700)
   const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
 
   const { parsed, confidence, source } = result;
+
+  // v1.2.9 — 헤더에 노출할 effective color.
+  //   1) reserved kind (운동/러닝) → RESERVED 색 고정.
+  //   2) 사용자가 picker 에서 선택 → selectedColor.
+  //   3) 둘 다 아니면 테마 primary (default).
+  const isReserved = isReservedKindTitle(parsed.title?.value);
+  const headerDotColor = isReserved
+    ? (/(러닝|running|달리기|마라톤|조깅)/i.test(parsed.title?.value ?? '')
+        ? RUNNING_RESERVED_COLOR
+        : WORKOUT_RESERVED_COLOR)
+    : (selectedColor ?? colors.primary);
 
   // Repeat type label mapping using i18n.
   // v1.2.8 — custom_weekly = 다중 요일 (예: 평일 = 월·화·수·목·금).
@@ -139,8 +166,10 @@ export function EventPreviewCard({ result }: Props) {
 
   return (
     <View style={styles.card}>
-      {/* Header: title + source badge */}
+      {/* Header: color dot + title + source badge.
+          v1.2.9 — ColorPicker 선택 시 dot 색이 즉시 sync. */}
       <View style={styles.header}>
+        <View style={[styles.colorDot, { backgroundColor: headerDotColor }]} />
         <Text style={styles.titleText} numberOfLines={1}>
           {parsed.title?.value ?? t('event.untitled')}
         </Text>
@@ -149,6 +178,9 @@ export function EventPreviewCard({ result }: Props) {
 
       {/* Fields */}
       <View style={styles.fields}>
+        {/* v1.2.9 — LEAD: "시간 노출되는 부분에서는 색상 빼주고".
+            시간 칸은 confidence 와 무관하게 plain neutral 로 표시.
+            (uncertain 신호는 헤더 SourceBadge "확인 필요" 칩으로 충분.) */}
         {parsed.startAt && (
           <FieldRow
             label="시작"
@@ -157,14 +189,14 @@ export function EventPreviewCard({ result }: Props) {
                 ? `${parsed.startAt.value.toLocaleDateString('ko-KR')} (${t('time.all_day')})`
                 : formatDateTime(parsed.startAt.value)
             }
-            uncertain={isUncertain(parsed.startAt.confidence)}
+            uncertain={false}
           />
         )}
         {parsed.endAt && !parsed.allDay?.value && (
           <FieldRow
             label="종료"
             value={formatDateTime(parsed.endAt.value)}
-            uncertain={isUncertain(parsed.endAt.confidence)}
+            uncertain={false}
           />
         )}
         {parsed.location && (
@@ -182,6 +214,15 @@ export function EventPreviewCard({ result }: Props) {
           />
         )}
       </View>
+
+      {/* v1.2.9 — 색상 선택. 운동/러닝 reserved kind 는 시스템 고정 색이라 picker 숨김.
+          onColorChange 콜백이 전달된 경우에만 노출 (caller 가 선택 색상을 처리). */}
+      {onColorChange && !isReservedKindTitle(parsed.title?.value) && (
+        <View style={styles.colorSection}>
+          <Text style={styles.colorLabel}>색상</Text>
+          <ColorPicker value={selectedColor ?? null} onChange={onColorChange} />
+        </View>
+      )}
     </View>
   );
 }
@@ -209,6 +250,12 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing[2],
+  },
+  colorDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    flexShrink: 0,
   },
   titleText: {
     ...(textStyles.body as object),
@@ -279,6 +326,17 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     ...(textStyles.caption as object),
     color: colors.warning,
     fontSize: 10,
+  },
+  colorSection: {
+    marginTop: spacing[2],
+    paddingTop: spacing[2],
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    gap: spacing[1],
+  },
+  colorLabel: {
+    ...(textStyles.caption as object),
+    color: colors.textSecondary,
   },
   });
 }

@@ -367,8 +367,12 @@ export function NLInputBar({ onEventCreated }: Props) {
 
   // ── Confirm: create event and close (or advance queue) ────────────────────
 
-  const handleConfirm = useCallback(async () => {
+  const handleConfirm = useCallback(async (chosenColor: string | null = null) => {
     if (!parseResult) return;
+    // v1.2.9 — 더블탭/중복 트리거 방지. 이미 saving 진행 중이면 무시.
+    // (DB 에 같은 일정 2개 row 가 0.7s 간격으로 들어가던 회귀 원인.)
+    if (inputState === 'loading') return;
+    setInputState('loading');
 
     const p = parseResult.parsed;
     const startAt = p.startAt?.value ?? new Date();
@@ -403,6 +407,9 @@ export function NLInputBar({ onEventCreated }: Props) {
         ...(p.repeatType?.value && p.repeatType.value !== 'none'
           ? { repeatType: p.repeatType.value }
           : {}),
+        // v1.2.9 — ConfirmModal 의 ColorPicker 에서 고른 색을 전달.
+        // null 이면 createEvent 가 category/default 색 적용.
+        ...(chosenColor ? { color: chosenColor } : {}),
       };
       const created = await createEvent(createInput);
 
@@ -450,7 +457,7 @@ export function NLInputBar({ onEventCreated }: Props) {
       setInputState('error');
       setTimeout(() => setInputState('idle'), 4000);
     }
-  }, [parseResult, pendingResults, text, upsertEvent, onEventCreated, colors.primary, t, hasConflict]);
+  }, [parseResult, pendingResults, text, upsertEvent, onEventCreated, colors.primary, t, hasConflict, inputState]);
 
   // ── Edit: navigate to /event/create with pre-fill ──────────────────────────
 

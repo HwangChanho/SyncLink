@@ -8,6 +8,7 @@
  * Pressing the dimmed backdrop dismisses the modal without action.
  */
 
+import { useEffect, useState } from 'react';
 import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { EventPreviewCard } from './EventPreviewCard';
@@ -23,8 +24,11 @@ interface Props {
   visible: boolean;
   /** The parse result to display in the preview card. */
   result: NLParseResult;
-  /** Called when the user taps "확인" (create the event as-is). */
-  onConfirm: () => void;
+  /**
+   * v1.2.9 — "확인" 콜백. 사용자가 ColorPicker 에서 고른 색을 함께 전달.
+   * null = auto/default (기존 동작). hex string = 명시 색상.
+   */
+  onConfirm: (color: string | null) => void;
   /** Called when the user taps "직접 입력" (navigate to create form). */
   onEdit: () => void;
   /** Called when the user dismisses the modal without acting. */
@@ -38,6 +42,12 @@ export function ConfirmModal({ visible, result, onConfirm, onEdit, onDismiss }: 
   const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
+
+  // v1.2.9 — 선택된 색상 (null = auto). 모달이 다시 열릴 때마다 reset.
+  const [selectedColor, setSelectedColor] = useState<string | null>(null);
+  useEffect(() => {
+    if (visible) setSelectedColor(null);
+  }, [visible, result]);
 
   return (
     <Modal
@@ -54,7 +64,11 @@ export function ConfirmModal({ visible, result, onConfirm, onEdit, onDismiss }: 
 
           <Text style={styles.heading}>{t('common.preview')}</Text>
 
-          <EventPreviewCard result={result} />
+          <EventPreviewCard
+            result={result}
+            selectedColor={selectedColor}
+            onColorChange={setSelectedColor}
+          />
 
           {/* Action buttons. Build-75 — 사용자: "AI 일정 등록할때 취소도
               있어야해". 백드롭 탭 dismiss 외 명시적 취소 버튼 추가. */}
@@ -77,7 +91,7 @@ export function ConfirmModal({ visible, result, onConfirm, onEdit, onDismiss }: 
             </Pressable>
             <Pressable
               style={[styles.button, styles.confirmButton]}
-              onPress={onConfirm}
+              onPress={() => onConfirm(selectedColor)}
               accessibilityRole="button"
               accessibilityLabel={t('common.a11y_confirm')}
             >
