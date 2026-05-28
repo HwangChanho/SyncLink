@@ -46,18 +46,21 @@ interface ParsedEventFromAI {
   endAt: string;     // ISO-8601
   location: string | null;
   allDay: boolean;
-  repeatType: 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly';
+  repeatType: 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom_weekly';
+  /** v1.2.8 — custom_weekly 일 때만 사용. JS Date.getDay() 호환 (0=일 ~ 6=토). */
+  weeklyDays?: number[];
 }
 
 interface AiParseResponse {
   result: {
     parsed: {
-      title?:      { value: string;   confidence: 'high' | 'medium' | 'low' };
-      startAt?:    { value: string;   confidence: 'high' | 'medium' | 'low' };
-      endAt?:      { value: string;   confidence: 'high' | 'medium' | 'low' };
-      location?:   { value: string;   confidence: 'high' | 'medium' | 'low' };
-      allDay?:     { value: boolean;  confidence: 'high' | 'medium' | 'low' };
-      repeatType?: { value: string;   confidence: 'high' | 'medium' | 'low' };
+      title?:       { value: string;    confidence: 'high' | 'medium' | 'low' };
+      startAt?:     { value: string;    confidence: 'high' | 'medium' | 'low' };
+      endAt?:       { value: string;    confidence: 'high' | 'medium' | 'low' };
+      location?:    { value: string;    confidence: 'high' | 'medium' | 'low' };
+      allDay?:      { value: boolean;   confidence: 'high' | 'medium' | 'low' };
+      repeatType?:  { value: string;    confidence: 'high' | 'medium' | 'low' };
+      weeklyDays?:  { value: number[];  confidence: 'high' | 'medium' | 'low' };
     };
     confidence: 'high' | 'medium' | 'low';
     source: 'ai';
@@ -78,15 +81,25 @@ interface AiParseResponse {
 const buildSystemPrompt = (contextDatetime: string, locale: string): string => {
   const lang = (locale ?? '').slice(0, 2).toLowerCase();
 
+  // v1.2.8 — repeatType 에 'custom_weekly' 추가 + weeklyDays 필드.
+  // 다중 요일 반복 ("월~금", "평일", "주 5일", "매주 월수금" 등) 처리.
+  // weeklyDays = JS Date.getDay() 호환 (0=일, 1=월, 2=화, 3=수, 4=목, 5=금, 6=토).
   if (lang === 'en') {
     return `
 You parse natural-language event text into JSON.
 Current time: ${contextDatetime}
 
 Return format (one valid JSON line, no extra text):
-{"title":"string","startAt":"ISO8601","endAt":"ISO8601","location":null,"allDay":false,"repeatType":"none"}
+{"title":"string","startAt":"ISO8601","endAt":"ISO8601","location":null,"allDay":false,"repeatType":"none","weeklyDays":null}
 
-repeatType ∈ "none" | "daily" | "weekly" | "monthly" | "yearly"
+repeatType ∈ "none" | "daily" | "weekly" | "monthly" | "yearly" | "custom_weekly"
+- "custom_weekly": multiple specific weekdays (e.g., "weekdays", "Mon-Fri", "Mon/Wed/Fri")
+  When custom_weekly, set weeklyDays = array of day numbers (0=Sun, 1=Mon, ..., 6=Sat).
+  Example "weekdays 9am-6pm" → repeatType="custom_weekly", weeklyDays=[1,2,3,4,5]
+  Example "every Mon/Wed/Fri" → repeatType="custom_weekly", weeklyDays=[1,3,5]
+- "weekly": every week on the SAME single weekday as startAt
+- Otherwise weeklyDays must be null.
+
 allDay: true when a date is given but no time
 If start/end are ambiguous, pick the nearest future moment.
 Return ONLY valid JSON. No explanation.
@@ -99,9 +112,14 @@ Return ONLY valid JSON. No explanation.
 現在時刻: ${contextDatetime}
 
 返答形式 (必ず有効な JSON 1 行のみ):
-{"title":"string","startAt":"ISO8601","endAt":"ISO8601","location":null,"allDay":false,"repeatType":"none"}
+{"title":"string","startAt":"ISO8601","endAt":"ISO8601","location":null,"allDay":false,"repeatType":"none","weeklyDays":null}
 
-repeatType: "none" | "daily" | "weekly" | "monthly" | "yearly"
+repeatType: "none" | "daily" | "weekly" | "monthly" | "yearly" | "custom_weekly"
+- "custom_weekly": 複数の曜日 (例: "平日"、"月〜金"、"月水金")
+  weeklyDays = 曜日番号配列 (0=日, 1=月, ..., 6=土)
+  例 "平日 9時〜18時" → repeatType="custom_weekly", weeklyDays=[1,2,3,4,5]
+- それ以外は weeklyDays = null
+
 allDay: 日付はあるが時刻が明示されていない場合 true
 不明確な場合は現在時刻基準で最も近い未来の時点を推定。
 必ず JSON のみを返してください。説明不要。
@@ -114,9 +132,14 @@ allDay: 日付はあるが時刻が明示されていない場合 true
 当前时间: ${contextDatetime}
 
 返回格式 (必须是一行有效的 JSON):
-{"title":"string","startAt":"ISO8601","endAt":"ISO8601","location":null,"allDay":false,"repeatType":"none"}
+{"title":"string","startAt":"ISO8601","endAt":"ISO8601","location":null,"allDay":false,"repeatType":"none","weeklyDays":null}
 
-repeatType 取值: "none" | "daily" | "weekly" | "monthly" | "yearly"
+repeatType 取值: "none" | "daily" | "weekly" | "monthly" | "yearly" | "custom_weekly"
+- "custom_weekly": 多个特定星期 (例如 "工作日"、"周一到周五"、"每周一三五")
+  weeklyDays = 星期数组 (0=周日, 1=周一, ..., 6=周六)
+  例 "工作日 9点到18点" → repeatType="custom_weekly", weeklyDays=[1,2,3,4,5]
+- 其他情况 weeklyDays = null
+
 allDay: 有日期但未指定时间时为 true
 若开始/结束不明确,推定为当前时间之后最接近的未来时刻。
 仅返回 JSON,不要任何解释。
@@ -129,12 +152,20 @@ allDay: 有日期但未指定时间时为 true
 현재 시각: ${contextDatetime}
 
 [일정 정보가 명확한 경우] 반환 형식 (valid JSON 한 줄):
-{"title":"string","startAt":"ISO8601","endAt":"ISO8601","location":null,"allDay":false,"repeatType":"none"}
+{"title":"string","startAt":"ISO8601","endAt":"ISO8601","location":null,"allDay":false,"repeatType":"none","weeklyDays":null}
 
 [이미지에서 일정 정보를 찾을 수 없거나 너무 모호한 경우]:
 {"noEventFound":true,"reason":"한 줄짜리 한국어 설명"}
 
-repeatType 가능 값: "none" | "daily" | "weekly" | "monthly" | "yearly"
+repeatType 가능 값: "none" | "daily" | "weekly" | "monthly" | "yearly" | "custom_weekly"
+- "custom_weekly": 여러 요일 반복 ("평일", "주 5일", "월~금", "매주 월수금" 등)
+  weeklyDays = 요일 숫자 배열 (0=일, 1=월, 2=화, 3=수, 4=목, 5=금, 6=토)
+  예 "평일 9시부터 오후 6시까지" → repeatType="custom_weekly", weeklyDays=[1,2,3,4,5], startAt/endAt 은 다음 가장 가까운 평일의 09:00/18:00
+  예 "주 5일 9-6시" → 같음
+  예 "매주 월수금 운동" → repeatType="custom_weekly", weeklyDays=[1,3,5]
+- "weekly": 매주 같은 단일 요일 반복 (startAt 요일과 동일).
+- 그 외 weeklyDays 는 null.
+
 allDay: 날짜는 있으나 시간이 명시되지 않으면 true
 startAt/endAt이 불분명하면 현재 시각 기준 가장 가까운 미래 시점으로 추정.
 이미지에 일정 관련 텍스트가 전혀 없거나 단순 사진 (풍경, 셀카 등) 이면
@@ -335,6 +366,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
           allDay: { value: aiParsed.allDay ?? false, confidence: 'high' },
           ...(aiParsed.repeatType && aiParsed.repeatType !== 'none' && {
             repeatType: { value: aiParsed.repeatType, confidence: 'high' },
+          }),
+          // v1.2.8 — custom_weekly 일 때만 weeklyDays 전달. 0~6 정수 배열.
+          ...(aiParsed.repeatType === 'custom_weekly' && Array.isArray(aiParsed.weeklyDays) && aiParsed.weeklyDays.length > 0 && {
+            weeklyDays: {
+              value: aiParsed.weeklyDays
+                .filter((n: unknown) => typeof n === 'number' && n >= 0 && n <= 6)
+                .map((n: number) => Math.floor(n)),
+              confidence: 'high',
+            },
           }),
         },
         confidence: 'high',   // AI result is always treated as high (or medium by caller)

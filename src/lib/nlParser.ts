@@ -77,6 +77,11 @@ export const locationExtractor = {
  */
 export const recurrencePatterns = {
   daily:   /매일/,
+  // v1.2.8 — multi-day weekly. "평일", "주중", "주 N일 (3~5)", "매주 월수금",
+  // "월수금", "월~금/월-금/월부터 금" 등. weeklyOn 보다 먼저 매칭 (구체 → 일반).
+  weekdays:  /평일|주중|주\s*[3-5]\s*일/,
+  weekend:   /주말|토일/,
+  weeklyMulti: /매주\s*([월화수목금토일]{2,7})|([월화수목금토일]{2,7})\s*요일|([월화수목금토일])\s*[~∼\-부터]\s*([월화수목금토일])(?:요일|부터|까지)?/,
   // weeklyOn captures the weekday in "매주 X요일" so the resulting event
   // anchors on that day instead of on the user's input-day (Build-50 NL
   // audit, case B2 fix). Plain "매주" still works without a weekday.
@@ -267,7 +272,8 @@ export function parseLocally(text: string, contextDate: Date = new Date()): NLPa
   let endMin = 0;
   let timeConf: Confidence = 'low';
   let location: string | null = null;
-  let repeatType: 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' = 'none';
+  let repeatType: 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom_weekly' = 'none';
+  let weeklyDays: number[] | null = null;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RegExpExecArray | null
   let m: RegExpExecArray | null;
@@ -297,7 +303,50 @@ export function parseLocally(text: string, contextDate: Date = new Date()): NLPa
   let weeklyAnchorDay: number | null = null;       // JS getDay() value
   let monthlyAnchorDayOfMonth: number | null = null;
 
-  if ((m = recurrencePatterns.yearly.exec(normalized))) {
+  // v1.2.8 — multi-day weekly (custom_weekly) 가 가장 구체. yearly 보다 먼저.
+  if ((m = recurrencePatterns.weekdays.exec(normalized))) {
+    // "평일" / "주중" / "주 3~5일"
+    repeatType  = 'custom_weekly';
+    weeklyDays  = [1, 2, 3, 4, 5];
+    consume(m);
+  } else if ((m = recurrencePatterns.weekend.exec(normalized))) {
+    // "주말" / "토일"
+    repeatType  = 'custom_weekly';
+    weeklyDays  = [0, 6];
+    consume(m);
+  } else if ((m = recurrencePatterns.weeklyMulti.exec(normalized))) {
+    // "매주 월수금" / "월수금요일" / "월~금"
+    const raw = m[1] ?? m[2];  // 연속 요일 그룹
+    if (raw) {
+      const days = new Set<number>();
+      for (const ch of raw) days.add(koreanDayToJsDay(ch));
+      if (days.size >= 2) {
+        repeatType = 'custom_weekly';
+        weeklyDays = Array.from(days).sort();
+      } else {
+        repeatType = 'weekly';
+        weeklyAnchorDay = koreanDayToJsDay(raw);
+      }
+    } else if (m[3] && m[4]) {
+      // "월~금" 같이 범위
+      const from = koreanDayToJsDay(m[3]);
+      const to   = koreanDayToJsDay(m[4]);
+      const arr: number[] = [];
+      // 0=일 ~ 6=토. from→to 순방향 wrap 처리.
+      let cur = from;
+      // 안전 cap: 최대 7회.
+      for (let i = 0; i < 7; i += 1) {
+        arr.push(cur);
+        if (cur === to) break;
+        cur = (cur + 1) % 7;
+      }
+      if (arr.length >= 2) {
+        repeatType = 'custom_weekly';
+        weeklyDays = arr.sort();
+      }
+    }
+    consume(m);
+  } else if ((m = recurrencePatterns.yearly.exec(normalized))) {
     repeatType = 'yearly'; consume(m);
   } else if ((m = recurrencePatterns.monthlyDay.exec(normalized))) {
     repeatType = 'monthly';
@@ -595,6 +644,10 @@ export function parseLocally(text: string, contextDate: Date = new Date()): NLPa
 
   if (repeatType !== 'none') {
     parsed.repeatType = pf(repeatType, 'high');
+  }
+  // v1.2.8 — custom_weekly 일 때만 days 배열 전달.
+  if (repeatType === 'custom_weekly' && weeklyDays && weeklyDays.length > 0) {
+    parsed.weeklyDays = pf(weeklyDays, 'high');
   }
 
   if (titleRaw) {

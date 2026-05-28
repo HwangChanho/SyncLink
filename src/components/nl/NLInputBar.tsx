@@ -68,6 +68,11 @@ function buildPrefillParams(result: NLParseResult): Record<string, string> {
   if (p.repeatType?.value && p.repeatType.value !== 'none') {
     params.repeatType = p.repeatType.value;
   }
+  // v1.2.8 — custom_weekly 일 때 weeklyDays [0..6] 배열을 CSV 로 전달.
+  // create.tsx 에서 repeatWeekdays 로 prefill 됨.
+  if (p.repeatType?.value === 'custom_weekly' && p.weeklyDays?.value && p.weeklyDays.value.length > 0) {
+    params.repeatWeekdays = p.weeklyDays.value.join(',');
+  }
 
   return params;
 }

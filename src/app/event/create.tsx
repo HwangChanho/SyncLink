@@ -178,7 +178,26 @@ export default function EventCreateScreen() {
     date: dateParam,
     startHour: startHourParam,
     startMinute: startMinuteParam,
-  } = useLocalSearchParams<{ date?: string; startHour?: string; startMinute?: string }>();
+    // v1.2.8 — NL prefill 받기 위해 자주 쓰는 4개 필드 + 반복 필드 추가.
+    title: titleParam,
+    startAt: startAtParam,
+    endAt: endAtParam,
+    location: locationParam,
+    allDay: allDayParam,
+    repeatType: repeatTypeParam,
+    repeatWeekdays: repeatWeekdaysParam,
+  } = useLocalSearchParams<{
+    date?: string;
+    startHour?: string;
+    startMinute?: string;
+    title?: string;
+    startAt?: string;
+    endAt?: string;
+    location?: string;
+    allDay?: string;
+    repeatType?: string;
+    repeatWeekdays?: string;
+  }>();
   const router = useRouter();
   const { upsertEvent } = useEventStore();
   // v1.2.x — ConflictSuggestionCard 데이터 source. 같은 날 이벤트 추출.
@@ -268,7 +287,43 @@ export default function EventCreateScreen() {
     setTitle, setAllDay, setStartAt, setEndAt, setRepeatType, setRepeatWeekdays,
     setLocation, setDescription, setShareSpaceIds, setReminderMinutes,
     setEventColor, setCategoryId, setEditableByMembers,
+    // v1.2.8 — useEventForm 의 set 들. NL prefill useEffect 에서 사용.
   } = setters;
+
+  // v1.2.8 — NL prefill. NLInputBar 에서 buildPrefillParams 로 query string
+  // 으로 전달. mount 시 1회 적용. 빈 값은 그대로 두어 useEventForm 초기값 유지.
+  const prefillAppliedRef = useRef(false);
+  useEffect(() => {
+    if (prefillAppliedRef.current) return;
+    prefillAppliedRef.current = true;
+
+    if (titleParam) setTitle(titleParam);
+    if (startAtParam) {
+      const d = new Date(startAtParam);
+      if (!isNaN(d.getTime())) setStartAt(d);
+    }
+    if (endAtParam) {
+      const d = new Date(endAtParam);
+      if (!isNaN(d.getTime())) setEndAt(d);
+    }
+    if (locationParam) setLocation(locationParam);
+    if (allDayParam === 'true') setAllDay(true);
+    if (repeatTypeParam) {
+      // RepeatTypeDb 와 직접 매칭. 잘못된 값은 무시.
+      const valid = ['none', 'daily', 'weekly', 'monthly', 'yearly', 'custom_weekly'] as const;
+      if ((valid as readonly string[]).includes(repeatTypeParam)) {
+        setRepeatType(repeatTypeParam as typeof valid[number]);
+      }
+    }
+    if (repeatWeekdaysParam) {
+      const arr = repeatWeekdaysParam
+        .split(',')
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((n) => !isNaN(n) && n >= 0 && n <= 6);
+      if (arr.length > 0) setRepeatWeekdays(arr);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [isSaving, setIsSaving] = useState(false);
 

@@ -45,7 +45,9 @@ export interface ParsedEventFields {
   allDay?: ParsedField<boolean>;
   location?: ParsedField<string>;
   description?: ParsedField<string>;
-  repeatType?: ParsedField<'none' | 'daily' | 'weekly' | 'monthly' | 'yearly'>;
+  repeatType?: ParsedField<'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom_weekly'>;
+  /** v1.2.8 — custom_weekly 일 때만 사용. JS Date.getDay() 호환 0..6 부분집합. */
+  weeklyDays?: ParsedField<number[]>;
 }
 
 // ─── Parse result ─────────────────────────────────────────────────────────────
