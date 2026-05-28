@@ -596,6 +596,24 @@ export function parseLocally(text: string, contextDate: Date = new Date()): NLPa
     confidence = 'low';
   }
 
+  // v1.2.8 — 복잡한 자연어는 로컬이 욕심내지 말고 AI 로 넘김.
+  // LEAD: "정말 심플한 일정만 로컬, 나머진 AI".
+  //
+  // 휴리스틱 (any → low):
+  //   1. 입력 길이 > 25자 (정상 단순 발화는 보통 25자 이하)
+  //   2. title 길이 > 12자 (긴 title = 잡설 섞임 가능성)
+  //   3. 1인칭 ("나는"/"내가"/"제가"/"저는"/"우리") 포함 — 자기소개성 자연어
+  //
+  // 종결어미 룰은 false positive 가 많아 (정상 "내일 9시 회의야" 같이) 제외.
+  const isComplexFreeform = (
+    text.length > 25
+    || (titleRaw !== '' && titleRaw.length > 12)
+    || /(?:^|[\s,])(나는|내가|제가|저는|우리)(?:\s|$)/.test(text)
+  );
+  if (isComplexFreeform) {
+    confidence = 'low';
+  }
+
   // ── Step 8: Build ParsedEventFields ───────────────────────────────────────
   // startAt confidence: 'high' only when both date and time are known.
   // Individual dateConf/timeConf track extraction quality for each component.
