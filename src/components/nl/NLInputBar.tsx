@@ -56,6 +56,28 @@ interface Props {
  * Only string/date/boolean primitives are included; complex nested objects
  * are serialised as ISO-8601 strings so Expo Router can pass them as params.
  */
+/**
+ * v1.2.8 — 결과가 "조정 필요" 한지 판단.
+ *
+ * 트리거 (any → AI 비서 모달로 이동):
+ *  1. confidence === 'low'                      — 추출 실패 신호 명확
+ *  2. confidence === 'medium' AND startAt 없음  — 시간 모호
+ *  3. title 이 비어있거나 12자 초과              — 잡설 그대로 들어옴
+ *  4. error 가 있고 noEventFound 도 아님         — AI fallback fail
+ */
+function shouldHandoffToAssistant(result: NLParseResult): boolean {
+  if (result.error && !result.noEventFound) return true;
+  if (result.confidence === 'low') return true;
+
+  const titleVal = result.parsed.title?.value;
+  if (!titleVal || titleVal.length > 12) return true;
+
+  const hasStart = !!result.parsed.startAt?.value;
+  if (result.confidence === 'medium' && !hasStart) return true;
+
+  return false;
+}
+
 function buildPrefillParams(result: NLParseResult): Record<string, string> {
   const p = result.parsed;
   const params: Record<string, string> = {};
@@ -299,15 +321,27 @@ export function NLInputBar({ onEventCreated }: Props) {
       return;
     }
 
-    // Show the first parsed event in ConfirmModal; queue the rest. Each
-    // confirm/dismiss advances the queue, so the user reviews every
-    // event individually instead of being blindsided by silent batch
-    // creation.
-    const [head, ...tail] = results;
-    setParseResult(head ?? null);
+    // v1.2.8 — LEAD: "조정이 필요한 일정은 AI 비서로 넘어가서 조율" —
+    // 단일 결과인데 confidence 가 high 가 아니거나 핵심 필드 (title/startAt)
+    // 가 모호하면 ConfirmModal 안 띄우고 바로 /chat 으로 raw text 전달.
+    // AI 비서가 사용자와 채팅으로 제목·시간 조율 후 직접 등록.
+    const head = results[0];
+    if (results.length === 1 && head && shouldHandoffToAssistant(head)) {
+      setInputState('idle');
+      setText('');
+      if (attachedImage) setAttachedImage(null);
+      router.push({
+        pathname: '/chat',
+        params: { prefill: trimmed },
+      });
+      return;
+    }
+
+    // 그 외: 미리보기 카드 → 사용자 확인.
+    const [first, ...tail] = results;
+    setParseResult(first ?? null);
     setPendingResults(tail);
     setInputState('preview');
-    // 결과 표시 시 첨부 이미지는 즉시 정리 (재호출 방지 + 미리보기 깨끗).
     if (attachedImage) setAttachedImage(null);
   }, [text, inputState, canUseAI, consumeAI, attachedImage, t, router, handleAttachImage]);
 
