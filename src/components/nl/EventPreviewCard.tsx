@@ -116,12 +116,25 @@ export function EventPreviewCard({ result }: Props) {
 
   const { parsed, confidence, source } = result;
 
-  // Repeat type label mapping using i18n
+  // Repeat type label mapping using i18n.
+  // v1.2.8 — custom_weekly = 다중 요일 (예: 평일 = 월·화·수·목·금).
+  // weeklyDays 값을 한국어 요일 약자로 노출.
+  const dowAbbr = ['일', '월', '화', '수', '목', '금', '토'];
+  const weeklyDaysLabel = parsed.weeklyDays?.value
+    ? parsed.weeklyDays.value
+        .filter((n) => n >= 0 && n <= 6)
+        .sort()
+        .map((n) => dowAbbr[n])
+        .join('·')
+    : null;
   const repeatLabels: Record<string, string> = {
     daily:   t('time.daily'),
     weekly:  t('time.weekly'),
     monthly: t('time.monthly'),
     yearly:  t('time.annual'),
+    custom_weekly: weeklyDaysLabel
+      ? t('time.weekly_custom', { defaultValue: '매주' }) + ' ' + weeklyDaysLabel
+      : t('time.weekly_custom', { defaultValue: '매주 특정 요일' }),
   };
 
   return (
