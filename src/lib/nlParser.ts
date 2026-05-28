@@ -643,6 +643,12 @@ export function parseLocally(text: string, contextDate: Date = new Date()): NLPa
     if (endHour !== null) {
       const endAtDate = new Date(startAtDate);
       endAtDate.setHours(endHour, endMin, 0, 0);
+      // v1.2.9 — "9~6시" 같은 입력에서 6시를 06:00 으로 잡으면 endAt 이
+      // startAt 보다 빠르게 된다. 사용자가 의도한 건 PM (18:00 퇴근).
+      // endAt <= startAt 이면 +12h 보정.
+      if (endAtDate.getTime() <= startAtDate.getTime()) {
+        endAtDate.setHours(endAtDate.getHours() + 12);
+      }
       parsed.endAt = pf(endAtDate, startAtConf);
     } else if (startHour !== null) {
       const endAtDate = new Date(startAtDate);

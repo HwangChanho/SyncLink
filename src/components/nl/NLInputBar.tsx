@@ -383,8 +383,19 @@ export function NLInputBar({ onEventCreated }: Props) {
     const conflict = !p.allDay?.value ? hasConflict(startAt, endAt) : null;
 
     try {
+      // v1.2.9 — title raw 가드. p.title 이 없을 때 text 전체를 쓰면
+      // "나는 직장인이고 회사다녀 9~ 까지야" 같은 긴 raw 가 title 로 저장된다.
+      // 25자 초과 시 잘라낸다 (회귀 방지). parse-event 가 동일 가드 적용이라
+      // AI 경로에선 이미 잘림 — 이건 로컬 high-confidence + title 누락 케이스용.
+      const titleCandidate = (p.title?.value ?? text.trim()).trim();
+      const safeTitle = titleCandidate.length === 0
+        ? t('event.untitled')
+        : titleCandidate.length > 25
+          ? titleCandidate.slice(0, 25) + '…'
+          : titleCandidate;
+
       const createInput = {
-        title:      p.title?.value ?? text.trim(),
+        title:      safeTitle,
         startAt,
         endAt,
         ...(p.allDay?.value ? { allDay: true } as const : {}),

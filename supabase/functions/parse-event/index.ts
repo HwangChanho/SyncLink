@@ -170,6 +170,20 @@ allDay: 날짜는 있으나 시간이 명시되지 않으면 true
 startAt/endAt이 불분명하면 현재 시각 기준 가장 가까운 미래 시점으로 추정.
 이미지에 일정 관련 텍스트가 전혀 없거나 단순 사진 (풍경, 셀카 등) 이면
 noEventFound=true 로 반환.
+
+⚠ title 규칙 (반드시 준수):
+- 활동/주체 **핵심 명사** 만. 사용자 입력 전체 문장을 넣지 말 것.
+- 예: "9시부터 6시까지 회사 다녀" → title="회사" (X "9시부터 6시까지 회사 다녀")
+- 예: "주말 운동 갈래" → title="운동"
+- 예: "내일 오후 3시 카페에서 미팅" → title="카페 미팅"
+- 예: "난 직장인이라 9-6시 일해" → title="회사"
+- 핵심 명사가 도저히 안 보이면 noEventFound=true 로 반환.
+
+⚠ startAt/endAt 규칙:
+- ISO 8601 **with offset** (예: "2026-05-28T09:00:00+09:00").
+- 현재 시각의 offset 을 그대로 사용.
+- "9-6시" / "9시부터 6시까지" 는 같은 날 오전 9시 ~ 오후 6시 (퇴근). endAt 이 startAt 보다 빠르면 안 됨.
+
 반드시 valid JSON만 반환하세요. 설명 없음.
 `.trim();
 };
@@ -348,17 +362,42 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // Map AI result to NLParseResult shape (dates stay as ISO strings here;
     //    the client converts them to Date objects when needed)
 
+    // v1.2.9 — response-side 가드:
+    //  (1) title 25자 초과 = raw 발화 fallback 으로 간주, 잘라냄.
+    //  (2) endAt <= startAt 이면 +12h (오후 보정).
+    //  (3) ISO offset 누락 시 contextDatetime 의 offset 으로 보강.
+    const nowIsoForOffset = contextDatetime ?? new Date().toISOString();
+    const offsetMatch = nowIsoForOffset.match(/(Z|[+-]\d{2}:?\d{2})$/);
+    const tzOffset = offsetMatch ? offsetMatch[1] : '+09:00';
+    const ensureOffset = (iso?: string | null): string | undefined => {
+      if (!iso || typeof iso !== 'string') return undefined;
+      if (/(Z|[+-]\d{2}:?\d{2})$/.test(iso)) return iso;
+      return iso + (tzOffset === 'Z' ? 'Z' : tzOffset);
+    };
+    const titleNormalized = typeof aiParsed.title === 'string'
+      ? (aiParsed.title.trim().length > 25 ? aiParsed.title.trim().slice(0, 25) + '…' : aiParsed.title.trim())
+      : aiParsed.title;
+    const startNormalized = ensureOffset(aiParsed.startAt);
+    let endNormalized = ensureOffset(aiParsed.endAt);
+    if (startNormalized && endNormalized) {
+      const s = new Date(startNormalized).getTime();
+      const e = new Date(endNormalized).getTime();
+      if (Number.isFinite(s) && Number.isFinite(e) && e <= s) {
+        endNormalized = new Date(e + 12 * 60 * 60 * 1000).toISOString();
+      }
+    }
+
     const response: AiParseResponse = {
       result: {
         parsed: {
-          ...(aiParsed.title && {
-            title: { value: aiParsed.title, confidence: 'high' },
+          ...(titleNormalized && {
+            title: { value: titleNormalized, confidence: 'high' },
           }),
-          ...(aiParsed.startAt && {
-            startAt: { value: aiParsed.startAt, confidence: 'high' },
+          ...(startNormalized && {
+            startAt: { value: startNormalized, confidence: 'high' },
           }),
-          ...(aiParsed.endAt && {
-            endAt: { value: aiParsed.endAt, confidence: 'high' },
+          ...(endNormalized && {
+            endAt: { value: endNormalized, confidence: 'high' },
           }),
           ...(aiParsed.location && {
             location: { value: aiParsed.location, confidence: 'high' },

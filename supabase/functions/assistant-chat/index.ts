@@ -80,6 +80,20 @@ const buildSystemPrompt = (locale: string, nowIso: string): string => {
       '- deleteEvent 는 매우 신중. 확실하지 않으면 한 번 더 확인.',
       '- 도구 실행 후 1~2문장으로 자연스럽게 보고.',
       '',
+      '⚠ createEvent 호출 규칙 (회귀 방지 — 반드시 준수):',
+      '- title 은 **핵심 명사**만. 사용자 문장을 그대로 넣지 말 것.',
+      '  · "9시부터 6시까지 회사" → title="회사"',
+      '  · "주말에 운동 갈래" → title="운동"',
+      '  · "내일 오후 3시 카페에서 미팅" → title="카페 미팅"',
+      '  · 핵심 명사가 모호하면 createEvent 호출 전 1번 짧게 되묻기.',
+      '- startAt/endAt 은 반드시 **UTC offset 포함** ISO 8601.',
+      '  · clientNowIso 의 offset (예: +09:00) 을 그대로 사용.',
+      '  · 예: "2026-05-28T09:00:00+09:00" (O), "2026-05-28T09:00:00" (X)',
+      '- 한 번의 사용자 발화에는 **createEvent 를 1회만** 호출. 같은 일정을',
+      '  반복 호출 금지 — 첫 호출 결과 (ok=true) 가 오면 즉시 보고 단계로 이동.',
+      '- "9~6시" / "9시-6시" 같은 표현은 **같은 날** 오전 9시 ~ 오후 6시 (퇴근).',
+      '  endAt < startAt 이면 endAt 에 +12시간 (PM 보정).',
+      '',
       '잡담 / 모호한 의도:',
       '- 모호하면 1번만 짧게 되묻기. 두 번 이상 되묻지 말 것.',
       '- 단순 인사·잡담은 1문장으로 짧게.',
@@ -121,13 +135,13 @@ const buildSystemPrompt = (locale: string, nowIso: string): string => {
 const TOOLS = [
   {
     name: 'createEvent',
-    description: '일정 생성. 시작/종료 시간은 ISO 8601 (사용자 로컬 시각 기준).',
+    description: '일정 생성. 한 사용자 발화에 1회만 호출 (중복 금지). startAt/endAt 은 반드시 offset 포함 ISO 8601.',
     input_schema: {
       type: 'object',
       properties: {
-        title:       { type: 'string', description: '일정 제목' },
-        startAt:     { type: 'string', description: 'ISO 8601 (예: 2026-05-20T19:00)' },
-        endAt:       { type: 'string', description: 'ISO 8601. 미지정이면 startAt + 1시간' },
+        title:       { type: 'string', description: '활동/주체 핵심 명사만 (예: "회사", "운동", "카페 미팅"). 사용자 발화 raw 금지.' },
+        startAt:     { type: 'string', description: 'ISO 8601 with offset (예: 2026-05-20T19:00:00+09:00)' },
+        endAt:       { type: 'string', description: 'ISO 8601 with offset. 미지정이면 startAt + 1시간' },
         allDay:      { type: 'boolean' },
         location:    { type: 'string' },
         description: { type: 'string' },
@@ -188,12 +202,39 @@ const TOOLS = [
 
 // ─── Tool execution (server-side, JWT-scoped) ─────────────────────────────────
 
+// v1.2.9 — 모델이 offset 없는 ISO (e.g. "2026-05-28T09:00:00") 를 줄 때
+// clientNowIso 의 offset 으로 보강. 그래도 ambiguous (Z, +/-HH:MM 없음) 면
+// "+09:00" (KST) 로 fallback — SyncLink 사용자 대부분 KST.
+// "9~6시" 같은 입력에서 모델이 잘못 18:00-03:00 으로 해석한 경우도 endAt 이
+// startAt 보다 빠르면 +12h 보정 (PM 의미로 해석).
+function normalizeIsoWithOffset(iso: string, nowIso: string): string {
+  if (!iso) return iso;
+  // 이미 offset 포함 (Z 또는 ±HH:MM)
+  if (/(Z|[+-]\d{2}:?\d{2})$/.test(iso)) return iso;
+  // clientNow 에서 offset 추출
+  const m = nowIso.match(/(Z|[+-]\d{2}:?\d{2})$/);
+  const off = m ? m[1] : '+09:00';
+  return iso + (off === 'Z' ? 'Z' : off);
+}
+
+function correctEndIfBeforeStart(startIso: string, endIso: string): string {
+  const s = new Date(startIso).getTime();
+  const e = new Date(endIso).getTime();
+  if (!Number.isFinite(s) || !Number.isFinite(e)) return endIso;
+  if (e <= s) {
+    // +12h (사용자가 "9시-6시" 같은 표현에서 6시 = 오후 6시 의도)
+    return new Date(e + 12 * 60 * 60 * 1000).toISOString();
+  }
+  return endIso;
+}
+
 async function runTool(
   userClient: ReturnType<typeof createClient>,
   userId: string,
   toolName: string,
   input: Record<string, unknown>,
   dryRun: boolean,
+  nowIso: string,
 ): Promise<{ ok: boolean; summary: string; data?: unknown }> {
   // v1.2.x — dry-run 모드: actual mutation 건너뛰고 의도만 회신.
   // 환경변수 ASSISTANT_DRY_RUN=true 또는 요청 dryRun:true 일 때 활성.
@@ -210,14 +251,29 @@ async function runTool(
     if (toolName === 'createEvent') {
       // RLS fix — events 테이블의 INSERT 정책은 user_id = auth.uid() 조건.
       // payload 에 user_id 명시 안 하면 default null → policy 위반.
-      const startAt = String(input.startAt ?? '');
-      const endAt = (input.endAt as string | undefined) ?? '';
-      const finalEnd = endAt || new Date(new Date(startAt).getTime() + 60 * 60 * 1000).toISOString();
+      // v1.2.9 — title raw 발화 가드: 25자 초과면 잘라서 안전한 기본 title 로.
+      // (모델 prompt 위반 fallback. 사용자가 "나는 직장인이고…" 전체를 title 로
+      // 받았던 버그 회귀 방지.)
+      const titleRaw = String(input.title ?? '').trim();
+      const safeTitle = titleRaw.length === 0
+        ? '새 일정'
+        : titleRaw.length > 25
+          ? titleRaw.slice(0, 25) + '…'
+          : titleRaw;
+
+      const startAtRaw = String(input.startAt ?? '');
+      const endAtRaw   = (input.endAt as string | undefined) ?? '';
+      const startAt    = normalizeIsoWithOffset(startAtRaw, nowIso);
+      let endAt = endAtRaw
+        ? normalizeIsoWithOffset(endAtRaw, nowIso)
+        : new Date(new Date(startAt).getTime() + 60 * 60 * 1000).toISOString();
+      endAt = correctEndIfBeforeStart(startAt, endAt);
+
       const { data, error } = await userClient.from('events').insert({
         user_id:     userId,
-        title:       input.title,
+        title:       safeTitle,
         start_at:    startAt,
-        end_at:      finalEnd,
+        end_at:      endAt,
         all_day:     input.allDay ?? false,
         location:    input.location ?? null,
         description: input.description ?? null,
@@ -435,6 +491,22 @@ Deno.serve(async (req: Request) => {
   const executed: ChatResponse['executed'] = [];
   let tokensUsed = 0;
 
+  // v1.2.9 — 중복 mutation dedup map.
+  // 모델이 같은 step 또는 다음 step 에서 같은 createEvent 를 또 부르는 케이스
+  // (DB 에 2개씩 INSERT 됐던 회귀) 차단. 키 = tool + canonical(input).
+  // listEventsInRange 같은 read-only 는 dedup 대상 아님.
+  const MUTATING_TOOLS = new Set(['createEvent', 'createTodo', 'updateEvent', 'deleteEvent']);
+  const dedupCache = new Map<string, { ok: boolean; summary: string; data?: unknown }>();
+  function dedupKey(name: string, input: Record<string, unknown>): string {
+    // ISO 초 단위 절삭 + trim 으로 noise 제거.
+    const trim = (v: unknown) => (typeof v === 'string' ? v.trim().replace(/\.\d{3}/, '').replace(/:\d{2}\+/, '+').replace(/:\d{2}Z/, 'Z') : v);
+    const canon = Object.keys(input).sort().reduce<Record<string, unknown>>((acc, k) => {
+      if (input[k] !== undefined && input[k] !== null && input[k] !== '') acc[k] = trim(input[k]);
+      return acc;
+    }, {});
+    return `${name}|${JSON.stringify(canon)}`;
+  }
+
   // Multi-step tool loop — v1.1.5 개선:
   //  - 최대 4 → 6 step (다중 분석 시나리오는 listEventsInRange 를 범위별로
   //    분할 호출하는 경우가 흔함).
@@ -472,7 +544,17 @@ Deno.serve(async (req: Request) => {
 
     const toolResults: Array<{ type: 'tool_result'; tool_use_id: string; content: string }> = [];
     for (const tb of toolUseBlocks as Array<{ id: string; name: string; input: Record<string, unknown> }>) {
-      const result = await runTool(userClient, user.id, tb.name, tb.input ?? {}, dryRun);
+      const tbInput = tb.input ?? {};
+      let result: { ok: boolean; summary: string; data?: unknown };
+      const key = dedupKey(tb.name, tbInput);
+      if (MUTATING_TOOLS.has(tb.name) && dedupCache.has(key)) {
+        // 같은 mutation 두 번째 호출 — 첫 결과 재사용 + 보고에 표시.
+        const prev = dedupCache.get(key)!;
+        result = { ...prev, summary: `[중복 차단] ${prev.summary}` };
+      } else {
+        result = await runTool(userClient, user.id, tb.name, tbInput, dryRun, nowIso);
+        if (MUTATING_TOOLS.has(tb.name) && result.ok) dedupCache.set(key, result);
+      }
       executed.push({ tool: tb.name, ok: result.ok, summary: result.summary });
       toolResults.push({
         type: 'tool_result',
