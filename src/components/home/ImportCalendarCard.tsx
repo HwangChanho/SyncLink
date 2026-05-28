@@ -113,41 +113,45 @@ export function ImportCalendarCard() {
   // v1.2.9 — 닫힌 상태면 카드 자체 미렌더.
   if (dismissed) return null;
 
+  // v1.2.9 — Pressable nested 의 propagation 이 RN 에서 안 먹히는 회귀로
+  // outer wrapper 를 View 로 바꾸고 main 영역만 Pressable. X 버튼은 별도
+  // Pressable 로 zIndex 가장 위에.
   return (
-    <Pressable
-      onPress={handlePick}
-      style={styles.card}
-      accessibilityRole="button"
-      accessibilityLabel="다른 캘린더 사진으로 일정 가져오기"
-    >
-      <View style={styles.icon}>
-        {busy ? (
-          <ActivityIndicator color={colors.textInverse} />
-        ) : (
-          <Ionicons name="camera-outline" size={20} color={colors.textInverse} />
-        )}
-      </View>
-      <View style={styles.body}>
-        <Text style={styles.title}>
-          {busy ? '일정 분석 중…' : '다른 캘린더 사진으로 가져오기'}
-        </Text>
-        <Text style={styles.sub}>
-          {busy ? 'AI 가 사진을 읽고 있어요' : '월간 스크린샷 1장이면 끝'}
-        </Text>
-      </View>
-      {/* v1.2.9 — 닫기 버튼. event propagation 차단해 카드 onPress 안 트리거. */}
+    <View style={styles.card}>
+      <Pressable
+        onPress={handlePick}
+        style={styles.mainArea}
+        accessibilityRole="button"
+        accessibilityLabel="다른 캘린더 사진으로 일정 가져오기"
+      >
+        <View style={styles.icon}>
+          {busy ? (
+            <ActivityIndicator color={colors.textInverse} />
+          ) : (
+            <Ionicons name="camera-outline" size={20} color={colors.textInverse} />
+          )}
+        </View>
+        <View style={styles.body}>
+          <Text style={styles.title}>
+            {busy ? '일정 분석 중…' : '다른 캘린더 사진으로 가져오기'}
+          </Text>
+          <Text style={styles.sub}>
+            {busy ? 'AI 가 사진을 읽고 있어요' : '월간 스크린샷 1장이면 끝'}
+          </Text>
+        </View>
+      </Pressable>
       {!busy && (
         <Pressable
-          onPress={(e) => { e.stopPropagation(); handleDismiss(); }}
-          hitSlop={8}
+          onPress={handleDismiss}
+          hitSlop={12}
           style={styles.closeButton}
           accessibilityRole="button"
           accessibilityLabel="카드 닫기"
         >
-          <Ionicons name="close" size={18} color={colors.textTertiary} />
+          <Ionicons name="close" size={20} color={colors.textTertiary} />
         </Pressable>
       )}
-    </Pressable>
+    </View>
   );
 }
 
@@ -156,14 +160,20 @@ function makeStyles(colors: ColorTokens) {
     card: {
       flexDirection:  'row',
       alignItems:     'center',
-      gap:            spacing[3],
-      padding:        spacing[3],
+      paddingRight:   spacing[2],
       marginHorizontal: spacing[4],
       marginVertical: spacing[1],
       borderRadius:   radius.lg,
       borderWidth:    1,
       borderColor:    colors.border,
       backgroundColor: colors.surface,
+    },
+    mainArea: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing[3],
+      padding: spacing[3],
     },
     icon: {
       width: 32, height: 32, borderRadius: 16,
@@ -174,8 +184,9 @@ function makeStyles(colors: ColorTokens) {
     title: { ...textStyles.body, color: colors.textPrimary, fontWeight: '600' },
     sub:   { ...textStyles.bodySm, color: colors.textTertiary, marginTop: 2 },
     closeButton: {
-      width: 24, height: 24,
+      width: 32, height: 32,
       alignItems: 'center', justifyContent: 'center',
+      marginRight: spacing[1],
     },
   });
 }
