@@ -8,10 +8,10 @@
  * Used by NLInputBar after a successful parse, before the user confirms.
  */
 
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import type { NLParseResult, Confidence } from '@/types';
+import type { NLParseResult, Confidence, SpaceSummary } from '@/types';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
@@ -28,6 +28,12 @@ interface Props {
   selectedColor?: string | null;
   /** Color 변경 콜백. 미제공이면 picker 자체 비노출. */
   onColorChange?: (color: string | null) => void;
+  /** v1.2.9 — 사용자의 스페이스 목록 (NLInputBar 가 마운트 시 load). 0개 면 picker 숨김. */
+  spaces?: SpaceSummary[];
+  /** 현재 선택된 스페이스 id 배열. */
+  selectedSpaceIds?: string[];
+  /** 스페이스 선택 변경 콜백. */
+  onSpacesChange?: (ids: string[]) => void;
 }
 
 // v1.2.9 — title 에 reserved kind 가 보이면 색상이 시스템 고정이라 picker 숨김.
@@ -124,7 +130,14 @@ function SourceBadge({ source, confidence }: BadgeProps) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function EventPreviewCard({ result, selectedColor, onColorChange }: Props) {
+export function EventPreviewCard({
+  result,
+  selectedColor,
+  onColorChange,
+  spaces,
+  selectedSpaceIds,
+  onSpacesChange,
+}: Props) {
   // Resolve active theme colors for dark mode support (TASK-700)
   const { t } = useTranslation();
   const colors = useColors();
@@ -221,6 +234,39 @@ export function EventPreviewCard({ result, selectedColor, onColorChange }: Props
         <View style={styles.colorSection}>
           <Text style={styles.colorLabel}>색상</Text>
           <ColorPicker value={selectedColor ?? null} onChange={onColorChange} />
+        </View>
+      )}
+
+      {/* v1.2.9 — 스페이스 공유 선택. spaces 가 비어있으면 섹션 자체 숨김.
+          기본은 비공개 (selectedSpaceIds = []). 사용자가 칩을 토글해 멀티 선택. */}
+      {onSpacesChange && spaces && spaces.length > 0 && (
+        <View style={styles.colorSection}>
+          <Text style={styles.colorLabel}>공유 스페이스 ({selectedSpaceIds?.length === 0 ? '비공개' : `${selectedSpaceIds?.length ?? 0}개`})</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+            {spaces.map((sp) => {
+              const isSel = (selectedSpaceIds ?? []).includes(sp.id);
+              return (
+                <Pressable
+                  key={sp.id}
+                  onPress={() => {
+                    const ids = selectedSpaceIds ?? [];
+                    const next = isSel ? ids.filter((x) => x !== sp.id) : [...ids, sp.id];
+                    onSpacesChange(next);
+                  }}
+                  style={[
+                    styles.spaceChip,
+                    isSel && { backgroundColor: colors.primary, borderColor: colors.primary },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSel }}
+                >
+                  <Text style={[styles.spaceChipText, isSel && { color: colors.textInverse }]} numberOfLines={1}>
+                    {sp.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
         </View>
       )}
     </View>
@@ -337,6 +383,24 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   colorLabel: {
     ...(textStyles.caption as object),
     color: colors.textSecondary,
+  },
+  chipRow: {
+    gap: spacing[2],
+    paddingVertical: spacing[1],
+  },
+  spaceChip: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1],
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+    maxWidth: 160,
+  },
+  spaceChipText: {
+    ...(textStyles.caption as object),
+    color: colors.textPrimary,
+    fontSize: 12,
   },
   });
 }

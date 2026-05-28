@@ -12,7 +12,7 @@ import { useEffect, useState } from 'react';
 import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { EventPreviewCard } from './EventPreviewCard';
-import type { NLParseResult } from '@/types';
+import type { NLParseResult, SpaceSummary } from '@/types';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
@@ -25,10 +25,12 @@ interface Props {
   /** The parse result to display in the preview card. */
   result: NLParseResult;
   /**
-   * v1.2.9 — "확인" 콜백. 사용자가 ColorPicker 에서 고른 색을 함께 전달.
-   * null = auto/default (기존 동작). hex string = 명시 색상.
+   * v1.2.9 — "확인" 콜백. ColorPicker 색상 + 선택된 스페이스 id 배열을 함께 전달.
+   * color: null = auto/default. spaceIds: [] = 비공개.
    */
-  onConfirm: (color: string | null) => void;
+  onConfirm: (color: string | null, spaceIds: string[]) => void;
+  /** 사용자 스페이스 목록 (caller 에서 load). 비어 있으면 picker 숨김. */
+  spaces?: SpaceSummary[];
   /** Called when the user taps "직접 입력" (navigate to create form). */
   onEdit: () => void;
   /** Called when the user dismisses the modal without acting. */
@@ -37,16 +39,20 @@ interface Props {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function ConfirmModal({ visible, result, onConfirm, onEdit, onDismiss }: Props) {
+export function ConfirmModal({ visible, result, onConfirm, onEdit, onDismiss, spaces }: Props) {
   // Resolve active theme colors for dark mode support (TASK-700)
   const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
 
-  // v1.2.9 — 선택된 색상 (null = auto). 모달이 다시 열릴 때마다 reset.
+  // v1.2.9 — 선택된 색상 + 스페이스 (모달이 다시 열릴 때마다 reset).
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
+  const [selectedSpaceIds, setSelectedSpaceIds] = useState<string[]>([]);
   useEffect(() => {
-    if (visible) setSelectedColor(null);
+    if (visible) {
+      setSelectedColor(null);
+      setSelectedSpaceIds([]);
+    }
   }, [visible, result]);
 
   return (
@@ -68,6 +74,9 @@ export function ConfirmModal({ visible, result, onConfirm, onEdit, onDismiss }: 
             result={result}
             selectedColor={selectedColor}
             onColorChange={setSelectedColor}
+            {...(spaces !== undefined ? { spaces } : {})}
+            selectedSpaceIds={selectedSpaceIds}
+            onSpacesChange={setSelectedSpaceIds}
           />
 
           {/* Action buttons. Build-75 — 사용자: "AI 일정 등록할때 취소도
@@ -91,7 +100,7 @@ export function ConfirmModal({ visible, result, onConfirm, onEdit, onDismiss }: 
             </Pressable>
             <Pressable
               style={[styles.button, styles.confirmButton]}
-              onPress={() => onConfirm(selectedColor)}
+              onPress={() => onConfirm(selectedColor, selectedSpaceIds)}
               accessibilityRole="button"
               accessibilityLabel={t('common.a11y_confirm')}
             >

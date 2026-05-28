@@ -30,10 +30,12 @@ import { FreeBannerAd } from '@/components/ads/FreeBannerAd';
 import { parseNaturalLanguage, parseNaturalLanguageMulti } from '@/services/aiService';
 import { useVoicePostProcess } from '@/hooks/useVoicePostProcess';
 import { createEvent } from '@/services/eventService';
+import { getMySpaces } from '@/services/spaceService';
+import { useAuthStore } from '@/stores/authStore';
 import { logError } from '@/lib/errorLogger';
 import { useEventStore } from '@/stores/eventStore';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
-import type { NLParseResult, EventSummary } from '@/types';
+import type { NLParseResult, EventSummary, SpaceSummary } from '@/types';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
@@ -120,6 +122,9 @@ export function NLInputBar({ onEventCreated }: Props) {
   // pending tail here while the user steps through them one by one via
   // ConfirmModal so each event still gets a per-event confirm/edit UX.
   const [pendingResults, setPendingResults] = useState<NLParseResult[]>([]);
+  // v1.2.9 — 사용자 스페이스 목록 (마운트 시 1회 load). EventPreviewCard 에서
+  // 칩으로 노출. 비어있으면 picker 자체 숨김.
+  const [mySpaces, setMySpaces] = useState<SpaceSummary[]>([]);
   const [errorMsg, setErrorMsg] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
@@ -156,6 +161,24 @@ export function NLInputBar({ onEventCreated }: Props) {
    */
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const inputRef = useRef<TextInput>(null);
+
+  // v1.2.9 — 사용자 스페이스 목록 로드. authStore.user 가 준비되면 fetch
+  // (마운트 시 auth restore 가 아직 안 끝났을 수 있어 user 를 dep 으로 사용).
+  // 실패 시 빈 배열 유지 (스페이스 picker 가 단순히 안 보일 뿐 다른 기능 영향 없음).
+  const authUserId = useAuthStore((s) => s.user?.id);
+  useEffect(() => {
+    if (!authUserId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await getMySpaces();
+        if (!cancelled) setMySpaces(list);
+      } catch (err) {
+        console.warn('[NLInputBar] getMySpaces failed:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [authUserId]);
 
   // ── Keyboard height tracking ─────────────────────────────────────────────────
   useEffect(() => {
@@ -367,7 +390,7 @@ export function NLInputBar({ onEventCreated }: Props) {
 
   // ── Confirm: create event and close (or advance queue) ────────────────────
 
-  const handleConfirm = useCallback(async (chosenColor: string | null = null) => {
+  const handleConfirm = useCallback(async (chosenColor: string | null = null, spaceIds: string[] = []) => {
     if (!parseResult) return;
     // v1.2.9 — 더블탭/중복 트리거 방지. 이미 saving 진행 중이면 무시.
     // (DB 에 같은 일정 2개 row 가 0.7s 간격으로 들어가던 회귀 원인.)
@@ -410,6 +433,8 @@ export function NLInputBar({ onEventCreated }: Props) {
         // v1.2.9 — ConfirmModal 의 ColorPicker 에서 고른 색을 전달.
         // null 이면 createEvent 가 category/default 색 적용.
         ...(chosenColor ? { color: chosenColor } : {}),
+        // v1.2.9 — 선택된 스페이스로 즉시 공유. 빈 배열이면 비공개 유지.
+        ...(spaceIds.length > 0 ? { shareToSpaceIds: spaceIds } : {}),
       };
       const created = await createEvent(createInput);
 
@@ -439,7 +464,9 @@ export function NLInputBar({ onEventCreated }: Props) {
         const [next, ...rest] = pendingResults;
         setParseResult(next ?? null);
         setPendingResults(rest);
-        // Stay in 'preview' so ConfirmModal stays open with the next event.
+        // v1.2.9 — handleConfirm 시작 시 setInputState('loading') 했으니
+        // 큐 advance 케이스는 'preview' 로 명시 복귀 (안 그러면 모달이 사라짐).
+        setInputState('preview');
         onEventCreated?.();
         return;
       }
@@ -669,6 +696,7 @@ export function NLInputBar({ onEventCreated }: Props) {
           onConfirm={handleConfirm}
           onEdit={handleEdit}
           onDismiss={handleDismiss}
+          spaces={mySpaces}
         />
       )}
 
