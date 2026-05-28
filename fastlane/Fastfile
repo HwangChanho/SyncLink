@@ -46,6 +46,28 @@ platform :ios do
         xcodeproj:    "#{PROJECT_ROOT}/ios/SyncLink.xcodeproj",
       )
 
+      # v1.3.0 — Marketing version triple-sync 가드.
+      # app.json 의 expo.version 을 단일 source of truth 로 삼아
+      # (1) xcodeproj MARKETING_VERSION, (2) ios Info.plist CFBundleShortVersionString,
+      # (3) targets/widget Info.plist CFBundleShortVersionString 모두 동기화.
+      # 이전 회귀: Info.plist 가 옛 1.1.7 인 채라 App Store Connect 가 1.1.7 train
+      # 으로 받아들임 (xcodebuild 가 Info.plist 우선시).
+      marketing = sh("node -e \"console.log(require('#{PROJECT_ROOT}/app.json').expo.version)\"").strip
+      UI.message "Marketing version (source of truth = app.json): #{marketing}"
+      sh("sed -i '' 's|MARKETING_VERSION = [0-9.]*;|MARKETING_VERSION = #{marketing};|g' '#{PROJECT_ROOT}/ios/SyncLink.xcodeproj/project.pbxproj'")
+      sh("/usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString #{marketing}' '#{PROJECT_ROOT}/ios/SyncLink/Info.plist'")
+      sh("/usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString #{marketing}' '#{PROJECT_ROOT}/targets/widget/Info.plist'")
+
+      # Triple-check: 4개 소스 모두 같은 marketing version 인지 검증.
+      app_v      = sh("node -e \"console.log(require('#{PROJECT_ROOT}/app.json').expo.version)\"").strip
+      xcode_v    = sh("grep 'MARKETING_VERSION' '#{PROJECT_ROOT}/ios/SyncLink.xcodeproj/project.pbxproj' | head -1 | sed 's/.*= //;s/;//;s/[[:space:]]//g'").strip
+      plist_v    = sh("/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' '#{PROJECT_ROOT}/ios/SyncLink/Info.plist'").strip
+      widget_v   = sh("/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' '#{PROJECT_ROOT}/targets/widget/Info.plist'").strip
+      UI.message "버전 일치 검증: app=#{app_v} xcode=#{xcode_v} plist=#{plist_v} widget=#{widget_v}"
+      unless [app_v, xcode_v, plist_v, widget_v].uniq.size == 1
+        UI.user_error!("❌ 버전 mismatch — fastlane 중단. app=#{app_v} xcode=#{xcode_v} plist=#{plist_v} widget=#{widget_v}")
+      end
+
       # 2. xcodebuild archive (기존에 검증된 방식)
       sh("rm -rf '#{PROJECT_ROOT}/build/SyncLink.xcarchive' '#{PROJECT_ROOT}/build/SyncLink-ipa'")
       sh("xcodebuild " \
