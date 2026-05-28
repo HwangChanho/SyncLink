@@ -286,6 +286,20 @@ export function NLInputBar({ onEventCreated }: Props) {
 
     Keyboard.dismiss();
 
+    // v1.2.9 — 삭제/취소/수정 의도가 감지되면 즉시 /chat 으로 핸드오프.
+    // AI 비서가 후보 탐색 → 한 번 더 확인 → deleteEvent/updateEvent 호출.
+    // (createEvent 와 달리 단일 미리보기 흐름으로 처리하면 위험.)
+    const intentRe = /(삭제|취소|지워|없애|제거|delete|cancel|remove)|(?:바꿔|수정|변경|옮겨|미뤄)/;
+    if (!attachedImage && intentRe.test(trimmed)) {
+      setInputState('idle');
+      setText('');
+      router.push({
+        pathname: '/chat',
+        params: { prefill: trimmed },
+      });
+      return;
+    }
+
     // TASK-505: Check subscription AI limit before calling the Edge Function.
     // The local parser is always free; only the AI fallback is gated.
     // We check the limit here (pre-parse) to avoid a wasted local parse call
@@ -685,6 +699,25 @@ export function NLInputBar({ onEventCreated }: Props) {
           }}
         />
 
+        {/* v1.2.9 — AI 비서 명시 호출 버튼. 텍스트 있으면 prefill 로 push,
+            없으면 빈 채팅 열기. NLInputBar 와 /chat 을 단일 진입점으로 통합. */}
+        <Pressable
+          style={styles.assistantButton}
+          onPress={() => {
+            const trimmed = text.trim();
+            setText('');
+            setInputState('idle');
+            router.push({
+              pathname: '/chat',
+              ...(trimmed ? { params: { prefill: trimmed } } : {}),
+            });
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="AI 비서로 이동"
+        >
+          <Ionicons name="sparkles" size={16} color={colors.primary} />
+        </Pressable>
+
         <Pressable
           style={[
             styles.sendButton,
@@ -799,8 +832,14 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     flex: 1,
     ...(textStyles.body as object),
     color: colors.textPrimary,
-    paddingVertical: spacing[2],
+    // v1.2.9 — LEAD 보고: 타이핑 시 글자가 아래로 치우침. paddingVertical
+    // 이 lineHeight 보다 작아서 텍스트가 하단 정렬됨. padding 제거 +
+    // textAlignVertical='center' 로 수직 가운데 정렬 (Android 영향).
+    paddingVertical: 0,
+    textAlignVertical: 'center',
     minHeight: 36,
+    lineHeight: 20,
+    includeFontPadding: false,
   },
   micButton: {
     width: 36,
@@ -808,6 +847,14 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  assistantButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primaryLight,
   },
   micButtonActive: {
     backgroundColor: colors.primaryLight,
