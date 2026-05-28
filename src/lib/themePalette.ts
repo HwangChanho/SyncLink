@@ -105,52 +105,53 @@ export function buildPalette(accentHue: number, isDark: boolean): ThemePalette {
   const h = ((accentHue % 360) + 360) % 360;
 
   if (isDark) {
+    // v1.2.8 — LEAD 피드백 "너무 어둡고 칙칙" → 톤 보정.
+    // 핵심 변경:
+    //   L (밝기): background 8→14, surface 14→19, surfaceAlt 20→26
+    //     → 거의 검정 → 부드러운 dark gray (Notion/Apple 다크 톤)
+    //   S (채도): 12→18 (background) / 12→16 (surface)
+    //     → hue tint 살짝 더 비치게 (회색 단조 X)
+    //   border L 22→28, S 14→18 — chip/카드 구분 더 또렷
+    //   textSecondary/Tertiary S/L 미세 ↑ — 회색 단조 X
+    //   primaryLight S/L ↑ — 다크 배경에서 chip 배경이 더 풍부
+    // WCAG AA 대비: textPrimary L=95 on background L=14 = 12:1 (안전)
     return {
       // ── Brand ─────────────────────────────────────────────────────────────
-      // primary: 선명한 accent 색 (버튼, 링크, 강조 아이콘)
-      primary:      hsl(h, 65, 62),
-      // primaryLight: 다크 배경에서 subtle 강조 (chip 배경 등)
-      primaryLight: hsl(h, 35, 28),
-      // primaryDark: hover/pressed 피드백
-      primaryDark:  hsl(h, 70, 50),
-      // accent: 보조 강조 (뱃지, 포인트)
-      accent:       hsl(h, 72, 65),
+      primary:      hsl(h, 70, 64),
+      primaryLight: hsl(h, 40, 34),
+      primaryDark:  hsl(h, 72, 52),
+      accent:       hsl(h, 75, 68),
 
       // ── Background ────────────────────────────────────────────────────────
-      // 메인 배경 — hue tint 극소화, 어두운 배경
-      background:    hsl(h, 12, 8),
-      // 서브 배경 (섹션 구분)
-      backgroundAlt: hsl(h, 12, 12),
-      // 카드/셀 배경
-      surface:       hsl(h, 12, 14),
-      // 선택된 카드 / 구분 배경
-      surfaceAlt:    hsl(h, 12, 20),
+      background:    hsl(h, 18, 14),
+      backgroundAlt: hsl(h, 18, 17),
+      surface:       hsl(h, 16, 19),
+      surfaceAlt:    hsl(h, 16, 26),
 
       // ── Text ──────────────────────────────────────────────────────────────
-      // 거의 흰색 + 살짝 hue tint → 전체 색조와 조화
-      textPrimary:     hsl(h, 8, 95),
-      textSecondary:   hsl(h, 8, 70),
-      textTertiary:    hsl(h, 5, 50),
-      textInverse:     hsl(h, 10, 8),
-      textPlaceholder: hsl(h, 5, 35),
+      textPrimary:     hsl(h, 10, 96),
+      textSecondary:   hsl(h, 12, 75),
+      textTertiary:    hsl(h, 8, 58),
+      textInverse:     hsl(h, 14, 12),
+      textPlaceholder: hsl(h, 6, 42),
 
       // ── Border ────────────────────────────────────────────────────────────
-      border:      hsl(h, 14, 22),
-      borderStrong: hsl(h, 16, 30),
+      border:       hsl(h, 18, 28),
+      borderStrong: hsl(h, 20, 36),
 
       // ── Status (hue-independent — 의미색은 고정) ──────────────────────
-      success: 'hsl(142, 65%, 50%)',
-      warning: 'hsl(38, 90%, 50%)',
-      error:   'hsl(0, 72%, 55%)',
+      success: 'hsl(142, 65%, 55%)',
+      warning: 'hsl(38, 90%, 55%)',
+      error:   'hsl(0, 72%, 60%)',
 
       // ── Tab bar ───────────────────────────────────────────────────────────
-      tabActive:   hsl(h, 65, 62),
-      tabInactive: hsl(h, 8, 45),
+      tabActive:   hsl(h, 70, 64),
+      tabInactive: hsl(h, 10, 50),
 
       // ── Input ─────────────────────────────────────────────────────────────
-      inputBackground: hsl(h, 12, 14),
-      inputBorder:     hsl(h, 14, 22),
-      inputFocus:      hsl(h, 65, 62),
+      inputBackground: hsl(h, 16, 19),
+      inputBorder:     hsl(h, 18, 28),
+      inputFocus:      hsl(h, 70, 64),
     };
   }
 
@@ -163,11 +164,16 @@ export function buildPalette(accentHue: number, isDark: boolean): ThemePalette {
     accent:       hsl(h, 72, 52),
 
     // ── Background ───────────────────────────────────────────────────────────
-    // 메인 배경: S를 낮춰서 "살짝 tinted 흰색" (완전한 흰색보다 자연스러움)
-    background:    hsl(h, 30, 99),
-    backgroundAlt: hsl(h, 25, 96),
-    surface:       hsl(h, 20, 100),
-    surfaceAlt:    hsl(h, 20, 96),
+    // 메인 배경: S를 낮춰서 "살짝 tinted 흰색".
+    // v1.2.8 — LEAD 피드백 "라이트 너무 밝다, 살짝만 어둡게".
+    //   background  L 99 → 97 (눈부심 ↓)
+    //   backgroundAlt L 96 → 94
+    //   surface     L 100 → 99 (카드는 background 보다 조금 밝아야 떠 보임)
+    //   surfaceAlt  L 96 → 93
+    background:    hsl(h, 30, 97),
+    backgroundAlt: hsl(h, 25, 94),
+    surface:       hsl(h, 20, 99),
+    surfaceAlt:    hsl(h, 20, 93),
 
     // ── Text ─────────────────────────────────────────────────────────────────
     // 거의 검은색 + 살짝 hue tint

@@ -27,7 +27,18 @@ export default function ChatScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
-      <Stack.Screen options={{ title: 'AI 비서', presentation: 'modal' }} />
+      <Stack.Screen
+        options={{
+          title: 'AI 비서',
+          presentation: 'modal',
+          // v1.2.8 — 다크 모드에서 native 기본 흰색 헤더가 본문과 mismatch.
+          // 테마 background 색으로 일관 처리 + 텍스트/아이콘 색도 자동 대비.
+          headerStyle:        { backgroundColor: colors.background },
+          headerTintColor:    colors.textPrimary,
+          headerTitleStyle:   { color: colors.textPrimary },
+          headerShadowVisible: false,
+        }}
+      />
 
       <KeyboardAvoidingView
         style={styles.content}
