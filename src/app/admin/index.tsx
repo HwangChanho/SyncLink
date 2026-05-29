@@ -46,6 +46,15 @@ type Days = 1 | 7 | 30;
 
 const chartWidth = Dimensions.get('window').width - 64;
 
+/**
+ * Claude API 월 예산 (docs/architecture/BUDGET_GUARDRAILS.md 기준).
+ * run-rate 게이지의 100% 기준선. 초과 시 경고색 표시.
+ */
+const MONTHLY_BUDGET_USD = 30;
+
+/** 고비용 사용자 강조 임계값 (USD). 누적 비용이 이 값을 넘으면 행을 강조. */
+const HIGH_COST_USER_THRESHOLD = 1;
+
 /** "5시간 23분 남음" / "12분 남음" / "곧 만료" 포맷. */
 function formatRemaining(ms: number): string {
   if (ms <= 0) return '만료됨';
@@ -54,6 +63,23 @@ function formatRemaining(ms: number): string {
   const m = totalMin % 60;
   if (h <= 0) return `${m}분 남음`;
   return `${h}시간 ${m}분 남음`;
+}
+
+/** USD 금액 포맷 — 작은 값은 소수 4자리, 큰 값은 2자리. */
+function formatUsd(v: number | string | undefined): string {
+  const n = typeof v === 'string' ? parseFloat(v) : (v ?? 0);
+  if (!isFinite(n)) return '$0';
+  if (n === 0) return '$0';
+  return n < 1 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`;
+}
+
+/**
+ * 월 예상 비용(run-rate) 계산.
+ * 기간 합계 비용을 일평균으로 환산 후 ×30. 일수 정보가 없으면 0.
+ */
+function projectMonthlyUsd(totalUsd: number, days: number): number {
+  if (!days || days <= 0) return 0;
+  return (totalUsd / days) * 30;
 }
 
 export default function AdminDashboard() {
@@ -229,14 +255,33 @@ export default function AdminDashboard() {
               </Text>
             </View>
 
-            {/* 사용자 카드 */}
+            {/* 사용자 카드 — 전체/활성 + (054) Pro/Free 전환율 */}
             <View style={styles.card}>
               <Text style={styles.cardTitle}>사용자</Text>
               <View style={styles.row}>
                 <Stat label="전체 가입" value={`${stats.users.total_users}`} styles={styles} />
                 <Stat label={`최근 ${days}일 활성`} value={`${stats.users.active_users}`} styles={styles} />
               </View>
+              {/* pro/free 카운트는 마이그레이션 054 이후에만 존재 → 옵셔널 가드 */}
+              {stats.users.pro_users != null && (
+                <View style={styles.row}>
+                  <Stat label="Pro" value={`${stats.users.pro_users}`} styles={styles} />
+                  <Stat label="Free" value={`${stats.users.free_users ?? 0}`} styles={styles} />
+                  <Stat
+                    label="전환율"
+                    value={
+                      stats.users.total_users > 0
+                        ? `${Math.round((stats.users.pro_users / stats.users.total_users) * 100)}%`
+                        : '—'
+                    }
+                    styles={styles}
+                  />
+                </View>
+              )}
             </View>
+
+            {/* 확장 인사이트 카드 (054) — 비용/리텐션/성장. 데이터 없으면 각자 skip */}
+            <InsightCards stats={stats} days={days} styles={styles} colors={colors} />
 
             {/* 함수별 — list */}
             <View style={styles.card}>
@@ -526,6 +571,8 @@ function UsersCard({
   const [data, setData] = useState<AdminUsersResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // 클라이언트 측 검색어 — 이미 로드된 rows 에서 nickname/email 필터.
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -537,6 +584,18 @@ function UsersCard({
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [token, sort]);
+
+  // 검색어로 필터링된 rows (대소문자 무시, nickname + email 대상).
+  const filteredRows = useMemo(() => {
+    if (!data) return [];
+    const q = query.trim().toLowerCase();
+    if (!q) return data.rows;
+    return data.rows.filter(
+      (u) =>
+        (u.nickname ?? '').toLowerCase().includes(q) ||
+        (u.email ?? '').toLowerCase().includes(q),
+    );
+  }, [data, query]);
 
   return (
     <View style={styles.card}>
@@ -563,42 +622,253 @@ function UsersCard({
         ))}
       </View>
 
+      {/* 검색창 — 로드된 rows 에서 nickname/email 필터 */}
+      <TextInput
+        style={styles.searchInput}
+        placeholder="닉네임 또는 이메일 검색"
+        placeholderTextColor={colors.textTertiary}
+        value={query}
+        onChangeText={setQuery}
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
+
       {loading ? (
         <ActivityIndicator color={colors.primary} style={{ paddingVertical: spacing[3] }} />
       ) : error ? (
         <Text style={styles.errorText}>{error}</Text>
-      ) : data && data.rows.length > 0 ? (
+      ) : data && filteredRows.length > 0 ? (
         <View style={styles.tableWrap}>
-          {data.rows.map((u) => (
-            <View key={u.id} style={styles.userRow}>
-              <View style={styles.userMain}>
-                <View style={styles.userTitleRow}>
-                  <Text style={styles.userName} numberOfLines={1}>
-                    {u.nickname || '(닉네임 없음)'}
+          {filteredRows.map((u) => {
+            // 누적 비용이 임계값 초과면 abuse 의심 → 행 강조.
+            const highCost = Number(u.total_cost_usd ?? 0) > HIGH_COST_USER_THRESHOLD;
+            return (
+              <View key={u.id} style={[styles.userRow, highCost && styles.userRowHighlight]}>
+                <View style={styles.userMain}>
+                  <View style={styles.userTitleRow}>
+                    <Text style={styles.userName} numberOfLines={1}>
+                      {u.nickname || '(닉네임 없음)'}
+                    </Text>
+                    {u.subscription_plan === 'pro' && (
+                      <View style={styles.proPill}>
+                        <Text style={styles.proPillText}>PRO</Text>
+                      </View>
+                    )}
+                    {highCost && (
+                      <View style={styles.warnPill}>
+                        <Text style={styles.warnPillText}>고비용</Text>
+                      </View>
+                    )}
+                    {u.country_code && (
+                      <Text style={styles.userCountry}>{u.country_code}</Text>
+                    )}
+                  </View>
+                  <Text style={styles.userEmail} numberOfLines={1}>
+                    {u.email ?? '—'}
                   </Text>
-                  {u.subscription_plan === 'pro' && (
-                    <View style={styles.proPill}>
-                      <Text style={styles.proPillText}>PRO</Text>
-                    </View>
-                  )}
-                  {u.country_code && (
-                    <Text style={styles.userCountry}>{u.country_code}</Text>
-                  )}
+                  <Text style={styles.userMeta}>
+                    가입 {u.created_at.slice(0, 10)} · 일정 {u.event_count} · AI {u.ai_calls}회 · {formatUsd(u.total_cost_usd)}
+                  </Text>
                 </View>
-                <Text style={styles.userEmail} numberOfLines={1}>
-                  {u.email ?? '—'}
-                </Text>
-                <Text style={styles.userMeta}>
-                  가입 {u.created_at.slice(0, 10)} · 일정 {u.event_count} · AI {u.ai_calls}회 · ${u.total_cost_usd}
-                </Text>
               </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
       ) : (
-        <Text style={styles.emptyText}>사용자가 없어요</Text>
+        <Text style={styles.emptyText}>
+          {query.trim() ? '검색 결과가 없어요' : '사용자가 없어요'}
+        </Text>
       )}
     </View>
+  );
+}
+
+/**
+ * 확장 인사이트 카드 묶음 (마이그레이션 054).
+ *
+ * 모든 카드는 해당 데이터(stats.xxx)가 응답에 있을 때만 렌더 → 구버전 서버 안전.
+ * 단일 책임: "기본 통계 외 비용/리텐션/성장 시각화"를 한 곳에 모은다.
+ */
+function InsightCards({
+  stats,
+  days,
+  styles,
+  colors,
+}: {
+  stats: AdminStats;
+  days: number;
+  styles: ReturnType<typeof makeStyles>;
+  colors: ReturnType<typeof useColors>;
+}) {
+  // ── 기간 합계 비용 → 월 run-rate 환산 (by_day 는 기존 키라 항상 존재) ──
+  const periodCostUsd = stats.by_day.reduce((sum, d) => sum + Number(d.usd ?? 0), 0);
+  const projectedMonthly = projectMonthlyUsd(periodCostUsd, days);
+  const budgetPct = MONTHLY_BUDGET_USD > 0 ? (projectedMonthly / MONTHLY_BUDGET_USD) * 100 : 0;
+  const overBudget = projectedMonthly > MONTHLY_BUDGET_USD;
+  const fillWidth = `${Math.min(Math.max(budgetPct, 0), 100)}%` as const;
+
+  return (
+    <>
+      {/* ① 월 예상 비용 (run-rate) 게이지 — $30 예산 대비 */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>월 예상 비용 (run-rate)</Text>
+        <View style={styles.row}>
+          <Stat label={`최근 ${days}일 합계`} value={formatUsd(periodCostUsd)} styles={styles} />
+          <Stat label="월 환산" value={formatUsd(projectedMonthly)} styles={styles} />
+          <Stat label="예산" value={formatUsd(MONTHLY_BUDGET_USD)} styles={styles} />
+        </View>
+        <View style={styles.gaugeTrack}>
+          <View
+            style={[
+              styles.gaugeFill,
+              { width: fillWidth },
+              overBudget && styles.gaugeFillOver,
+            ]}
+          />
+        </View>
+        <Text style={[styles.subText, overBudget && styles.warnText]}>
+          {overBudget
+            ? `⚠️ 예산 초과 예상 (${Math.round(budgetPct)}%)`
+            : `예산의 ${Math.round(budgetPct)}% 소진 예상`}
+        </Text>
+      </View>
+
+      {/* ② 일별 비용 추이 차트 */}
+      {stats.by_day.length > 0 && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>일별 비용 추이 (USD)</Text>
+          <BarChart
+            data={{
+              labels: [...stats.by_day].reverse().map((d) => d.day.slice(5)),
+              datasets: [{ data: [...stats.by_day].reverse().map((d) => Number(d.usd ?? 0)) }],
+            }}
+            width={chartWidth}
+            height={180}
+            yAxisLabel="$"
+            yAxisSuffix=""
+            fromZero
+            withHorizontalLabels={false}
+            withInnerLines={false}
+            chartConfig={{
+              backgroundColor: 'transparent',
+              backgroundGradientFrom: colors.surface,
+              backgroundGradientTo: colors.surface,
+              decimalPlaces: 2,
+              color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`, // emerald — 비용
+              labelColor: () => colors.textSecondary,
+              barPercentage: 0.6,
+              propsForBackgroundLines: { stroke: 'transparent' },
+            }}
+            style={{ marginLeft: -spacing[3] }}
+          />
+        </View>
+      )}
+
+      {/* ③ 모델별 비용 분해 */}
+      {stats.by_model && stats.by_model.length > 0 && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>모델별 (최근 {days}일)</Text>
+          <View style={styles.tableWrap}>
+            <View style={styles.tableHeader}>
+              <Text style={[styles.cell, styles.cellName]}>모델</Text>
+              <Text style={[styles.cell, styles.cellNum]}>호출</Text>
+              <Text style={[styles.cell, styles.cellNum]}>in tok</Text>
+              <Text style={[styles.cell, styles.cellNum]}>out tok</Text>
+              <Text style={[styles.cell, styles.cellNum]}>USD</Text>
+            </View>
+            {stats.by_model.map((m) => (
+              <View key={m.model} style={styles.tableRow}>
+                <Text style={[styles.cell, styles.cellName]} numberOfLines={1}>{m.model}</Text>
+                <Text style={[styles.cell, styles.cellNum]}>{m.calls}</Text>
+                <Text style={[styles.cell, styles.cellNum]}>{m.in_tok}</Text>
+                <Text style={[styles.cell, styles.cellNum]}>{m.out_tok}</Text>
+                <Text style={[styles.cell, styles.cellNum]}>{formatUsd(m.usd)}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {/* ④ 리텐션 버킷 */}
+      {stats.retention && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>리텐션 (일정 활동 기준)</Text>
+          <View style={styles.row}>
+            <Stat label="7일 내 활성" value={`${stats.retention.active_7d}`} styles={styles} />
+            <Stat label="8~30일" value={`${stats.retention.active_30d}`} styles={styles} />
+            <Stat label="휴면(30일+)" value={`${stats.retention.dormant}`} styles={styles} />
+          </View>
+        </View>
+      )}
+
+      {/* ⑤ 신규 가입 추이 */}
+      {stats.signups_by_day && stats.signups_by_day.length > 0 && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>신규 가입 추이 (최근 {days}일)</Text>
+          <BarChart
+            data={{
+              labels: [...stats.signups_by_day].reverse().map((d) => d.day.slice(5)),
+              datasets: [{ data: [...stats.signups_by_day].reverse().map((d) => d.signups) }],
+            }}
+            width={chartWidth}
+            height={160}
+            yAxisLabel=""
+            yAxisSuffix=""
+            fromZero
+            showValuesOnTopOfBars
+            withHorizontalLabels={false}
+            withInnerLines={false}
+            chartConfig={{
+              backgroundColor: 'transparent',
+              backgroundGradientFrom: colors.surface,
+              backgroundGradientTo: colors.surface,
+              decimalPlaces: 0,
+              color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`, // blue — 가입
+              labelColor: () => colors.textSecondary,
+              barPercentage: 0.6,
+              propsForBackgroundLines: { stroke: 'transparent' },
+            }}
+            style={{ marginLeft: -spacing[3] }}
+          />
+        </View>
+      )}
+
+      {/* ⑥ 기능영역별 비용 */}
+      {stats.by_feature && stats.by_feature.length > 0 && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>기능영역별 (최근 {days}일)</Text>
+          <View style={styles.tableWrap}>
+            <View style={styles.tableHeader}>
+              <Text style={[styles.cell, styles.cellName]}>영역</Text>
+              <Text style={[styles.cell, styles.cellNum]}>호출</Text>
+              <Text style={[styles.cell, styles.cellNum]}>USD</Text>
+            </View>
+            {stats.by_feature.map((f) => (
+              <View key={f.feature_area} style={styles.tableRow}>
+                <Text style={[styles.cell, styles.cellName]} numberOfLines={1}>{f.feature_area}</Text>
+                <Text style={[styles.cell, styles.cellNum]}>{f.calls}</Text>
+                <Text style={[styles.cell, styles.cellNum]}>{formatUsd(f.usd)}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {/* ⑦ 국가 분포 */}
+      {stats.country_dist && stats.country_dist.length > 0 && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>국가 분포</Text>
+          <View style={styles.tableWrap}>
+            {stats.country_dist.map((c) => (
+              <View key={c.country_code} style={styles.tableRow}>
+                <Text style={[styles.cell, styles.cellName]} numberOfLines={1}>{c.country_code}</Text>
+                <Text style={[styles.cell, styles.cellNum]}>{c.users}명</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+    </>
   );
 }
 
@@ -741,6 +1011,59 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       ...textStyles.caption,
       color: colors.textTertiary,
       fontSize: 11,
+    },
+
+    // ─── 054 신규 스타일 ───────────────────────────────────────────────
+    /** run-rate 게이지 트랙(배경 바). */
+    gaugeTrack: {
+      height: 10,
+      borderRadius: radius.full,
+      backgroundColor: colors.backgroundAlt,
+      overflow: 'hidden',
+    },
+    /** run-rate 게이지 채움 — 예산 내(보라). */
+    gaugeFill: {
+      height: '100%',
+      borderRadius: radius.full,
+      backgroundColor: colors.primary,
+    },
+    /** run-rate 게이지 채움 — 예산 초과(빨강). */
+    gaugeFillOver: {
+      backgroundColor: colors.error,
+    },
+    /** 예산 초과 경고 텍스트. */
+    warnText: {
+      color: colors.error,
+      fontWeight: '700',
+    },
+    /** 사용자 검색 입력. */
+    searchInput: {
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      borderRadius: radius.md,
+      paddingHorizontal: spacing[3],
+      paddingVertical: spacing[2],
+      fontSize: 14,
+      color: colors.textPrimary,
+      backgroundColor: colors.background,
+    },
+    /** 고비용 사용자 행 강조 배경 (연한 빨강 — 다크/라이트 공통 가독). */
+    userRowHighlight: {
+      backgroundColor: 'rgba(220, 38, 38, 0.08)',
+      borderRadius: radius.sm,
+    },
+    /** 고비용 표식 pill. */
+    warnPill: {
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      borderRadius: radius.full,
+      backgroundColor: colors.error,
+    },
+    warnPillText: {
+      ...textStyles.caption,
+      color: colors.textInverse,
+      fontWeight: '700',
+      fontSize: 9,
     },
   });
 }
