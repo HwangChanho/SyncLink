@@ -29,7 +29,17 @@ export interface AdminStats {
   days: number;
   since: string;
   today: { calls: number; users: number; in_tok: number; out_tok: number; usd: number };
-  users: { total_users: number; active_users: number };
+  /**
+   * 사용자 카운트.
+   * - total_users / active_users: 기존 (마이그레이션 048~050)
+   * - pro_users / free_users: 마이그레이션 054 신규 — 구버전 서버 응답엔 없을 수 있어 optional.
+   */
+  users: {
+    total_users: number;
+    active_users: number;
+    pro_users?: number;
+    free_users?: number;
+  };
   by_function: Array<{
     function_name: string;
     calls: number;
@@ -40,6 +50,24 @@ export interface AdminStats {
   }>;
   by_day: Array<{ day: string; calls: number; users: number; out_tok: number; usd: number }>;
   by_day_function: Array<{ function_name: string; day: string; calls: number }>;
+
+  // ─── 마이그레이션 054 신규 (모두 optional — 구버전 서버 안전) ───────────────
+  /** 모델(Haiku/Sonnet 등)별 비용 분해. */
+  by_model?: Array<{
+    model: string;
+    calls: number;
+    in_tok: number;
+    out_tok: number;
+    usd: number;
+  }>;
+  /** 기능영역(feature_area)별 비용. */
+  by_feature?: Array<{ feature_area: string; calls: number; usd: number }>;
+  /** 일별 신규 가입 수 (기간 내). */
+  signups_by_day?: Array<{ day: string; signups: number }>;
+  /** last_event_at 기반 리텐션 버킷. */
+  retention?: { active_7d: number; active_30d: number; dormant: number };
+  /** 국가 분포 top (NULL = '미상'). */
+  country_dist?: Array<{ country_code: string; users: number }>;
 }
 
 export type UsersSort = 'recent' | 'active' | 'usage';
