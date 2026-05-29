@@ -121,10 +121,12 @@ struct SyncLinkWidgetEntryView: View {
     switch family {
     case .systemLarge:
       LargeView(snapshot: snap)
-        .padding(12)
+        // v1.3.1 — LEAD: "위/아래 좌/우 padding 동일하게".
+        // 12 → 16 (좌우/상하 모두) + 내부 spacing 조정으로 시각적 균형.
+        .padding(16)
     default:
       SmallView(snapshot: snap)
-        .padding(12)
+        .padding(16)
     }
   }
 }
@@ -180,7 +182,11 @@ private struct LargeView: View {
   let snapshot: WidgetSnapshot
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 6) {
+    // v1.3.1 — 위/아래 시각 균형: top/bottom 에 동등하게 spacer 분배해
+    // grid 가 위젯 중앙에 자리 잡도록. 기존엔 bottom Spacer 만 있어 grid 가
+    // 상단으로 압축되고 상단 padding 이 좁아 보이던 회귀.
+    VStack(alignment: .leading, spacing: 8) {
+      Spacer(minLength: 0)
       // Header — yyyy.MM and short hint, mirrors Naver Calendar widget style.
       HStack {
         Text(monthHeaderLabel())
