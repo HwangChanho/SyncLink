@@ -82,6 +82,11 @@ export default function AnalyticsScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchStats = async () => {
+    // 분석은 Pro 전용 — Free 사용자는 통계 쿼리 자체를 생략 (불필요 비용 방지).
+    if (!isPro) {
+      setLoading(false);
+      return;
+    }
     setError(null);
     try {
       const range = presetRange(preset);
@@ -105,6 +110,13 @@ export default function AnalyticsScreen() {
     setRefreshing(true);
     fetchStats();
   };
+
+  // ─── 분석 탭 전체 Pro 게이트 ──────────────────────────────────────────
+  // Free 사용자에게는 실제 분석 대신 가치 제안 + 업그레이드 안내 화면을 보여준다.
+  // 탭 자체는 탭바에 그대로 노출 → 발견성 유지 + 전환 유도 (paywall teaser 패턴).
+  if (!isPro) {
+    return <AnalyticsPaywallView styles={styles} colors={colors} />;
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -271,6 +283,64 @@ export default function AnalyticsScreen() {
 }
 
 /**
+ * 분석 탭 Pro 페이월 화면 — Free 사용자가 분석 탭에 진입했을 때 표시.
+ *
+ * 블러 미리보기 대신 "무엇을 얻는지"를 명확히 제시 + 업그레이드 CTA.
+ * CTA 는 기존 결제 화면(`/subscription/paywall`)을 재사용한다.
+ */
+function AnalyticsPaywallView({
+  styles,
+  colors,
+}: {
+  styles: ReturnType<typeof makeStyles>;
+  colors: ReturnType<typeof useColors>;
+}) {
+  // Pro 분석이 제공하는 핵심 가치 — paywall feature 목록과 톤 일치.
+  const features: Array<{
+    icon: React.ComponentProps<typeof Ionicons>['name'];
+    text: string;
+  }> = [
+    { icon: 'pie-chart-outline', text: '카테고리 · 요일 · 시간대 분포 분석' },
+    { icon: 'trending-up-outline', text: '기간별 추이와 가장 바쁜 시간 파악' },
+    { icon: 'sparkles-outline', text: 'AI 맞춤 인사이트 & 다음 주 추천' },
+  ];
+
+  return (
+    <SafeAreaView style={styles.safe} edges={['bottom']}>
+      <ScrollView contentContainerStyle={styles.paywallContent}>
+        <View style={styles.paywallHero}>
+          <View style={styles.paywallIconCircle}>
+            <Ionicons name="bar-chart" size={34} color={colors.primary} />
+          </View>
+          <Text style={styles.paywallTitle}>분석은 Pro 기능이에요</Text>
+          <Text style={styles.paywallSub}>
+            내 일정 패턴을 한눈에 보고, AI 인사이트로 더 똑똑하게 계획하세요.
+          </Text>
+        </View>
+
+        <View style={styles.paywallFeatures}>
+          {features.map((f) => (
+            <View key={f.icon} style={styles.paywallFeatureRow}>
+              <Ionicons name={f.icon} size={18} color={colors.primary} />
+              <Text style={styles.paywallFeatureText}>{f.text}</Text>
+            </View>
+          ))}
+        </View>
+
+        <TouchableOpacity
+          style={styles.paywallCta}
+          activeOpacity={0.9}
+          onPress={() => router.push('/subscription/paywall')}
+        >
+          <Ionicons name="lock-open-outline" size={16} color="#FFFFFF" />
+          <Text style={styles.paywallCtaText}>Pro로 업그레이드</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+/**
  * Pro 게이트 wrapper. isPro 면 자식 그대로, Free 면 blur overlay + 자물쇠
  * + paywall CTA. 카드 외형은 동일하게 유지.
  */
@@ -409,6 +479,56 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       padding: spacing[4],
       gap: spacing[3],
     },
+
+    // ─── Pro 페이월 화면 (Free 사용자 진입 시) ───────────────────────────
+    paywallContent: {
+      flexGrow: 1,
+      justifyContent: 'center',
+      padding: spacing[5],
+      gap: spacing[5],
+    },
+    paywallHero: { alignItems: 'center', gap: spacing[2] },
+    paywallIconCircle: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      backgroundColor: colors.backgroundAlt,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: spacing[2],
+    },
+    paywallTitle: {
+      ...textStyles.h2,
+      color: colors.textPrimary,
+      fontWeight: '700',
+      textAlign: 'center',
+    },
+    paywallSub: {
+      ...textStyles.body,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      lineHeight: 20,
+    },
+    paywallFeatures: {
+      gap: spacing[3],
+      backgroundColor: colors.surface,
+      borderRadius: radius.lg,
+      padding: spacing[4],
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    paywallFeatureRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+    paywallFeatureText: { ...textStyles.body, color: colors.textPrimary, flex: 1 },
+    paywallCta: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing[2],
+      backgroundColor: colors.primary,
+      paddingVertical: spacing[3],
+      borderRadius: radius.full,
+    },
+    paywallCtaText: { ...textStyles.body, color: '#FFFFFF', fontWeight: '700' },
     segment: {
       flexDirection: 'row',
       backgroundColor: colors.backgroundAlt,
