@@ -37,6 +37,12 @@ import {
   presetRange,
   type EventStats,
 } from '@/services/analyticsService';
+import {
+  getDayHourGrid,
+  getWeeklyTrend,
+  type DayHourGrid,
+  type WeeklyTrendPoint,
+} from '@/services/analyticsExtrasService';
 import { generateInsight, type InsightResult } from '@/services/insightsService';
 
 type Preset = 'week' | 'month' | 'quarter';
@@ -70,6 +76,40 @@ function formatMinutes(min: number): string {
   return m === 0 ? `${h}시간` : `${h}시간 ${m}분`;
 }
 
+/** 증감 비교 결과. up=null = 변화없음/비교불가. */
+interface Delta {
+  /** "12%" 같은 절대 퍼센트 텍스트 (부호 제외) 또는 'NEW'. */
+  text: string;
+  /** true=증가, false=감소, null=동일/비교불가. */
+  up: boolean | null;
+}
+
+/** 현재 vs 직전 값으로 증감률 계산. */
+function computeDelta(curr: number, prev: number): Delta {
+  if (prev === 0) return { text: curr > 0 ? 'NEW' : '—', up: curr > 0 ? true : null };
+  const pct = Math.round(((curr - prev) / prev) * 100);
+  if (pct === 0) return { text: '0%', up: null };
+  return { text: `${Math.abs(pct)}%`, up: pct > 0 };
+}
+
+/** 기간 라벨 (비교 caption 용). */
+function presetLabel(p: Preset): string {
+  return p === 'week' ? '주' : p === 'month' ? '달' : '분기';
+}
+
+/** 하루 평균 일정 수 (기간 길이로 나눔). */
+function avgPerDay(s: EventStats): string {
+  const days = Math.max(
+    1,
+    Math.round((s.range.end.getTime() - s.range.start.getTime()) / 86_400_000),
+  );
+  return (s.totalCount / days).toFixed(1);
+}
+
+/** 증감 색상 — 증가 green / 감소 red (테마 무관 고정, 가독 보장). */
+const DELTA_UP_COLOR = '#10B981';
+const DELTA_DOWN_COLOR = '#EF4444';
+
 export default function AnalyticsScreen() {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -77,6 +117,10 @@ export default function AnalyticsScreen() {
 
   const [preset, setPreset] = useState<Preset>('month');
   const [stats, setStats] = useState<EventStats | null>(null);
+  // 직전 동일 길이 기간 (증감 비교용) + Phase 3 확장 집계.
+  const [prevStats, setPrevStats] = useState<EventStats | null>(null);
+  const [grid, setGrid] = useState<DayHourGrid | null>(null);
+  const [trend, setTrend] = useState<WeeklyTrendPoint[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -90,8 +134,23 @@ export default function AnalyticsScreen() {
     setError(null);
     try {
       const range = presetRange(preset);
-      const result = await getEventStatsForRange(range);
+      // 직전 동일 길이 기간 (range.start 직전으로 같은 span 만큼).
+      const spanMs = range.end.getTime() - range.start.getTime();
+      const prevRange = {
+        start: new Date(range.start.getTime() - spanMs - 1),
+        end: new Date(range.start.getTime() - 1),
+      };
+      // 현재/직전 통계 + 확장 집계를 병렬 조회.
+      const [result, prev, gridRes, trendRes] = await Promise.all([
+        getEventStatsForRange(range),
+        getEventStatsForRange(prevRange),
+        getDayHourGrid(range),
+        getWeeklyTrend(8),
+      ]);
       setStats(result);
+      setPrevStats(prev);
+      setGrid(gridRes);
+      setTrend(trendRes);
     } catch (err) {
       setError(err instanceof Error ? err.message : '분석 데이터를 불러오지 못했습니다.');
     } finally {
@@ -152,19 +211,41 @@ export default function AnalyticsScreen() {
           </View>
         ) : stats ? (
           <>
-            {/* 요약 카드 */}
+            {/* 요약 카드 — 직전 기간 대비 증감 + 하루 평균 + 한가한 요일 + 최다 카테고리 */}
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>요약</Text>
-              <View style={styles.summaryRow}>
-                <Stat label="총 일정" value={`${stats.totalCount}개`} />
-                <Stat label="총 시간" value={formatMinutes(stats.totalMinutes)} />
+              <View style={styles.insightHeader}>
+                <Text style={styles.cardTitle}>요약</Text>
+                {prevStats && (
+                  <Text style={styles.compareCaption}>직전 {presetLabel(preset)} 대비</Text>
+                )}
               </View>
               <View style={styles.summaryRow}>
+                <StatDelta
+                  label="총 일정"
+                  value={`${stats.totalCount}개`}
+                  delta={prevStats ? computeDelta(stats.totalCount, prevStats.totalCount) : null}
+                  styles={styles}
+                />
+                <StatDelta
+                  label="총 시간"
+                  value={formatMinutes(stats.totalMinutes)}
+                  delta={prevStats ? computeDelta(stats.totalMinutes, prevStats.totalMinutes) : null}
+                  styles={styles}
+                />
+              </View>
+              <View style={styles.summaryRow}>
+                <Stat label="하루 평균" value={`${avgPerDay(stats)}개`} />
                 <Stat
                   label="가장 바쁜 요일"
                   value={stats.busiestDow !== null ? `${DOW_LABELS[stats.busiestDow]}요일` : '—'}
                 />
-                <Stat label="빈 날" value={`${stats.emptyDayCount}일`} />
+              </View>
+              <View style={styles.summaryRow}>
+                <Stat
+                  label="가장 한가한 요일"
+                  value={stats.quietestDow !== null ? `${DOW_LABELS[stats.quietestDow]}요일` : '—'}
+                />
+                <Stat label="최다 카테고리" value={stats.byCategory[0]?.name || '—'} />
               </View>
             </View>
 
@@ -237,33 +318,75 @@ export default function AnalyticsScreen() {
               />
             </View>
 
-            {/* 시간대 분포 — Pro. 4분할 heat map. Free 는 잠금 overlay. */}
-            <ProGate isPro={isPro} styles={styles} colors={colors} title="시간대 분포">
-              <View style={styles.bucketRow}>
-                {stats.byHourBucket.map((b) => {
-                  const max = Math.max(...stats.byHourBucket.map((x) => x.count), 1);
-                  const intensity = b.count / max;
-                  return (
-                    <View key={b.bucket} style={styles.bucketCol}>
-                      <View
-                        style={[
-                          styles.bucketBox,
-                          { backgroundColor: colors.primary, opacity: 0.15 + intensity * 0.85 },
-                        ]}
-                      >
-                        <Text style={styles.bucketCount}>{b.count}</Text>
-                      </View>
-                      <Text style={styles.bucketLabel}>
-                        {b.bucket === 'morning' ? '아침' : b.bucket === 'afternoon' ? '낮' : b.bucket === 'evening' ? '저녁' : '밤'}
-                      </Text>
+            {/* 요일 × 시간대 히트맵 (7×4) — 4분할 단순 막대를 격자로 강화 */}
+            {grid && grid.total > 0 && (
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>요일 × 시간대 히트맵</Text>
+                <View style={styles.heatGrid}>
+                  <View style={styles.heatRow}>
+                    <View style={styles.heatCornerCell} />
+                    {['아침', '낮', '저녁', '밤'].map((b) => (
+                      <Text key={b} style={styles.heatColLabel}>{b}</Text>
+                    ))}
+                  </View>
+                  {grid.grid.map((row, dow) => (
+                    <View key={dow} style={styles.heatRow}>
+                      <Text style={styles.heatRowLabel}>{DOW_LABELS[dow]}</Text>
+                      {row.map((count, bIdx) => {
+                        const intensity = grid.max > 0 ? count / grid.max : 0;
+                        return (
+                          <View
+                            key={bIdx}
+                            style={[
+                              styles.heatCell,
+                              {
+                                backgroundColor: colors.primary,
+                                opacity: count === 0 ? 0.06 : 0.2 + intensity * 0.8,
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.heatCellText,
+                                intensity > 0.5 && styles.heatCellTextStrong,
+                              ]}
+                            >
+                              {count || ''}
+                            </Text>
+                          </View>
+                        );
+                      })}
                     </View>
-                  );
-                })}
+                  ))}
+                </View>
+                <Text style={styles.bucketCaption}>
+                  아침 5–12시 · 낮 12–17시 · 저녁 17–22시 · 밤 22–5시
+                </Text>
               </View>
-              <Text style={styles.bucketCaption}>
-                아침 5–12시 · 낮 12–17시 · 저녁 17–22시 · 밤 22–5시
-              </Text>
-            </ProGate>
+            )}
+
+            {/* 주별 추이 (최근 8주) */}
+            {trend && trend.some((p) => p.count > 0) && (
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>주별 추이 (최근 8주)</Text>
+                <BarChart
+                  data={{
+                    labels: trend.map((p) => p.label),
+                    datasets: [{ data: trend.map((p) => p.count) }],
+                  }}
+                  width={chartWidth}
+                  height={180}
+                  yAxisLabel=""
+                  yAxisSuffix=""
+                  fromZero
+                  showValuesOnTopOfBars
+                  withHorizontalLabels={false}
+                  withInnerLines={false}
+                  chartConfig={chartConfig(colors)}
+                  style={{ marginLeft: -spacing[3] }}
+                />
+              </View>
+            )}
 
             {/* AI 인사이트 — Pro. Edge Function 호출은 Pro 일 때만. */}
             {isPro ? (
@@ -467,6 +590,38 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** 증감 배지가 붙는 stat (직전 기간 대비). */
+function StatDelta({
+  label,
+  value,
+  delta,
+  styles,
+}: {
+  label: string;
+  value: string;
+  delta: Delta | null;
+  styles: ReturnType<typeof makeStyles>;
+}) {
+  return (
+    <View style={styles.stat}>
+      <View style={styles.statValueRow}>
+        <Text style={styles.statValue}>{value}</Text>
+        {delta && delta.up !== null && (
+          <Text
+            style={[
+              styles.deltaText,
+              { color: delta.up ? DELTA_UP_COLOR : DELTA_DOWN_COLOR },
+            ]}
+          >
+            {delta.up ? '▲' : '▼'}{delta.text}
+          </Text>
+        )}
+      </View>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
 function makeStyles(colors: ReturnType<typeof useColors>) {
@@ -529,6 +684,50 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       borderRadius: radius.full,
     },
     paywallCtaText: { ...textStyles.body, color: '#FFFFFF', fontWeight: '700' },
+
+    // ─── Phase 3 확장 (비교/히트맵/Space/추이) ───────────────────────────
+    compareCaption: { ...textStyles.caption, color: colors.textTertiary },
+    statValueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
+    deltaText: { ...textStyles.caption, fontWeight: '700', fontSize: 11 },
+    // 7×4 히트맵
+    heatGrid: { gap: 4 },
+    heatRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    heatCornerCell: { width: 24 },
+    heatColLabel: {
+      flex: 1,
+      ...textStyles.caption,
+      fontSize: 10,
+      color: colors.textTertiary,
+      textAlign: 'center',
+    },
+    heatRowLabel: {
+      width: 24,
+      ...textStyles.caption,
+      fontSize: 11,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    heatCell: {
+      flex: 1,
+      height: 34,
+      borderRadius: radius.sm,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    heatCellText: { ...textStyles.caption, fontSize: 11, color: colors.textPrimary },
+    heatCellTextStrong: { color: '#FFFFFF', fontWeight: '700' },
+    // 개인/공유 비율 바
+    scopeBar: {
+      height: 8,
+      borderRadius: radius.full,
+      backgroundColor: colors.backgroundAlt,
+      overflow: 'hidden',
+    },
+    scopeBarShared: {
+      height: '100%',
+      borderRadius: radius.full,
+      backgroundColor: colors.primary,
+    },
     segment: {
       flexDirection: 'row',
       backgroundColor: colors.backgroundAlt,
