@@ -26,6 +26,15 @@ export interface WeeklyTrendPoint {
   count: number;
 }
 
+export interface OwnershipSplit {
+  /** 내가 직접 등록한 일정. */
+  own: { count: number; minutes: number };
+  /** Space 에서 공유받은(타인이 등록) 일정. */
+  shared: { count: number; minutes: number };
+  /** 공유받은 비율(%) — 전체 대비. 0~100. */
+  sharedPct: number;
+}
+
 // ─── 내부 헬퍼 ───────────────────────────────────────────────────────────────
 
 /** 시간(0~23) → 4분할 인덱스. 아침5-12 / 낮12-17 / 저녁17-22 / 밤22-5. */
@@ -110,4 +119,38 @@ export async function getWeeklyTrend(weeks = 8): Promise<WeeklyTrendPoint[]> {
   }
 
   return points;
+}
+
+/** 일정 길이(분). allDay 는 하루(1440분) 환산 — analyticsService 와 동일 규칙. */
+function eventMinutes(ev: { startAt: Date; endAt: Date; allDay: boolean }): number {
+  if (ev.allDay) return 1440;
+  return Math.max(0, Math.round((ev.endAt.getTime() - ev.startAt.getTime()) / 60000));
+}
+
+/**
+ * 내가 등록 vs 공유받은 일정 비중.
+ *
+ * EventSummary.isOwn(true=내 일정) 기준 분리. Space 별 세분화는 event_shares
+ * 조회가 필요해 보류하고, 커플·팀 분담을 가장 잘 보여주는 own/shared 비중만 제공.
+ *
+ * @param range 집계 기간 (start~end, inclusive)
+ */
+export async function getOwnershipSplit(
+  range: { start: Date; end: Date },
+): Promise<OwnershipSplit> {
+  const events = await getEventsInRange({ start: range.start, end: range.end });
+
+  const own = { count: 0, minutes: 0 };
+  const shared = { count: 0, minutes: 0 };
+
+  for (const ev of events) {
+    const mins = eventMinutes(ev);
+    const bucket = ev.isOwn ? own : shared;
+    bucket.count += 1;
+    bucket.minutes += mins;
+  }
+
+  const total = own.count + shared.count;
+  const sharedPct = total > 0 ? Math.round((shared.count / total) * 100) : 0;
+  return { own, shared, sharedPct };
 }

@@ -40,8 +40,10 @@ import {
 import {
   getDayHourGrid,
   getWeeklyTrend,
+  getOwnershipSplit,
   type DayHourGrid,
   type WeeklyTrendPoint,
+  type OwnershipSplit,
 } from '@/services/analyticsExtrasService';
 import { generateInsight, type InsightResult } from '@/services/insightsService';
 
@@ -121,6 +123,7 @@ export default function AnalyticsScreen() {
   const [prevStats, setPrevStats] = useState<EventStats | null>(null);
   const [grid, setGrid] = useState<DayHourGrid | null>(null);
   const [trend, setTrend] = useState<WeeklyTrendPoint[] | null>(null);
+  const [ownership, setOwnership] = useState<OwnershipSplit | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -141,16 +144,18 @@ export default function AnalyticsScreen() {
         end: new Date(range.start.getTime() - 1),
       };
       // 현재/직전 통계 + 확장 집계를 병렬 조회.
-      const [result, prev, gridRes, trendRes] = await Promise.all([
+      const [result, prev, gridRes, trendRes, ownershipRes] = await Promise.all([
         getEventStatsForRange(range),
         getEventStatsForRange(prevRange),
         getDayHourGrid(range),
         getWeeklyTrend(8),
+        getOwnershipSplit(range),
       ]);
       setStats(result);
       setPrevStats(prev);
       setGrid(gridRes);
       setTrend(trendRes);
+      setOwnership(ownershipRes);
     } catch (err) {
       setError(err instanceof Error ? err.message : '분석 데이터를 불러오지 못했습니다.');
     } finally {
@@ -362,6 +367,21 @@ export default function AnalyticsScreen() {
                 <Text style={styles.bucketCaption}>
                   아침 5–12시 · 낮 12–17시 · 저녁 17–22시 · 밤 22–5시
                 </Text>
+              </View>
+            )}
+
+            {/* 내 일정 · 공유받은 일정 비중 (isOwn 기준) */}
+            {ownership && ownership.own.count + ownership.shared.count > 0 && (
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>내 일정 · 공유받은 일정</Text>
+                <View style={styles.summaryRow}>
+                  <Stat label="내가 등록" value={`${ownership.own.count}개`} />
+                  <Stat label="공유받음" value={`${ownership.shared.count}개`} />
+                  <Stat label="공유 비율" value={`${ownership.sharedPct}%`} />
+                </View>
+                <View style={styles.scopeBar}>
+                  <View style={[styles.scopeBarShared, { width: `${ownership.sharedPct}%` }]} />
+                </View>
               </View>
             )}
 

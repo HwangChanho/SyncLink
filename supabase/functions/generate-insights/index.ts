@@ -41,8 +41,9 @@ function buildSystemPrompt(): string {
     '당신은 사용자의 일정 데이터를 분석해 친근하고 도움이 되는 인사이트를 제공하는 캘린더 비서입니다.',
     '응답은 반드시 JSON 한 객체만 출력하고 다른 설명은 절대 붙이지 마세요.',
     '응답 schema: { "comment": string, "suggestion": string }',
-    '- comment: 한국어 2~3 문장. 사용자가 지난 기간 어떻게 시간을 보냈는지 패턴을 짚어주고, 칭찬 또는 부드러운 조언 1가지.',
-    '- suggestion: 한국어 1문장. 다음 주에 실천 가능한 작은 액션 제안. 없으면 빈 문자열.',
+    '- comment: 한국어 2~3 문장. 지난 기간 데이터에서 눈에 띄는 "패턴" 1가지를 콕 짚어 주세요 (예: 특정 요일이나 시간대에 일정이 몰림, 일정 없는 날이 유난히 많음, 한 카테고리에 편중됨, 개인 일정 대비 공유받은 일정 비중). 그 패턴을 근거로 칭찬 또는 부드러운 조언 1가지를 덧붙이세요.',
+    '- suggestion: 한국어 1문장. 다음 주에 바로 실천할 수 있는 "구체적" 행동을 제안하세요 (예: "수요일 저녁에 집중 시간 1개를 미리 예약해 보세요", "주말 중 하루는 일정을 비워 쉬는 날로 두세요"). 막연한 권유 대신 요일·시간대·개수처럼 행동 가능한 형태로 적으세요. 마땅한 제안이 없으면 빈 문자열.',
+    '패턴이 뚜렷하지 않으면 억지로 추론하지 말고, 데이터 범위 안에서 자연스럽게 관찰되는 내용만 언급하세요.',
     '말투는 존댓말. 데이터가 부족하면 "더 많은 일정을 등록하면 더 정확한 인사이트를 드릴 수 있어요" 정도로 안내.',
     '숫자는 사용자가 보낸 stats 안의 값만 사용. 임의 값 만들어내지 말 것.',
   ].join('\n');
@@ -70,6 +71,7 @@ function buildUserPrompt(stats: StatsPayload): string {
   return [
     `분석 기간: 최근 ${days}일`,
     `총 일정: ${stats.totalCount}개 (총 ${Math.round(stats.totalMinutes / 60)}시간)`,
+    `개인/공유 비중: 내가 등록 ${stats.ownCount}개 / 공유받음 ${stats.totalCount - stats.ownCount}개`,
     `가장 바쁜 요일: ${busiest}`,
     `가장 한가한 요일: ${quietest}`,
     `일정 없는 날: ${stats.emptyDayCount}일`,
@@ -140,7 +142,7 @@ Deno.serve(async (req: Request) => {
     const t0 = Date.now();
     const resp = await anthropic.messages.create({
       model:       'claude-haiku-4-5-20251001',
-      max_tokens:  400,
+      max_tokens:  600,
       system:      buildSystemPrompt(),
       messages:    [{ role: 'user', content: buildUserPrompt(stats) }],
     });
