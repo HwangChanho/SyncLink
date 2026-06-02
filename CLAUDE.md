@@ -114,6 +114,14 @@ Sub-agent 정의: `.claude/agents/` | QA 디스패처: `.claude/commands/qa.md`
 TestFlight 업로드 전 `docs/QA_CHECKLIST.md` 5개 게이트 통과 필수.  
 **배포 규칙 전문**: `docs/DEPLOY_RULES.md`
 
+## ⚠️ 검증 체크리스트 (필수 — "수정했다" 보고 전)
+
+`docs/VERIFICATION_CHECKLIST.md` 를 변경 유형별로 빈칸 없이 통과시킨다.
+- **UI 시각 변경은 tsc 로 검증 안 됨** → 반드시 `scripts/sim-verify.sh` 로
+  실제 렌더 캡처 + 크롭 육안 확인. 조건부 UI(Free 전용 등)는 그 상태로 봐야 함.
+- 배포 해시/버전은 **실제 출력값**만 기록(추정 금지).
+- 보고는 "수정함"이 아니라 "수정 + [검증방법]으로 확인함". 미검증은 "미검증" 명시.
+
 ## 참고 문서
 
 - `docs/SESSION_BOOT.md` — **세션 재시작용 role + 부트 체크리스트 (필독)**
