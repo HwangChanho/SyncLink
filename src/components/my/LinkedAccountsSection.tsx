@@ -38,6 +38,8 @@ export function LinkedAccountsSection() {
   const [linked, setLinked] = useState<string[]>([]);
   const [loadingProvider, setLoadingProvider] = useState<Provider | null>(null);
   const [bootError, setBootError] = useState<string | null>(null);
+  // Phase B — 동일 이메일 통합 후보 (있으면 안내 배너 노출).
+  const [candidates, setCandidates] = useState<authService.MergeCandidate[]>([]);
 
   const refresh = useCallback(async () => {
     try {
@@ -49,7 +51,19 @@ export function LinkedAccountsSection() {
     }
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  // 통합 후보는 부가 정보 — 실패해도 섹션 동작에 영향 주지 않게 분리.
+  const refreshCandidates = useCallback(async () => {
+    try {
+      setCandidates(await authService.getAccountMergeCandidates());
+    } catch {
+      setCandidates([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+    void refreshCandidates();
+  }, [refresh, refreshCandidates]);
 
   const handleToggle = useCallback(async (provider: Provider) => {
     if (loadingProvider !== null) return;
@@ -79,6 +93,21 @@ export function LinkedAccountsSection() {
       {bootError !== null && (
         <Text style={local.errorText}>{bootError}</Text>
       )}
+
+      {/* Phase B — 동일 이메일 통합 후보 안내. Pro 후보가 있으면 강조. */}
+      {candidates.length > 0 && (() => {
+        const proCandidate = candidates.find((c) => c.plan === 'pro');
+        return (
+          <View style={local.candidateBanner}>
+            <Ionicons name="information-circle" size={18} color={colors.primary} />
+            <Text style={local.candidateText}>
+              {proCandidate
+                ? `같은 이메일의 다른 계정(${proCandidate.nickname || proCandidate.email}, Pro)을 발견했어요. 아래에서 로그인 방법을 연결하면 한 계정으로 통합돼요.`
+                : `같은 이메일의 다른 계정을 발견했어요. 아래에서 로그인 방법을 연결하면 한 계정으로 통합돼요.`}
+            </Text>
+          </View>
+        );
+      })()}
       <View style={menu.menuCard}>
         {PROVIDERS.map((p, i) => {
           const isLinked = linked.includes(p.key);
@@ -143,6 +172,22 @@ function makeLocal(colors: ReturnType<typeof useColors>) {
     linkLabel: {
       ...textStyles.label,
       color: colors.primary,
+    },
+    candidateBanner: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing[2],
+      marginHorizontal: spacing[4],
+      marginTop: spacing[2],
+      padding: spacing[3],
+      borderRadius: radius.md,
+      backgroundColor: 'rgba(108,99,255,0.08)',
+    },
+    candidateText: {
+      ...textStyles.caption,
+      color: colors.textSecondary,
+      flex: 1,
+      lineHeight: 17,
     },
   });
 }

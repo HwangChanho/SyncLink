@@ -464,6 +464,31 @@ export async function getLinkedProviders(): Promise<string[]> {
 }
 
 /**
+ * 계정 통합 후보 (Phase B / ADR-010).
+ *
+ * 현재 로그인 사용자와 "동일 이메일"을 가진 다른 계정. 서버 RPC
+ * `get_account_merge_candidates` 가 호출자 본인 이메일 기준으로만 탐지하므로
+ * 타인 계정 노출 위험이 없다 (마이그레이션 055).
+ *
+ * - plan='pro' 인 후보가 있으면 그 계정을 primary 로 추천 (구독 보존).
+ * - 이메일이 없는 계정(카카오 등)은 후보가 비어 있을 수 있음.
+ */
+export interface MergeCandidate {
+  user_id: string;
+  email: string;
+  nickname: string;
+  plan: 'free' | 'pro';
+  created_at: string;
+}
+
+export async function getAccountMergeCandidates(): Promise<MergeCandidate[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc('get_account_merge_candidates');
+  if (error) throw error;
+  return (data ?? []) as MergeCandidate[];
+}
+
+/**
  * Unlink a previously linked OAuth identity. Cannot unlink the last identity
  * (Supabase enforces — would orphan the account).
  */
