@@ -488,6 +488,31 @@ export async function getAccountMergeCandidates(): Promise<MergeCandidate[]> {
   return (data ?? []) as MergeCandidate[];
 }
 
+export interface MergeResult {
+  success: boolean;
+  moved_events?: number;
+  /** 양쪽 모두 Pro 였음 — 이중 결제 가능성 경고. */
+  both_pro?: boolean;
+}
+
+/**
+ * 두 계정을 병합 (Phase C). secondary 의 데이터를 primary 로 이전 후 secondary 삭제.
+ *
+ * primary 는 **Pro 계정 또는 유지할 계정**이어야 한다 (서버가 Pro 유실을 거부).
+ * Edge Function `account-merge-execute` 가 RPC + auth.users 삭제를 처리.
+ *
+ * @param primary  유지될 계정 UUID (Pro 우선)
+ * @param secondary 흡수되어 삭제될 계정 UUID
+ */
+export async function mergeAccount(primary: string, secondary: string): Promise<MergeResult> {
+  const { data, error } = await supabase.functions.invoke('account-merge-execute', {
+    body: { primary, secondary },
+  });
+  if (error) throw error;
+  if (!data?.success) throw new Error(data?.error ?? '계정 병합에 실패했습니다.');
+  return data as MergeResult;
+}
+
 /**
  * Unlink a previously linked OAuth identity. Cannot unlink the last identity
  * (Supabase enforces — would orphan the account).

@@ -20,6 +20,7 @@ import { useColors } from '@/hooks/useColors';
 import { textStyles } from '@/constants/typography';
 import { spacing, radius } from '@/constants/spacing';
 import * as authService from '@/services/authService';
+import { useAuthStore } from '@/stores/authStore';
 import { makeMenuStyles } from './menuStyles';
 
 type Provider = 'google' | 'kakao' | 'apple';
@@ -35,11 +36,13 @@ export function LinkedAccountsSection() {
   const menu = makeMenuStyles(colors);
   const local = makeLocal(colors);
 
+  const myId = useAuthStore((s) => s.user?.id ?? null);
   const [linked, setLinked] = useState<string[]>([]);
   const [loadingProvider, setLoadingProvider] = useState<Provider | null>(null);
   const [bootError, setBootError] = useState<string | null>(null);
   // Phase B — 동일 이메일 통합 후보 (있으면 안내 배너 노출).
   const [candidates, setCandidates] = useState<authService.MergeCandidate[]>([]);
+  const [merging, setMerging] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -64,6 +67,59 @@ export function LinkedAccountsSection() {
     void refresh();
     void refreshCandidates();
   }, [refresh, refreshCandidates]);
+
+  /**
+   * 통합 실행. Pro 계정을 primary(유지)로, 다른 쪽을 secondary(흡수)로 결정.
+   * - 후보가 Pro 이고 내 계정이 Pro 가 아니면 → 후보가 primary → 내 계정이 삭제됨
+   *   → 병합 후 현재 세션이 무효해지므로 재로그인 안내.
+   */
+  const handleMerge = useCallback(async (candidate: authService.MergeCandidate) => {
+    if (!myId || merging) return;
+
+    const candidateIsPrimary = candidate.plan === 'pro';
+    const primary = candidateIsPrimary ? candidate.user_id : myId;
+    const secondary = candidateIsPrimary ? myId : candidate.user_id;
+
+    const warnSelfDelete = candidateIsPrimary; // 내 현재 계정이 흡수되는 경우
+
+    Alert.alert(
+      '계정 통합',
+      candidateIsPrimary
+        ? `Pro 계정(${candidate.nickname || candidate.email})을 기준으로 통합해요. 현재 로그인한 계정의 데이터가 Pro 계정으로 옮겨지고, 통합 후 다시 로그인해야 해요. 진행할까요?`
+        : `다른 계정(${candidate.nickname || candidate.email})의 데이터를 현재 계정으로 가져와 통합해요. 진행할까요?`,
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '통합',
+          style: 'destructive',
+          onPress: async () => {
+            setMerging(true);
+            try {
+              const res = await authService.mergeAccount(primary, secondary);
+              if (res.both_pro) {
+                Alert.alert(
+                  '통합 완료',
+                  '두 계정 모두 Pro 였어요. 중복 구독이 있는지 스토어에서 확인하고 필요 시 한쪽을 해지해 주세요.',
+                );
+              } else if (warnSelfDelete) {
+                Alert.alert('통합 완료', '통합이 끝났어요. 다시 로그인해 주세요.', [
+                  { text: '확인', onPress: () => void authService.signOut() },
+                ]);
+              } else {
+                Alert.alert('통합 완료', '계정이 하나로 합쳐졌어요.');
+                await refreshCandidates();
+                await refresh();
+              }
+            } catch (err) {
+              Alert.alert('통합 실패', err instanceof Error ? err.message : '잠시 후 다시 시도해주세요');
+            } finally {
+              setMerging(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [myId, merging, refresh, refreshCandidates]);
 
   const handleToggle = useCallback(async (provider: Provider) => {
     if (loadingProvider !== null) return;
@@ -94,20 +150,34 @@ export function LinkedAccountsSection() {
         <Text style={local.errorText}>{bootError}</Text>
       )}
 
-      {/* Phase B — 동일 이메일 통합 후보 안내. Pro 후보가 있으면 강조. */}
-      {candidates.length > 0 && (() => {
-        const proCandidate = candidates.find((c) => c.plan === 'pro');
-        return (
-          <View style={local.candidateBanner}>
-            <Ionicons name="information-circle" size={18} color={colors.primary} />
+      {/* Phase B/C — 동일 이메일 통합 후보. Pro 후보 강조 + 통합 실행 버튼. */}
+      {candidates.map((c) => (
+        <View key={c.user_id} style={local.candidateBanner}>
+          <Ionicons
+            name={c.plan === 'pro' ? 'star' : 'information-circle'}
+            size={18}
+            color={c.plan === 'pro' ? colors.warning : colors.primary}
+          />
+          <View style={local.candidateBody}>
             <Text style={local.candidateText}>
-              {proCandidate
-                ? `같은 이메일의 다른 계정(${proCandidate.nickname || proCandidate.email}, Pro)을 발견했어요. 아래에서 로그인 방법을 연결하면 한 계정으로 통합돼요.`
-                : `같은 이메일의 다른 계정을 발견했어요. 아래에서 로그인 방법을 연결하면 한 계정으로 통합돼요.`}
+              {c.plan === 'pro'
+                ? `같은 이메일의 다른 계정(${c.nickname || c.email}, Pro)을 발견했어요. 이 Pro 계정 기준으로 통합할 수 있어요.`
+                : `같은 이메일의 다른 계정(${c.nickname || c.email})을 발견했어요. 현재 계정으로 통합할 수 있어요.`}
             </Text>
+            <TouchableOpacity
+              style={local.mergeBtn}
+              onPress={() => void handleMerge(c)}
+              disabled={merging}
+            >
+              {merging ? (
+                <ActivityIndicator size="small" color={colors.textInverse} />
+              ) : (
+                <Text style={local.mergeBtnText}>통합하기</Text>
+              )}
+            </TouchableOpacity>
           </View>
-        );
-      })()}
+        </View>
+      ))}
       <View style={menu.menuCard}>
         {PROVIDERS.map((p, i) => {
           const isLinked = linked.includes(p.key);
@@ -183,11 +253,26 @@ function makeLocal(colors: ReturnType<typeof useColors>) {
       borderRadius: radius.md,
       backgroundColor: 'rgba(108,99,255,0.08)',
     },
+    candidateBody: {
+      flex: 1,
+      gap: spacing[2],
+    },
     candidateText: {
       ...textStyles.caption,
       color: colors.textSecondary,
-      flex: 1,
       lineHeight: 17,
+    },
+    mergeBtn: {
+      alignSelf: 'flex-start',
+      paddingHorizontal: spacing[3],
+      paddingVertical: spacing[1],
+      borderRadius: radius.full,
+      backgroundColor: colors.primary,
+    },
+    mergeBtnText: {
+      ...textStyles.label,
+      color: colors.textInverse,
+      fontWeight: '700',
     },
   });
 }
