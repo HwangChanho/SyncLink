@@ -189,7 +189,7 @@ export function ChatComposer() {
       </Pressable>
       {!isPro ? (
         <Pressable onPress={handleUpgrade} style={styles.proBadge} accessibilityLabel="Pro 업그레이드">
-          <Ionicons name="star" size={11} color={colors.warning} />
+          <Ionicons name="star" size={11} color={colors.textInverse} />
           <Text style={styles.proBadgeText}>PRO</Text>
         </Pressable>
       ) : null}
@@ -243,6 +243,8 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     iconBtnActive: {
       backgroundColor: colors.error,
     },
+    // Pro 업그레이드 칩 — HomeHeader 의 PRO 배지와 동일한 보라 배경 + 흰 글씨로
+    // 통일. (이전엔 노랑 배경+노랑 글씨라 텍스트/아이콘이 묻혀 빈 노란 점처럼 보였음)
     proBadge: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -250,14 +252,14 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       height: 24,
       paddingHorizontal: 8,
       borderRadius: radius.full,
-      backgroundColor: colors.warning + '20',
+      backgroundColor: colors.primary,
     },
     proBadgeText: {
       ...(textStyles.caption as object),
       fontSize: 11,
       lineHeight: 13,
       fontWeight: '700',
-      color: colors.warning,
+      color: colors.textInverse,
     },
     iconBtnLocked: {
       opacity: 0.5,
