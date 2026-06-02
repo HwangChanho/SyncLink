@@ -13,7 +13,7 @@
  */
 
 import React, { useCallback, useState } from 'react';
-import { View, TextInput, Pressable, StyleSheet, Alert, Image } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet, Alert, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useColors } from '@/hooks/useColors';
@@ -189,7 +189,8 @@ export function ChatComposer() {
       </Pressable>
       {!isPro ? (
         <Pressable onPress={handleUpgrade} style={styles.proBadge} accessibilityLabel="Pro 업그레이드">
-          <Ionicons name="star" size={12} color={colors.warning} />
+          <Ionicons name="star" size={11} color={colors.warning} />
+          <Text style={styles.proBadgeText}>PRO</Text>
         </Pressable>
       ) : null}
       </View>
@@ -243,12 +244,20 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       backgroundColor: colors.error,
     },
     proBadge: {
-      width: 22,
-      height: 22,
-      borderRadius: 11,
+      flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
+      gap: 3,
+      height: 24,
+      paddingHorizontal: 8,
+      borderRadius: radius.full,
       backgroundColor: colors.warning + '20',
+    },
+    proBadgeText: {
+      ...(textStyles.caption as object),
+      fontSize: 11,
+      lineHeight: 13,
+      fontWeight: '700',
+      color: colors.warning,
     },
     iconBtnLocked: {
       opacity: 0.5,
