@@ -69,9 +69,44 @@ export function LinkedAccountsSection() {
   }, [refresh, refreshCandidates]);
 
   /**
-   * 통합 실행. Pro 계정을 primary(유지)로, 다른 쪽을 secondary(흡수)로 결정.
-   * - 후보가 Pro 이고 내 계정이 Pro 가 아니면 → 후보가 primary → 내 계정이 삭제됨
-   *   → 병합 후 현재 세션이 무효해지므로 재로그인 안내.
+   * 실제 병합 실행 + 결과 처리. handleMerge 가 정책을 정한 뒤 호출.
+   *
+   * @param warnSelfDelete 현재 계정이 흡수되는 경우(병합 후 재로그인 필요)
+   */
+  const executeMerge = useCallback(async (
+    primary: string,
+    secondary: string,
+    policy: authService.MergeConflictPolicy,
+    warnSelfDelete: boolean,
+  ) => {
+    setMerging(true);
+    try {
+      const res = await authService.mergeAccount(primary, secondary, policy);
+      const dedupeNote = res.deduped ? ` (겹치는 일정 ${res.deduped}개 정리됨)` : '';
+      if (res.both_pro) {
+        Alert.alert(
+          '통합 완료',
+          `계정이 합쳐졌어요${dedupeNote}. 두 계정 모두 Pro 였어요 — 중복 구독이 있는지 스토어에서 확인하고 필요 시 한쪽을 해지해 주세요.`,
+        );
+      } else if (warnSelfDelete) {
+        Alert.alert('통합 완료', `통합이 끝났어요${dedupeNote}. 다시 로그인해 주세요.`, [
+          { text: '확인', onPress: () => void authService.signOut() },
+        ]);
+      } else {
+        Alert.alert('통합 완료', `계정이 하나로 합쳐졌어요${dedupeNote}.`);
+        await refreshCandidates();
+        await refresh();
+      }
+    } catch (err) {
+      Alert.alert('통합 실패', err instanceof Error ? err.message : '잠시 후 다시 시도해주세요');
+    } finally {
+      setMerging(false);
+    }
+  }, [refresh, refreshCandidates]);
+
+  /**
+   * 통합 시작. Pro 계정을 primary(유지)로, 다른 쪽을 secondary(흡수)로 결정.
+   * 겹치는 일정이 있으면 "둘 다 유지 / 중복 제거"를 사용자에게 묻는다.
    */
   const handleMerge = useCallback(async (candidate: authService.MergeCandidate) => {
     if (!myId || merging) return;
@@ -79,47 +114,49 @@ export function LinkedAccountsSection() {
     const candidateIsPrimary = candidate.plan === 'pro';
     const primary = candidateIsPrimary ? candidate.user_id : myId;
     const secondary = candidateIsPrimary ? myId : candidate.user_id;
-
     const warnSelfDelete = candidateIsPrimary; // 내 현재 계정이 흡수되는 경우
 
+    // 1) 겹치는 일정 미리 조회 (실패해도 keep_both 로 진행).
+    let conflicts = 0;
+    try {
+      const preview = await authService.getMergeConflicts(primary, secondary);
+      conflicts = preview.conflicts;
+    } catch {
+      conflicts = 0;
+    }
+
+    const baseMsg = candidateIsPrimary
+      ? `Pro 계정(${candidate.nickname || candidate.email})을 기준으로 통합해요. 현재 계정 데이터가 옮겨지고 통합 후 다시 로그인해야 해요.`
+      : `다른 계정(${candidate.nickname || candidate.email})의 데이터를 현재 계정으로 가져와요.`;
+
+    // 2) 충돌 없으면 단순 확인 → keep_both.
+    if (conflicts === 0) {
+      Alert.alert('계정 통합', `${baseMsg} 진행할까요?`, [
+        { text: '취소', style: 'cancel' },
+        { text: '통합', style: 'destructive',
+          onPress: () => void executeMerge(primary, secondary, 'keep_both', warnSelfDelete) },
+      ]);
+      return;
+    }
+
+    // 3) 충돌 있으면 정책 선택.
     Alert.alert(
-      '계정 통합',
-      candidateIsPrimary
-        ? `Pro 계정(${candidate.nickname || candidate.email})을 기준으로 통합해요. 현재 로그인한 계정의 데이터가 Pro 계정으로 옮겨지고, 통합 후 다시 로그인해야 해요. 진행할까요?`
-        : `다른 계정(${candidate.nickname || candidate.email})의 데이터를 현재 계정으로 가져와 통합해요. 진행할까요?`,
+      '겹치는 일정이 있어요',
+      `${baseMsg}\n\n같은 시간·제목의 일정이 ${conflicts}개 겹쳐요. 어떻게 할까요?`,
       [
         { text: '취소', style: 'cancel' },
         {
-          text: '통합',
+          text: '둘 다 유지',
+          onPress: () => void executeMerge(primary, secondary, 'keep_both', warnSelfDelete),
+        },
+        {
+          text: '중복 제거',
           style: 'destructive',
-          onPress: async () => {
-            setMerging(true);
-            try {
-              const res = await authService.mergeAccount(primary, secondary);
-              if (res.both_pro) {
-                Alert.alert(
-                  '통합 완료',
-                  '두 계정 모두 Pro 였어요. 중복 구독이 있는지 스토어에서 확인하고 필요 시 한쪽을 해지해 주세요.',
-                );
-              } else if (warnSelfDelete) {
-                Alert.alert('통합 완료', '통합이 끝났어요. 다시 로그인해 주세요.', [
-                  { text: '확인', onPress: () => void authService.signOut() },
-                ]);
-              } else {
-                Alert.alert('통합 완료', '계정이 하나로 합쳐졌어요.');
-                await refreshCandidates();
-                await refresh();
-              }
-            } catch (err) {
-              Alert.alert('통합 실패', err instanceof Error ? err.message : '잠시 후 다시 시도해주세요');
-            } finally {
-              setMerging(false);
-            }
-          },
+          onPress: () => void executeMerge(primary, secondary, 'dedupe', warnSelfDelete),
         },
       ],
     );
-  }, [myId, merging, refresh, refreshCandidates]);
+  }, [myId, merging, executeMerge]);
 
   const handleToggle = useCallback(async (provider: Provider) => {
     if (loadingProvider !== null) return;
@@ -221,13 +258,17 @@ function makeLocal(colors: ReturnType<typeof useColors>) {
       marginTop: spacing[1],
       marginHorizontal: spacing[4],
     },
+    // leading 블록(아이콘+라벨)이 가용 공간을 차지하고 shrink 가능해야 trailing
+    // "연결"/"연결됨" 배지가 잘리지 않는다. (flex 없이 두면 레이아웃 모호 → 잘림)
     row: {
+      flex: 1,
+      minWidth: 0,
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing[3],
     },
     rowText: {
-      flex: 1,
+      flexShrink: 1,
     },
     linkedBadge: {
       paddingHorizontal: spacing[2],

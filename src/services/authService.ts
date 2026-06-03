@@ -488,11 +488,40 @@ export async function getAccountMergeCandidates(): Promise<MergeCandidate[]> {
   return (data ?? []) as MergeCandidate[];
 }
 
+/** 병합 시 겹치는 일정 처리 정책. */
+export type MergeConflictPolicy = 'keep_both' | 'dedupe';
+
+export interface MergeConflictPreview {
+  /** 겹치는(start_at+title 동일) 일정 수. */
+  conflicts: number;
+  /** secondary 전체 일정 수. */
+  secondary_total: number;
+}
+
 export interface MergeResult {
   success: boolean;
   moved_events?: number;
+  /** dedupe 정책에서 삭제된 secondary 일정 수. */
+  deduped?: number;
   /** 양쪽 모두 Pro 였음 — 이중 결제 가능성 경고. */
   both_pro?: boolean;
+}
+
+/**
+ * 병합 전 겹치는 일정 미리보기 (Phase C+). 사용자에게 충돌 처리를 묻기 위함.
+ * 서버 RPC `get_merge_conflicts` 가 본인+동일이메일만 허용.
+ */
+export async function getMergeConflicts(
+  primary: string,
+  secondary: string,
+): Promise<MergeConflictPreview> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc('get_merge_conflicts', {
+    p_primary: primary,
+    p_secondary: secondary,
+  });
+  if (error) throw error;
+  return (data ?? { conflicts: 0, secondary_total: 0 }) as MergeConflictPreview;
 }
 
 /**
@@ -503,10 +532,15 @@ export interface MergeResult {
  *
  * @param primary  유지될 계정 UUID (Pro 우선)
  * @param secondary 흡수되어 삭제될 계정 UUID
+ * @param conflictPolicy 겹치는 일정 처리 ('keep_both' 둘 다 | 'dedupe' 중복 제거). 기본 keep_both.
  */
-export async function mergeAccount(primary: string, secondary: string): Promise<MergeResult> {
+export async function mergeAccount(
+  primary: string,
+  secondary: string,
+  conflictPolicy: MergeConflictPolicy = 'keep_both',
+): Promise<MergeResult> {
   const { data, error } = await supabase.functions.invoke('account-merge-execute', {
-    body: { primary, secondary },
+    body: { primary, secondary, conflictPolicy },
   });
   if (error) throw error;
   if (!data?.success) throw new Error(data?.error ?? '계정 병합에 실패했습니다.');

@@ -64,8 +64,13 @@ serve(async (req: Request): Promise<Response> => {
     const body = await req.json().catch(() => ({}));
     const primary = body?.primary as string | undefined;
     const secondary = body?.secondary as string | undefined;
+    // 겹치는 일정 처리 정책 — 'keep_both'(기본) | 'dedupe'.
+    const conflictPolicy = (body?.conflictPolicy as string | undefined) ?? 'keep_both';
     if (!primary || !secondary) {
       return json({ error: 'primary 와 secondary 가 필요합니다.' }, 400);
+    }
+    if (conflictPolicy !== 'keep_both' && conflictPolicy !== 'dedupe') {
+      return json({ error: '잘못된 충돌 정책입니다.' }, 400);
     }
     // 호출자는 둘 중 하나여야 함 (Edge 1차 방어 — RPC 가 재검증).
     if (user.id !== primary && user.id !== secondary) {
@@ -82,9 +87,10 @@ serve(async (req: Request): Promise<Response> => {
     const { data: mergeResult, error: mergeError } = await userClient.rpc('merge_account', {
       p_primary: primary,
       p_secondary: secondary,
+      p_conflict_policy: conflictPolicy,
     });
     if (mergeError) {
-      await logToDb('account-merge.rpc', mergeError, { primary, secondary, caller: user.id });
+      await logToDb('account-merge.rpc', mergeError, { primary, secondary, policy: conflictPolicy, caller: user.id });
       return json({ error: mergeError.message ?? '병합에 실패했습니다.' }, 400);
     }
 
