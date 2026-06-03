@@ -30,13 +30,13 @@ alter table admin_credentials enable row level security;
 
 revoke all on admin_credentials from anon, authenticated;
 
--- ─── 2. 초기 admin 등록 — cksgh0316 / ***REMOVED-CREDENTIAL*** ────────────────────────────
--- 이미 존재하면 password_hash 갱신 (마이그레이션 재실행 호환).
+-- ─── 2. 초기 admin 등록 ──────────────────────────────────────────────────
+-- 비밀번호는 여기에 평문으로 두지 않는다. 신규 환경에서는 임의 placeholder 로
+-- 생성되며, 실제 비번은 057 의 admin_set_password(service_role) 로 회전해 주입한다.
+-- (기존 운영 DB 는 이미 057 로 강한 비번 적용 완료 — 이 insert 는 재실행되지 않음)
 insert into admin_credentials (username, password_hash, note)
-values ('cksgh0316', extensions.crypt('***REMOVED-CREDENTIAL***', extensions.gen_salt('bf')), 'LEAD (initial)')
-on conflict (username) do update
-  set password_hash = excluded.password_hash,
-      note          = excluded.note;
+values ('cksgh0316', extensions.crypt(gen_random_uuid()::text, extensions.gen_salt('bf')), 'LEAD (set via 057)')
+on conflict (username) do nothing;
 
 -- ─── 3. admin_verify RPC ────────────────────────────────────────────────
 create or replace function admin_verify(p_username text, p_password text)
