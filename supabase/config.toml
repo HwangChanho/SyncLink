@@ -32,3 +32,14 @@ verify_jwt = false
 # `supabase secrets` as REVENUECAT_WEBHOOK_SECRET). No Supabase JWT.
 # Sprint 18.
 verify_jwt = false
+
+[functions.weekly-review-batch]
+# Invoked only by pg_cron (migrations 035/038) with
+# `Authorization: Bearer <weekly_review_secret>` — a random hex from Vault,
+# NOT a Supabase JWT. The gateway's default JWT verification would 401 the
+# cron call before our handler runs, so verification must be disabled here;
+# the handler itself checks WEEKLY_REVIEW_SECRET. This entry was previously
+# missing, so a redeploy with the CLI default would have silently broken the
+# weekly-review cron. (smart-reminder needs no entry — its cron sends the
+# service_role key, which IS a valid JWT and passes default verification.)
+verify_jwt = false
