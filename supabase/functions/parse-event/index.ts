@@ -446,6 +446,23 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const message = err instanceof Error ? err.message : 'Unknown error';
     console.error('[parse-event] Error:', message);
 
+    // 크레딧 소진(결제) → LEAD 이메일 알림 + 사용자에게 명확 안내(503).
+    // adminClient 는 try 스코프라 여기서 새로 생성 (알림 1회용).
+    // @ts-ignore — Deno import map 은 deploy 시 해석.
+    const { isCreditError, alertCreditExhausted } = await import('../_shared/aiHealth.ts');
+    if (isCreditError(err)) {
+      const alertClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+        { auth: { autoRefreshToken: false, persistSession: false } },
+      );
+      await alertCreditExhausted(alertClient, { fn: 'parse-event' });
+      return new Response(JSON.stringify({ error: 'ai_unavailable' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },

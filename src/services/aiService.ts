@@ -124,6 +124,19 @@ async function callEdgeFunction(
     );
 
     if (error || !data) {
+      // 크레딧 소진 등 AI 일시 중단(503 ai_unavailable) → 명확한 안내로 치환.
+      let bodyKey = '';
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const ctx = (error as any)?.context;
+        if (ctx && typeof ctx.json === 'function') {
+          const b = await ctx.json();
+          bodyKey = typeof b?.error === 'string' ? b.error : '';
+        }
+      } catch { /* 무시 */ }
+      if (/ai_unavailable/i.test(bodyKey) || /503/.test(error?.message ?? '')) {
+        throw new Error('AI 기능을 일시적으로 사용할 수 없어요. 직접 입력하거나 잠시 후 다시 시도해 주세요.');
+      }
       throw new Error(error?.message ?? 'Empty response from Edge Function');
     }
 
