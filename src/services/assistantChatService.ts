@@ -26,8 +26,12 @@ export interface AssistantTurnResult {
 }
 
 export interface AssistantTurnError {
-  /** 'quota' = quota_free_daily / quota_pro_hourly; 'auth' = 인증 실패; 'other' = 기타. */
-  kind: 'quota' | 'auth' | 'other';
+  /**
+   * 'quota' = quota_free_daily / quota_pro_hourly; 'auth' = 인증 실패;
+   * 'ai_unavailable' = AI 서비스 일시 중단(크레딧 소진 등 — 사용자 잘못 아님);
+   * 'other' = 기타.
+   */
+  kind: 'quota' | 'auth' | 'ai_unavailable' | 'other';
   message: string;
 }
 
@@ -61,23 +65,41 @@ export async function sendAssistantTurn(
     );
 
     if (error) {
-      // supabase-js 는 4xx/5xx 도 error 로 surface. 메시지에서 quota 키워드 추출.
+      // supabase-js 는 4xx/5xx 도 error 로 surface. 본문(error.context)에서 에러 키를
+      // 읽어 정확히 분류 (메시지만으로는 503/ai_unavailable 구분이 안 됨).
+      let bodyKey = '';
+      try {
+        // FunctionsHttpError 는 .context 에 원본 Response 를 담는다.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const ctx = (error as any)?.context;
+        if (ctx && typeof ctx.json === 'function') {
+          const b = await ctx.json();
+          bodyKey = typeof b?.error === 'string' ? b.error : '';
+        }
+      } catch { /* 본문 파싱 실패 무시 */ }
+
       const msg = (error as Error).message ?? '';
-      const isQuota = /429|quota/i.test(msg);
-      const isAuth  = /401|auth/i.test(msg);
+      const isAiDown = /ai_unavailable|503/i.test(bodyKey) || /503/.test(msg);
+      const isQuota  = /quota/i.test(bodyKey) || /429|quota/i.test(msg);
+      const isAuth   = /auth/i.test(bodyKey) || /401|auth/i.test(msg);
+      const kind: AssistantTurnError['kind'] =
+        isAiDown ? 'ai_unavailable' : isQuota ? 'quota' : isAuth ? 'auth' : 'other';
       void logError({
         context: 'assistant-chat.invoke',
         error,
-        details: { kind: isQuota ? 'quota' : isAuth ? 'auth' : 'other' },
+        details: { kind, bodyKey },
       });
       return {
         error: {
-          kind:    isQuota ? 'quota' : isAuth ? 'auth' : 'other',
-          message: isQuota
-            ? '오늘 사용 가능한 횟수를 초과했어요. 내일 다시 시도하거나 Pro 로 업그레이드하세요.'
-            : isAuth
-              ? '인증이 만료되었어요. 다시 로그인해 주세요.'
-              : '잠시 후 다시 시도해 주세요.',
+          kind,
+          message:
+            kind === 'ai_unavailable'
+              ? 'AI 기능을 일시적으로 사용할 수 없어요. 잠시 후 다시 시도해 주세요. (문제가 계속되면 운영자에게 자동으로 알림이 가요)'
+              : kind === 'quota'
+                ? '오늘 사용 가능한 횟수를 초과했어요. 내일 다시 시도하거나 Pro 로 업그레이드하세요.'
+                : kind === 'auth'
+                  ? '인증이 만료되었어요. 다시 로그인해 주세요.'
+                  : '잠시 후 다시 시도해 주세요.',
         },
       };
     }

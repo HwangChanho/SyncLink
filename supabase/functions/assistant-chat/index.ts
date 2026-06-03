@@ -535,6 +535,9 @@ Deno.serve(async (req: Request) => {
   //  - max_tokens 800 → 1200 — 분석 응답이 잘리던 케이스.
   const MAX_STEPS = 6;
   let finalText = '';
+  // AI 호출 전체를 감싸 크레딧 소진(결제) 에러를 잡는다. 잡으면 LEAD 이메일 알림 +
+  // 사용자에게 명확한 'ai_unavailable' 응답(503). 그 외 에러는 재던짐.
+  try {
   for (let step = 0; step < MAX_STEPS; step++) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const response: any = await anthropic.messages.create({
@@ -604,6 +607,19 @@ Deno.serve(async (req: Request) => {
     } catch {
       // wrapUp 실패는 무시 — 아래 fallback 메시지로.
     }
+  }
+  } catch (err) {
+    // 크레딧 소진 등 결제 문제 → LEAD 알림 + 사용자에게 명확 안내.
+    // @ts-ignore — Deno import map 은 deploy 시 해석.
+    const { isCreditError, alertCreditExhausted } = await import('../_shared/aiHealth.ts');
+    if (isCreditError(err)) {
+      await alertCreditExhausted(adminClient, { fn: 'assistant-chat' });
+      return new Response(JSON.stringify({ error: 'ai_unavailable' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    throw err;  // 그 외 에러는 기존 동작(상위 핸들러/500).
   }
 
   const responseBody: ChatResponse = {
