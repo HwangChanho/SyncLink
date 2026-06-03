@@ -77,11 +77,25 @@ Deno.serve(async (req: Request) => {
   const anthropic = new Anthropic({ apiKey });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const response: any = await anthropic.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 200,
-    messages: [{ role: 'user', content: buildPrompt(body) }],
-  });
+  let response: any;
+  try {
+    response = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 200,
+      messages: [{ role: 'user', content: buildPrompt(body) }],
+    });
+  } catch (err) {
+    // 크레딧 소진(결제) → LEAD 이메일 알림 + 사용자에게 명확 안내(503).
+    // @ts-ignore — Deno import map 은 deploy 시 해석.
+    const { isCreditError, alertCreditExhausted } = await import('../_shared/aiHealth.ts');
+    if (isCreditError(err)) {
+      await alertCreditExhausted(adminClient, { fn: 'suggest-slot' });
+      return new Response(JSON.stringify({ error: 'ai_unavailable' }), {
+        status: 503, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    throw err;
+  }
   const tokensUsed = (response.usage?.input_tokens ?? 0) + (response.usage?.output_tokens ?? 0);
 
   const text = (response.content as Array<{ type: string; text?: string }>)

@@ -257,6 +257,22 @@ Deno.serve(async (): Promise<Response> => {
     const message = err instanceof Error ? err.message : 'Unknown error';
     console.error('[smart-reminder] Fatal error:', message);
 
+    // 크레딧 소진(결제) → LEAD 이메일 알림(크론이라 사용자 응답은 없음).
+    // @ts-ignore — Deno import map 은 deploy 시 해석.
+    const { isCreditError, alertCreditExhausted } = await import('../_shared/aiHealth.ts');
+    if (isCreditError(err)) {
+      const alertClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+        { auth: { autoRefreshToken: false, persistSession: false } },
+      );
+      await alertCreditExhausted(alertClient, { fn: 'smart-reminder' });
+      return new Response(JSON.stringify({ error: 'ai_unavailable' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },

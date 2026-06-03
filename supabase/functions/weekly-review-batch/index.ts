@@ -122,6 +122,13 @@ async function runBatch(
       }
     } catch (e) {
       console.error('[weekly-review-batch] user error', userId, e);
+      // 크레딧 소진(결제)이면 LEAD 알림 후 배치 중단(나머지 사용자도 전부 실패).
+      // @ts-ignore — Deno import map 은 deploy 시 해석.
+      const { isCreditError, alertCreditExhausted } = await import('../_shared/aiHealth.ts');
+      if (isCreditError(e)) {
+        await alertCreditExhausted(adminClient, { fn: 'weekly-review-batch' });
+        break;
+      }
     }
   }
 

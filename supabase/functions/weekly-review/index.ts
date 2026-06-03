@@ -287,6 +287,20 @@ Deno.serve(async (req: Request) => {
 
   } catch (err) {
     const message = err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.';
+    // 크레딧 소진(결제) → LEAD 이메일 알림 + 사용자에게 명확 안내(503).
+    // @ts-ignore — Deno import map 은 deploy 시 해석.
+    const { isCreditError, alertCreditExhausted } = await import('../_shared/aiHealth.ts');
+    if (isCreditError(err)) {
+      const alertClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+        { auth: { autoRefreshToken: false, persistSession: false } },
+      );
+      await alertCreditExhausted(alertClient, { fn: 'weekly-review' });
+      return new Response(JSON.stringify({ error: 'ai_unavailable' }), {
+        status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     return new Response(
       JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },

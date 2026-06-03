@@ -119,6 +119,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   if (!anthropicResp.ok) {
     const txt = await anthropicResp.text();
+    // 크레딧 소진(결제) → LEAD 이메일 알림 + 사용자에게 명확 안내(503).
+    // raw fetch 라 SDK throw 가 아님 — 응답 본문 텍스트로 판별.
+    // @ts-ignore — Deno import map 은 deploy 시 해석.
+    const { isCreditError, alertCreditExhausted } = await import('../_shared/aiHealth.ts');
+    if (isCreditError(txt)) {
+      await alertCreditExhausted(admin, { fn: 'analyze-image' });
+      return json({ error: 'ai_unavailable' }, 503);
+    }
     return json({ error: `anthropic ${anthropicResp.status}`, detail: txt }, 502);
   }
   const aiData = await anthropicResp.json();

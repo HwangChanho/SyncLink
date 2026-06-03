@@ -198,6 +198,12 @@ Deno.serve(async (req: Request) => {
     // still proceed with the user's spoken input. We log so we can spot
     // recurring failures in Supabase function logs.
     console.error('[disambiguate-voice] Claude call failed:', err);
+    // 크레딧 소진(결제)이면 LEAD 알림(soft-fail 유지 — 원문 transcript 반환).
+    // @ts-ignore — Deno import map 은 deploy 시 해석.
+    const { isCreditError, alertCreditExhausted } = await import('../_shared/aiHealth.ts');
+    if (isCreditError(err)) {
+      await alertCreditExhausted(adminClient, { fn: 'disambiguate-voice' });
+    }
     best = transcript;
     alternatives = [];
   }

@@ -188,6 +188,18 @@ Deno.serve(async (req: Request) => {
     }, 200);
   } catch (err) {
     console.error('[generate-insights] error:', err);
+    // 크레딧 소진(결제) → LEAD 이메일 알림 + 사용자에게 명확 안내(503).
+    // @ts-ignore — Deno import map 은 deploy 시 해석.
+    const { isCreditError, alertCreditExhausted } = await import('../_shared/aiHealth.ts');
+    if (isCreditError(err)) {
+      const alertClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+        { auth: { autoRefreshToken: false, persistSession: false } },
+      );
+      await alertCreditExhausted(alertClient, { fn: 'generate-insights' });
+      return jsonResp({ error: 'ai_unavailable' }, 503);
+    }
     return jsonResp({ error: err instanceof Error ? err.message : 'unknown' }, 500);
   }
 });

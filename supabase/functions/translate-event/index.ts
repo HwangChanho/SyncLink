@@ -177,7 +177,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   const supabaseUrl     = Deno.env.get('SUPABASE_URL') ?? '';
   const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
-  const serviceRoleKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  // 주: service_role 키는 아래 quota gate 블록에서 adminClient 를 만들 때
+  //     Deno.env.get 으로 직접 읽는다. (예전엔 여기서 serviceRoleKey 로 받아
+  //     두 번째 adminClient 를 또 선언했는데 = 동일 스코프 중복선언 버그였음.)
 
   // User-scoped client: respects RLS so we can only see events the caller can see.
   const userClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -251,10 +253,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     // Service-role client: required to write to event_translations (no INSERT
-    // policy) and to insert usage_metrics.
-    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    // policy) and to insert usage_metrics. Reuses the `adminClient` already
+    // created above for the quota gate — a second `const adminClient` here was
+    // a duplicate-declaration bug (same try-block scope) that Deno rejects.
 
     // ── Cache hit? ─────────────────────────────────────────────────────────
     const { data: cached } = await adminClient
@@ -337,6 +338,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
   } catch (err) {
     // Log to DB so LEAD can triage; never leak raw stack to the client.
     await logToDb('translate-event', err, { event_id, target_locale });
+    // 크레딧 소진(결제) → LEAD 이메일 알림 + 사용자에게 명확 안내(503).
+    // @ts-ignore — Deno import map 은 deploy 시 해석.
+    const { isCreditError, alertCreditExhausted } = await import('../_shared/aiHealth.ts');
+    if (isCreditError(err)) {
+      const alertClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+        { auth: { autoRefreshToken: false, persistSession: false } },
+      );
+      await alertCreditExhausted(alertClient, { fn: 'translate-event' });
+      return json(503, { error: 'ai_unavailable' });
+    }
     const message = err instanceof Error ? err.message : 'Unknown error';
     return json(500, { error: 'internal', message });
   }
