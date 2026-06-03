@@ -58,7 +58,7 @@ export default function SpacesScreen() {
                 onPress={() => router.push('/space/create')}
                 activeOpacity={0.7}
               >
-                <Text style={styles.primaryButtonText}>Space {t('category.new')}</Text>
+                <Text style={styles.primaryButtonText}>{t('space.create_button')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.secondaryButton}
@@ -86,7 +86,7 @@ export default function SpacesScreen() {
                 onPress={() => router.push('/space/create')}
                 activeOpacity={0.7}
               >
-                <Text style={styles.addText}>+ Space {t('category.new')}</Text>
+                <Text style={styles.addText}>+ {t('space.create_button')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.addRow}
