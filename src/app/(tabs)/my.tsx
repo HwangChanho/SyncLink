@@ -33,6 +33,7 @@ import { textStyles } from '@/constants/typography';
 import * as authService from '@/services/authService';
 import { manageSubscriptions } from '@/services/purchaseService';
 import { useAuthStore } from '@/stores/authStore';
+import { GuestGate } from '@/components/common/GuestGate';
 import { showAlert } from '@/lib/webAlert';
 import { logError } from '@/lib/errorLogger';
 import { SettingsSection } from '@/components/my/SettingsSection';
@@ -47,7 +48,28 @@ import { DevDashboard } from '@/components/DevDashboard';
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+/**
+ * Guest gate: the My tab is account-centric (profile, settings, account
+ * deletion) and dereferences the signed-in user, so browsing guests get a
+ * sign-in prompt instead. The wrapper keeps hook order stable — the content
+ * component's hooks only ever run once authenticated.
+ */
 export default function MyScreen() {
+  const { t } = useTranslation();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  if (!isAuthenticated) {
+    return (
+      <GuestGate
+        description={t('auth.guest.gate_my')}
+        icon="person-outline"
+        testID="guest-gate-my"
+      />
+    );
+  }
+  return <MyScreenContent />;
+}
+
+function MyScreenContent() {
   const { t } = useTranslation();
   const colors = useColors();
   // Build dynamic styles using the current theme's color tokens

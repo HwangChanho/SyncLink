@@ -19,13 +19,34 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
+import { useAuthStore } from '@/stores/authStore';
+import { GuestGate } from '@/components/common/GuestGate';
 import { useSpaceStore } from '@/stores/spaceStore';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { SpaceCard } from '@/components/space/SpaceCard';
 import { getUnreadCounts } from '@/services/spaceMessageService';
 
+/**
+ * Guest gate: Spaces (shared calendars) require an account. Browsing guests
+ * see a sign-in prompt instead of an empty space list.
+ */
 export default function SpacesScreen() {
+  const { t } = useTranslation();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  if (!isAuthenticated) {
+    return (
+      <GuestGate
+        description={t('auth.guest.gate_spaces')}
+        icon="people-outline"
+        testID="guest-gate-spaces"
+      />
+    );
+  }
+  return <SpacesScreenContent />;
+}
+
+function SpacesScreenContent() {
   const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);

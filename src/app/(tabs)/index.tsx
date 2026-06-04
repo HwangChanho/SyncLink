@@ -40,6 +40,7 @@ import { findNextFreeSlot, deriveRecentStats } from '@/lib/freeTimeRecommend';
 import { useMemo }              from 'react';
 import { useColors } from '@/hooks/useColors';
 import { useTranslation } from 'react-i18next';
+import { LoginPromptBanner } from '@/components/common/LoginPromptBanner';
 import { spacing } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import type { DateRange } from '@/types';
@@ -158,6 +159,9 @@ export default function HomeScreen() {
 
         {/* Greeting + date */}
         <HomeHeader />
+
+        {/* Guest-only sign-in nudge (self-hides once authenticated). */}
+        <LoginPromptBanner />
 
         {/* v1.2 Phase 3 — AI 빈 시간 활동 제안 카드. AI 호출 없이 rule baseline. */}
         <AISuggestionCard slot={freeSlot} />

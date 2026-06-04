@@ -99,6 +99,22 @@ const ja = {
   },
 
   auth: {
+    guest: {
+      banner_title: '閲覧中です',
+      banner_desc: 'ログインすると予定を保存し、家族や友だちと共有できます',
+      banner_cta: 'ログイン',
+      gate_title: 'ログインが必要です',
+      gate_my: 'プロフィールと設定はログイン後に利用できます',
+      gate_spaces: 'Space の共有はログイン後に利用できます',
+      gate_analytics: '予定の分析はログイン後に利用できます',
+      gate_cta: 'ログインして利用',
+      demo_badge: '例',
+      demo_meeting: 'チーム会議',
+      demo_dinner: '夕食の約束',
+      demo_workout: '朝の運動',
+      demo_birthday: '母の誕生日 🎂',
+      demo_movie: '映画鑑賞',
+    },
     login: {
       tagline: 'スケジュールを共有しよう — AI がサポート',
       google: 'Google で始める',

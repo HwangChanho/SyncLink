@@ -155,6 +155,13 @@ function useAuthGuard(): { routingReady: boolean } {
     // v1.2.7 — 관리자 대시보드 (/admin/...) 는 가드 우회. 자체 isAdmin
     // RPC 가드 + 비-로그인 시 로그인 안내 자체 처리.
     const inAdmin        = segments[0] === 'admin';
+    // 2026-06-04 게스트 진입: (tabs) 와 그 첫 페인트("/" = 빈 segments) 는
+    // 비로그인도 허용한다. 둘러보기 화면은 게스트로 렌더되고, 계정 중심 탭
+    // (my/spaces/analytics) · 로그인 필수 스택 화면은 화면 자체에서 GuestGate /
+    // 로그인 유도로 처리한다.
+    // Cast as the routedCorrectly block does: expo-router's tuple type omits
+    // the empty-segments ("/" first paint) case that occurs at runtime.
+    const inTabs         = segments[0] === '(tabs)' || (segments as readonly string[]).length === 0;
 
     // Compute the target path without immediately calling replace()
     let target: string | null = null;
@@ -163,10 +170,11 @@ function useAuthGuard(): { routingReady: boolean } {
       if (!onboardingDone && !inOnboarding && !inAdmin) target = '/onboarding';
       else if (onboardingDone && (inAuthGroup || inOnboarding)) target = '/(tabs)';
     } else {
-      // Unauthenticated: always send to login. Onboarding never appears
-      // before auth (avoids re-running onboarding after account deletion).
-      // /admin 은 예외 — 화면 자체에서 로그인 안내.
-      if (!inAuthGroup && !inAdmin) target = '/auth/login';
+      // Guest: free to browse the main tabs + auth screens (+ self-gated admin).
+      // Only login-required STACK routes (event/create, space/*, settings, …)
+      // bounce to /auth/login. Onboarding stays post-login (avoids re-running
+      // it after account deletion).
+      if (!inAuthGroup && !inAdmin && !inTabs) target = '/auth/login';
     }
 
     // Guard: skip if we already replaced to the same target in the previous render.
@@ -200,12 +208,16 @@ function useAuthGuard(): { routingReady: boolean } {
     } else if (isAuthenticated) {
       routedCorrectly = onboardingDone ? !inAuthGroup && !inOnboarding : inOnboarding;
     } else {
-      routedCorrectly = inAuthGroup;
+      // Guest: correct when on an allowed route — auth screens OR the main
+      // tabs (2026-06-04 guest entry). Login-required stack routes stay
+      // "wrong" so the effect above bounces them to /auth/login.
+      routedCorrectly = inAuthGroup || inTabs;
     }
-    // Empty segments (= "/") on web first-paint counts as wrong unless
-    // the user is authenticated AND has finished onboarding.
-    if (segs.length === 0 && !(isAuthenticated && onboardingDone)) {
-      routedCorrectly = false;
+    // Empty segments (= "/") first-paint: correct for a guest (→ tabs home)
+    // and for an onboarded authenticated user; wrong for a not-yet-onboarded
+    // authenticated user (they must reach /onboarding first).
+    if (segs.length === 0) {
+      routedCorrectly = isAuthenticated ? !!onboardingDone : true;
     }
     // Modal routes (segs[0] === 'event' / 'space' / etc.) are always OK
     // when authenticated — they sit on top of (tabs) and aren't part of the

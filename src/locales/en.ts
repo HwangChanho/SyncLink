@@ -99,6 +99,22 @@ const en = {
   },
 
   auth: {
+    guest: {
+      banner_title: "You're just looking around",
+      banner_desc: 'Sign in to save your schedule and share it with family and friends',
+      banner_cta: 'Sign in',
+      gate_title: 'Sign in required',
+      gate_my: 'Your profile and settings are available after signing in',
+      gate_spaces: 'Space sharing is available after signing in',
+      gate_analytics: 'Schedule analytics is available after signing in',
+      gate_cta: 'Sign in to continue',
+      demo_badge: 'Example',
+      demo_meeting: 'Team meeting',
+      demo_dinner: 'Dinner plans',
+      demo_workout: 'Morning workout',
+      demo_birthday: "Mom's birthday 🎂",
+      demo_movie: 'Movie night',
+    },
     login: {
       tagline: 'Your schedule, together — powered by AI',
       google: 'Continue with Google',

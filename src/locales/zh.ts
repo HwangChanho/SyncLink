@@ -99,6 +99,22 @@ const zh = {
   },
 
   auth: {
+    guest: {
+      banner_title: '您正在浏览',
+      banner_desc: '登录后即可保存日程并与家人、朋友共享',
+      banner_cta: '登录',
+      gate_title: '需要登录',
+      gate_my: '登录后即可使用个人信息和设置',
+      gate_spaces: '登录后即可使用 Space 共享',
+      gate_analytics: '登录后即可使用日程分析',
+      gate_cta: '登录后使用',
+      demo_badge: '示例',
+      demo_meeting: '团队会议',
+      demo_dinner: '晚餐约会',
+      demo_workout: '晨练',
+      demo_birthday: '妈妈生日 🎂',
+      demo_movie: '看电影',
+    },
     login: {
       tagline: '共享日程，AI 为您管理',
       google: '使用 Google 登录',

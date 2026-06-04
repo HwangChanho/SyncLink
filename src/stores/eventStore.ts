@@ -19,6 +19,8 @@ import type { EventSummary, DateRange } from '@/types';
 import { getEventsInRange, getEventById } from '@/services/eventService';
 import { expandRecurrence } from '@/lib/recurrence';
 import { subscribeToEvents as realtimeSubscribeToEvents } from '@/services/eventRealtimeService';
+import { useAuthStore } from '@/stores/authStore';
+import { buildGuestDemoEventsByDate } from '@/lib/guestDemoData';
 
 /**
  * Local-timezone YYYY-MM-DD key.
@@ -99,6 +101,16 @@ export const useEventStore = create<EventState>((set, _get) => ({
   fetchedDateKeys: new Set<string>(),
 
   fetchEvents: async (range: DateRange, opts?: { force?: boolean }) => {
+    // 2026-06-04 게스트 진입: 계정이 없으면 서버(RLS 로 어차피 [] 반환) 호출을
+    // 생략하고 예시(데모) 일정을 채워, 홈/캘린더가 빈 화면 대신 살아있는 모습을
+    // 보여준다 → 로그인 유도(LoginPromptBanner / GuestGate)로 자연 연결.
+    if (!useAuthStore.getState().isAuthenticated) {
+      set((state) => ({
+        eventsByDate: { ...state.eventsByDate, ...buildGuestDemoEventsByDate() },
+        isFetching: false,
+      }));
+      return;
+    }
     // Build-71 perf — range 의 모든 date key 가 이미 fetched 라면 skip.
     // Build-94 — 단, opts.force 면 캐시 무시 후 refetch (Realtime 으로 받지
     // 못한 새 share / 다른 device 변경 등 stale 가능성 처리).

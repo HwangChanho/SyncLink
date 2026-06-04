@@ -30,6 +30,9 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
+import { useAuthStore } from '@/stores/authStore';
+import { useTranslation } from 'react-i18next';
+import { GuestGate } from '@/components/common/GuestGate';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import {
@@ -112,7 +115,27 @@ function avgPerDay(s: EventStats): string {
 const DELTA_UP_COLOR = '#10B981';
 const DELTA_DOWN_COLOR = '#EF4444';
 
+/**
+ * Guest gate: analytics is account + Pro gated. Guests (no account) get a
+ * sign-in prompt; the Pro paywall inside the content component still applies
+ * to signed-in Free users.
+ */
 export default function AnalyticsScreen() {
+  const { t } = useTranslation();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  if (!isAuthenticated) {
+    return (
+      <GuestGate
+        description={t('auth.guest.gate_analytics')}
+        icon="bar-chart-outline"
+        testID="guest-gate-analytics"
+      />
+    );
+  }
+  return <AnalyticsScreenContent />;
+}
+
+function AnalyticsScreenContent() {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const isPro = useSubscriptionStore((s) => s.plan === 'pro');

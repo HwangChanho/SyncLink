@@ -104,6 +104,22 @@ const ko = {
   },
 
   auth: {
+    guest: {
+      banner_title: '둘러보는 중이에요',
+      banner_desc: '로그인하면 일정을 저장하고 가족·친구와 공유할 수 있어요',
+      banner_cta: '로그인',
+      gate_title: '로그인이 필요해요',
+      gate_my: '내 정보와 설정은 로그인 후 이용할 수 있어요',
+      gate_spaces: 'Space 공유는 로그인 후 이용할 수 있어요',
+      gate_analytics: '일정 분석은 로그인 후 이용할 수 있어요',
+      gate_cta: '로그인하고 이용하기',
+      demo_badge: '예시',
+      demo_meeting: '팀 회의',
+      demo_dinner: '저녁 약속',
+      demo_workout: '아침 운동',
+      demo_birthday: '엄마 생신 🎂',
+      demo_movie: '영화 보기',
+    },
     login: {
       tagline: '함께하는 일정, AI가 챙겨드려요',
       google: 'Google로 시작하기',
