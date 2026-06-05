@@ -20,7 +20,7 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import * as FileSystem from 'expo-file-system';
-import type { Session } from '@supabase/supabase-js';
+import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase';
 import { logError } from '@/lib/errorLogger';
 import type { UserRow } from '@/types';
@@ -117,48 +117,9 @@ export async function signInWithGoogle(): Promise<SignInResult> {
     return {} as SignInResult;
   }
 
-  // Ensure Google Play Services are available (Android only; no-op on iOS)
-  await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-
-  let idToken: string | null = null;
-
-  try {
-    const userInfo = await GoogleSignin.signIn();
-
-    // v13+ returns { type: 'success'|'cancelled', data: { idToken } }
-    // Older versions return { idToken } directly — handle both shapes
-    idToken = (userInfo as any)?.idToken
-      ?? (userInfo as any)?.data?.idToken
-      ?? null;
-
-    if (!idToken) {
-      // Type indicates cancellation in v13+
-      const type = (userInfo as any)?.type;
-      if (type === 'cancelled' || type === 'noSavedCredentialFound') {
-        throw new Error('cancelled');
-      }
-      throw new Error('Google ID 토큰을 받지 못했습니다. 다시 시도해 주세요.');
-    }
-  } catch (err: unknown) {
-    // Map Google-specific error codes to friendly messages
-    if (isStatusCodeError(err, statusCodes.SIGN_IN_CANCELLED)) {
-      throw new Error('cancelled');
-    }
-    if (isStatusCodeError(err, statusCodes.IN_PROGRESS)) {
-      throw new Error('Google 로그인이 이미 진행 중입니다.');
-    }
-    if (isStatusCodeError(err, statusCodes.PLAY_SERVICES_NOT_AVAILABLE)) {
-      // 메시지에서 외부 스토어 이름을 빼서 iOS 빌드의 string scan 에 잡히지
-      // 않도록 일반화 (Apple Guideline 2.3.10).
-      throw new Error('Google 로그인 서비스를 사용할 수 없습니다. 기기 설정을 확인해 주세요.');
-    }
-    // Developer-facing: DEVELOPER_ERROR usually means bundle ID mismatch in Google Cloud Console
-    // Fix: ensure iOS OAuth client is registered with bundle ID io.synclink.app
-    if (isStatusCodeError(err, 10 /* DEVELOPER_ERROR */)) {
-      throw new Error('Google 로그인 설정 오류입니다. (DEVELOPER_ERROR: 번들 ID 불일치 — Google Cloud Console에서 io.synclink.app으로 iOS 클라이언트를 재생성하세요)');
-    }
-    throw err;
-  }
+  // Native: 클라이언트 무관한 Google ID 토큰을 획득한 뒤 전역 세션으로 교환.
+  // (acquireGoogleIdToken 은 통합 로그인의 B 계정 로그인에서도 재사용된다.)
+  const idToken = await acquireGoogleIdToken();
 
   // Exchange Google ID token for Supabase session
   const { data, error } = await supabase.auth.signInWithIdToken({
@@ -214,88 +175,26 @@ export async function signInWithGoogle(): Promise<SignInResult> {
  * @throws Error with descriptive message on any Edge Function / token failure.
  */
 export async function signInWithKakao(): Promise<SignInResult> {
-  // ── 1. Resolve the REST API key and redirect URI ────────────────────────
-  const kakaoRestApiKey = process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY;
-  if (!kakaoRestApiKey) {
-    throw new Error(
-      'Kakao 로그인 설정이 누락되었습니다. (EXPO_PUBLIC_KAKAO_REST_API_KEY 미설정)',
-    );
-  }
-
-  // Kakao requires HTTPS redirect_uri and does NOT accept custom schemes.
-  // Architecture: our Edge Function IS the redirect target. It processes the
-  // code server-side and then bounces the user-agent back to the app via an
-  // HTML redirect to this appReturn URL.
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    throw new Error('Supabase 설정이 누락되었습니다.');
-  }
-  const origin = (globalThis as typeof globalThis & { location?: { origin?: string } })
-    .location?.origin;
-  const appReturn = Platform.OS === 'web' && origin
-    ? `${origin}/auth/callback`
-    : Linking.createURL('/auth/callback');
-  // Edge Function URL (registered in Kakao Developer Console as a Redirect URI)
-  const edgeFunctionUrl = `${SUPABASE_URL}/functions/v1/kakao-auth`;
-
-  // ── 2. Build the Kakao authorize URL ────────────────────────────────────
-  // redirect_uri = our Edge Function (HTTPS, Kakao-compatible)
-  // state = app-return URL so the Edge Function can bounce back to us
-  const authUrl =
-    'https://kauth.kakao.com/oauth/authorize' +
-    `?client_id=${encodeURIComponent(kakaoRestApiKey)}` +
-    `&redirect_uri=${encodeURIComponent(edgeFunctionUrl)}` +
-    `&state=${encodeURIComponent(appReturn)}` +
-    '&response_type=code';
-
-  // ── 3. Open Kakao consent UI and watch for the app-return redirect ──────
-  // After Kakao redirects to our Edge Function, the function processes the
-  // code and redirects (via HTML) to `appReturn?email=...&password=...`.
-  //
-  // On web we use a full-page navigation (window.location.assign) instead
-  // of WebBrowser.openAuthSessionAsync — popup-based OAuth from Kakao
-  // breaks under cross-origin/popup-blocker rules in Safari and Chrome
-  // strict mode, and the session would be lost when the popup closes.
-  // The /auth/callback route then finalises the sign-in by reading the
-  // email/password params Edge Function delivered.
+  // On web we use a full-page navigation (window.location.assign) instead of
+  // WebBrowser.openAuthSessionAsync — popup-based OAuth from Kakao breaks under
+  // cross-origin/popup-blocker rules in Safari and Chrome strict mode, and the
+  // session would be lost when the popup closes. The /auth/callback route then
+  // finalises the sign-in by reading the email/password params Edge delivered.
   if (Platform.OS === 'web') {
+    const origin = (globalThis as typeof globalThis & { location?: { origin?: string } })
+      .location?.origin;
+    const appReturn = origin ? `${origin}/auth/callback` : Linking.createURL('/auth/callback');
     const win = (globalThis as typeof globalThis & { location?: { assign: (u: string) => void } });
-    win.location?.assign(authUrl);
+    win.location?.assign(buildKakaoAuthUrl(appReturn));
     // The page is leaving — nothing else to do here.
     return {} as SignInResult;
   }
 
-  const result = await WebBrowser.openAuthSessionAsync(authUrl, appReturn, {
-    showInRecents: false,
-  });
+  // Native: 클라이언트 무관한 Kakao 자격(email/password)을 획득해 전역 세션을 생성.
+  // (acquireKakaoCredentials 은 통합 로그인의 B 계정 로그인에서도 재사용된다.)
+  const { email, password } = await acquireKakaoCredentials();
 
-  if (result.type !== 'success') {
-    throw new Error('cancelled');
-  }
-
-  // ── 4. Extract email/password from the final redirect URL ───────────────
-  // result.url looks like: synclink://auth/callback?email=...&password=...
-  // (or on web: https://app.example.com/auth/callback?email=...&password=...)
-  const errParam = extractQueryParam(result.url, 'error');
-  if (errParam) {
-    const err = new Error(`Kakao 로그인 오류: ${decodeURIComponent(errParam)}`);
-    // Edge Function이 HTML redirect로 돌려보낸 에러 문자열을 기록
-    await logError({ context: 'auth.kakao.edge-error', error: err, details: { errParam } });
-    throw err;
-  }
-  const email = extractQueryParam(result.url, 'email');
-  const password = extractQueryParam(result.url, 'password');
-  if (!email || !password) {
-    const err = new Error('Kakao 로그인 응답이 올바르지 않습니다.');
-    // 이메일/비밀번호 중 하나가 없는 비정상 응답 (password 값은 민감하므로 기록하지 않음)
-    await logError({
-      context: 'auth.kakao.malformed-response',
-      error:   err,
-      details: { hasEmail: !!email, hasPassword: !!password },
-    });
-    throw err;
-  }
-
-  // ── 6. Exchange the derived credentials for a real Supabase session ─────
+  // ── Exchange the derived credentials for a real Supabase session ────────
   // The password is never stored anywhere on the client — signInWithPassword
   // hands us session tokens that replace it.
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -396,17 +295,9 @@ export async function signInWithApple(): Promise<SignInResult> {
     return buildSignInResult(sessData.session);
   }
 
-  const credential = await AppleAuthentication.signInAsync({
-    requestedScopes: [
-      AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-      AppleAuthentication.AppleAuthenticationScope.EMAIL,
-    ],
-  });
-
-  const { identityToken } = credential;
-  if (!identityToken) {
-    throw new Error('Apple ID 토큰을 받지 못했습니다. 다시 시도해 주세요.');
-  }
+  // iOS native: 클라이언트 무관한 Apple identity 토큰을 획득해 전역 세션을 생성.
+  // (acquireAppleIdentityToken 은 통합 로그인의 B 계정 로그인에서도 재사용된다.)
+  const identityToken = await acquireAppleIdentityToken();
 
   // Exchange Apple identity token for Supabase session
   const { data, error } = await supabase.auth.signInWithIdToken({
@@ -574,6 +465,321 @@ export async function mergeAccount(
   if (error) throw error;
   if (!data?.success) throw new Error(data?.error ?? '계정 병합에 실패했습니다.');
   return data as MergeResult;
+}
+
+// ─── 통합 로그인 (재로그인 기반 단일계정 병합) ────────────────────────────────
+//
+// 사용자가 A 로그인 상태에서 [통합 로그인]으로 다른 내 계정 B 에 재로그인하면,
+// B 의 토큰을 확보해 서버(account-merge-bytoken)에 A·B 두 토큰을 넘긴다. 서버가
+// 두 토큰을 각각 검증(본인 2계정)한 뒤 단일 계정으로 병합한다.
+//
+// 핵심: B 로그인은 전역 supabase 세션을 건드리면 안 된다(A 세션 유지). 그래서
+// persistSession:false 인 ephemeral 클라이언트로 B 를 로그인해 토큰만 추출한다.
+// native 토큰 획득부(Google/Apple/Kakao)는 평소 로그인과 동일 헬퍼를 재사용한다.
+
+/** 통합 로그인에서 지원하는 B 계정 로그인 방식. */
+export type MergeLoginMethod = 'google' | 'apple' | 'kakao' | 'email';
+
+/** B 로그인 결과 — 전역 세션을 바꾸지 않고 토큰만 보관. */
+export interface SecondarySession {
+  userId: string;
+  email: string | null;
+  accessToken: string;
+  refreshToken: string;
+}
+
+/** 통합 미리보기 결과(dryRun). 확인 모달에 표시할 건수/메타. */
+export interface MergePreviewResult {
+  success: true;
+  dryRun: true;
+  /** 유지될 계정(Pro 우선). */
+  primary: string;
+  /** 흡수되어 삭제될 계정. */
+  secondary: string;
+  /** primary 가 현재 세션(A)인지 — false 면 통합 후 B 세션으로 전환 필요. */
+  primaryIsCurrent: boolean;
+  /** 겹치는(같은 start_at+title) 일정 수. */
+  conflicts: number;
+  secondary_events: number;
+  secondary_todos: number;
+  secondary_cats: number;
+  primary_email: string;
+  secondary_email: string;
+  primary_plan: string;
+  secondary_plan: string;
+}
+
+/** 통합 실행 결과. */
+export interface MergeExecuteResult {
+  success: true;
+  primary: string;
+  secondary: string;
+  primaryIsCurrent: boolean;
+  moved_events?: number;
+  moved_idents?: number;
+  deduped?: number;
+  /** 양쪽 모두 Pro 였음 — 중복 구독 경고. */
+  both_pro?: boolean;
+}
+
+/**
+ * 전역 supabase 와 분리된 ephemeral(휘발성) 클라이언트.
+ *
+ * persistSession:false → AsyncStorage 의 A 세션을 절대 덮어쓰지 않는다.
+ * autoRefreshToken:false → 단발성 사용이라 백그라운드 갱신 타이머가 필요 없다.
+ */
+function createEphemeralClient(): SupabaseClient {
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+}
+
+/**
+ * B 계정에 로그인해 토큰만 확보한다 (전역 A 세션 무손상).
+ *
+ * @param method 'google' | 'apple' | 'kakao' | 'email'
+ * @param creds  email 방식일 때 { email, password }
+ * @throws Error('cancelled') 사용자가 로그인 취소
+ */
+export async function loginSecondaryAccount(
+  method: MergeLoginMethod,
+  creds?: { email: string; password: string },
+): Promise<SecondarySession> {
+  if (Platform.OS === 'web') {
+    throw new Error('통합 로그인은 앱에서만 지원됩니다.');
+  }
+  const ephemeral = createEphemeralClient();
+  let session: Session | null = null;
+
+  switch (method) {
+    case 'google': {
+      // forceAccountChooser=true → 캐시된 A 구글 계정을 비워 B 선택을 강제.
+      const idToken = await acquireGoogleIdToken(true);
+      const { data, error } = await ephemeral.auth.signInWithIdToken({ provider: 'google', token: idToken });
+      if (error) throw error;
+      session = data.session;
+      break;
+    }
+    case 'apple': {
+      if (Platform.OS !== 'ios') throw new Error('Apple 통합 로그인은 iOS에서만 지원됩니다.');
+      const token = await acquireAppleIdentityToken();
+      const { data, error } = await ephemeral.auth.signInWithIdToken({ provider: 'apple', token });
+      if (error) throw error;
+      session = data.session;
+      break;
+    }
+    case 'kakao': {
+      const { email, password } = await acquireKakaoCredentials();
+      const { data, error } = await ephemeral.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      session = data.session;
+      break;
+    }
+    case 'email': {
+      if (!creds?.email || !creds.password) throw new Error('이메일과 비밀번호를 입력해주세요.');
+      const { data, error } = await ephemeral.auth.signInWithPassword({
+        email: creds.email.trim(),
+        password: creds.password,
+      });
+      if (error) throw error;
+      session = data.session;
+      break;
+    }
+  }
+
+  if (!session) throw new Error('통합할 계정 로그인에 실패했습니다.');
+  return {
+    userId: session.user.id,
+    email: session.user.email ?? null,
+    accessToken: session.access_token,
+    refreshToken: session.refresh_token,
+  };
+}
+
+/**
+ * account-merge-bytoken Edge 호출 공통부.
+ * 현재 세션(A) 토큰 + B 토큰을 전달. 비-2xx 응답이면 서버의 JSON 에러 메시지를
+ * 최대한 추출해 사용자에게 보여준다(supabase-js 는 기본적으로 generic 메시지만 줌).
+ */
+async function invokeMergeByToken(
+  body: { bToken: string; dryRun?: boolean; policy?: MergeConflictPolicy },
+): Promise<Record<string, unknown>> {
+  const session = await getSession();
+  if (!session) throw new Error('현재 로그인이 필요합니다. 다시 로그인해주세요.');
+
+  const { data, error } = await supabase.functions.invoke('account-merge-bytoken', {
+    body: { aToken: session.accessToken, ...body },
+  });
+
+  if (error) {
+    // FunctionsHttpError 는 원본 Response 를 .context 로 노출 → 서버 JSON 메시지 추출.
+    let serverMsg: string | undefined;
+    let sameAccount = false;
+    const ctx = (error as { context?: unknown }).context;
+    if (ctx && typeof (ctx as Response).json === 'function') {
+      try {
+        const parsed = (await (ctx as Response).json()) as { error?: string; sameAccount?: boolean };
+        serverMsg = parsed?.error;
+        sameAccount = parsed?.sameAccount === true;
+      } catch {
+        /* 본문이 JSON 이 아님 — generic 메시지로 폴백 */
+      }
+    }
+    const e = new Error(serverMsg ?? error.message ?? '통합에 실패했습니다.') as Error & { sameAccount?: boolean };
+    if (sameAccount) e.sameAccount = true;
+    throw e;
+  }
+  if (!data?.success) throw new Error(data?.error ?? '통합에 실패했습니다.');
+  return data as Record<string, unknown>;
+}
+
+/**
+ * 통합 미리보기 (dryRun). B 계정 데이터 건수 + 겹침 수 + primary 결정 결과를 반환.
+ * 실제 변경은 일어나지 않는다.
+ */
+export async function previewMergeByToken(bAccessToken: string): Promise<MergePreviewResult> {
+  return (await invokeMergeByToken({ bToken: bAccessToken, dryRun: true })) as unknown as MergePreviewResult;
+}
+
+/**
+ * 통합 실행. secondary 데이터+identity 를 primary 로 이전하고 secondary 를 삭제한다.
+ * @param policy 겹치는 일정 처리 ('keep_both' 둘 다 | 'dedupe' 중복 제거).
+ */
+export async function executeMergeByToken(
+  bAccessToken: string,
+  policy: MergeConflictPolicy = 'keep_both',
+): Promise<MergeExecuteResult> {
+  return (await invokeMergeByToken({ bToken: bAccessToken, dryRun: false, policy })) as unknown as MergeExecuteResult;
+}
+
+/**
+ * 전역 세션을 주어진 토큰으로 교체한다. 통합 후 primary 가 B(현재 세션 아님)일 때,
+ * A 가 삭제되었으므로 primary(B) 세션으로 전환하는 데 사용한다.
+ */
+export async function setActiveSession(accessToken: string, refreshToken: string): Promise<void> {
+  const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+  if (error) throw error;
+}
+
+// ─── Native token acquisition (평소 로그인 + 통합 로그인 공용) ─────────────────
+
+/**
+ * Google native ID 토큰 획득 (어떤 Supabase 클라이언트와도 무관).
+ * @param forceAccountChooser true 면 캐시된 계정을 비워 계정 선택 화면을 강제(B 로그인용).
+ */
+async function acquireGoogleIdToken(forceAccountChooser = false): Promise<string> {
+  if (Platform.OS === 'web') {
+    throw new Error('Google 네이티브 로그인은 앱에서만 지원됩니다.');
+  }
+  // Ensure Google Play Services are available (Android only; no-op on iOS)
+  await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+
+  // 통합 로그인(B): A 의 캐시 계정을 비워 다른 계정을 선택하도록 한다.
+  if (forceAccountChooser) {
+    try { await GoogleSignin.signOut(); } catch { /* 로그인된 적 없으면 무시 */ }
+  }
+
+  let idToken: string | null = null;
+  try {
+    const userInfo = await GoogleSignin.signIn();
+    // v13+ returns { type, data: { idToken } }; older returns { idToken } — handle both.
+    idToken = (userInfo as any)?.idToken
+      ?? (userInfo as any)?.data?.idToken
+      ?? null;
+    if (!idToken) {
+      const type = (userInfo as any)?.type;
+      if (type === 'cancelled' || type === 'noSavedCredentialFound') {
+        throw new Error('cancelled');
+      }
+      throw new Error('Google ID 토큰을 받지 못했습니다. 다시 시도해 주세요.');
+    }
+  } catch (err: unknown) {
+    if (isStatusCodeError(err, statusCodes.SIGN_IN_CANCELLED)) {
+      throw new Error('cancelled');
+    }
+    if (isStatusCodeError(err, statusCodes.IN_PROGRESS)) {
+      throw new Error('Google 로그인이 이미 진행 중입니다.');
+    }
+    if (isStatusCodeError(err, statusCodes.PLAY_SERVICES_NOT_AVAILABLE)) {
+      // iOS 빌드 string scan 회피 위해 외부 스토어명 제외 (Apple Guideline 2.3.10).
+      throw new Error('Google 로그인 서비스를 사용할 수 없습니다. 기기 설정을 확인해 주세요.');
+    }
+    if (isStatusCodeError(err, 10 /* DEVELOPER_ERROR */)) {
+      throw new Error('Google 로그인 설정 오류입니다. (DEVELOPER_ERROR: 번들 ID 불일치 — Google Cloud Console에서 io.synclink.app으로 iOS 클라이언트를 재생성하세요)');
+    }
+    throw err;
+  }
+  return idToken;
+}
+
+/** Apple identity 토큰 획득 (iOS native). */
+async function acquireAppleIdentityToken(): Promise<string> {
+  const credential = await AppleAuthentication.signInAsync({
+    requestedScopes: [
+      AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+      AppleAuthentication.AppleAuthenticationScope.EMAIL,
+    ],
+  });
+  const { identityToken } = credential;
+  if (!identityToken) {
+    throw new Error('Apple ID 토큰을 받지 못했습니다. 다시 시도해 주세요.');
+  }
+  return identityToken;
+}
+
+/**
+ * Kakao authorize URL 빌드. redirect_uri = 우리 Edge(kakao-auth), state = appReturn.
+ */
+function buildKakaoAuthUrl(appReturn: string): string {
+  const kakaoRestApiKey = process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY;
+  if (!kakaoRestApiKey) {
+    throw new Error('Kakao 로그인 설정이 누락되었습니다. (EXPO_PUBLIC_KAKAO_REST_API_KEY 미설정)');
+  }
+  if (!SUPABASE_URL) {
+    throw new Error('Supabase 설정이 누락되었습니다.');
+  }
+  // Kakao requires HTTPS redirect_uri (no custom schemes). Our Edge is the
+  // redirect target; it processes the code then HTML-redirects back to appReturn.
+  const edgeFunctionUrl = `${SUPABASE_URL}/functions/v1/kakao-auth`;
+  return (
+    'https://kauth.kakao.com/oauth/authorize' +
+    `?client_id=${encodeURIComponent(kakaoRestApiKey)}` +
+    `&redirect_uri=${encodeURIComponent(edgeFunctionUrl)}` +
+    `&state=${encodeURIComponent(appReturn)}` +
+    '&response_type=code'
+  );
+}
+
+/**
+ * Kakao 네이티브 자격(email/password) 획득. WebBrowser 로 Kakao 동의 → Edge 가
+ * appReturn?email=..&password=.. 로 되돌려보낸 값을 추출 (클라이언트 무관).
+ */
+async function acquireKakaoCredentials(): Promise<{ email: string; password: string }> {
+  const appReturn = Linking.createURL('/auth/callback');
+  const authUrl = buildKakaoAuthUrl(appReturn);
+
+  const result = await WebBrowser.openAuthSessionAsync(authUrl, appReturn, { showInRecents: false });
+  if (result.type !== 'success') {
+    throw new Error('cancelled');
+  }
+  const errParam = extractQueryParam(result.url, 'error');
+  if (errParam) {
+    const err = new Error(`Kakao 로그인 오류: ${decodeURIComponent(errParam)}`);
+    await logError({ context: 'auth.kakao.edge-error', error: err, details: { errParam } });
+    throw err;
+  }
+  const email = extractQueryParam(result.url, 'email');
+  const password = extractQueryParam(result.url, 'password');
+  if (!email || !password) {
+    const err = new Error('Kakao 로그인 응답이 올바르지 않습니다.');
+    await logError({
+      context: 'auth.kakao.malformed-response',
+      error:   err,
+      details: { hasEmail: !!email, hasPassword: !!password },
+    });
+    throw err;
+  }
+  return { email, password };
 }
 
 /**
