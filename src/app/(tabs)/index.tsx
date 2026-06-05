@@ -112,10 +112,13 @@ export default function HomeScreen() {
   // 인증 복원이 끝난 뒤 로드한다. 부팅 중(isLoading)에 홈이 mount 되면 eventStore 가
   // 데모/실데이터를 잘못 채울 수 있어(데모 누수), 인증 확정 시점에 (재)로드한다.
   const authReady = useAuthStore((s) => !s.isLoading);
+  const isAuthed = useAuthStore((s) => s.isAuthenticated);
   useEffect(() => {
+    // 인증 확정 후 로드. 로그인/로그아웃(isAuthed 변화) 시에도 재로드해
+    // 게스트↔로그인 전환 시 데이터(데모/실데이터)가 올바르게 갱신되게 한다.
     if (authReady) loadTodayData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authReady]);
+  }, [authReady, isAuthed]);
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (

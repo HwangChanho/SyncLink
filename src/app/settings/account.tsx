@@ -53,8 +53,9 @@ export default function AccountScreen() {
             try {
               await authService.signOut();
               setUser(null);
-              // _layout auth-guard 가 redirect, 여기서 명시적 push 도 안전망.
-              router.replace('/auth/login');
+              // 게스트 진입(2026-06): 로그아웃 후 강제 로그인 대신 게스트 홈으로.
+              // 둘러보기를 이어가고 홈 배너/시트로 다시 로그인 유도된다.
+              router.replace('/(tabs)');
             } catch (err) {
               showAlert(
                 t('common.error'),
@@ -94,7 +95,8 @@ export default function AccountScreen() {
                     try {
                       await authService.deleteAccount();
                       setUser(null);
-                      router.replace('/auth/login');
+                      // 계정 삭제 후에도 강제 로그인 대신 게스트 홈으로(둘러보기 가능).
+                      router.replace('/(tabs)');
                     } catch (err) {
                       void logError({ context: 'settings.account.delete', error: err });
                       showAlert(
