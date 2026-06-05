@@ -41,6 +41,7 @@ import { useWidgetSync } from '@/hooks/useWidgetSync';
 import { PinPad } from '@/components/common/PinPad';
 import { OfflineBanner } from '@/components/common/OfflineBanner';
 import { LoginPromptSheet } from '@/components/common/LoginPromptSheet';
+import { useLoginPromptStore } from '@/stores/loginPromptStore';
 import { AppSplash } from '@/components/common/AppSplash';
 // Sprint 14 TASK-1402/1406 — AdMob SDK initialization after ATT consent.
 import { initAdMob } from '@/services/adService';
@@ -550,6 +551,11 @@ export default function RootLayout() {
     // Subscribe to auth state — fires immediately with current session.
     // isLoading stays true until first callback resolves, preventing redirect flash.
     const unsubscribe = onAuthStateChange(async (session) => {
+      // 인증 상태 변화(로그인/로그아웃) 시 떠 있을 수 있는 LoginPromptSheet 를 닫는다.
+      // 안 닫으면 시트(RN Modal)가 로그인 직후 라우팅 전환(또 다른 modal transition)과
+      // 겹쳐 iOS 터치 deadlock → 검은 화면 멈춤(2026-06-05 사용자 실측). 캘린더 picker
+      // 멈춤과 동일 메커니즘.
+      useLoginPromptStore.getState().close();
       if (session) {
         const userRow = await getUserProfile(session.userId);
         if (userRow) {

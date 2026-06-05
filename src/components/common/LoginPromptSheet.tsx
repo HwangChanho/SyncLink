@@ -11,7 +11,7 @@
 
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import type { ColorTokens } from '@/hooks/useColors';
@@ -28,6 +28,11 @@ export function LoginPromptSheet() {
   const message = useLoginPromptStore((s) => s.message);
   const close = useLoginPromptStore((s) => s.close);
 
+  // 로그인/온보딩 화면에서는 절대 띄우지 않는다. 시트(RN Modal)가 로그인 화면에
+  // 남아 있으면 로그인 직후 라우팅 전환과 겹쳐 iOS 터치 deadlock → 검은 화면.
+  const seg0 = (useSegments() as readonly string[])[0];
+  const onAuthFlow = seg0 === 'auth' || seg0 === 'onboarding';
+
   // Close first so the sheet's exit animation doesn't fight the navigation
   // transition to the login screen.
   const handleLogin = () => {
@@ -36,7 +41,7 @@ export function LoginPromptSheet() {
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
+    <Modal visible={visible && !onAuthFlow} transparent animationType="slide" onRequestClose={close}>
       <Pressable style={styles.overlay} onPress={close}>
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           <View style={styles.handle} />
