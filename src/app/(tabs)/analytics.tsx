@@ -49,10 +49,14 @@ import {
   type OwnershipSplit,
 } from '@/services/analyticsExtrasService';
 import { generateInsight, type InsightResult } from '@/services/insightsService';
+import i18n from '@/lib/i18n';
 
 type Preset = 'week' | 'month' | 'quarter';
 
-const DOW_LABELS = ['일', '월', '화', '수', '목', '금', '토'] as const;
+/** Localized weekday short labels (일~토 / Sun~Sat / …) — read from i18n. */
+function dowLabels(): readonly string[] {
+  return i18n.t('analytics.dow', { returnObjects: true }) as readonly string[];
+}
 
 /** 화면 너비 - 카드 좌우 padding 32. chart 가 카드 안 꽉 채우게. */
 const chartWidth = Dimensions.get('window').width - 64;
@@ -75,10 +79,12 @@ function chartConfig(colors: ReturnType<typeof useColors>) {
  * 분(minutes) → "Nh Mm" 또는 "Nm" 사람이 읽는 포맷.
  */
 function formatMinutes(min: number): string {
-  if (min < 60) return `${min}분`;
+  const hh = i18n.t('analytics.hours');
+  const mm = i18n.t('analytics.minutes');
+  if (min < 60) return `${min}${mm}`;
   const h = Math.floor(min / 60);
   const m = min % 60;
-  return m === 0 ? `${h}시간` : `${h}시간 ${m}분`;
+  return m === 0 ? `${h}${hh}` : `${h}${hh} ${m}${mm}`;
 }
 
 /** 증감 비교 결과. up=null = 변화없음/비교불가. */
@@ -99,7 +105,11 @@ function computeDelta(curr: number, prev: number): Delta {
 
 /** 기간 라벨 (비교 caption 용). */
 function presetLabel(p: Preset): string {
-  return p === 'week' ? '주' : p === 'month' ? '달' : '분기';
+  return p === 'week'
+    ? i18n.t('analytics.unit_week')
+    : p === 'month'
+      ? i18n.t('analytics.unit_month')
+      : i18n.t('analytics.unit_quarter');
 }
 
 /** 하루 평균 일정 수 (기간 길이로 나눔). */
@@ -136,6 +146,7 @@ export default function AnalyticsScreen() {
 }
 
 function AnalyticsScreenContent() {
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const isPro = useSubscriptionStore((s) => s.plan === 'pro');
@@ -180,7 +191,7 @@ function AnalyticsScreenContent() {
       setTrend(trendRes);
       setOwnership(ownershipRes);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '분석 데이터를 불러오지 못했습니다.');
+      setError(err instanceof Error ? err.message : t('analytics.error_load'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -220,7 +231,7 @@ function AnalyticsScreenContent() {
               style={[styles.segmentBtn, preset === p && styles.segmentBtnActive]}
             >
               <Text style={[styles.segmentText, preset === p && styles.segmentTextActive]}>
-                {p === 'week' ? '주간' : p === 'month' ? '월간' : '분기'}
+                {p === 'week' ? t('analytics.preset_week') : p === 'month' ? t('analytics.preset_month') : t('analytics.preset_quarter')}
               </Text>
             </TouchableOpacity>
           ))}
@@ -234,7 +245,7 @@ function AnalyticsScreenContent() {
           <View style={styles.center}>
             <Text style={styles.errorText}>{error}</Text>
             <TouchableOpacity onPress={fetchStats} style={styles.retryBtn}>
-              <Text style={styles.retryText}>다시 시도</Text>
+              <Text style={styles.retryText}>{t('analytics.retry')}</Text>
             </TouchableOpacity>
           </View>
         ) : stats ? (
@@ -242,46 +253,46 @@ function AnalyticsScreenContent() {
             {/* 요약 카드 — 직전 기간 대비 증감 + 하루 평균 + 한가한 요일 + 최다 카테고리 */}
             <View style={styles.card}>
               <View style={styles.insightHeader}>
-                <Text style={styles.cardTitle}>요약</Text>
+                <Text style={styles.cardTitle}>{t('analytics.summary_title')}</Text>
                 {prevStats && (
-                  <Text style={styles.compareCaption}>직전 {presetLabel(preset)} 대비</Text>
+                  <Text style={styles.compareCaption}>{t('analytics.compare', { period: presetLabel(preset) })}</Text>
                 )}
               </View>
               <View style={styles.summaryRow}>
                 <StatDelta
-                  label="총 일정"
-                  value={`${stats.totalCount}개`}
+                  label={t('analytics.stat_total')}
+                  value={`${stats.totalCount}${t('analytics.count_unit')}`}
                   delta={prevStats ? computeDelta(stats.totalCount, prevStats.totalCount) : null}
                   styles={styles}
                 />
                 <StatDelta
-                  label="총 시간"
+                  label={t('analytics.stat_total_time')}
                   value={formatMinutes(stats.totalMinutes)}
                   delta={prevStats ? computeDelta(stats.totalMinutes, prevStats.totalMinutes) : null}
                   styles={styles}
                 />
               </View>
               <View style={styles.summaryRow}>
-                <Stat label="하루 평균" value={`${avgPerDay(stats)}개`} />
+                <Stat label={t('analytics.stat_avg_day')} value={`${avgPerDay(stats)}${t('analytics.count_unit')}`} />
                 <Stat
-                  label="가장 바쁜 요일"
-                  value={stats.busiestDow !== null ? `${DOW_LABELS[stats.busiestDow]}요일` : '—'}
+                  label={t('analytics.stat_busiest')}
+                  value={stats.busiestDow !== null ? `${dowLabels()[stats.busiestDow]}${t('analytics.dow_suffix')}` : t('analytics.none')}
                 />
               </View>
               <View style={styles.summaryRow}>
                 <Stat
-                  label="가장 한가한 요일"
-                  value={stats.quietestDow !== null ? `${DOW_LABELS[stats.quietestDow]}요일` : '—'}
+                  label={t('analytics.stat_quietest')}
+                  value={stats.quietestDow !== null ? `${dowLabels()[stats.quietestDow]}${t('analytics.dow_suffix')}` : t('analytics.none')}
                 />
-                <Stat label="최다 카테고리" value={stats.byCategory[0]?.name || '—'} />
+                <Stat label={t('analytics.stat_top_category')} value={stats.byCategory[0]?.name || t('analytics.none')} />
               </View>
             </View>
 
             {/* 카테고리 비중 — chart-kit PieChart + legend */}
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>카테고리 비중</Text>
+              <Text style={styles.cardTitle}>{t('analytics.cat_share_title')}</Text>
               {stats.byCategory.length === 0 ? (
-                <Text style={styles.emptyText}>이 기간에 등록된 일정이 없어요</Text>
+                <Text style={styles.emptyText}>{t('analytics.empty_period')}</Text>
               ) : (
                 <>
                   <PieChart
@@ -313,7 +324,7 @@ function AnalyticsScreenContent() {
                             {cat.name}
                           </Text>
                           <Text style={styles.catCount}>
-                            {cat.count}개 · {pct}%
+                            {cat.count}{t('analytics.count_unit')} · {pct}%
                           </Text>
                         </View>
                       );
@@ -325,10 +336,10 @@ function AnalyticsScreenContent() {
 
             {/* 요일 분포 — chart-kit BarChart */}
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>요일 분포</Text>
+              <Text style={styles.cardTitle}>{t('analytics.dow_dist_title')}</Text>
               <BarChart
                 data={{
-                  labels: stats.byDayOfWeek.map((d) => DOW_LABELS[d.dow] ?? ''),
+                  labels: stats.byDayOfWeek.map((d) => dowLabels()[d.dow] ?? ''),
                   datasets: [{
                     data: stats.byDayOfWeek.map((d) => d.count),
                   }],
@@ -349,17 +360,17 @@ function AnalyticsScreenContent() {
             {/* 요일 × 시간대 히트맵 (7×4) — 4분할 단순 막대를 격자로 강화 */}
             {grid && grid.total > 0 && (
               <View style={styles.card}>
-                <Text style={styles.cardTitle}>요일 × 시간대 히트맵</Text>
+                <Text style={styles.cardTitle}>{t('analytics.heatmap_title')}</Text>
                 <View style={styles.heatGrid}>
                   <View style={styles.heatRow}>
                     <View style={styles.heatCornerCell} />
-                    {['아침', '낮', '저녁', '밤'].map((b) => (
+                    {[t('analytics.tod_morning'), t('analytics.tod_afternoon'), t('analytics.tod_evening'), t('analytics.tod_night')].map((b) => (
                       <Text key={b} style={styles.heatColLabel}>{b}</Text>
                     ))}
                   </View>
                   {grid.grid.map((row, dow) => (
                     <View key={dow} style={styles.heatRow}>
-                      <Text style={styles.heatRowLabel}>{DOW_LABELS[dow]}</Text>
+                      <Text style={styles.heatRowLabel}>{dowLabels()[dow]}</Text>
                       {row.map((count, bIdx) => {
                         const intensity = grid.max > 0 ? count / grid.max : 0;
                         return (
@@ -388,7 +399,7 @@ function AnalyticsScreenContent() {
                   ))}
                 </View>
                 <Text style={styles.bucketCaption}>
-                  아침 5–12시 · 낮 12–17시 · 저녁 17–22시 · 밤 22–5시
+                  {t('analytics.tod_legend')}
                 </Text>
               </View>
             )}
@@ -396,11 +407,11 @@ function AnalyticsScreenContent() {
             {/* 내 일정 · 공유받은 일정 비중 (isOwn 기준) */}
             {ownership && ownership.own.count + ownership.shared.count > 0 && (
               <View style={styles.card}>
-                <Text style={styles.cardTitle}>내 일정 · 공유받은 일정</Text>
+                <Text style={styles.cardTitle}>{t('analytics.own_share_title')}</Text>
                 <View style={styles.summaryRow}>
-                  <Stat label="내가 등록" value={`${ownership.own.count}개`} />
-                  <Stat label="공유받음" value={`${ownership.shared.count}개`} />
-                  <Stat label="공유 비율" value={`${ownership.sharedPct}%`} />
+                  <Stat label={t('analytics.stat_own')} value={`${ownership.own.count}${t('analytics.count_unit')}`} />
+                  <Stat label={t('analytics.stat_shared')} value={`${ownership.shared.count}${t('analytics.count_unit')}`} />
+                  <Stat label={t('analytics.stat_shared_pct')} value={`${ownership.sharedPct}%`} />
                 </View>
                 <View style={styles.scopeBar}>
                   <View style={[styles.scopeBarShared, { width: `${ownership.sharedPct}%` }]} />
@@ -411,7 +422,7 @@ function AnalyticsScreenContent() {
             {/* 주별 추이 (최근 8주) */}
             {trend && trend.some((p) => p.count > 0) && (
               <View style={styles.card}>
-                <Text style={styles.cardTitle}>주별 추이 (최근 8주)</Text>
+                <Text style={styles.cardTitle}>{t('analytics.weekly_trend_title')}</Text>
                 <BarChart
                   data={{
                     labels: trend.map((p) => p.label),
@@ -435,9 +446,9 @@ function AnalyticsScreenContent() {
             {isPro ? (
               <AIInsightCard stats={stats} styles={styles} colors={colors} />
             ) : (
-              <ProGate isPro={false} styles={styles} colors={colors} title="AI 인사이트">
+              <ProGate isPro={false} styles={styles} colors={colors} title={t('analytics.insights_title')}>
                 <Text style={styles.insightBody}>
-                  AI 가 당신의 일정 패턴을 분석해 자연어 인사이트와 액션 제안을 드려요.
+                  {t('analytics.insights_desc')}
                 </Text>
               </ProGate>
             )}
@@ -461,14 +472,15 @@ function AnalyticsPaywallView({
   styles: ReturnType<typeof makeStyles>;
   colors: ReturnType<typeof useColors>;
 }) {
+  const { t } = useTranslation();
   // Pro 분석이 제공하는 핵심 가치 — paywall feature 목록과 톤 일치.
   const features: Array<{
     icon: React.ComponentProps<typeof Ionicons>['name'];
     text: string;
   }> = [
-    { icon: 'pie-chart-outline', text: '카테고리 · 요일 · 시간대 분포 분석' },
-    { icon: 'trending-up-outline', text: '기간별 추이와 가장 바쁜 시간 파악' },
-    { icon: 'sparkles-outline', text: 'AI 맞춤 인사이트 & 다음 주 추천' },
+    { icon: 'pie-chart-outline', text: t('analytics.feature_distribution') },
+    { icon: 'trending-up-outline', text: t('analytics.feature_trend') },
+    { icon: 'sparkles-outline', text: t('analytics.feature_ai') },
   ];
 
   return (
@@ -478,9 +490,9 @@ function AnalyticsPaywallView({
           <View style={styles.paywallIconCircle}>
             <Ionicons name="bar-chart" size={34} color={colors.primary} />
           </View>
-          <Text style={styles.paywallTitle}>분석은 Pro 기능이에요</Text>
+          <Text style={styles.paywallTitle}>{t('analytics.paywall_title')}</Text>
           <Text style={styles.paywallSub}>
-            내 일정 패턴을 한눈에 보고, AI 인사이트로 더 똑똑하게 계획하세요.
+            {t('analytics.paywall_desc')}
           </Text>
         </View>
 
@@ -499,7 +511,7 @@ function AnalyticsPaywallView({
           onPress={() => router.push('/subscription/paywall')}
         >
           <Ionicons name="lock-open-outline" size={16} color="#FFFFFF" />
-          <Text style={styles.paywallCtaText}>Pro로 업그레이드</Text>
+          <Text style={styles.paywallCtaText}>{t('analytics.pro_upgrade')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -523,6 +535,7 @@ function ProGate({
   colors: ReturnType<typeof useColors>;
   children: React.ReactNode;
 }) {
+  const { t } = useTranslation();
   if (isPro) {
     return (
       <View style={styles.card}>
@@ -546,7 +559,7 @@ function ProGate({
       </View>
       <View style={styles.gateLocked}>{children}</View>
       <View style={styles.gateCta}>
-        <Text style={styles.gateCtaText}>탭하면 Pro 로 잠금 해제</Text>
+        <Text style={styles.gateCtaText}>{t('analytics.gate_unlock')}</Text>
         <Ionicons name="chevron-forward" size={14} color={colors.primary} />
       </View>
     </TouchableOpacity>
@@ -568,6 +581,7 @@ function AIInsightCard({
   styles: ReturnType<typeof makeStyles>;
   colors: ReturnType<typeof useColors>;
 }) {
+  const { t } = useTranslation();
   const [insight, setInsight] = useState<InsightResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -582,7 +596,7 @@ function AIInsightCard({
         if (!cancelled) setInsight(res);
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : '인사이트를 받지 못했어요.');
+        if (!cancelled) setError(err instanceof Error ? err.message : t('analytics.error_insight'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -593,7 +607,7 @@ function AIInsightCard({
   return (
     <View style={styles.card}>
       <View style={styles.insightHeader}>
-        <Text style={styles.cardTitle}>AI 인사이트</Text>
+        <Text style={styles.cardTitle}>{t('analytics.insights_title')}</Text>
         <View style={styles.insightBadge}>
           <Text style={styles.insightBadgeText}>BETA</Text>
         </View>
@@ -601,13 +615,13 @@ function AIInsightCard({
       {loading ? (
         <View style={styles.insightLoadingRow}>
           <ActivityIndicator size="small" color={colors.primary} />
-          <Text style={styles.insightLoadingText}>분석 중이에요…</Text>
+          <Text style={styles.insightLoadingText}>{t('analytics.insight_loading')}</Text>
         </View>
       ) : error ? (
         <Text style={styles.errorText}>{error}</Text>
       ) : insight?.quotaExceeded ? (
         <Text style={styles.lockedText}>
-          오늘 무료 인사이트 한도를 모두 사용했어요. Pro 로 무제한 사용할 수 있어요.
+          {t('analytics.insight_quota')}
         </Text>
       ) : insight ? (
         <>
