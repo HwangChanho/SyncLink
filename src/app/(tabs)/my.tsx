@@ -37,9 +37,9 @@ import { GuestGate } from '@/components/common/GuestGate';
 import { showAlert } from '@/lib/webAlert';
 import { logError } from '@/lib/errorLogger';
 import { SettingsSection } from '@/components/my/SettingsSection';
-// LinkedAccountsSection — 다중 provider(Google/Kakao/Apple) 수동 연동 UI.
-// Sprint 21(ADR-010)에서 추가 → 웹 회귀 격리 목적으로 일시 비활성 → 2026-06-03 재활성.
-import { LinkedAccountsSection } from '@/components/my/LinkedAccountsSection';
+// AccountMergeSection — 통합 로그인(재로그인 기반 단일계정 병합). 2026-06-05 재설계로
+// 기존 LinkedAccountsSection(제공자별 OAuth identity 연동)을 대체.
+import { AccountMergeSection } from '@/components/my/AccountMergeSection';
 import { ServiceInfoSection } from '@/components/my/ServiceInfoSection';
 // Build-81 — AccountSection 은 settings/account 화면으로 이전. import 제거.
 import { DevDashboard } from '@/components/DevDashboard';
@@ -373,8 +373,8 @@ function MyScreenContent() {
           </View>
         )}
 
-        {/* ── 연결된 로그인 (Google/Kakao/Apple 수동 연동, ADR-010) ── */}
-        <LinkedAccountsSection />
+        {/* ── 통합 로그인 (재로그인 기반 단일계정 병합, 2026-06-05 재설계) ── */}
+        <AccountMergeSection />
 
         <SettingsSection />
 
