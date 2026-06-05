@@ -110,13 +110,10 @@ export const useEventStore = create<EventState>((set, _get) => ({
     // 인증 확정 후 재호출(홈 effect / 캘린더 focus)에서 올바르게 로드한다.
     if (auth.isLoading) return;
     if (!auth.isAuthenticated) {
-      // 게스트: 예시 일정으로 eventsByDate 를 통째로 교체(merge 아님). 직전 로그인
-      // 사용자의 실데이터가 남아 게스트/로그아웃 화면에 새지 않도록 한다.
-      set({
-        eventsByDate: buildGuestDemoEventsByDate(),
-        fetchedDateKeys: new Set<string>(),
+      set((state) => ({
+        eventsByDate: { ...state.eventsByDate, ...buildGuestDemoEventsByDate() },
         isFetching: false,
-      });
+      }));
       return;
     }
     // Build-71 perf — range 의 모든 date key 가 이미 fetched 라면 skip.
