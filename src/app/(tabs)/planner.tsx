@@ -103,15 +103,23 @@ function PlannerScreenInner() {
       const map = new Map(cats.map(c => [c.id, c]));
       setCategoryMap(map);
     } catch (err) {
-      logError({ context: 'planner.loadCategories', error: err }).catch(() => { /* noop */ });
+      // 게스트는 카테고리를 못 불러오는 게 정상 → 로그인 필요 에러는 조용히 무시.
+      if (!(err instanceof Error && err.message.includes('로그인이 필요'))) {
+        logError({ context: 'planner.loadCategories', error: err }).catch(() => { /* noop */ });
+      }
     }
   }, []);
 
   useEffect(() => {
-    void fetchTodos()
-      .catch((err) => logError({ context: 'planner.fetchTodos', error: err }));
-    void fetchNotes()
-      .catch((err) => logError({ context: 'planner.fetchNotes', error: err }));
+    // 게스트의 '로그인 필요' 읽기 에러는 정상 → 로그만 생략(write 는 store error
+    // 를 통해 LoginPromptSheet 로 따로 유도된다).
+    const logIfNotAuth = (context: string) => (err: unknown) => {
+      if (!(err instanceof Error && err.message.includes('로그인이 필요'))) {
+        logError({ context, error: err });
+      }
+    };
+    void fetchTodos().catch(logIfNotAuth('planner.fetchTodos'));
+    void fetchNotes().catch(logIfNotAuth('planner.fetchNotes'));
     loadCategories();
   }, [fetchTodos, fetchNotes, loadCategories]);
 
