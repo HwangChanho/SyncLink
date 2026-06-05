@@ -954,8 +954,13 @@ export function MonthView({
                       pressed && styles.pickerItemHi,
                     ]}
                     onPress={() => {
+                      const picked = evt;
                       setViewPickerEvents(null);
-                      onEventPress?.(evt);
+                      // ⚠️ RN Modal 두 개를 같은 틱에 transition 하면(피커 dismiss +
+                      // onEventPress 가 여는 모달 = 게스트 LoginPromptSheet 또는 이벤트
+                      // 상세) iOS 가 터치 deadlock 에 빠져 앱이 멈춘다(2026-06-05 게스트
+                      // 실측). 피커가 닫힌 뒤로 onEventPress 를 미뤄 모달 충돌을 피한다.
+                      setTimeout(() => onEventPress?.(picked), 350);
                     }}
                   >
                     <View style={[styles.pickerColorBar, { backgroundColor: evt.color }]} />
