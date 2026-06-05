@@ -104,7 +104,12 @@ export const useEventStore = create<EventState>((set, _get) => ({
     // 2026-06-04 게스트 진입: 계정이 없으면 서버(RLS 로 어차피 [] 반환) 호출을
     // 생략하고 예시(데모) 일정을 채워, 홈/캘린더가 빈 화면 대신 살아있는 모습을
     // 보여준다 → 로그인 유도(LoginPromptBanner / GuestGate)로 자연 연결.
-    if (!useAuthStore.getState().isAuthenticated) {
+    const auth = useAuthStore.getState();
+    // ⚠️ 인증 복원 중(isLoading)에는 손대지 않는다. 부팅 직후 잠깐 비인증 상태에서
+    // 데모를 채우면 곧 로그인될 사용자의 홈에도 데모가 새어버린다(실측 발견).
+    // 인증 확정 후 재호출(홈 effect / 캘린더 focus)에서 올바르게 로드한다.
+    if (auth.isLoading) return;
+    if (!auth.isAuthenticated) {
       set((state) => ({
         eventsByDate: { ...state.eventsByDate, ...buildGuestDemoEventsByDate() },
         isFetching: false,

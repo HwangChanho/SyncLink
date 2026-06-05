@@ -24,6 +24,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useEventStore } from '@/stores/eventStore';
 import { useTodoStore } from '@/stores/todoStore';
+import { useAuthStore } from '@/stores/authStore';
 import { getViewRange } from '@/lib/calendarRange';
 import { NLInputBar } from '@/components/nl/NLInputBar';
 import { HomeHeader }         from '@/components/home/HomeHeader';
@@ -108,10 +109,13 @@ export default function HomeScreen() {
     });
   };
 
+  // 인증 복원이 끝난 뒤 로드한다. 부팅 중(isLoading)에 홈이 mount 되면 eventStore 가
+  // 데모/실데이터를 잘못 채울 수 있어(데모 누수), 인증 확정 시점에 (재)로드한다.
+  const authReady = useAuthStore((s) => !s.isLoading);
   useEffect(() => {
-    loadTodayData();
+    if (authReady) loadTodayData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authReady]);
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
