@@ -31,6 +31,7 @@ import { useTodoStore } from '@/stores/todoStore';
 import type { Todo, Category } from '@/types';
 import { getCategories } from '@/services/categoryService';
 import { showAlert } from '@/lib/webAlert';
+import { useLoginPromptStore } from '@/stores/loginPromptStore';
 import { TodoEditSheet } from '@/components/planner/TodoEditSheet';
 import { TodoCreateSheet } from '@/components/planner/TodoCreateSheet';
 import { CategoryPickerSheet } from '@/components/planner/CategoryPickerSheet';
@@ -121,6 +122,20 @@ function PlannerScreenInner() {
 
   useEffect(() => {
     if (error && !alertActiveRef.current) {
+      // 게스트가 추가/수정/삭제 등 write 를 시도하면 서비스가 "로그인이 필요합니다"
+      // 를 throw → 여기로 온다. Alert 대신 LoginPromptSheet 로 유도해 캘린더/홈과
+      // 톤을 맞춘다(사용자 요청). 그 외 에러는 기존 Alert.
+      if (error.includes('로그인이 필요')) {
+        clearError();
+        // 열려 있을 수 있는 플래너 시트(생성/수정/카테고리)를 먼저 닫는다.
+        // 모달 두 개를 동시에 transition 하면 iOS 가 멈추므로(캘린더 picker 와 동일),
+        // 시트 dismiss 후로 LoginPromptSheet 를 미뤄 연다.
+        setCreateSheetOpen(false);
+        setEditingTodo(null);
+        setCategoryChangeTodo(null);
+        setTimeout(() => useLoginPromptStore.getState().open(), 300);
+        return;
+      }
       alertActiveRef.current = true;
       showAlert(t('common.error'), error, [{
         text: t('common.ok'),
