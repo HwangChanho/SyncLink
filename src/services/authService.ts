@@ -447,10 +447,39 @@ export async function linkProvider(provider: 'google' | 'kakao' | 'apple'): Prom
   if (!session) {
     throw new Error('linkProvider: 먼저 로그인해야 합니다');
   }
-  // Note: 'kakao' is configured as a custom OAuth provider in Supabase; the
-  // string passed here matches the Supabase Auth provider key.
-  const { error } = await supabase.auth.linkIdentity({ provider: provider as 'google' | 'apple' | 'kakao' });
+
+  // Web: linkIdentity 가 직접 full-page redirect 하므로 호출만 하면 된다.
+  if (Platform.OS === 'web') {
+    const { error } = await supabase.auth.linkIdentity({ provider: provider as 'google' | 'apple' | 'kakao' });
+    if (error) throw error;
+    return;
+  }
+
+  // Native(RN): linkIdentity 는 OAuth URL 만 돌려주고 브라우저를 자동으로 열지
+  // 않는다(window 없음). 일반 OAuth 로그인과 동일하게 skipBrowserRedirect 로 URL 을
+  // 받아 WebBrowser 로 직접 열고, 돌아온 콜백의 PKCE code 를 exchangeCodeForSession
+  // 으로 교환해 연동을 완료한다. (이전엔 linkIdentity 만 호출 → RN 에서 아무 일도
+  // 일어나지 않아 "통합 로그인 안 됨" — 2026-06-05 수정.)
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const Linking = require('expo-linking');
+  const redirectTo = Linking.createURL('/auth/callback');
+  const { data, error } = await supabase.auth.linkIdentity({
+    provider: provider as 'google' | 'apple' | 'kakao',
+    options: { redirectTo, skipBrowserRedirect: true },
+  });
   if (error) throw error;
+  if (!data?.url) throw new Error('연동 OAuth URL 을 생성하지 못했습니다.');
+
+  const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo, { showInRecents: false });
+  if (result.type !== 'success' || !result.url) {
+    throw new Error('cancelled');
+  }
+  const errParam = extractQueryParam(result.url, 'error_description') ?? extractQueryParam(result.url, 'error');
+  if (errParam) throw new Error(`연동 오류: ${decodeURIComponent(errParam)}`);
+  const code = extractQueryParam(result.url, 'code');
+  if (!code) throw new Error('연동 코드를 받지 못했습니다.');
+  const { error: exErr } = await supabase.auth.exchangeCodeForSession(code);
+  if (exErr) throw exErr;
 }
 
 /**
