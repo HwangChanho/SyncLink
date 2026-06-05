@@ -114,6 +114,10 @@ const zh = {
       demo_workout: '晨练',
       demo_birthday: '妈妈生日 🎂',
       demo_movie: '看电影',
+      sheet_title: '登录后创建你的日程',
+      sheet_desc: '登录后即可保存日程并随处同步',
+      sheet_cta: '登录',
+      sheet_later: '以后再说',
     },
     login: {
       tagline: '共享日程，AI 为您管理',

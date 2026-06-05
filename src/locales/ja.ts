@@ -114,6 +114,10 @@ const ja = {
       demo_workout: '朝の運動',
       demo_birthday: '母の誕生日 🎂',
       demo_movie: '映画鑑賞',
+      sheet_title: 'ログインして予定を作ろう',
+      sheet_desc: 'ログインすると予定を保存し、どこでも同期できます',
+      sheet_cta: 'ログイン',
+      sheet_later: '後で',
     },
     login: {
       tagline: 'スケジュールを共有しよう — AI がサポート',

@@ -9,6 +9,7 @@
 
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useEventStore } from '@/stores/eventStore';
@@ -74,6 +75,7 @@ export function TodayEventList() {
   const colors = useColors();
   const styles = makeStyles(colors);
   const router       = useRouter();
+  const requireAuth  = useRequireAuth();
   const eventsByDate = useEventStore(s => s.eventsByDate);
 
   const todayEvents  = eventsByDate[todayKey()] ?? [];
@@ -94,7 +96,7 @@ export function TodayEventList() {
       {sortedEvents.length === 0 ? (
         <Pressable
           style={styles.emptyContainer}
-          onPress={() => router.push('/event/create')}
+          onPress={() => requireAuth(() => router.push('/event/create'))}
           accessibilityRole="button"
           accessibilityLabel={t('event.add')}
         >
@@ -115,7 +117,7 @@ export function TodayEventList() {
             <EventRow
               key={event.id}
               event={event}
-              onPress={() => router.push(`/event/${event.id}`)}
+              onPress={() => requireAuth(() => router.push(`/event/${event.id}`))}
               colors={colors}
               styles={styles}
             />

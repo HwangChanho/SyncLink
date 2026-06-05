@@ -8,6 +8,7 @@
 
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useEventStore } from '@/stores/eventStore';
@@ -77,6 +78,7 @@ export function UpcomingEventsCard() {
   const colors       = useColors();
   const styles       = makeStyles(colors);
   const router       = useRouter();
+  const requireAuth  = useRequireAuth();
   const eventsByDate = useEventStore(s => s.eventsByDate);
 
   // Collect events from tomorrow through DAYS_AHEAD days ahead
@@ -128,7 +130,7 @@ export function UpcomingEventsCard() {
             key={event.id}
             event={event}
             dateLabel={dateLabel(event.dateKey)}
-            onPress={() => router.push(`/event/${event.id}`)}
+            onPress={() => requireAuth(() => router.push(`/event/${event.id}`))}
             colors={colors}
             styles={styles}
           />

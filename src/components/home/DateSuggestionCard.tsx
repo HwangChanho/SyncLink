@@ -21,6 +21,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { router } from 'expo-router';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
@@ -97,7 +98,8 @@ export function DateSuggestionCard() {
   // ─── Render ────────────────────────────────────────────────────────────────
 
   /** Navigate to event/create pre-filled with the first free slot. */
-  const handleCreateEvent = () => {
+  const requireAuth = useRequireAuth();
+  const handleCreateEvent = () => requireAuth(() => {
     const firstSlot = result?.slots[0];
     if (firstSlot) {
       const startDate = new Date(firstSlot.start);
@@ -109,7 +111,7 @@ export function DateSuggestionCard() {
     } else {
       router.push('/event/create');
     }
-  };
+  });
 
   return (
     <View style={styles.container}>

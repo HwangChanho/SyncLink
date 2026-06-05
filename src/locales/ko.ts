@@ -119,6 +119,10 @@ const ko = {
       demo_workout: '아침 운동',
       demo_birthday: '엄마 생신 🎂',
       demo_movie: '영화 보기',
+      sheet_title: '로그인하고 내 일정 만들기',
+      sheet_desc: '로그인하면 일정을 저장하고 어디서나 동기화할 수 있어요',
+      sheet_cta: '로그인',
+      sheet_later: '다음에',
     },
     login: {
       tagline: '함께하는 일정, AI가 챙겨드려요',

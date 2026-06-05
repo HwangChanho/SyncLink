@@ -32,6 +32,7 @@ import { useVoicePostProcess } from '@/hooks/useVoicePostProcess';
 import { createEvent } from '@/services/eventService';
 import { getMySpaces } from '@/services/spaceService';
 import { useAuthStore } from '@/stores/authStore';
+import { useLoginPromptStore } from '@/stores/loginPromptStore';
 import { logError } from '@/lib/errorLogger';
 import { useEventStore } from '@/stores/eventStore';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
@@ -283,6 +284,12 @@ export function NLInputBar({ onEventCreated }: Props) {
     // image 첨부 시엔 text 가 비어도 허용. text-only 면 빈 입력 차단.
     if (!attachedImage && !trimmed) return;
     if (inputState === 'loading') return;
+
+    // 게스트: AI 입력은 계정 필요 — 로그인 유도 시트로 안내하고 처리 중단.
+    if (!useAuthStore.getState().isAuthenticated) {
+      useLoginPromptStore.getState().open();
+      return;
+    }
 
     Keyboard.dismiss();
 

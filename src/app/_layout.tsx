@@ -40,6 +40,7 @@ import { useWebPush } from '@/hooks/useWebPush';
 import { useWidgetSync } from '@/hooks/useWidgetSync';
 import { PinPad } from '@/components/common/PinPad';
 import { OfflineBanner } from '@/components/common/OfflineBanner';
+import { LoginPromptSheet } from '@/components/common/LoginPromptSheet';
 import { AppSplash } from '@/components/common/AppSplash';
 // Sprint 14 TASK-1402/1406 — AdMob SDK initialization after ATT consent.
 import { initAdMob } from '@/services/adService';
@@ -811,6 +812,8 @@ export default function RootLayout() {
           {/* v1.2 Phase 2 — AI 비서 모달. ChatFab → router.push('/chat'). */}
           <Stack.Screen name="chat" options={{ presentation: 'modal', headerShown: true, title: 'AI 비서' }} />
         </Stack>
+        {/* Guest soft sign-in nudge — driven by loginPromptStore, over the Stack. */}
+        <LoginPromptSheet />
       </SafeAreaProvider>
       </View>
     </GestureHandlerRootView>

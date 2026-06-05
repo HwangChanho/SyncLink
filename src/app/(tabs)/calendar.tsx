@@ -28,6 +28,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { Ionicons } from '@expo/vector-icons';
 import { NLInputBar } from '@/components/nl/NLInputBar';
 import { CalendarHeader, type ViewMode } from '@/components/calendar/CalendarHeader';
@@ -55,6 +56,7 @@ export default function CalendarScreen() {
   const colors = useColors();
   const styles = makeStyles(colors);
   const router = useRouter();
+  const requireAuth = useRequireAuth();
   // PRD 4.2 Tier 2 — i18n for free-time UI strings.
   const { t } = useTranslation();
   const { eventsByDate, fetchEvents, upsertEvent, removeEvent } = useEventStore();
@@ -227,11 +229,13 @@ export default function CalendarScreen() {
    * select, no navigation).
    */
   const handleEmptyDatePress = useCallback((date: Date) => {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    router.push(`/event/create?date=${y}-${m}-${d}`);
-  }, [router]);
+    requireAuth(() => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      router.push(`/event/create?date=${y}-${m}-${d}`);
+    });
+  }, [router, requireAuth]);
 
   /**
    * Long-pressing a date in MonthView jumps straight to event/create
@@ -239,11 +243,13 @@ export default function CalendarScreen() {
    * Faster than: tap date → enter day view → press + button → fill form.
    */
   const handleDateLongPress = useCallback((date: Date) => {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    router.push(`/event/create?date=${y}-${m}-${d}`);
-  }, [router]);
+    requireAuth(() => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      router.push(`/event/create?date=${y}-${m}-${d}`);
+    });
+  }, [router, requireAuth]);
 
   // Build-55 의 handleEmptySlotPress / WeekView+DayView 의 onEmptySlotPress
   // 연결은 LEAD 보고로 일시 비활성화 — capture 단계에서 항상 claim 하던
@@ -253,8 +259,8 @@ export default function CalendarScreen() {
 
   /** Tapping an event opens the event detail screen. */
   const handleEventPress = useCallback((event: EventSummary) => {
-    router.push(`/event/${event.id}`);
-  }, [router]);
+    requireAuth(() => router.push(`/event/${event.id}`));
+  }, [router, requireAuth]);
 
   // ─── Event fetching ──────────────────────────────────────────────────────────
 

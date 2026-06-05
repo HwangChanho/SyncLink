@@ -114,6 +114,10 @@ const en = {
       demo_workout: 'Morning workout',
       demo_birthday: "Mom's birthday 🎂",
       demo_movie: 'Movie night',
+      sheet_title: 'Sign in to make it yours',
+      sheet_desc: 'Sign in to save your schedule and sync it everywhere',
+      sheet_cta: 'Sign in',
+      sheet_later: 'Maybe later',
     },
     login: {
       tagline: 'Your schedule, together — powered by AI',
