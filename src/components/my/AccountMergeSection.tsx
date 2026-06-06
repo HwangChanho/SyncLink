@@ -39,7 +39,6 @@ import type {
   MergeConflictPolicy,
   SecondarySession,
 } from '@/services/authService';
-import { useEventStore } from '@/stores/eventStore';
 import { showAlert } from '@/lib/webAlert';
 import { makeMenuStyles } from './menuStyles';
 
@@ -136,22 +135,16 @@ export function AccountMergeSection() {
     }
   }, []);
 
-  /** 확인 단계 → 실제 병합 실행 + 세션/캐시 정리 → done. */
+  /** 확인 단계 → 실제 병합 실행 → done. */
   const confirmMerge = useCallback(async () => {
     if (!bSession || !preview) return;
     setBusy(true);
     try {
       const res = await authService.executeMergeByToken(bSession.accessToken, policy);
-
-      // 캘린더/홈 일정 캐시를 비워 다음 화면 포커스에서 병합 데이터로 재조회.
-      useEventStore.setState({ eventsByDate: {} });
-
-      // primary 가 현재 세션이 아니면(=A 가 흡수/삭제됨) primary(B) 세션으로 전환.
-      // setActiveSession → onAuthStateChange(SIGNED_IN) → 유저 재하이드레이션.
-      if (!res.primaryIsCurrent) {
-        await authService.setActiveSession(bSession.accessToken, bSession.refreshToken);
-      }
-
+      // 병합으로 계정 토폴로지가 바뀐다(흡수/삭제·plan·일정 이동). 부분적인
+      // setSession/캐시 무효화는 plan(Pro) 갱신 누락 등으로 stale 화면을 만들었다
+      // (2026-06-06 실측 버그). 가장 확실한 방법은 done 화면에서 재로그인 유도 →
+      // 모든 상태(세션·plan·일정)를 fresh 하게 다시 로드.
       setLastResult(res);
       setStep('done');
     } catch (err) {
@@ -160,6 +153,16 @@ export function AccountMergeSection() {
       setBusy(false);
     }
   }, [bSession, preview, policy]);
+
+  /** 통합 완료 후 재로그인 — signOut 하면 auth 가드가 로그인 화면으로 보낸다. */
+  const reloginAfterMerge = useCallback(async () => {
+    setVisible(false);
+    try {
+      await authService.signOut();
+    } catch {
+      /* 이미 무효 세션일 수 있음(현재 계정이 흡수됨) — 무시하고 로그인으로 */
+    }
+  }, []);
 
   // ─── 렌더 ────────────────────────────────────────────────────────────────────
 
@@ -352,13 +355,14 @@ export function AccountMergeSection() {
         <Text style={styles.title}>통합 완료</Text>
         <Text style={styles.subtitle}>
           계정이 하나로 합쳐졌어요{moved > 0 ? ` · 일정 ${moved}개 이전` : ''}
-          {dedup > 0 ? ` · 중복 ${dedup}개 정리` : ''}.
+          {dedup > 0 ? ` · 중복 ${dedup}개 정리` : ''}. 이제 어느 방법으로 로그인해도 같은 계정이에요.
         </Text>
-        <Pressable style={styles.primaryBtn} onPress={open}>
-          <Text style={styles.primaryBtnText}>다른 계정 더 통합</Text>
+        <Text style={styles.note}>변경을 반영하려면 다시 로그인해주세요.</Text>
+        <Pressable style={styles.primaryBtn} onPress={() => void reloginAfterMerge()}>
+          <Text style={styles.primaryBtnText}>다시 로그인</Text>
         </Pressable>
         <Pressable style={styles.textBtn} onPress={() => setVisible(false)}>
-          <Text style={styles.textBtnLabel}>완료</Text>
+          <Text style={styles.textBtnLabel}>나중에</Text>
         </Pressable>
       </>
     );
