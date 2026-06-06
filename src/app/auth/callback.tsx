@@ -62,7 +62,13 @@ export default function AuthCallbackScreen() {
     const href = (globalThis as WebLocation).location?.href ?? '';
 
     if (!href) {
-      router.replace('/auth/login');
+      // Native: 이 화면은 정상 흐름에서 쓰이지 않는다(OAuth 는 WebBrowser 가 처리).
+      // 그런데 통합 로그인 중 Kakao WebBrowser 의 synclink://auth/callback 리다이렉트가
+      // Expo Router 로 새어 들어와 여기 도달하면, 유효 세션이 있는데도 로그인 화면으로
+      // 보내져 "로그아웃/검은화면"처럼 보였다(2026-06-06 실측). 세션이 있으면 탭으로,
+      // 없을 때만 로그인으로 보낸다.
+      const { data: { session } } = await supabase.auth.getSession();
+      router.replace(session ? '/(tabs)' : '/auth/login');
       return;
     }
 
