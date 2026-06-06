@@ -48,7 +48,7 @@ import { initAdMob } from '@/services/adService';
 import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
 import { useColors } from '@/hooks/useColors';
 import { logError } from '@/lib/errorLogger';
-import { ONBOARDING_STORAGE_KEY } from '@/app/onboarding/index';
+import { useOnboardingStore } from '@/stores/onboardingStore';
 import { useFonts } from 'expo-font';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
 
@@ -97,56 +97,19 @@ function useAuthGuard(): { routingReady: boolean } {
   const segments = useSegments();
   const router = useRouter();
 
-  /** null = still checking AsyncStorage; true/false = result */
-  const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
+  // 온보딩 완료 플래그 — 공유 store 에서 읽는다. 온보딩 완료 시 store.complete()
+  // 가 `done` 을 **동기적으로** true 로 바꾼 뒤 navigate 하므로, 가드가 stale false
+  // 로 /onboarding 으로 되돌리는 레이스(온보딩 두 번 + 로그인 화면 깜빡)가 사라진다.
+  // null = 아직 hydrate 안 됨, true/false = 결과.
+  const onboardingDone = useOnboardingStore((s) => s.done);
 
   /** Prevent duplicate replaces to the same target during re-renders. */
   const lastReplacedRef = useRef<string | null>(null);
 
-  /**
-   * Tracks whether the user was on the onboarding screen in the previous render.
-   * Used to detect onboarding→other navigation transitions so we can re-read
-   * AsyncStorage fresh (fixes stale onboardingDone after E2E clearState + skip).
-   */
-  const prevInOnboardingRef = useRef(false);
-
-  // Read onboarding flag ONCE at mount. Re-running on segment change caused
-  // redundant AsyncStorage reads which fed back into the routing effect below.
+  // 앱 시작 시 1회 hydrate. 이후 갱신은 onboarding 화면의 store.complete() 가 담당.
   useEffect(() => {
-    AsyncStorage.getItem(ONBOARDING_STORAGE_KEY)
-      .then((value) => setOnboardingDone(value !== null))
-      .catch(() => setOnboardingDone(true));
+    void useOnboardingStore.getState().hydrate();
   }, []);
-
-  /**
-   * Re-read the onboarding flag from AsyncStorage whenever the user leaves
-   * the onboarding screen while authenticated.
-   *
-   * Background: useAuthGuard reads AsyncStorage only once at mount (empty deps).
-   * After E2E clearState the key is absent → onboardingDone=false.  The guard
-   * correctly routes to /onboarding.  Once the user taps "skip", onboarding
-   * writes the key and calls router.replace('/auth/login').  But the guard's
-   * in-memory onboardingDone is still false (stale), so the routing logic
-   * re-targets /onboarding and lastReplacedRef blocks the redirect, leaving
-   * the user stuck on /auth/login with routingReady=false → AppSplash forever.
-   *
-   * Fix: detect the onboarding→other transition and do a fresh AsyncStorage
-   * read so the guard picks up the newly-written key.
-   */
-  useEffect(() => {
-    const inOnboardingNow = segments[0] === 'onboarding';
-    const justLeftOnboarding = prevInOnboardingRef.current && !inOnboardingNow;
-    prevInOnboardingRef.current = inOnboardingNow;
-
-    if (justLeftOnboarding && isAuthenticated) {
-      // Clear the de-duplicate guard so the routing effect can redirect again
-      // once the fresh AsyncStorage value comes back.
-      lastReplacedRef.current = null;
-      AsyncStorage.getItem(ONBOARDING_STORAGE_KEY)
-        .then((value) => setOnboardingDone(value !== null))
-        .catch(() => setOnboardingDone(true));
-    }
-  }, [segments, isAuthenticated]);
 
   useEffect(() => {
     // Wait for both auth hydration and AsyncStorage read to complete

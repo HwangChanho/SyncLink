@@ -196,7 +196,7 @@ describe('OnboardingScreen', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('"시작하기" (마지막 페이지 CTA)', () => {
-    it('"시작하기" 탭 → router.replace("/auth/login") 호출', async () => {
+    it('"시작하기" 탭 → router.replace("/(tabs)") 호출', async () => {
       const { getByText } = render(<OnboardingScreen />);
 
       fireEvent.press(getByText('다음'));
@@ -204,7 +204,7 @@ describe('OnboardingScreen', () => {
       fireEvent.press(getByText('시작하기'));
 
       await waitFor(() => {
-        expect(mockReplace).toHaveBeenCalledWith('/auth/login');
+        expect(mockReplace).toHaveBeenCalledWith('/(tabs)');
       });
     });
 
@@ -242,13 +242,13 @@ describe('OnboardingScreen', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('"건너뛰기" 버튼', () => {
-    it('"건너뛰기" 탭 → router.replace("/auth/login") 호출', async () => {
+    it('"건너뛰기" 탭 → router.replace("/(tabs)") 호출', async () => {
       const { getByLabelText } = render(<OnboardingScreen />);
 
       fireEvent.press(getByLabelText('온보딩 건너뛰기'));
 
       await waitFor(() => {
-        expect(mockReplace).toHaveBeenCalledWith('/auth/login');
+        expect(mockReplace).toHaveBeenCalledWith('/(tabs)');
       });
     });
 
@@ -265,14 +265,14 @@ describe('OnboardingScreen', () => {
       });
     });
 
-    it('2페이지에서 "건너뛰기" → router.replace("/auth/login") 호출', async () => {
+    it('2페이지에서 "건너뛰기" → router.replace("/(tabs)") 호출', async () => {
       const { getByText, getByLabelText } = render(<OnboardingScreen />);
 
       fireEvent.press(getByText('다음')); // 2페이지 이동
       fireEvent.press(getByLabelText('온보딩 건너뛰기'));
 
       await waitFor(() => {
-        expect(mockReplace).toHaveBeenCalledWith('/auth/login');
+        expect(mockReplace).toHaveBeenCalledWith('/(tabs)');
       });
     });
   });
@@ -293,7 +293,7 @@ describe('OnboardingScreen', () => {
 
       // 저장 실패해도 네비게이션은 진행되어야 함 (non-critical)
       await waitFor(() => {
-        expect(mockReplace).toHaveBeenCalledWith('/auth/login');
+        expect(mockReplace).toHaveBeenCalledWith('/(tabs)');
       });
     });
   });

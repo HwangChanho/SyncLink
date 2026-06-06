@@ -33,7 +33,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useOnboardingStore } from '@/stores/onboardingStore';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
@@ -43,12 +43,9 @@ import { textStyles } from '@/constants/typography';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-/**
- * AsyncStorage key for the onboarding completion flag.
- * If this key exists, the onboarding is skipped on startup.
- * Exported so _layout.tsx can read it without re-declaring the key.
- */
-export const ONBOARDING_STORAGE_KEY = '@synclink/onboarding_done';
+// 온보딩 완료 플래그(키 + 상태)는 onboardingStore 가 단일 소스.
+// 하위호환(테스트 등 기존 import) 위해 동일 경로로 재노출한다.
+export { ONBOARDING_STORAGE_KEY } from '@/stores/onboardingStore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -91,16 +88,17 @@ export default function OnboardingScreen() {
   // ── Handlers ────────────────────────────────────────────────────────────
 
   /**
-   * Mark onboarding as complete in AsyncStorage and navigate to login.
+   * Mark onboarding complete and go straight to the tabs.
    * Called from both "시작하기" (last page CTA) and "건너뛰기" (skip button).
+   *
+   * complete() sets the shared `done` flag **synchronously** before we navigate,
+   * so the auth guard sees done=true and does NOT bounce back to /onboarding on a
+   * stale value. (예전엔 /auth/login 으로 보낸 뒤 가드가 stale false 로 온보딩을 한 번
+   * 더 띄우고 로그인 화면이 깜빡였다 — 2026-06-06 수정.)
    */
   const handleFinish = useCallback(async () => {
-    try {
-      await AsyncStorage.setItem(ONBOARDING_STORAGE_KEY, 'true');
-    } catch {
-      // AsyncStorage failure is non-critical — proceed to login regardless
-    }
-    router.replace('/auth/login');
+    await useOnboardingStore.getState().complete();
+    router.replace('/(tabs)');
   }, []);
 
   /**
