@@ -97,8 +97,11 @@ export function AccountMergeSection() {
     const isNative = method !== 'email';
     if (isNative) setVisible(false);
     setBusy(true);
+    // 어느 단계에서 실패했는지 사용자에게 명확히 알리기 위해 phase 를 추적한다.
+    let phase: 'login' | 'preview' = 'login';
     try {
       const b = await authService.loginSecondaryAccount(method, creds);
+      phase = 'preview';
       const pv = await authService.previewMergeByToken(b.accessToken);
       setBSession(b);
       setPreview(pv);
@@ -109,10 +112,21 @@ export function AccountMergeSection() {
       const e = err as Error & { sameAccount?: boolean };
       // 'cancelled' 는 사용자가 로그인 창을 닫은 것 → 조용히 이전 단계로.
       if (e.message !== 'cancelled') {
+        const msg = e.message ?? '';
+        const isNetwork = /network request failed|network error|fetch failed|timeout/i.test(msg);
         if (e.sameAccount) {
           showAlert('이미 같은 계정', '현재 계정과 동일한 계정이라 통합할 수 없어요.');
+        } else if (isNetwork) {
+          // "Network request failed" 를 그대로 노출하지 않고 단계 + 재시도 안내로.
+          showAlert(
+            '네트워크 오류',
+            `${phase === 'login' ? '계정 로그인' : '통합 정보 조회'} 중 연결이 끊겼어요. 인터넷 연결을 확인하고 다시 시도해주세요.`,
+          );
         } else {
-          showAlert('통합 로그인 실패', e.message || '잠시 후 다시 시도해주세요.');
+          showAlert(
+            phase === 'login' ? '통합 로그인 실패' : '통합 정보 조회 실패',
+            msg || '잠시 후 다시 시도해주세요.',
+          );
         }
       }
       setStep(method === 'email' ? 'email' : 'pick');
@@ -228,6 +242,10 @@ export function AccountMergeSection() {
           placeholder="비밀번호"
           placeholderTextColor={colors.textTertiary}
           secureTextEntry
+          // 통합 로그인 흐름에서 iOS "암호 저장?" 시스템 다이얼로그가 시트와 겹쳐
+          // 멈추는 것을 막는다(B 계정 비번을 키체인에 저장 제안할 이유도 없음).
+          textContentType="oneTimeCode"
+          autoComplete="off"
           value={password}
           onChangeText={setPassword}
           editable={!busy}
