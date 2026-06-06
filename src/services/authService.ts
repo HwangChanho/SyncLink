@@ -604,18 +604,13 @@ export async function loginSecondaryAccount(
 async function invokeMergeByToken(
   body: { bToken: string; dryRun?: boolean; policy?: MergeConflictPolicy },
 ): Promise<Record<string, unknown>> {
-  let session = await getSession();
+  const session = await getSession();
   if (!session) throw new Error('현재 로그인이 필요합니다. 다시 로그인해주세요.');
 
-  // B 로그인(특히 Kakao WebBrowser)이 오래 걸리면 현재 세션 access token 이 만료돼,
-  // Edge 의 getUser(aToken) 가 "현재 계정 인증이 만료" 로 거부할 수 있다. 호출 직전
-  // 강제 refresh 로 fresh aToken 을 확보한다(refresh 실패해도 기존 토큰으로 시도).
-  try {
-    session = await refreshSession();
-  } catch {
-    /* refresh 실패 — 기존 토큰으로 시도(아직 유효할 수도) */
-  }
-
+  // ⚠️ refreshSession() 을 호출하지 않는다 — refresh 가 실패하면 supabase-js 가 현재
+  //    세션을 sign-out 시켜 사용자가 통째로 로그아웃됐다(Kakao 통합 중 토큰 회전으로
+  //    refresh 실패 → "로그아웃 + 통합 실패", 2026-06-06 실측). aToken 이 만료된 경우엔
+  //    Edge 가 "현재 계정 인증이 만료" 로 응답(로그아웃 아님)하는 편이 훨씬 안전하다.
   const { data, error } = await supabase.functions.invoke('account-merge-bytoken', {
     body: { aToken: session.accessToken, ...body },
   });
