@@ -53,8 +53,9 @@ export default function AccountScreen() {
             try {
               await authService.signOut();
               setUser(null);
-              // _layout auth-guard 가 redirect, 여기서 명시적 push 도 안전망.
-              router.replace('/auth/login');
+              // setUser(null) → useAuthGuard 가 /auth/login 으로 단일 redirect.
+              // 여기서 router.replace 를 또 호출하면 가드 redirect 와 겹쳐 로그인
+              // 화면이 두 번 떴다 → 명시적 replace 제거(2026-06-06 수정).
             } catch (err) {
               showAlert(
                 t('common.error'),
@@ -94,7 +95,7 @@ export default function AccountScreen() {
                     try {
                       await authService.deleteAccount();
                       setUser(null);
-                      router.replace('/auth/login');
+                      // 로그아웃과 동일 — 가드가 단일 redirect. 중복 replace 제거.
                     } catch (err) {
                       void logError({ context: 'settings.account.delete', error: err });
                       showAlert(
