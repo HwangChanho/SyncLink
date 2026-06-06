@@ -68,9 +68,11 @@ export default function LoginScreen() {
             : signInWithApple;
         await fn();
       }
-      // Navigate to tabs unconditionally; useAuthGuard reroutes first-run
-      // users to /onboarding when the ONBOARDING_STORAGE_KEY flag is unset.
-      router.replace('/(tabs)');
+      // 로그인 성공 후 라우팅은 useAuthGuard 가 단독으로 처리한다
+      // (신규 → /onboarding, 기존 → /(tabs)). 예전엔 여기서 '/(tabs)' 로 무조건
+      // replace 한 뒤 가드가 신규 유저를 다시 /onboarding 으로 보내, 온보딩이 두 번
+      // 뜨거나 로그인(SNS) 화면이 깜빡인 뒤 홈으로 가는 더블 네비게이션이 생겼다.
+      // 수동 replace 제거 → 가드의 단일 라우팅에 위임(2026-06-06 수정).
     } catch (err: unknown) {
       if (isCancelError(err)) return;
       setError(err instanceof Error ? err.message : t('auth.login.error'));
