@@ -26,6 +26,7 @@ import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { SpaceCard } from '@/components/space/SpaceCard';
 import { getUnreadCounts } from '@/services/spaceMessageService';
+import { AppErrorBoundary } from '@/components/common/AppErrorBoundary';
 
 /**
  * Guest gate: Spaces (shared calendars) require an account. Browsing guests
@@ -43,7 +44,13 @@ export default function SpacesScreen() {
       />
     );
   }
-  return <SpacesScreenContent />;
+  // 스페이스 화면이 (계정 통합 후 데이터 불일치 등으로) 렌더 크래시해도 검은화면
+  // 대신 폴백 + 재시도 UI 를 보여주고, 실제 에러를 error_logs 에 남긴다(2026-06-07).
+  return (
+    <AppErrorBoundary area="spaces">
+      <SpacesScreenContent />
+    </AppErrorBoundary>
+  );
 }
 
 function SpacesScreenContent() {
