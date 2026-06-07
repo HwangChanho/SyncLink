@@ -138,10 +138,12 @@ export default function TabLayout() {
           ),
         }}
       />
-      {/* Sprint 1 (AI 분석 대시보드) — v1.2.7 */}
+      {/* 분석 탭 — 2026-06-07 LEAD 결정으로 탭바에서 숨김(href:null). 차트 빈데이터
+          크래시(검은화면) 등 구조적 불안정으로 보류. 라우트/파일은 유지(추후 복구). */}
       <Tabs.Screen
         name="analytics"
         options={{
+          href: null,
           title: t('tabs.analytics', { defaultValue: '분석' }),
           tabBarButtonTestID: 'tab-button-analytics',
           tabBarIcon: ({ color, focused }) => (

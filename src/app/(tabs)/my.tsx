@@ -37,9 +37,9 @@ import { GuestGate } from '@/components/common/GuestGate';
 import { showAlert } from '@/lib/webAlert';
 import { logError } from '@/lib/errorLogger';
 import { SettingsSection } from '@/components/my/SettingsSection';
-// AccountMergeSection — 통합 로그인(재로그인 기반 단일계정 병합). 2026-06-05 재설계로
-// 기존 LinkedAccountsSection(제공자별 OAuth identity 연동)을 대체.
-import { AccountMergeSection } from '@/components/my/AccountMergeSection';
+// AccountMergeSection(통합 로그인) — 2026-06-07 LEAD 결정으로 UI 비활성(숨김).
+// 계정 통합이 구조적으로 데이터 손실/크래시 리스크가 커 보류. 컴포넌트·서버는 유지(추후 복구).
+// import { AccountMergeSection } from '@/components/my/AccountMergeSection';
 import { ServiceInfoSection } from '@/components/my/ServiceInfoSection';
 // Build-81 — AccountSection 은 settings/account 화면으로 이전. import 제거.
 import { DevDashboard } from '@/components/DevDashboard';
@@ -373,8 +373,8 @@ function MyScreenContent() {
           </View>
         )}
 
-        {/* ── 통합 로그인 (재로그인 기반 단일계정 병합, 2026-06-05 재설계) ── */}
-        <AccountMergeSection />
+        {/* ── 통합 로그인 — 2026-06-07 LEAD 결정으로 비활성(숨김). 구조적 불안정으로 보류. ── */}
+        {/* <AccountMergeSection /> */}
 
         <SettingsSection />
 
