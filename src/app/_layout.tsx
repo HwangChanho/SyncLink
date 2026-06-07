@@ -32,6 +32,10 @@ import {
 import { initializePurchases, checkProStatus } from '@/services/purchaseService';
 import { supabase } from '@/lib/supabase';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
+// 로그아웃/탈퇴 시 로컬 데이터 캐시를 비우기 위해 데이터 스토어를 참조한다.
+import { useEventStore } from '@/stores/eventStore';
+import { useTodoStore } from '@/stores/todoStore';
+import { useSpaceStore } from '@/stores/spaceStore';
 import { useAppLockStore } from '@/stores/appLockStore';
 import { authenticate, isBiometricAvailable } from '@/services/appLockService';
 import { verifyPin } from '@/services/pinLockService';
@@ -528,6 +532,13 @@ export default function RootLayout() {
           setLoading(false);
         }
       } else {
+        // 로그아웃/회원탈퇴(세션 null) 시 로컬 데이터 캐시도 비운다. 안 비우면 탈퇴 후
+        // 재로그인해도 이전 계정의 일정·할일·스페이스·Pro 배지가 화면에 그대로 남았다
+        // (2026-06-07 실측 "탈퇴하고 재로그인해도 그대로 남음" — 재설치 없이 깨끗해지게).
+        useEventStore.setState({ eventsByDate: {} });
+        useTodoStore.setState({ todos: [], notes: [] });
+        useSpaceStore.setState({ spaces: [] });
+        useSubscriptionStore.getState().setPlan('free');
         setUser(null); // also sets isLoading = false
       }
     });
