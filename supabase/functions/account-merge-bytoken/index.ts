@@ -9,8 +9,9 @@
  *        흡수하는 것을 원천 차단한다. (058 의 same-email 체크를 대체.)
  *  2) primary 선정 = Pro 우선(구독 보존). 둘 다 동일 등급이면 현재 세션(A) 우선.
  *  3) dryRun=true 면 merge_preview_v2 로 건수만 반환(미리보기). 변경 없음.
- *  4) 아니면 merge_account_v2(service_role) 로 secondary 데이터+identity 를 primary 로
+ *  4) 아니면 merge_account_v3(service_role) 로 secondary 데이터+identity 를 primary 로
  *     이전 + secondary public.users 삭제 → 이어서 admin API 로 secondary auth.users 삭제.
+ *     (v3 = 전수 이전 + 데이터 소실 가드. space_messages/event_comments/reactions/reminders 포함.)
  *
  * 보안:
  *  - 토큰은 검증 용도로만 사용하고 절대 로깅하지 않는다.
@@ -126,7 +127,9 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     // ── 5. 병합 실행 (service_role) ──────────────────────────────────────────
-    const { data: mergeResult, error: mergeError } = await admin.rpc('merge_account_v2', {
+    //   v3 = 전수 이전(denylist) + 데이터 소실 가드. 누락 테이블이 있으면 RPC 가
+    //   RAISE 하여 통합이 400 으로 실패 → 데이터가 조용히 소실되지 않는다.
+    const { data: mergeResult, error: mergeError } = await admin.rpc('merge_account_v3', {
       p_primary: primary,
       p_secondary: secondary,
       p_conflict_policy: conflictPolicy,
