@@ -33,6 +33,7 @@ import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useTranslation } from 'react-i18next';
 import { GuestGate } from '@/components/common/GuestGate';
+import { AppErrorBoundary } from '@/components/common/AppErrorBoundary';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import {
@@ -142,7 +143,13 @@ export default function AnalyticsScreen() {
       />
     );
   }
-  return <AnalyticsScreenContent />;
+  // 분석 화면이 (차트 빈데이터·계정 통합 후 데이터 불일치 등으로) 렌더 크래시해도
+  // 검은화면 대신 폴백 + 재시도 UI 를 보여주고, 실제 에러를 error_logs 에 남긴다(2026-06-07).
+  return (
+    <AppErrorBoundary area="analytics">
+      <AnalyticsScreenContent />
+    </AppErrorBoundary>
+  );
 }
 
 function AnalyticsScreenContent() {
@@ -334,27 +341,34 @@ function AnalyticsScreenContent() {
               )}
             </View>
 
-            {/* 요일 분포 — chart-kit BarChart */}
+            {/* 요일 분포 — chart-kit BarChart.
+                ⚠️ chart-kit 은 labels/data 가 빈 배열이면 내부적으로 Math.max(...[])
+                = -Infinity 로 스케일을 계산하다 렌더 크래시(검은화면)한다. byDayOfWeek 가
+                비어 있으면(해당 기간 일정 0건) 차트 대신 안내 문구로 폴백. (PieChart 와 동일 가드, 2026-06-07) */}
             <View style={styles.card}>
               <Text style={styles.cardTitle}>{t('analytics.dow_dist_title')}</Text>
-              <BarChart
-                data={{
-                  labels: stats.byDayOfWeek.map((d) => dowLabels()[d.dow] ?? ''),
-                  datasets: [{
-                    data: stats.byDayOfWeek.map((d) => d.count),
-                  }],
-                }}
-                width={chartWidth}
-                height={180}
-                yAxisLabel=""
-                yAxisSuffix=""
-                fromZero
-                showValuesOnTopOfBars
-                withHorizontalLabels={false}
-                withInnerLines={false}
-                chartConfig={chartConfig(colors)}
-                style={{ marginLeft: -spacing[3] }}
-              />
+              {stats.byDayOfWeek.length === 0 ? (
+                <Text style={styles.emptyText}>{t('analytics.empty_period')}</Text>
+              ) : (
+                <BarChart
+                  data={{
+                    labels: stats.byDayOfWeek.map((d) => dowLabels()[d.dow] ?? ''),
+                    datasets: [{
+                      data: stats.byDayOfWeek.map((d) => d.count),
+                    }],
+                  }}
+                  width={chartWidth}
+                  height={180}
+                  yAxisLabel=""
+                  yAxisSuffix=""
+                  fromZero
+                  showValuesOnTopOfBars
+                  withHorizontalLabels={false}
+                  withInnerLines={false}
+                  chartConfig={chartConfig(colors)}
+                  style={{ marginLeft: -spacing[3] }}
+                />
+              )}
             </View>
 
             {/* 요일 × 시간대 히트맵 (7×4) — 4분할 단순 막대를 격자로 강화 */}

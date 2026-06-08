@@ -46,11 +46,22 @@ import { InviteCodeSection } from '@/components/space/InviteCodeSection';
 import { findFreeTimeSlots } from '@/services/freeTimeService';
 import { useSpaceStore } from '@/stores/spaceStore';
 import { useAuthStore } from '@/stores/authStore';
+import { AppErrorBoundary } from '@/components/common/AppErrorBoundary';
 import type { Space, SpaceMember, Anniversary, FreeTimeSlot } from '@/types';
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SpaceDetailScreen() {
+  // 스페이스 상세가 (0-멤버 유령 스페이스 / orphan 데이터 등으로) 렌더 크래시해도
+  // 검은화면 대신 폴백 + 재시도 UI 를 보여주고, 실제 에러를 error_logs 에 남긴다(2026-06-07).
+  return (
+    <AppErrorBoundary area="space-detail">
+      <SpaceDetailScreenContent />
+    </AppErrorBoundary>
+  );
+}
+
+function SpaceDetailScreenContent() {
   const { t } = useTranslation();
   const colors = useColors();
   const styles = makeSpaceDetailStyles(colors);
