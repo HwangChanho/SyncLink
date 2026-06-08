@@ -138,12 +138,11 @@ export default function TabLayout() {
           ),
         }}
       />
-      {/* 분석 탭 — 2026-06-07 LEAD 결정으로 탭바에서 숨김(href:null). 차트 빈데이터
-          크래시(검은화면) 등 구조적 불안정으로 보류. 라우트/파일은 유지(추후 복구). */}
+      {/* 분석 탭 — 차트 빈데이터 가드 + AppErrorBoundary(cf14de1) 적용으로 검은화면
+          크래시 원인을 제거하여 재노출(2026-06-08). 06-07 에 href:null 로 숨겼던 것 복구. */}
       <Tabs.Screen
         name="analytics"
         options={{
-          href: null,
           title: t('tabs.analytics', { defaultValue: '분석' }),
           tabBarButtonTestID: 'tab-button-analytics',
           tabBarIcon: ({ color, focused }) => (
