@@ -588,6 +588,8 @@ const ko = {
   },
 
   calendar: {
+    // 데스크탑 월뷰 우측 선택일 패널 빈 상태 (웹 반응형 S3)
+    day_empty: '이 날 일정이 없어요',
     title: {
       month: '{{year}}년 {{month}}월 {{day}}일',
       week:  '{{year}}년 {{startMonth}}월 {{startDay}}일 ~ {{endMonth}}월 {{endDay}}일',

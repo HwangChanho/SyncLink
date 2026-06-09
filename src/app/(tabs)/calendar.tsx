@@ -37,12 +37,14 @@ import { MonthView } from '@/components/calendar/MonthView';
 import { useAnniversaryStore } from '@/stores/anniversaryStore';
 import { WeekView } from '@/components/calendar/WeekView';
 import { DayView } from '@/components/calendar/DayView';
+import { SelectedDayPanel } from '@/components/calendar/SelectedDayPanel';
 import { useEventStore } from '@/stores/eventStore';
 import { subscribeToSharedEvents } from '@/services/eventRealtimeService';
 import { useTodoStore } from '@/stores/todoStore';
 import type { MonthViewItem } from '@/components/calendar/MonthView';
 import type { EventSummary } from '@/types';
 import { useColors } from '@/hooks/useColors';
+import { useResponsive } from '@/hooks/useResponsive';
 import { useTranslation } from 'react-i18next';
 // Phase 2.1 — date/range utils + 화면 hook 들로 분할.
 import { toDateKey, getViewRange, shiftDate } from '@/lib/calendarRange';
@@ -55,6 +57,8 @@ import { useCategoryFilter } from '@/hooks/useCategoryFilter';
 export default function CalendarScreen() {
   const colors = useColors();
   const styles = makeStyles(colors);
+  // 데스크탑 웹: 월뷰 옆에 선택일 일정 패널을 붙이는 master-detail 분기. (웹 반응형 S3)
+  const { isDesktop } = useResponsive();
   const router = useRouter();
   const requireAuth = useRequireAuth();
   // PRD 4.2 Tier 2 — i18n for free-time UI strings.
@@ -426,7 +430,10 @@ export default function CalendarScreen() {
           onClose={() => setPickerVisible(false)}
         />
 
-        {/* Swipe-enabled content area */}
+        {/* Swipe-enabled content area.
+            데스크탑 월뷰는 좌측 월 그리드(와이드) + 우측 선택일 패널로 분할
+            (master-detail). 모바일/태블릿/주·일뷰는 기존 풀스크린 유지. (S3) */}
+        <View style={[styles.contentArea, isDesktop && viewMode === 'month' && styles.contentRow]}>
         <Animated.View
           style={[styles.content, { transform: [{ translateX: swipeX }] }]}
           {...swipePanHandlers}
@@ -480,6 +487,20 @@ export default function CalendarScreen() {
             />
           )}
         </Animated.View>
+
+        {/* 데스크탑 월뷰 우측 선택일 일정 패널 (master-detail) */}
+        {isDesktop && viewMode === 'month' && (
+          <SelectedDayPanel
+            selectedDate={selectedDate}
+            events={todayEvents}
+            onEventPress={handleEventPress}
+            onCreatePress={() => router.push({
+              pathname: '/event/create',
+              params: { date: toDateKey(selectedDate) },
+            })}
+          />
+        )}
+        </View>
 
         {/* NLInputBar: TASK-302 — natural language event creation */}
         <NLInputBar
@@ -606,6 +627,14 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     },
     content: {
       flex: 1,
+    },
+    // S3 — 데스크탑 월뷰 master-detail 컨테이너. 기본은 단일 컬럼(content 만),
+    // 데스크탑 월뷰일 때만 contentRow 로 좌(월뷰 flex) + 우(패널 320) 분할.
+    contentArea: {
+      flex: 1,
+    },
+    contentRow: {
+      flexDirection: 'row',
     },
     // Top-left category filter affordance.
     // Build-50 — single style for all left-toolbar overlay-toggle buttons

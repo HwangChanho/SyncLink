@@ -565,6 +565,8 @@ const ja = {
   },
 
   calendar: {
+    // デスクトップ月表示の右側・選択日パネルの空状態 (web responsive S3)
+    day_empty: 'この日の予定はありません',
     title: {
       month: '{{year}}年{{month}}月{{day}}日',
       week:  '{{year}}年 {{startMonth}}月{{startDay}}日 ~ {{endMonth}}月{{endDay}}日',

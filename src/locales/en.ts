@@ -576,6 +576,8 @@ const en = {
   },
 
   calendar: {
+    // Desktop month-view right-side selected-day panel — empty state (web responsive S3)
+    day_empty: 'No events on this day',
     title: {
       month: '{{month}}/{{day}}/{{year}}',
       week:  '{{startMonth}}/{{startDay}} – {{endMonth}}/{{endDay}}, {{year}}',

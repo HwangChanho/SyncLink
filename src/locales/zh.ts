@@ -568,6 +568,8 @@ const zh = {
   },
 
   calendar: {
+    // 桌面端月视图右侧所选日期面板 — 空状态 (web responsive S3)
+    day_empty: '这一天没有日程',
     title: {
       month: '{{year}}年{{month}}月{{day}}日',
       week:  '{{year}}年 {{startMonth}}月{{startDay}}日 ~ {{endMonth}}月{{endDay}}日',
