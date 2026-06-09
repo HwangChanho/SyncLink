@@ -107,8 +107,16 @@ function useAuthGuard(): { routingReady: boolean } {
   // null = 아직 hydrate 안 됨, true/false = 결과.
   const onboardingDone = useOnboardingStore((s) => s.done);
 
-  /** Prevent duplicate replaces to the same target during re-renders. */
-  const lastReplacedRef = useRef<string | null>(null);
+  /**
+   * 마지막으로 가드가 "교정을 시도/확인한" route(segments) 시그니처.
+   *
+   * 같은 wrong route 에서의 단순 재렌더는 중복 replace 를 막되, 새 네비게이션
+   * (segments 변경)마다 1회 교정을 허용한다. 기존 구현은 target 기준이라 한 번
+   * 보낸 target 으로는 영영 재교정하지 않았고, 사용자가 뒤로가기로 wrong route 에
+   * 돌아오면 routedCorrectly=false 가 풀리지 않아 무한 AppSplash 에 갇혔다
+   * (2026-06-09 "카카오 취소 후 뒤로가기 → 무한 스켈레톤" 회귀).
+   */
+  const lastGuardedSegRef = useRef<string | null>(null);
 
   // 앱 시작 시 1회 hydrate. 이후 갱신은 onboarding 화면의 store.complete() 가 담당.
   useEffect(() => {
@@ -146,12 +154,19 @@ function useAuthGuard(): { routingReady: boolean } {
       if (!inAuthGroup && !inAdmin && !inTabs) target = '/auth/login';
     }
 
-    // Guard: skip if we already replaced to the same target in the previous render.
-    // This prevents a replace() -> segments change -> re-run -> replace() loop
-    // that caused login/home screens to be pushed twice.
-    if (target && lastReplacedRef.current !== target) {
-      lastReplacedRef.current = target;
-      router.replace(target as '/(tabs)' | '/auth/login' | '/onboarding');
+    // 같은 route 에서의 단순 재렌더는 중복 replace 를 막되(replace → segments
+    // change → re-run → replace 루프 방지), 새 네비게이션(segments 변경)마다
+    // 1회 교정을 허용한다. 그래야 뒤로가기로 wrong route 에 돌아와도 가드가
+    // 다시 올바른 곳으로 보내 무한 AppSplash 에 갇히지 않는다.
+    const segSig = (segments as readonly string[]).join('/');
+    if (target) {
+      if (lastGuardedSegRef.current !== segSig) {
+        lastGuardedSegRef.current = segSig;
+        router.replace(target as '/(tabs)' | '/auth/login' | '/onboarding');
+      }
+    } else {
+      // 올바른 route 에 도착 — 다음 이탈을 교정할 수 있도록 현재 위치를 기록.
+      lastGuardedSegRef.current = segSig;
     }
   }, [isAuthenticated, isLoading, onboardingDone, segments, router]);
 
