@@ -40,6 +40,7 @@ import { ImportCalendarCard }   from '@/components/home/ImportCalendarCard';
 import { findNextFreeSlot, deriveRecentStats } from '@/lib/freeTimeRecommend';
 import { useMemo }              from 'react';
 import { useColors } from '@/hooks/useColors';
+import { useResponsive } from '@/hooks/useResponsive';
 import { useTranslation } from 'react-i18next';
 import { LoginPromptBanner } from '@/components/common/LoginPromptBanner';
 import { spacing } from '@/constants/spacing';
@@ -66,6 +67,8 @@ function homeRange(): DateRange {
 
 export default function HomeScreen() {
   const colors = useColors();
+  // 데스크탑(웹)에서는 콘텐츠가 풀폭으로 늘어지지 않게 적정폭 중앙 정렬. (S2 2026-06-09)
+  const { isDesktop } = useResponsive();
   const { t } = useTranslation();
   const fetchEvents = useEventStore(s => s.fetchEvents);
   const isFetchingEvents = useEventStore(s => s.isFetching);
@@ -130,7 +133,10 @@ export default function HomeScreen() {
        */}
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          isDesktop && { maxWidth: 880, width: '100%', alignSelf: 'center' as const },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         refreshControl={
