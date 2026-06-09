@@ -177,7 +177,11 @@ function PlannerScreenInner() {
   // ── Main render ──────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={[styles.container, isDesktop && desktopContentCentered]} edges={['left', 'right']}>
+    <SafeAreaView style={styles.container} edges={['left', 'right']}>
+      {/* 데스크탑 웹: 배경은 풀폭으로 두고 콘텐츠만 880 중앙 정렬해, 양옆 여백이
+          본문과 같은 배경색이 되도록 한다. 기존엔 SafeAreaView 자체를 880 으로
+          줄여 양옆이 부모 배경색으로 떠 "흰 여백"처럼 보였다(2026-06-09 LEAD 피드백). */}
+      <View style={[styles.flex, isDesktop && desktopContentCentered]}>
       {/*
         Top label removed — the tab navigator already renders "플래너"
         in its bold title slot, having a second copy below it was
@@ -272,6 +276,7 @@ function PlannerScreenInner() {
           )}
         </View>
       </KeyboardAvoidingView>
+      </View>
 
       {/* Quick-add category picker — controlled by the chip above */}
       <CategoryPickerSheet
