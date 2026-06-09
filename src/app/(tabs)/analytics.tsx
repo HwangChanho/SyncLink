@@ -59,8 +59,13 @@ function dowLabels(): readonly string[] {
   return i18n.t('analytics.dow', { returnObjects: true }) as readonly string[];
 }
 
-/** 화면 너비 - 카드 좌우 padding 32. chart 가 카드 안 꽉 채우게. */
-const chartWidth = Dimensions.get('window').width - 64;
+/**
+ * 화면 너비 - 카드 좌우 padding. chart 가 카드 안 꽉 채우게.
+ * 웹 데스크탑에서는 본문이 _layout 의 maxWidth(880)로 좁혀지므로 window 전체폭을
+ * 그대로 쓰면 차트가 컨테이너를 넘친다 → 880 으로 클램프. 모바일은 window<880 이라
+ * 기존(window-64)과 동일하게 동작(회귀 없음). (2026-06-08)
+ */
+const chartWidth = Math.min(Dimensions.get('window').width, 880) - 64;
 
 /** chart-kit 공통 config — 테마 색 반영. */
 function chartConfig(colors: ReturnType<typeof useColors>) {

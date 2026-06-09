@@ -14,6 +14,8 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
+import { useResponsive } from '@/hooks/useResponsive';
+import { ResponsiveTabBar, SIDE_NAV_WIDTH } from '@/components/common/ResponsiveTabBar';
 import { componentHeight } from '@/constants/spacing';
 import { LanguageButton } from '@/components/common/LanguageButton';
 import {
@@ -32,6 +34,8 @@ export default function TabLayout() {
   // child screens (NLInputBar, FAB) sitting too close to the home bar on
   // newer devices — sprint-32 user feedback "홈바에 딱 붙어있음".
   const insets = useSafeAreaInsets();
+  // 웹 데스크탑(>=1024): 하단 탭바 → 좌측 사이드 네비 + 콘텐츠 우측 패딩. (2026-06-08 S1)
+  const { isDesktop } = useResponsive();
 
   // The colour the user picked in /settings/appearance is now applied as
   // the **header background** (the strip surrounding the title). When the
@@ -46,7 +50,11 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      tabBar={(props) => <ResponsiveTabBar {...props} />}
       screenOptions={{
+        // 데스크탑 사이드 네비(absolute) 폭만큼 콘텐츠를 우측으로 밀어 가리지 않게.
+        // 모바일/태블릿은 undefined → 기존 풀폭 콘텐츠 그대로(회귀 0).
+        sceneStyle: isDesktop ? { paddingLeft: SIDE_NAV_WIDTH } : undefined,
         // Show the header so the LanguageButton is always accessible.
         headerShown: true,
         // Default header height — forcing a smaller `height` was clipping

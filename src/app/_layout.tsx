@@ -14,7 +14,7 @@ import '@/lib/i18n'; // initialize i18n before any component renders (synchronou
 import { initSentry } from '@/lib/sentry';
 import { LogBox } from 'react-native';
 import { useEffect, useRef, useState } from 'react';
-import { AppState, AppStateStatus, Platform, View, StyleSheet, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { AppState, AppStateStatus, Platform, View, StyleSheet, Text, TouchableOpacity, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -399,6 +399,15 @@ export default function RootLayout() {
 
   const { routingReady } = useAuthGuard();
 
+  // Web 반응형 본문 폭: 폰 520(현행 유지) / 태블릿 720 / 데스크탑 880.
+  // 모바일 앱(Platform.OS !== 'web')은 아래 분기에서 제외돼 영향 없음. (2026-06-08)
+  const { width: winWidth } = useWindowDimensions();
+  const colors = useColors();
+  // 데스크탑(>=1024): 풀폭 — (tabs) 좌측 사이드 네비가 가로를 활용하므로 중앙 maxWidth 해제.
+  // 태블릿(600~1023): 720 중앙 + 여백 폴리시. 폰(<600): 520(현행). (S1 2026-06-08)
+  const isTabletWeb = Platform.OS === 'web' && winWidth >= 600 && winWidth < 1024;
+  const webMaxWidth = winWidth >= 1024 ? undefined : winWidth >= 600 ? 720 : 520;
+
   // Web-only: sign the user out after 30 minutes of inactivity. Native
   // sessions stay live because the OS lock screen + in-app PIN already
   // protect the device; the threat model on the web (shared computers)
@@ -738,19 +747,26 @@ export default function RootLayout() {
   }, [router]);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      {/* Web 에서 좌우 여백 + 가운데 정렬. 모바일 앱 (iOS/Android) 은 영향
-          없음. 데스크톱 브라우저에서 컨테이너가 viewport 전체를 채우면 너무
-          허전해 보이고 콘텐츠가 가장자리에 딱 붙음 — 모바일 친화 max-width
-          (520px) 로 좁히고 가운데 정렬 + 좌우 패딩. (LEAD 2026-05-06) */}
+    <GestureHandlerRootView style={[{ flex: 1 }, isTabletWeb && { backgroundColor: colors.backgroundAlt }]}>
+      {/* Web 에서 좌우 여백 + 가운데 정렬. 모바일 앱 (iOS/Android) 은 영향 없음.
+          데스크톱/태블릿에서 viewport 전체로 늘어지지 않게 본문을 가운데 좁혀 모바일
+          친화를 유지하되, 폭은 화면 크기별로 분기(폰 520 / 태블릿 720 / 데스크톱 880).
+          넓어진 좌우 여백은 backgroundAlt 배경 + 본문 좌우 보더로 "앱이 가운데 떠 있는"
+          느낌을 정돈한다. (LEAD 2026-05-06, 폭 분기 2026-06-08) */}
       <View
         style={[
           { flex: 1 },
           Platform.OS === 'web' && {
-            maxWidth:        520,
+            maxWidth:        webMaxWidth,
             width:           '100%',
             alignSelf:       'center',
-            paddingHorizontal: 16,
+            paddingHorizontal: winWidth >= 1024 ? 0 : 16,
+          },
+          isTabletWeb && {
+            backgroundColor:  colors.background,
+            borderLeftWidth:  StyleSheet.hairlineWidth,
+            borderRightWidth: StyleSheet.hairlineWidth,
+            borderColor:      colors.border,
           },
         ]}
       >
