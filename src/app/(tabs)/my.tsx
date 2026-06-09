@@ -27,6 +27,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
+import { useResponsive } from '@/hooks/useResponsive';
+import { desktopContentCentered } from '@/constants/webLayout';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
@@ -74,6 +76,8 @@ function MyScreenContent() {
   const colors = useColors();
   // Build dynamic styles using the current theme's color tokens
   const styles = makeStyles(colors);
+  // 데스크탑 웹: 콘텐츠 적정폭(880) 중앙 정렬 — 풀폭 늘어짐 방지. (웹 반응형 S2)
+  const { isDesktop } = useResponsive();
 
   const { plan, aiUsageToday } = useSubscriptionStore();
 
@@ -220,7 +224,10 @@ function MyScreenContent() {
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          isDesktop && desktopContentCentered,
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* ── Profile section ─────────────────────────────────────────── */}

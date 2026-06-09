@@ -26,6 +26,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PieChart, BarChart } from 'react-native-chart-kit';
 import { Dimensions } from 'react-native';
+import { useResponsive } from '@/hooks/useResponsive';
+import { desktopContentCentered } from '@/constants/webLayout';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
@@ -162,6 +164,8 @@ function AnalyticsScreenContent() {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const isPro = useSubscriptionStore((s) => s.plan === 'pro');
+  // 데스크탑 웹: 콘텐츠 적정폭(880) 중앙 정렬. (웹 반응형 S2)
+  const { isDesktop } = useResponsive();
 
   const [preset, setPreset] = useState<Preset>('month');
   const [stats, setStats] = useState<EventStats | null>(null);
@@ -231,7 +235,10 @@ function AnalyticsScreenContent() {
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          isDesktop && desktopContentCentered,
+        ]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {/* 기간 segment */}
@@ -492,6 +499,8 @@ function AnalyticsPaywallView({
   colors: ReturnType<typeof useColors>;
 }) {
   const { t } = useTranslation();
+  // 데스크탑 웹: 페이월 콘텐츠 적정폭(880) 중앙 정렬. (웹 반응형 S2)
+  const { isDesktop } = useResponsive();
   // Pro 분석이 제공하는 핵심 가치 — paywall feature 목록과 톤 일치.
   const features: Array<{
     icon: React.ComponentProps<typeof Ionicons>['name'];
@@ -504,7 +513,12 @@ function AnalyticsPaywallView({
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.paywallContent}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.paywallContent,
+          isDesktop && desktopContentCentered,
+        ]}
+      >
         <View style={styles.paywallHero}>
           <View style={styles.paywallIconCircle}>
             <Ionicons name="bar-chart" size={34} color={colors.primary} />

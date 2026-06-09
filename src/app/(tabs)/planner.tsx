@@ -27,6 +27,8 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
+import { useResponsive } from '@/hooks/useResponsive';
+import { desktopContentCentered } from '@/constants/webLayout';
 import { useTodoStore } from '@/stores/todoStore';
 import type { Todo, Category } from '@/types';
 import { getCategories } from '@/services/categoryService';
@@ -64,6 +66,8 @@ function PlannerScreenInner() {
   const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
+  // 데스크탑 웹: 화면 본문(header+content) 적정폭(880) 중앙 정렬. (웹 반응형 S2)
+  const { isDesktop } = useResponsive();
 
   const { todos, notes, isLoading, error, fetchTodos, fetchNotes, addTodo, editTodo, removeTodo, removeNote, toggleTodo, clearError } = useTodoStore();
 
@@ -173,7 +177,7 @@ function PlannerScreenInner() {
   // ── Main render ──────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={styles.container} edges={['left', 'right']}>
+    <SafeAreaView style={[styles.container, isDesktop && desktopContentCentered]} edges={['left', 'right']}>
       {/*
         Top label removed — the tab navigator already renders "플래너"
         in its bold title slot, having a second copy below it was

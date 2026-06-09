@@ -44,6 +44,7 @@ import { useResponsive } from '@/hooks/useResponsive';
 import { useTranslation } from 'react-i18next';
 import { LoginPromptBanner } from '@/components/common/LoginPromptBanner';
 import { spacing } from '@/constants/spacing';
+import { desktopContentCentered } from '@/constants/webLayout';
 import { textStyles } from '@/constants/typography';
 import type { DateRange } from '@/types';
 
@@ -135,7 +136,7 @@ export default function HomeScreen() {
         style={styles.scroll}
         contentContainerStyle={[
           styles.scrollContent,
-          isDesktop && { maxWidth: 880, width: '100%', alignSelf: 'center' as const },
+          isDesktop && desktopContentCentered,
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"

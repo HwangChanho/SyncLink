@@ -19,6 +19,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
+import { useResponsive } from '@/hooks/useResponsive';
+import { desktopContentCentered } from '@/constants/webLayout';
 import { useAuthStore } from '@/stores/authStore';
 import { GuestGate } from '@/components/common/GuestGate';
 import { useSpaceStore } from '@/stores/spaceStore';
@@ -57,6 +59,8 @@ function SpacesScreenContent() {
   const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
+  // 데스크탑 웹: 콘텐츠 적정폭(880) 중앙 정렬 — 풀폭 늘어짐 방지. (웹 반응형 S2)
+  const { isDesktop } = useResponsive();
   const { spaces, fetchMySpaces, isLoading } = useSpaceStore();
   // v1.2.1 — Space 별 안 본 메시지 수.
   const [unread, setUnread] = useState<Record<string, number>>({});
@@ -71,7 +75,12 @@ function SpacesScreenContent() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          isDesktop && desktopContentCentered,
+        ]}
+      >
         {isLoading && spaces.length === 0 ? (
           <View style={styles.loadingRow}>
             <ActivityIndicator size="small" color={colors.primary} />
