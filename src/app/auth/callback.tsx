@@ -123,16 +123,28 @@ export default function AuthCallbackScreen() {
         try { replace.call((globalThis as WebLocation).history, {}, '', '/auth/callback'); } catch { /* non-fatal */ }
       }
     } else if (code) {
-      // PKCE: Google / Apple via Supabase OAuth
+      // PKCE: Google / Apple via Supabase OAuth.
+      // ⚠️ supabase 의 detectSessionInUrl(true) 이 페이지 로드 시 같은 ?code= 를
+      // 자동으로 먼저 교환할 수 있다. PKCE code 는 1회용이라 자동 교환이 먼저
+      // 소비하면 이 수동 교환은 "PKCE code verifier not found" 로 실패한다(race).
+      // 그 경우 이미 세션이 생겼는지 확인해, 있으면 성공으로 간주한다
+      // (자동/수동 중 하나만 성공하면 로그인 완료).
       const { error } = await supabase.auth.exchangeCodeForSession(href);
-      if (error) throw error;
+      if (error) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw error;
+      }
     } else if (accessToken && refreshToken) {
-      // Implicit
+      // Implicit. 마찬가지로 detectSessionInUrl 이 #access_token 을 이미 처리했을
+      // 수 있으므로, setSession 실패 시 세션 존재를 확인해 성공으로 간주한다.
       const { error } = await supabase.auth.setSession({
         access_token: accessToken,
         refresh_token: refreshToken,
       });
-      if (error) throw error;
+      if (error) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw error;
+      }
     } else {
       // No code or tokens found — session may already exist or flow failed
       const { data: { session } } = await supabase.auth.getSession();
