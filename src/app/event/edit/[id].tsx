@@ -38,6 +38,8 @@ import { useSpaceStore } from '@/stores/spaceStore';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { RelativeDateSection } from '@/components/event/RelativeDateSection';
+import { addDays } from '@/lib/relativeDate';
 import { PlaceSearchInput } from '@/components/places/PlaceSearchInput';
 import { ReminderPicker } from '@/components/reminders/ReminderPicker';
 import { DateTimeModal } from '@/components/common/DateTimeModal';
@@ -154,11 +156,13 @@ export default function EventEditScreen() {
     title, allDay, startAt, endAt, repeatType, repeatWeekdays,
     location, description, shareSpaceIds, reminderMinutes, eventColor,
     editableByMembers,
+    relativeEnabled, baseDate, offsetDays, offsetLabel,
   } = form;
   const {
     setTitle, setAllDay, setStartAt, setEndAt, setRepeatType, setRepeatWeekdays,
     setLocation, setDescription, setShareSpaceIds, setReminderMinutes,
     setEventColor, setEditableByMembers,
+    setRelativeEnabled, setBaseDate, setOffsetDays, setOffsetLabel,
   } = setters;
 
   /** Original event kept for diffing shares on save. */
@@ -237,6 +241,13 @@ export default function EventEditScreen() {
         setReminderMinutes(reminders.map((r) => r.minutesBefore));
         // Build-96 — 멤버 편집 허용 토글 초기값.
         setEditableByMembers(ev.editableByMembers ?? false);
+        // v1.3 — 상대일 일정 메타 hydration. base_date 있으면 상대일 모드 ON.
+        if (ev.baseDate) {
+          setRelativeEnabled(true);
+          setBaseDate(ev.baseDate);
+          setOffsetDays(ev.offsetDays ?? 1);
+          setOffsetLabel(ev.offsetLabel ?? '');
+        }
       } catch (err) {
         if (!cancelled) {
           setLoadError(err instanceof Error ? err.message : t('event.load_failed'));
@@ -248,6 +259,18 @@ export default function EventEditScreen() {
 
     return () => { cancelled = true; };
   }, [id, t]);
+
+  // v1.3 — 상대일 일정 ON 이면 (기준일 + N일) all-day 일정으로 start/end 동기화.
+  // create.tsx 와 동일 패턴. 로드된 상대일 일정도 base+offset == startAt 이라 무해.
+  useEffect(() => {
+    if (!relativeEnabled) return;
+    const base = baseDate ?? (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
+    const target = addDays(base, offsetDays);
+    setAllDay(true);
+    setStartAt(target);
+    setEndAt(new Date(target.getFullYear(), target.getMonth(), target.getDate(), 23, 59, 59));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [relativeEnabled, baseDate, offsetDays]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
 
@@ -323,6 +346,11 @@ export default function EventEditScreen() {
               ? (Number(paceMinutes || '0') * 60 + Number(paceSeconds || '0'))
               : null)
           : null,
+        // v1.3 — 상대일 일정 메타. ON 이면 저장, OFF 면 명시적 null 로 클리어
+        // (토글 끄고 저장 → 일반 일정으로 환원).
+        ...(relativeEnabled && baseDate
+          ? { baseDate, offsetDays, offsetLabel: offsetLabel.trim() || null }
+          : { baseDate: null, offsetDays: null, offsetLabel: null }),
       });
 
       // v1.1.2 — 이미지 diff 처리 (fire-and-forget):
@@ -381,7 +409,9 @@ export default function EventEditScreen() {
     }
   }, [
     id, originalEvent, title, allDay, startAt, repeatType, location, description,
-    eventColor, shareSpaceIds, reminderMinutes, upsertEvent, router, colors.primary, t,
+    eventColor, shareSpaceIds, reminderMinutes,
+    relativeEnabled, baseDate, offsetDays, offsetLabel,
+    upsertEvent, router, colors.primary, t,
   ]);
 
   /**
@@ -639,6 +669,8 @@ export default function EventEditScreen() {
         />
 
         <View style={styles.form}>
+          {/* v1.3 — 상대일 일정 ON 이면 종일/시작/종료 행 숨김 (기준일+N일 자동 계산). */}
+          {!relativeEnabled && (<>
           {/* All-day */}
           <FormRow label={t('event.form.all_day')} rowStyle={rowStyle}>
             <Switch
@@ -684,6 +716,19 @@ export default function EventEditScreen() {
               </View>
             </FormRow>
           )}
+          </>)}
+
+          {/* v1.3 — 상대일 일정 (기준일 + N일 → D-day). 토글은 항상 노출. */}
+          <RelativeDateSection
+            enabled={relativeEnabled}
+            onToggle={setRelativeEnabled}
+            baseDate={baseDate}
+            onChangeBaseDate={setBaseDate}
+            offsetDays={offsetDays}
+            onChangeOffsetDays={setOffsetDays}
+            offsetLabel={offsetLabel}
+            onChangeOffsetLabel={setOffsetLabel}
+          />
 
           {/*
            * DateTimeModal — unified date + time editor (Bug 2 fix, parity with create.tsx).
