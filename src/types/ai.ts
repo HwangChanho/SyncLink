@@ -48,6 +48,10 @@ export interface ParsedEventFields {
   repeatType?: ParsedField<'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom_weekly'>;
   /** v1.2.8 — custom_weekly 일 때만 사용. JS Date.getDay() 호환 0..6 부분집합. */
   weeklyDays?: ParsedField<number[]>;
+  /** v1.3 — 상대일 일정: 기준일(=오늘)로부터 N일. NL "도착예상/수령/만료" 류일 때만. */
+  offsetDays?: ParsedField<number>;
+  /** v1.3 — 상대일 일정 라벨 ("도착예상" 등). */
+  offsetLabel?: ParsedField<string>;
 }
 
 // ─── Parse result ─────────────────────────────────────────────────────────────

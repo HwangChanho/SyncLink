@@ -479,6 +479,16 @@ export function NLInputBar({ onEventCreated }: Props) {
         ...(chosenColor ? { color: chosenColor } : {}),
         // v1.2.9 — 선택된 스페이스로 즉시 공유. 빈 배열이면 비공개 유지.
         ...(spaceIds.length > 0 ? { shareToSpaceIds: spaceIds } : {}),
+        // v1.3 — 상대일 일정 (NL "택배 3일 뒤 도착예상"). offsetDays 있으면 오늘을
+        // 기준일로 base/offset 저장 → all-day + D-day 배지. startAt 은 이미 오늘+N.
+        ...(p.offsetDays?.value != null
+          ? {
+              allDay: true as const,
+              baseDate: (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })(),
+              offsetDays: p.offsetDays.value,
+              ...(p.offsetLabel?.value ? { offsetLabel: p.offsetLabel.value } : {}),
+            }
+          : {}),
       };
       const created = await createEvent(createInput);
 

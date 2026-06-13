@@ -49,6 +49,10 @@ interface ParsedEventFromAI {
   repeatType: 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom_weekly';
   /** v1.2.8 — custom_weekly 일 때만 사용. JS Date.getDay() 호환 (0=일 ~ 6=토). */
   weeklyDays?: number[];
+  /** v1.3 — 상대일 일정: 기준일(=오늘)로부터 N일. '도착예상/수령/만료' 류일 때만. */
+  offsetDays?: number;
+  /** v1.3 — 상대일 일정 라벨 ("도착예상" 등). */
+  offsetLabel?: string | null;
 }
 
 interface AiParseResponse {
@@ -61,6 +65,8 @@ interface AiParseResponse {
       allDay?:      { value: boolean;   confidence: 'high' | 'medium' | 'low' };
       repeatType?:  { value: string;    confidence: 'high' | 'medium' | 'low' };
       weeklyDays?:  { value: number[];  confidence: 'high' | 'medium' | 'low' };
+      offsetDays?:  { value: number;    confidence: 'high' | 'medium' | 'low' };
+      offsetLabel?: { value: string;    confidence: 'high' | 'medium' | 'low' };
     };
     confidence: 'high' | 'medium' | 'low';
     source: 'ai';
@@ -152,7 +158,7 @@ allDay: 有日期但未指定时间时为 true
 현재 시각: ${contextDatetime}
 
 [일정 정보가 명확한 경우] 반환 형식 (valid JSON 한 줄):
-{"title":"string","startAt":"ISO8601","endAt":"ISO8601","location":null,"allDay":false,"repeatType":"none","weeklyDays":null}
+{"title":"string","startAt":"ISO8601","endAt":"ISO8601","location":null,"allDay":false,"repeatType":"none","weeklyDays":null,"offsetDays":null,"offsetLabel":null}
 
 [이미지에서 일정 정보를 찾을 수 없거나 너무 모호한 경우]:
 {"noEventFound":true,"reason":"한 줄짜리 한국어 설명"}
@@ -185,6 +191,16 @@ noEventFound=true 로 반환.
 - ISO 8601 **with offset** (예: "2026-05-28T09:00:00+09:00").
 - 현재 시각의 offset 을 그대로 사용.
 - "9-6시" / "9시부터 6시까지" 는 같은 날 오전 9시 ~ 오후 6시 (퇴근). endAt 이 startAt 보다 빠르면 안 됨.
+
+⚠ 상대일 일정 (offsetDays/offsetLabel) — '도착예상·수령·만료·마감' 류 의미일 때만:
+- "택배 3일 뒤 도착(예상)", "주문 며칠 뒤 도착", "발급일로부터 N일 뒤 수령/만료" 처럼
+  '며칠 뒤 + (도착/수령/만료/마감/예정)' 이면:
+    offsetDays = N (숫자), offsetLabel = 성격 단어("도착예상"/"수령"/"만료"/"마감"),
+    allDay=true, startAt/endAt = 현재 시각 + N일 (그 날 00:00 ~ 23:59).
+- 그 외 일반 약속·회의·할 일은 offsetDays=null, offsetLabel=null.
+  예 "3일 후 회의" → offsetDays=null (일반 일정).
+  예 "택배 시켰어 3일 뒤 도착예상" → title="택배 도착", offsetDays=3, offsetLabel="도착예상", allDay=true.
+  예 "여권 발급일로부터 7일 뒤 수령" → title="여권 수령", offsetDays=7, offsetLabel="수령", allDay=true.
 
 반드시 valid JSON만 반환하세요. 설명 없음.
 `.trim();
@@ -427,6 +443,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 .map((n: number) => Math.floor(n)),
               confidence: 'high',
             },
+          }),
+          // v1.3 — 상대일 일정 메타 (도착예상/수령/만료 류). 0 이상 정수 + 라벨일 때만.
+          ...(typeof aiParsed.offsetDays === 'number' && aiParsed.offsetDays >= 0 && {
+            offsetDays: { value: Math.floor(aiParsed.offsetDays), confidence: 'high' },
+          }),
+          ...(typeof aiParsed.offsetLabel === 'string' && aiParsed.offsetLabel.trim().length > 0 && {
+            offsetLabel: { value: aiParsed.offsetLabel.trim(), confidence: 'high' },
           }),
         },
         confidence: 'high',   // AI result is always treated as high (or medium by caller)
