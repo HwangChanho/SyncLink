@@ -16,6 +16,7 @@ import type { ColorTokens } from '@/hooks/useColors';
 import { palette } from '@/constants/colors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { DDayBadge } from '@/components/event/DDayBadge';
 import type { EventSummary } from '@/types';
 
 interface Props {
@@ -89,6 +90,8 @@ export function SelectedDayPanel({ selectedDate, events, onEventPress, onCreateP
                 <View style={styles.rowContent}>
                   <Text style={styles.eventTitle} numberOfLines={1}>{ev.title}</Text>
                   <Text style={styles.eventTime}>{timeLabel}</Text>
+                  {/* v1.3 — 상대일 일정이면 D-day 배지. */}
+                  {ev.baseDate ? <DDayBadge target={ev.startAt} label={ev.offsetLabel ?? null} /> : null}
                 </View>
                 {/* 공유 받은 일정 표시(내 일정이 아닐 때) */}
                 {!ev.isOwn && (

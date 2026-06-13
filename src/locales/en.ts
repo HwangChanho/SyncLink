@@ -212,6 +212,18 @@ const en = {
       color: 'Color',
       color_default: 'Default color',
     },
+    // v1.3 — relative-date event (base + N days → D-day)
+    relative: {
+      title: 'Relative-date event (base + N days)',
+      hint: 'Auto-schedule N days from an issue/order date (e.g. parcel arrives in 3 days)',
+      base_date: 'Base date',
+      offset_days: 'Days after',
+      days_unit: 'd',
+      label: 'Display label',
+      label_placeholder: 'e.g. Arrival',
+      label_presets: ['Arrival', 'Pickup', 'Expiry', 'Deadline'],
+      preview: 'Target: {{date}} ({{dday}})',
+    },
     edit_back: 'Back',
     // IDEA-019 — event created success toast message
     added_toast: 'Event added',

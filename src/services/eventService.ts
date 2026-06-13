@@ -40,6 +40,27 @@ const supa = supabase as any;
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
+/**
+ * Format a Date as a 'YYYY-MM-DD' string for a Postgres `date` column, using
+ * the local calendar day (not UTC) so the stored base date matches what the
+ * user picked regardless of timezone. v1.3 (relative-date events).
+ */
+function toDateOnly(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Parse a Postgres `date` ('YYYY-MM-DD') into a local-midnight Date. Appending
+ * 'T00:00:00' (no Z) keeps it in local time, avoiding the UTC-midnight
+ * off-by-one-day shift that `new Date('2026-06-13')` would cause. v1.3.
+ */
+function parseDateOnly(s: string): Date {
+  return new Date(`${s}T00:00:00`);
+}
+
 /** Converts an EventRow to an EventSummary for calendar rendering. */
 function toEventSummary(
   row: EventRow,
@@ -72,6 +93,9 @@ function toEventSummary(
       ? { repeatWeekdays: row.repeat_weekdays }
       : {}),
     ...(row.repeat_until ? { repeatUntil: new Date(row.repeat_until) } : {}),
+    // v1.3 — 상대일 일정이면 D-day 배지/라벨 표시용 메타 전달. 일반 일정은 미포함.
+    ...(row.base_date ? { baseDate: parseDateOnly(row.base_date) } : {}),
+    ...(row.offset_label ? { offsetLabel: row.offset_label } : {}),
   };
 }
 
@@ -106,6 +130,10 @@ function toEvent(
     // v1.1.2 — running 일 때만 의미. 그 외 null.
     distanceKm:    row.distance_km ?? null,
     avgPaceSeconds: row.avg_pace_seconds ?? null,
+    // v1.3 — 상대일 일정 메타. base_date 가 null 이면 일반 일정.
+    baseDate:     row.base_date ? parseDateOnly(row.base_date) : null,
+    offsetDays:   row.offset_days ?? null,
+    offsetLabel:  row.offset_label ?? null,
     createdAt:    new Date(row.created_at),
     updatedAt:    new Date(row.updated_at),
   };
@@ -432,6 +460,14 @@ export async function createEvent(input: CreateEventInput): Promise<Event> {
     if (input.repeatType === 'custom_weekly') {
       insertPayload.repeat_weekdays = input.repeatWeekdays ?? [];
     }
+    // v1.3 — 상대일 일정 메타는 사용 시(baseDate 지정)에만 payload 에 추가한다.
+    // migration 063 미적용 환경에서 일반 일정 저장이 깨지지 않도록 — Build-57 의
+    // repeat_weekdays 와 동일한 "옵션 컬럼은 필요할 때만 포함" 가드.
+    if (input.baseDate) {
+      insertPayload.base_date    = toDateOnly(input.baseDate);
+      insertPayload.offset_days  = input.offsetDays ?? 0;
+      insertPayload.offset_label = input.offsetLabel ?? null;
+    }
     const { data: row, error } = await supa
       .from('events')
       .insert(insertPayload)
@@ -514,6 +550,13 @@ export async function createEvent(input: CreateEventInput): Promise<Event> {
         editableByMembers: input.editableByMembers ?? false,
         eventKind:     input.eventKind ?? 'general',
         workoutParts:  input.workoutParts ?? [],
+        // v1.1.2 — running 외엔 null (refetch 실패 합성본에도 명시 — 기존 누락 보완).
+        distanceKm:     row.distance_km ?? null,
+        avgPaceSeconds: row.avg_pace_seconds ?? null,
+        // v1.3 — 상대일 일정 메타.
+        baseDate:      row.base_date ? parseDateOnly(row.base_date) : null,
+        offsetDays:    row.offset_days ?? null,
+        offsetLabel:   row.offset_label ?? null,
         createdAt:     new Date(row.created_at),
         updatedAt:     new Date(row.updated_at),
       };
@@ -587,6 +630,11 @@ export async function updateEvent(eventId: string, updates: UpdateEventInput): P
       patch.distance_km      = null;
       patch.avg_pace_seconds = null;
     }
+    // v1.3 — 상대일 일정 메타. 명시적으로 들어온 필드만 patch 한다 (migration 063
+    // 미적용 환경에서 일반 update 가 깨지지 않게 — 일반 일정 흐름은 이 키를 안 보냄).
+    if (updates.baseDate    !== undefined) patch.base_date    = updates.baseDate ? toDateOnly(updates.baseDate) : null;
+    if (updates.offsetDays  !== undefined) patch.offset_days  = updates.offsetDays;
+    if (updates.offsetLabel !== undefined) patch.offset_label = updates.offsetLabel ?? null;
 
     // v1.1.1 — eventKind 별 예약 색상 강제. 사용자가 다른 색을 보내도 무시.
     // workout → 빨강, running → 파랑, general 전환 시 사용자가 color 명시

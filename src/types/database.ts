@@ -132,6 +132,12 @@ export interface EventRow {
   distance_km: number | null;
   /** v1.1.2 — running 일 때 평균 페이스를 초 단위로 저장 (분/km 계산용). nullable. */
   avg_pace_seconds: number | null;
+  /** v1.3 — 상대일 일정: 기준일 (발급일/주문일). ISO date 'YYYY-MM-DD'. NULL = 일반 일정. */
+  base_date: string | null;
+  /** v1.3 — 기준일로부터 +N일. start_at 은 (base_date + offset_days) 로 미리 계산해 저장. */
+  offset_days: number | null;
+  /** v1.3 — D-day 표시용 라벨 ("도착예상"/"수령"/"만료" 등). */
+  offset_label: string | null;
   created_at: string;
   updated_at: string;
 }

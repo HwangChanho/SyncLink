@@ -212,6 +212,18 @@ const zh = {
       color: '颜色',
       color_default: '默认颜色',
     },
+    // v1.3 — 相对日期日程（基准日 + N天 → D-day）
+    relative: {
+      title: '相对日期日程（基准日 + N天）',
+      hint: '从签发日/下单日起N天后自动登记（例：快递3天后预计到达）',
+      base_date: '基准日',
+      offset_days: 'N天后',
+      days_unit: '天',
+      label: '显示标签',
+      label_placeholder: '例：预计到达',
+      label_presets: ['预计到达', '领取', '到期', '截止'],
+      preview: '目标日: {{date}}（{{dday}}）',
+    },
     edit_back: '返回',
     // IDEA-019 — 日程创建完成 Toast 消息
     added_toast: '日程已添加',

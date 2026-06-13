@@ -19,6 +19,7 @@ import type { ColorTokens } from '@/hooks/useColors';
 import { palette } from '@/constants/colors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { DDayBadge } from '@/components/event/DDayBadge';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -56,6 +57,8 @@ function EventRow({ event, onPress, colors, styles }: EventRowProps) {
       <View style={styles.rowContent}>
         <Text style={styles.eventTitle} numberOfLines={1}>{event.title}</Text>
         <Text style={styles.eventTime}>{timeLabel}</Text>
+        {/* v1.3 — 상대일 일정이면 D-day 배지 (라벨 + D-N). */}
+        {event.baseDate ? <DDayBadge target={event.startAt} label={event.offsetLabel ?? null} /> : null}
       </View>
 
       {/* Shared indicator */}

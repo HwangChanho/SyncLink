@@ -36,6 +36,14 @@ export interface EventFormInitial {
   categoryId?: string | null;
   /** Build-96 — 멤버 편집 허용 토글 초기값. default false. */
   editableByMembers?: boolean;
+  /** v1.3 — 상대일 일정(기준일+N일) 모드 on/off 초기값. default false. */
+  relativeEnabled?: boolean;
+  /** v1.3 — 기준일 (발급일/주문일). default null(=UI 는 '오늘' 로 표시). */
+  baseDate?: Date | null;
+  /** v1.3 — 기준일로부터 +N일. default 1. */
+  offsetDays?: number;
+  /** v1.3 — D-day 라벨. default ''. */
+  offsetLabel?: string;
 }
 
 export interface EventFormState {
@@ -54,6 +62,14 @@ export interface EventFormState {
   eventColor: string | null;
   categoryId: string | null;
   editableByMembers: boolean;
+  /** v1.3 — 상대일 일정(기준일+N일) 모드 on/off. */
+  relativeEnabled: boolean;
+  /** v1.3 — 기준일. null 이면 UI 는 '오늘' 로 간주해 표시. */
+  baseDate: Date | null;
+  /** v1.3 — 기준일로부터 +N일. */
+  offsetDays: number;
+  /** v1.3 — D-day 라벨 ('' = 없음). */
+  offsetLabel: string;
 }
 
 // 모든 setter 를 React.Dispatch 로 노출 — 호출자가 prev 기반 함수형
@@ -72,6 +88,10 @@ export interface EventFormSetters {
   setEventColor: React.Dispatch<React.SetStateAction<string | null>>;
   setCategoryId: React.Dispatch<React.SetStateAction<string | null>>;
   setEditableByMembers: React.Dispatch<React.SetStateAction<boolean>>;
+  setRelativeEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+  setBaseDate: React.Dispatch<React.SetStateAction<Date | null>>;
+  setOffsetDays: React.Dispatch<React.SetStateAction<number>>;
+  setOffsetLabel: React.Dispatch<React.SetStateAction<string>>;
 }
 
 export interface EventFormHelpers {
@@ -123,6 +143,11 @@ export function useEventForm(initial: EventFormInitial = {}): {
   const [eventColor, setEventColor] = useState<string | null>(initial.eventColor ?? null);
   const [categoryId, setCategoryId] = useState<string | null>(initial.categoryId ?? null);
   const [editableByMembers, setEditableByMembers] = useState<boolean>(initial.editableByMembers ?? false);
+  // v1.3 — 상대일 일정 (기준일 + N일 → D-day).
+  const [relativeEnabled, setRelativeEnabled] = useState<boolean>(initial.relativeEnabled ?? false);
+  const [baseDate, setBaseDate] = useState<Date | null>(initial.baseDate ?? null);
+  const [offsetDays, setOffsetDays] = useState<number>(initial.offsetDays ?? 1);
+  const [offsetLabel, setOffsetLabel] = useState<string>(initial.offsetLabel ?? '');
 
   const applyPickerValue = useCallback((target: 'start' | 'end', selected: Date) => {
     if (target === 'start') {
@@ -157,11 +182,13 @@ export function useEventForm(initial: EventFormInitial = {}): {
       title, allDay, startAt, endAt, repeatType, repeatWeekdays,
       location, description, shareSpaceIds, reminderMinutes, eventColor, categoryId,
       editableByMembers,
+      relativeEnabled, baseDate, offsetDays, offsetLabel,
     },
     setters: {
       setTitle, setAllDay, setStartAt, setEndAt, setRepeatType, setRepeatWeekdays,
       setLocation, setDescription, setShareSpaceIds, setReminderMinutes, setEventColor, setCategoryId,
       setEditableByMembers,
+      setRelativeEnabled, setBaseDate, setOffsetDays, setOffsetLabel,
     },
     helpers: { applyPickerValue, applyWebDateChange, shiftTime },
   };

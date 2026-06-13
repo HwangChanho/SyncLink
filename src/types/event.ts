@@ -62,6 +62,12 @@ export interface Event {
   distanceKm: number | null;
   /** v1.1.2 — 'running' kind 일 때 평균 페이스 (초/km). 그 외 null. */
   avgPaceSeconds: number | null;
+  /** v1.3 — 상대일 일정 기준일 (발급일/주문일). null = 일반 일정. */
+  baseDate: Date | null;
+  /** v1.3 — 기준일로부터 +N일. */
+  offsetDays: number | null;
+  /** v1.3 — D-day 표시용 라벨 ("도착예상"/"수령"/"만료" 등). */
+  offsetLabel: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -101,6 +107,10 @@ export interface EventSummary {
   repeatType?: string | null;
   repeatWeekdays?: number[] | null;
   repeatUntil?: Date | null;
+  /** v1.3 — 상대일 일정이면 기준일(있음=상대일 일정 신호). D-day 는 startAt 으로 계산. */
+  baseDate?: Date | null;
+  /** v1.3 — 상대일 일정 D-day 배지 라벨. 있으면 리스트에 "라벨 D-N" 표시. */
+  offsetLabel?: string | null;
 }
 
 /** Payload when creating a new event (omit server-generated fields). */
@@ -139,6 +149,16 @@ export interface CreateEventInput {
   distanceKm?: number | null;
   /** v1.1.2 — eventKind === 'running' 일 때 평균 페이스 (초/km). null = 미기록. */
   avgPaceSeconds?: number | null;
+  /**
+   * v1.3 — 상대일 일정: 기준일 (발급일/주문일). 지정하면 호출자가 startAt 을
+   * (baseDate + offsetDays) 로 계산해 함께 전달한다 (서버는 start_at 을 그대로 저장).
+   * null/undefined = 일반 일정.
+   */
+  baseDate?: Date | null;
+  /** v1.3 — 기준일로부터 +N일. */
+  offsetDays?: number | null;
+  /** v1.3 — D-day 표시용 라벨. */
+  offsetLabel?: string | null;
 }
 
 /** Payload when updating an event. */

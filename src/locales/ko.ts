@@ -222,6 +222,18 @@ const ko = {
       color: '색상',
       color_default: '기본 색상',
     },
+    // v1.3 — 상대일 일정 (기준일 + N일 → D-day)
+    relative: {
+      title: '상대일 일정 (기준일 + N일)',
+      hint: '발급일·주문일에서 며칠 뒤로 자동 등록 (예: 택배 3일 뒤 도착예상)',
+      base_date: '기준일',
+      offset_days: 'N일 뒤',
+      days_unit: '일',
+      label: '표시 라벨',
+      label_placeholder: '예: 도착예상',
+      label_presets: ['도착예상', '수령', '만료', '마감'],
+      preview: '목표일: {{date}} ({{dday}})',
+    },
     edit_back: '돌아가기',
     // IDEA-019 — 일정 생성 완료 토스트 메시지
     added_toast: '일정이 추가되었어요',

@@ -59,6 +59,8 @@ import { showAlert } from '@/lib/webAlert';
 import { SimpleToast, useSimpleToast } from '@/components/common/SimpleToast';
 import { FreeTimeRecommendSheet } from '@/components/calendar/FreeTimeRecommendSheet';
 import type { FreeSlot } from '@/types/freeTime';
+import { RelativeDateSection } from '@/components/event/RelativeDateSection';
+import { addDays } from '@/lib/relativeDate';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -282,11 +284,13 @@ export default function EventCreateScreen() {
     title, allDay, startAt, endAt, repeatType, repeatWeekdays,
     location, description, shareSpaceIds, reminderMinutes, eventColor, categoryId,
     editableByMembers,
+    relativeEnabled, baseDate, offsetDays, offsetLabel,
   } = form;
   const {
     setTitle, setAllDay, setStartAt, setEndAt, setRepeatType, setRepeatWeekdays,
     setLocation, setDescription, setShareSpaceIds, setReminderMinutes,
     setEventColor, setCategoryId, setEditableByMembers,
+    setRelativeEnabled, setBaseDate, setOffsetDays, setOffsetLabel,
     // v1.2.8 — useEventForm 의 set 들. NL prefill useEffect 에서 사용.
   } = setters;
 
@@ -324,6 +328,19 @@ export default function EventCreateScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // v1.3 — 상대일 일정 ON 이면 (기준일 + N일) all-day 일정으로 start/end 를 동기화.
+  // 폼의 정규 날짜 필드를 갱신해두면 기존 save/conflict 로직이 그대로 동작하고,
+  // performSave 는 baseDate/offsetDays/offsetLabel 만 추가로 넘기면 된다.
+  useEffect(() => {
+    if (!relativeEnabled) return;
+    const base = baseDate ?? (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
+    const target = addDays(base, offsetDays);
+    setAllDay(true);
+    setStartAt(target);
+    setEndAt(new Date(target.getFullYear(), target.getMonth(), target.getDate(), 23, 59, 59));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [relativeEnabled, baseDate, offsetDays]);
 
   const [isSaving, setIsSaving] = useState(false);
 
@@ -588,6 +605,13 @@ export default function EventCreateScreen() {
             ? (Number(paceMinutes || '0') * 60 + Number(paceSeconds || '0'))
             : null,
         } : {}),
+        // v1.3 — 상대일 일정 메타. relative ON 일 때만 전달 (startAt 은 위 effect 가
+        // 이미 기준일+N일 all-day 로 동기화). baseDate 는 토글 ON 시 today 로 보정됨.
+        ...(relativeEnabled && baseDate ? {
+          baseDate,
+          offsetDays,
+          ...(offsetLabel.trim() ? { offsetLabel: offsetLabel.trim() } : {}),
+        } : {}),
       });
 
       // Persist reminders for the newly created event (fire-and-forget; see
@@ -633,7 +657,9 @@ export default function EventCreateScreen() {
     }
   }, [
     title, allDay, startAt, repeatType, location, description, categoryId,
-    eventColor, shareSpaceIds, reminderMinutes, editableByMembers, upsertEvent, router, colors.primary, t, showToast,
+    eventColor, shareSpaceIds, reminderMinutes, editableByMembers,
+    relativeEnabled, baseDate, offsetDays, offsetLabel,
+    upsertEvent, router, colors.primary, t, showToast,
   ]);
 
   /**
@@ -946,6 +972,9 @@ export default function EventCreateScreen() {
         </View>
 
         <View style={styles.form}>
+          {/* v1.3 — 상대일 일정 ON 이면 시작/종료/종일 행은 숨김 (기준일+N일 이
+              all-day 일정으로 자동 계산되므로). RelativeDateSection 의 토글로 복귀. */}
+          {!relativeEnabled && (<>
           {/* All-day toggle */}
           <FormRow label={t('time.all_day')} rowStyle={rowStyle}>
 
@@ -999,6 +1028,19 @@ export default function EventCreateScreen() {
               )}
             </FormRow>
           )}
+          </>)}
+
+          {/* v1.3 — 상대일 일정 (기준일 + N일 → D-day). 토글은 항상 노출. */}
+          <RelativeDateSection
+            enabled={relativeEnabled}
+            onToggle={setRelativeEnabled}
+            baseDate={baseDate}
+            onChangeBaseDate={setBaseDate}
+            offsetDays={offsetDays}
+            onChangeOffsetDays={setOffsetDays}
+            offsetLabel={offsetLabel}
+            onChangeOffsetLabel={setOffsetLabel}
+          />
 
           {/*
            * DateTimeModal — unified date + time editor (Bug 2 fix).

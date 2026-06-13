@@ -451,29 +451,31 @@ describe('EventCreateScreen', () => {
 
   describe('allDay 토글', () => {
     it('종일 토글 활성화 시 "종료" 행이 숨겨짐', () => {
-      const { UNSAFE_getByType, queryByText, getByText } = render(<EventCreateScreen />);
+      const { UNSAFE_getAllByType, queryByText, getByText } = render(<EventCreateScreen />);
       const { Switch } = require('react-native');
 
       // 초기 상태: "종료" 표시
       expect(getByText('종료')).toBeTruthy();
 
-      // Switch를 true로 토글
-      fireEvent(UNSAFE_getByType(Switch), 'valueChange', true);
+      // v1.3 — RelativeDateSection 이 두 번째 Switch(상대일 토글)를 추가하므로
+      // 첫 번째 Switch(=종일 토글)를 명시적으로 타겟. 종일 Switch 가 먼저 렌더됨.
+      fireEvent(UNSAFE_getAllByType(Switch)[0], 'valueChange', true);
 
       // allDay=true → !allDay 조건 false → "종료" 행 숨김
       expect(queryByText('종료')).toBeNull();
     });
 
     it('종일 토글 비활성화 시 "종료" 행이 다시 표시됨', () => {
-      const { UNSAFE_getByType, queryByText, getByText } = render(<EventCreateScreen />);
+      const { UNSAFE_getAllByType, queryByText, getByText } = render(<EventCreateScreen />);
       const { Switch } = require('react-native');
 
+      // v1.3 — 첫 번째 Switch = 종일 토글 (두 번째는 상대일 토글).
       // 켜기
-      fireEvent(UNSAFE_getByType(Switch), 'valueChange', true);
+      fireEvent(UNSAFE_getAllByType(Switch)[0], 'valueChange', true);
       expect(queryByText('종료')).toBeNull();
 
       // 끄기
-      fireEvent(UNSAFE_getByType(Switch), 'valueChange', false);
+      fireEvent(UNSAFE_getAllByType(Switch)[0], 'valueChange', false);
       expect(getByText('종료')).toBeTruthy();
     });
 
@@ -483,11 +485,12 @@ describe('EventCreateScreen', () => {
         allDay: true,
       });
 
-      const { getByPlaceholderText, getByText, UNSAFE_getByType } = render(<EventCreateScreen />);
+      const { getByPlaceholderText, getByText, UNSAFE_getAllByType } = render(<EventCreateScreen />);
       const { Switch } = require('react-native');
 
       fireEvent.changeText(getByPlaceholderText('제목을 입력해 주세요.'), '종일 미팅');
-      fireEvent(UNSAFE_getByType(Switch), 'valueChange', true);
+      // v1.3 — 첫 번째 Switch = 종일 토글 (RelativeDateSection 토글이 두 번째).
+      fireEvent(UNSAFE_getAllByType(Switch)[0], 'valueChange', true);
 
       await act(async () => {
         fireEvent.press(getByText('저장'));

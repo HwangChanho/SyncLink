@@ -212,6 +212,18 @@ const ja = {
       color: 'カラー',
       color_default: 'デフォルトカラー',
     },
+    // v1.3 — 相対日予定（基準日＋N日 → D-day）
+    relative: {
+      title: '相対日予定（基準日＋N日）',
+      hint: '発行日・注文日からN日後に自動登録（例：宅配3日後に到着予定）',
+      base_date: '基準日',
+      offset_days: 'N日後',
+      days_unit: '日',
+      label: '表示ラベル',
+      label_placeholder: '例：到着予定',
+      label_presets: ['到着予定', '受取', '期限', '締切'],
+      preview: '目標日: {{date}}（{{dday}}）',
+    },
     edit_back: '戻る',
     // IDEA-019 — 予定作成完了トーストメッセージ
     added_toast: '予定が追加されました',
