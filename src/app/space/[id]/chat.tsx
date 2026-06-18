@@ -24,6 +24,7 @@ import { useColors, type ColorTokens } from '@/hooks/useColors';
 import { useAuthStore } from '@/stores/authStore';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { LinkifiedText } from '@/lib/linkText';
 import {
   listMessages, sendTextMessage, sendImageMessage, deleteMessage,
   subscribeToSpace, markSpaceAsRead, searchMessages,
@@ -186,9 +187,11 @@ export default function SpaceChatScreen() {
       >
         <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleOther]}>
           {item.body && (
-            <Text style={[styles.bodyText, mine ? styles.bodyMine : styles.bodyOther]}>
-              {item.body}
-            </Text>
+            <LinkifiedText
+              text={item.body}
+              style={[styles.bodyText, mine ? styles.bodyMine : styles.bodyOther]}
+              linkStyle={styles.bodyLink}
+            />
           )}
           {item.imageUrl && (
             <Image source={{ uri: item.imageUrl }} style={styles.image} resizeMode="cover" />
@@ -377,6 +380,9 @@ function makeStyles(colors: ColorTokens) {
     bodyText: { ...textStyles.body },
     bodyMine: { color: colors.textInverse },
     bodyOther: { color: colors.textPrimary },
+    // Tappable URL run inside a message. Underlined; color is inherited from
+    // bodyMine/bodyOther so links stay legible on both bubble backgrounds.
+    bodyLink: { textDecorationLine: 'underline', fontWeight: '600' },
     image: {
       width: 200,
       height: 200,

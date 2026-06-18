@@ -11,13 +11,15 @@
 
 import { memo } from 'react';
 import {
-  View, Text, FlatList,
+  View, Text, FlatList, Image,
   ActivityIndicator, Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { showAlert } from '@/lib/webAlert';
+import { firstYoutubeThumbnail } from '@/lib/youtube';
+import { useNoteSettingsStore } from '@/stores/noteSettingsStore';
 import type { ColorTokens } from '@/hooks/useColors';
 import type { Todo } from '@/types';
 import type { PlannerStyles } from './plannerStyles';
@@ -63,6 +65,11 @@ const NoteCard = memo(function NoteCard({
   const preview = note.content?.slice(0, 100) ?? '';
   const updatedLabel = formatRelativeDate(note.updatedAt);
 
+  // Show a YouTube thumbnail when the note body has a YouTube link and the
+  // user hasn't turned thumbnails off (settings/notes). null = no thumbnail.
+  const showThumbnail = useNoteSettingsStore((s) => s.showYoutubeThumbnails);
+  const thumbnail = showThumbnail ? firstYoutubeThumbnail(note.content) : null;
+
   return (
     <Pressable
       style={({ pressed }) => [styles.noteCard, pressed && styles.noteCardPressed]}
@@ -78,6 +85,13 @@ const NoteCard = memo(function NoteCard({
         );
       }}
     >
+      {thumbnail && (
+        <Image
+          source={{ uri: thumbnail }}
+          style={styles.noteCardThumbnail}
+          resizeMode="cover"
+        />
+      )}
       <Text style={styles.noteCardTitle} numberOfLines={1}>{note.title}</Text>
       {preview.length > 0 && (
         <Text style={styles.noteCardPreview} numberOfLines={3}>{preview}</Text>

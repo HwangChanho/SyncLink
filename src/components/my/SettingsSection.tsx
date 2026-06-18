@@ -86,6 +86,19 @@ export function SettingsSection() {
         </TouchableOpacity>
         <View style={menu.menuDivider} />
 
+        {/* 노트 설정 — 유튜브 썸네일 표시 토글 등. */}
+        <TouchableOpacity
+          style={menu.menuItem}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onPress={() => router.push('/settings/notes' as any)}
+          activeOpacity={0.7}
+          testID="settings-button-notes"
+        >
+          <Text style={menu.menuItemText}>{t('note.settings_title')}</Text>
+          <Text style={menu.menuItemChevron}>›</Text>
+        </TouchableOpacity>
+        <View style={menu.menuDivider} />
+
         {/* PRD 4.5 / Sprint 25: 다국어 명시적 토글 (헤더 LanguageButton 보강) */}
         <TouchableOpacity
           style={menu.menuItem}

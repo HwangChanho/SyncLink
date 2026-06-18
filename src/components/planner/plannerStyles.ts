@@ -208,6 +208,16 @@ export function makeStyles(colors: ColorTokens) {
       color: colors.textTertiary,
       marginTop: spacing[1],
     },
+    // YouTube thumbnail shown at the top of a note card when the body has a
+    // YouTube link (and the user setting is on). 16:9 to match the source.
+    noteCardThumbnail: {
+      width: '100%',
+      aspectRatio: 16 / 9,
+      borderRadius: radius.md,
+      marginBottom: spacing[1],
+      // Placeholder tint while the remote image loads.
+      backgroundColor: colors.backgroundAlt,
+    },
 
     // Quick add bar
     quickAddBar: {

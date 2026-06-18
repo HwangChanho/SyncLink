@@ -53,6 +53,7 @@ import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
 import { useColors } from '@/hooks/useColors';
 import { logError } from '@/lib/errorLogger';
 import { useOnboardingStore } from '@/stores/onboardingStore';
+import { useNoteSettingsStore } from '@/stores/noteSettingsStore';
 import { useFonts } from 'expo-font';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
 
@@ -121,6 +122,8 @@ function useAuthGuard(): { routingReady: boolean } {
   // 앱 시작 시 1회 hydrate. 이후 갱신은 onboarding 화면의 store.complete() 가 담당.
   useEffect(() => {
     void useOnboardingStore.getState().hydrate();
+    // Restore note settings (YouTube thumbnail toggle) from AsyncStorage.
+    void useNoteSettingsStore.getState().hydrate();
   }, []);
 
   useEffect(() => {

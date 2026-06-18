@@ -1,6 +1,9 @@
 const en = {
   common: {
     ok: 'OK',
+    link_warning_title: 'Open external link',
+    link_warning_message: 'You are about to open an external site. Make sure you trust this link.\n\n{{url}}',
+    link_open: 'Open',
     cancel: 'Cancel',
     save: 'Save',
     saving: 'Saving…',
@@ -273,6 +276,9 @@ const en = {
 
   note: {
     label: 'Note',
+    settings_title: 'Note settings',
+    youtube_thumbnail: 'YouTube thumbnails',
+    youtube_thumbnail_desc: 'Show a thumbnail in the list when a note contains a YouTube link.',
     delete: 'Delete Note',
     delete_confirm: 'This action cannot be undone. Continue?',
     edit: 'Edit Note',

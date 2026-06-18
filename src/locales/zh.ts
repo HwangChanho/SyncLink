@@ -1,6 +1,9 @@
 const zh = {
   common: {
     ok: '确认',
+    link_warning_title: '打开外部链接',
+    link_warning_message: '您即将打开一个外部网站。请确认该链接可信。\n\n{{url}}',
+    link_open: '打开',
     cancel: '取消',
     save: '保存',
     saving: '保存中…',
@@ -273,6 +276,9 @@ const zh = {
 
   note: {
     label: '笔记',
+    settings_title: '笔记设置',
+    youtube_thumbnail: 'YouTube 缩略图',
+    youtube_thumbnail_desc: '当笔记包含 YouTube 链接时，在列表中显示缩略图。',
     delete: '删除笔记',
     delete_confirm: '此操作无法撤销，是否继续？',
     edit: '编辑笔记',

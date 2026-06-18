@@ -1,6 +1,9 @@
 const ja = {
   common: {
     ok: 'OK',
+    link_warning_title: '外部リンクを開く',
+    link_warning_message: '外部サイトを開きます。信頼できるリンクか確認してください。\n\n{{url}}',
+    link_open: '開く',
     cancel: 'キャンセル',
     save: '保存',
     saving: '保存中…',
@@ -273,6 +276,9 @@ const ja = {
 
   note: {
     label: 'ノート',
+    settings_title: 'ノート設定',
+    youtube_thumbnail: 'YouTube サムネイル',
+    youtube_thumbnail_desc: 'ノートに YouTube リンクがあると一覧にサムネイルを表示します。',
     delete: 'ノートを削除',
     delete_confirm: 'この操作は元に戻せません。続けますか？',
     edit: 'ノートを編集',

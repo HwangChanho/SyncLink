@@ -5,6 +5,9 @@
 const ko = {
   common: {
     ok: '확인',
+    link_warning_title: '외부 링크 열기',
+    link_warning_message: '외부 사이트로 이동합니다. 신뢰할 수 있는 링크인지 확인하세요.\n\n{{url}}',
+    link_open: '열기',
     cancel: '취소',
     save: '저장',
     saving: '저장 중…',
@@ -283,6 +286,9 @@ const ko = {
 
   note: {
     label: '노트',
+    settings_title: '노트 설정',
+    youtube_thumbnail: '유튜브 썸네일',
+    youtube_thumbnail_desc: '노트 본문에 유튜브 링크가 있으면 목록에서 썸네일로 보여줍니다.',
     delete: '노트 삭제',
     delete_confirm: '이 작업은 되돌릴 수 없습니다. 계속하시겠습니까?',
     edit: '노트 편집',
