@@ -70,6 +70,12 @@ platform :ios do
 
       # 2. xcodebuild archive (기존에 검증된 방식)
       sh("rm -rf '#{PROJECT_ROOT}/build/SyncLink.xcarchive' '#{PROJECT_ROOT}/build/SyncLink-ipa'")
+      # OTHER_CODE_SIGN_FLAGS: codesign 을 login.keychain 으로 고정한다.
+      # 형제 프로젝트의 EAS 빌드가 전역 keychain 검색목록을 리셋하면서
+      # login.keychain 을 밀어내면, 우리 archive 의 CodeSign 이
+      # "<hash>: no identity found" 로 깨졌다(2026-06-18). --keychain 으로
+      # codesign 이 login.keychain 만 보게 해 이 세션 간 레이스에 면역시킨다.
+      login_keychain = File.expand_path('~/Library/Keychains/login.keychain-db')
       sh("xcodebuild " \
          "-workspace '#{PROJECT_ROOT}/ios/SyncLink.xcworkspace' " \
          "-scheme SyncLink " \
@@ -79,6 +85,7 @@ platform :ios do
          "-authenticationKeyPath '#{API_KEY_PATH}' " \
          "-authenticationKeyID #{API_KEY_ID} " \
          "-authenticationKeyIssuerID #{API_ISSUER} " \
+         "OTHER_CODE_SIGN_FLAGS='--keychain #{login_keychain}' " \
          "SENTRY_DISABLE_AUTO_UPLOAD=true " \
          "archive")
 
