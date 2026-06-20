@@ -14,13 +14,12 @@ import {
   View, Text, FlatList, Image,
   ActivityIndicator, Pressable,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { showAlert } from '@/lib/webAlert';
 import { firstYoutubeThumbnail } from '@/lib/youtube';
 import { useNoteSettingsStore } from '@/stores/noteSettingsStore';
-import { MascotFloat } from '@/components/common/MascotFloat';
-import { spacing, radius } from '@/constants/spacing';
 import type { ColorTokens } from '@/hooks/useColors';
 import type { Todo } from '@/types';
 import type { PlannerStyles } from './plannerStyles';
@@ -132,23 +131,7 @@ export function NotesTab({
   if (notes.length === 0) {
     return (
       <View style={styles.centered}>
-        {/* Mascot on a soft "diary page" card. The card's fixed light tint
-            blends the asset's near-white backdrop so it reads as the fairy
-            sitting on a page in both light & dark mode. */}
-        <View
-          style={{
-            padding: spacing[3],
-            borderRadius: radius.xl,
-            backgroundColor: '#FFFDFB',
-            marginBottom: spacing[4],
-            shadowColor: '#000',
-            shadowOpacity: 0.06,
-            shadowRadius: 8,
-            shadowOffset: { width: 0, height: 3 },
-          }}
-        >
-          <MascotFloat size={150} />
-        </View>
+        <Ionicons name="document-text-outline" size={48} color={colors.textTertiary} />
         <Text style={styles.emptyText}>{t('note.label')} {t('common.none')}</Text>
       </View>
     );
