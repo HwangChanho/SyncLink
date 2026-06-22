@@ -42,7 +42,7 @@
       },
       "android": {
         "serviceAccountKeyPath": "./credentials/google-play-service-account.json",
-        "track": "internal",
+        "track": "SyncLink",
         "releaseStatus": "draft"
       }
     }
