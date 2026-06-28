@@ -496,7 +496,18 @@ const en = {
 
   nl: {
     placeholder: 'Add an event in plain language…',
-    suggestions: ['Meeting tomorrow 2pm', 'Dinner Saturday 8pm', 'Weekly workout Friday'],
+    quickAdd: {
+      frequent_title: 'Frequent events',
+      category_title: 'Quick add',
+      meeting: 'Meeting',
+      appointment: 'Appointment',
+      meal: 'Meal',
+      workout: 'Workout',
+      hospital: 'Hospital',
+      travel: 'Travel',
+      date: 'Date',
+      deadline: 'Deadline',
+    },
     ai_limit: 'AI usage limit reached.',
     save_failed: 'Failed to save event. Please try again.',
     error: 'An error occurred.',

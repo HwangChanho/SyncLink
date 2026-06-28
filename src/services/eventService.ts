@@ -363,6 +363,68 @@ export async function searchEventsByTitle(
 }
 
 /**
+ * Return the user's most frequently registered events as quick-add templates,
+ * ranked by how often each title appears (ties broken by recency). Unlike
+ * searchEventsByTitle this takes no query — it powers the "자주 쓰는 일정"
+ * chips on the AI assistant empty state. Returns [] when logged out / no history.
+ */
+export async function getFrequentEventTemplates(
+  limit = 6,
+): Promise<EventAutocompleteSuggestion[]> {
+  const userId = await getCurrentUserId();
+  if (!userId) return [];
+
+  // Pull a recent window of the user's own events and aggregate by title
+  // client-side — cheaper than a GROUP BY RPC and accurate enough since the
+  // most-used titles are almost always within the recent window.
+  const { data, error } = await supa
+    .from('events')
+    .select('id, title, description, location, category_id, color, all_day, start_at')
+    .eq('user_id', userId)
+    .order('start_at', { ascending: false })
+    .limit(200) as {
+      data: {
+        id: string;
+        title: string;
+        description: string | null;
+        location: string | null;
+        category_id: string | null;
+        color: string | null;
+        all_day: boolean;
+        start_at: string;
+      }[] | null;
+      error: Error | null;
+    };
+
+  if (error || !data) return [];
+
+  // Group by normalised title, counting frequency. Rows arrive start_at DESC,
+  // so the first row seen per title is also its most recent occurrence.
+  const groups = new Map<string, { count: number; row: (typeof data)[number] }>();
+  for (const row of data) {
+    const key = row.title.trim().toLowerCase();
+    if (key.length === 0) continue;
+    const prev = groups.get(key);
+    if (prev) prev.count += 1;
+    else groups.set(key, { count: 1, row });
+  }
+
+  return [...groups.values()]
+    .sort((a, b) => b.count - a.count) // most frequent first
+    .slice(0, limit)
+    .map(({ row }) => ({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      location: row.location,
+      categoryId: row.category_id,
+      color: row.color,
+      allDay: row.all_day,
+      lastStartAt: new Date(row.start_at),
+    }));
+}
+
+/**
  * Fetch full event details by ID.
  * Populates sharedSpaceIds and ownerNickname via supplementary queries.
  *

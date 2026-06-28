@@ -128,13 +128,11 @@ export function NLInputBar({ onEventCreated }: Props) {
   const [mySpaces, setMySpaces] = useState<SpaceSummary[]>([]);
   const [errorMsg, setErrorMsg] = useState('');
   const [isListening, setIsListening] = useState(false);
-  const [isFocused, setIsFocused] = useState(false);
   // v1.1 Phase 1 — STT 결과를 AI 로 후보정한 뒤 모호한 해석이 둘 이상이면
   // 사용자가 한 번에 고를 수 있도록 chip 으로 노출. 비어있으면 chip 영역
   // 자체를 렌더하지 않는다.
   const [voiceAlternatives, setVoiceAlternatives] = useState<string[]>([]);
   const { refine: refineVoice } = useVoicePostProcess();
-  const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
    * When true, the QuotaExceededSheet is displayed instead of routing to
    * the paywall (Sprint 14 TASK-1404).
@@ -592,28 +590,9 @@ export function NLInputBar({ onEventCreated }: Props) {
       // 여백이 사용자 보기에 너무 컸음. 정확히 keyboardHeight 만큼만 lift.
       keyboardHeight > 0 && { paddingBottom: keyboardHeight },
     ]}>
-      {/* Suggestion chips — shown when focused with empty text */}
-      {isFocused && !text && inputState === 'idle' && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyboardShouldPersistTaps="always"
-          contentContainerStyle={styles.chipsRow}
-        >
-          {(t('nl.suggestions', { returnObjects: true }) as string[]).map((chip, i) => (
-            <Pressable
-              key={i}
-              style={styles.chip}
-              onPress={() => {
-                setText(chip);
-                inputRef.current?.focus();
-              }}
-            >
-              <Text style={styles.chipText}>{chip}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-      )}
+      {/* Suggestion chips removed (2026-06-28) — quick-add moved to the AI
+          assistant empty state (QuickAddSuggestions). The chip/chipsRow styles
+          below are still used by the STT voiceAlternatives block. */}
 
       {/* Error snackbar */}
       {inputState === 'error' && errorMsg ? (
@@ -716,14 +695,6 @@ export function NLInputBar({ onEventCreated }: Props) {
           editable={inputState !== 'loading'}
           multiline={false}
           maxLength={200}
-          onFocus={() => {
-            if (blurTimer.current) clearTimeout(blurTimer.current);
-            setIsFocused(true);
-          }}
-          onBlur={() => {
-            // Delay so chip Pressable onPress fires before focus is lost
-            blurTimer.current = setTimeout(() => setIsFocused(false), 200);
-          }}
         />
 
         {/* v1.2.9 — AI 비서 명시 호출 버튼. 텍스트 있으면 prefill 로 push,

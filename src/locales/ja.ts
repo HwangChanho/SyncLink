@@ -493,7 +493,18 @@ const ja = {
 
   nl: {
     placeholder: '自然語でイベントを追加…',
-    suggestions: ['明日午後2時に会議', '土曜夜8時に夕食', '毎週金曜に運動'],
+    quickAdd: {
+      frequent_title: 'よく使う予定',
+      category_title: 'クイック登録',
+      meeting: '会議',
+      appointment: '約束',
+      meal: '食事',
+      workout: '運動',
+      hospital: '病院',
+      travel: '旅行',
+      date: 'デート',
+      deadline: '締め切り',
+    },
     ai_limit: 'AI の使用制限に達しました。',
     save_failed: 'イベントの保存に失敗しました。もう一度お試しください。',
     error: 'エラーが発生しました。',

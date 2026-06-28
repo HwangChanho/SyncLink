@@ -496,7 +496,18 @@ const zh = {
 
   nl: {
     placeholder: '用自然语言添加日程…',
-    suggestions: ['明天下午2点开会', '周六晚8点聚餐', '每周五健身'],
+    quickAdd: {
+      frequent_title: '常用日程',
+      category_title: '快速添加',
+      meeting: '会议',
+      appointment: '约定',
+      meal: '用餐',
+      workout: '健身',
+      hospital: '医院',
+      travel: '旅行',
+      date: '约会',
+      deadline: '截止',
+    },
     ai_limit: 'AI 使用次数已达上限。',
     save_failed: '日程保存失败，请重试。',
     error: '发生错误。',

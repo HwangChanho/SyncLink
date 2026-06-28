@@ -11,6 +11,7 @@ import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import type { ChatUiMessage } from '@/stores/chatStore';
+import { QuickAddSuggestions } from './QuickAddSuggestions';
 
 interface Props {
   messages: ChatUiMessage[];
@@ -48,6 +49,8 @@ export function ChatMessageList({ messages, isLoading }: Props) {
             <Text style={styles.exampleItem}>· 최근 한 달 가장 자주한 카테고리는?</Text>
             <Text style={styles.exampleItem}>· 지난 3개월 수면·러닝 추세 요약해줘</Text>
           </View>
+          {/* 2026-06-28 — quick event-registration chips (개인화 + 카테고리). */}
+          <QuickAddSuggestions />
         </View>
       ) : null}
 

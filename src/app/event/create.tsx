@@ -188,6 +188,8 @@ export default function EventCreateScreen() {
     allDay: allDayParam,
     repeatType: repeatTypeParam,
     repeatWeekdays: repeatWeekdaysParam,
+    // 2026-06-28 — AI 빠른 등록 칩이 카테고리도 prefill 하므로 추가.
+    categoryId: categoryIdParam,
   } = useLocalSearchParams<{
     date?: string;
     startHour?: string;
@@ -199,6 +201,7 @@ export default function EventCreateScreen() {
     allDay?: string;
     repeatType?: string;
     repeatWeekdays?: string;
+    categoryId?: string;
   }>();
   const router = useRouter();
   const { upsertEvent } = useEventStore();
@@ -311,6 +314,7 @@ export default function EventCreateScreen() {
       if (!isNaN(d.getTime())) setEndAt(d);
     }
     if (locationParam) setLocation(locationParam);
+    if (categoryIdParam) setCategoryId(categoryIdParam);
     if (allDayParam === 'true') setAllDay(true);
     if (repeatTypeParam) {
       // RepeatTypeDb 와 직접 매칭. 잘못된 값은 무시.

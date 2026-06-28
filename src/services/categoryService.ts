@@ -102,6 +102,37 @@ export async function getCategories(): Promise<Category[]> {
 }
 
 /**
+ * Resolve the seeded system categories (개인/업무/기타) to their row IDs,
+ * keyed by builtin name. Unlike getCategories(), this matches on the raw
+ * Korean seed name (before localisation) so callers can reliably target a
+ * specific system category — e.g. the AI quick-add templates that prefill
+ * "업무" for a meeting. Returns {} when logged out.
+ */
+export async function getBuiltinCategoryMap(): Promise<
+  Partial<Record<'personal' | 'work' | 'other', string>>
+> {
+  const userId = await getCurrentUserId();
+  if (!userId) return {};
+
+  const { data, error } = (await supa
+    .from('categories')
+    .select('id, name')
+    .is('user_id', null)) as {
+    data: { id: string; name: string }[] | null;
+    error: Error | null;
+  };
+  if (error || !data) return {};
+
+  const out: Partial<Record<'personal' | 'work' | 'other', string>> = {};
+  for (const row of data) {
+    if (row.name === '개인') out.personal = row.id;
+    else if (row.name === '업무') out.work = row.id;
+    else if (row.name === '기타') out.other = row.id;
+  }
+  return out;
+}
+
+/**
  * Create a new user-defined category.
  *
  * @param input - Category creation payload (name, color, optional icon)

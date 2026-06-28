@@ -507,7 +507,18 @@ const ko = {
 
   nl: {
     placeholder: '일정을 자연어로 입력하세요…',
-    suggestions: ['내일 오후 2시 회의', '토요일 저녁 8시 약속', '매주 금요일 운동'],
+    quickAdd: {
+      frequent_title: '자주 쓰는 일정',
+      category_title: '빠른 등록',
+      meeting: '회의',
+      appointment: '약속',
+      meal: '식사',
+      workout: '운동',
+      hospital: '병원',
+      travel: '여행',
+      date: '데이트',
+      deadline: '마감',
+    },
     ai_limit: 'AI 사용 한도에 도달했습니다.',
     save_failed: '일정 저장에 실패했어요. 다시 시도해주세요.',
     error: '검색 중 오류가 발생했습니다.',
