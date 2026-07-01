@@ -161,7 +161,12 @@ function useAuthGuard(): { routingReady: boolean } {
     // change → re-run → replace 루프 방지), 새 네비게이션(segments 변경)마다
     // 1회 교정을 허용한다. 그래야 뒤로가기로 wrong route 에 돌아와도 가드가
     // 다시 올바른 곳으로 보내 무한 AppSplash 에 갇히지 않는다.
-    const segSig = (segments as readonly string[]).join('/');
+    // dedup 시그니처에 인증/온보딩 상태를 포함한다. route(segments) 가 그대로여도
+    // 인증 상태가 바뀌면(예: settings/account 같은 로그인-필수 스택 화면에서
+    // 제자리 로그아웃) 교정을 1회 다시 허용해야 한다. segments 만 키로 쓰면
+    // logout-in-place 시 segSig 가 안 바뀌어 /auth/login 교정이 skip 되고,
+    // routedCorrectly=false 로 남아 AppSplash(스켈레톤)에 무한히 갇혔다(2026-07-01 수정).
+    const segSig = `${isAuthenticated ? 1 : 0}|${onboardingDone ? 1 : 0}|${(segments as readonly string[]).join('/')}`;
     if (target) {
       if (lastGuardedSegRef.current !== segSig) {
         lastGuardedSegRef.current = segSig;
