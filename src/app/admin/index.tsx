@@ -868,6 +868,40 @@ function InsightCards({
           </View>
         </View>
       )}
+
+      {/* ⑧ 스페이스(공유 캘린더) 사용 현황 — 마이그레이션 064 */}
+      {stats.spaces && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>스페이스 (공유 캘린더)</Text>
+          {/* 1행: 규모 — 전체 / 실제 공유(2명+) / 참여 유저 수 */}
+          <View style={styles.row}>
+            <Stat label="전체" value={`${stats.spaces.total}`} styles={styles} />
+            <Stat label="멤버 2+" value={`${stats.spaces.multi_member}`} styles={styles} />
+            <Stat label="참여 유저" value={`${stats.spaces.users_in_space}`} styles={styles} />
+          </View>
+          {/* 2행: 타입 분포 + 전체 유저 대비 참여율 */}
+          <View style={styles.row}>
+            <Stat label="커플" value={`${stats.spaces.couple}`} styles={styles} />
+            <Stat label="그룹" value={`${stats.spaces.group}`} styles={styles} />
+            <Stat
+              label="참여율"
+              value={
+                stats.users.total_users > 0
+                  ? `${Math.round((stats.spaces.users_in_space / stats.users.total_users) * 100)}%`
+                  : '—'
+              }
+              styles={styles}
+            />
+          </View>
+          {/* 최근 활동 + 부가기능 채택도 요약 */}
+          <Text style={styles.subText}>
+            최근 공유 활동 · 7일 {stats.spaces.active_7d} · 30일 {stats.spaces.active_30d} 스페이스
+          </Text>
+          <Text style={styles.subText}>
+            공유 일정 {stats.spaces.shared_events}건 · 메시지 {stats.spaces.messages} · 기념일 {stats.spaces.anniversaries}
+          </Text>
+        </View>
+      )}
     </>
   );
 }

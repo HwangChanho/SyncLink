@@ -68,6 +68,31 @@ export interface AdminStats {
   retention?: { active_7d: number; active_30d: number; dormant: number };
   /** 국가 분포 top (NULL = '미상'). */
   country_dist?: Array<{ country_code: string; users: number }>;
+
+  // ─── 마이그레이션 064 신규 (optional — 구버전 서버 안전) ────────────────────
+  /**
+   * 공유 캘린더("스페이스") 사용 현황 스냅샷.
+   * - total/couple/group: 스페이스 수 및 타입 분포
+   * - with_members: 멤버 1명 이상 / multi_member: 2명 이상(실제 공유 성립)
+   * - users_in_space: 스페이스에 속한 distinct 유저 수 (참여율 분자)
+   * - avg_members: 스페이스당 평균 멤버 / shared_events: 일정 공유 총 건수
+   * - active_7d/30d: 최근 7·30일 내 일정 공유가 있던 스페이스 수 (활성도)
+   * - messages/anniversaries: 메시지·기념일 총 사용량 (부가기능 채택도)
+   */
+  spaces?: {
+    total: number;
+    couple: number;
+    group: number;
+    with_members: number;
+    multi_member: number;
+    users_in_space: number;
+    avg_members: number;
+    shared_events: number;
+    active_7d: number;
+    active_30d: number;
+    messages: number;
+    anniversaries: number;
+  };
 }
 
 export type UsersSort = 'recent' | 'active' | 'usage';
