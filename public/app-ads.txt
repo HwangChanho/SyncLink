@@ -1,0 +1,5 @@
+# app-ads.txt — authorizes Google AdMob to sell SyncLink's mobile ad inventory.
+# Hosted at https://synclink.pages.dev/app-ads.txt (the developer website set on the
+# App Store / Play listing). Google crawls this exact path to verify the app.
+# Format (IAB app-ads.txt): <ad system domain>, <publisher account id>, <relationship>, <certification authority id>
+google.com, pub-2936938026486482, DIRECT, f08c47fec0942fa0
