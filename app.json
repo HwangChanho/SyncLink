@@ -49,7 +49,7 @@
       },
       "package": "io.synclink.app",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 6,
+      "versionCode": 7,
       "softwareKeyboardLayoutMode": "resize",
       "intentFilters": [
         {
