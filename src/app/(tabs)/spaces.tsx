@@ -24,6 +24,7 @@ import { desktopContentCentered } from '@/constants/webLayout';
 import { useAuthStore } from '@/stores/authStore';
 import { GuestGate } from '@/components/common/GuestGate';
 import { useSpaceStore } from '@/stores/spaceStore';
+import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { SpaceCard } from '@/components/space/SpaceCard';
@@ -65,6 +66,17 @@ function SpacesScreenContent() {
   // v1.2.1 — Space 별 안 본 메시지 수.
   const [unread, setUnread] = useState<Record<string, number>>({});
 
+  // 스페이스 "생성"은 Pro 전용 (참여는 free 허용 — 정책: 생성만 Pro). 서버 트리거
+  // (마이그레이션 065)가 최종 방어선이지만, free 유저는 생성 화면 대신 페이월로 보낸다.
+  const isPro = useSubscriptionStore((s) => s.plan === 'pro');
+  const goCreateSpace = () => {
+    if (!isPro) {
+      router.push('/subscription/paywall');
+      return;
+    }
+    router.push('/space/create');
+  };
+
   // Tab mount 시 + focus 마다 재조회 (다른 탭에서 변경된 경우 동기화)
   useEffect(() => {
     fetchMySpaces();
@@ -92,7 +104,7 @@ function SpacesScreenContent() {
               <TouchableOpacity
                 testID="spaces-button-create"
                 style={styles.primaryButton}
-                onPress={() => router.push('/space/create')}
+                onPress={goCreateSpace}
                 activeOpacity={0.7}
               >
                 <Text style={styles.primaryButtonText}>{t('space.create_button')}</Text>
@@ -120,7 +132,7 @@ function SpacesScreenContent() {
               <TouchableOpacity
                 testID="spaces-button-add"
                 style={styles.addRow}
-                onPress={() => router.push('/space/create')}
+                onPress={goCreateSpace}
                 activeOpacity={0.7}
               >
                 <Text style={styles.addText}>+ {t('space.create_button')}</Text>

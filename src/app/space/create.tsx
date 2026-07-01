@@ -28,6 +28,7 @@ import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import * as spaceService from '@/services/spaceService';
 import { useSpaceStore } from '@/stores/spaceStore';
+import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import type { SpaceType } from '@/types';
 import { logError } from '@/lib/errorLogger';
 
@@ -49,6 +50,8 @@ export default function CreateSpaceScreen() {
   const [name, setName] = useState('');
   const [selectedType, setSelectedType] = useState<SpaceType>('couple');
   const [isLoading, setIsLoading] = useState(false);
+  // 스페이스 생성은 Pro 전용 (참여는 free 허용 — 정책: 생성만 Pro).
+  const isPro = useSubscriptionStore((s) => s.plan === 'pro');
 
   /** Space type options built from i18n translations. */
   const SPACE_TYPE_OPTIONS: SpaceTypeOption[] = [
@@ -69,6 +72,13 @@ export default function CreateSpaceScreen() {
   const { fetchMySpaces, setActiveSpaceId, setSpaceDetail } = useSpaceStore();
 
   const handleCreate = async () => {
+    // 생성은 Pro 전용 — free 유저가 버튼 게이트를 우회해 이 화면에 진입한 경우
+    // (웹 딥링크 등) 네트워크 호출 전에 페이월로 유도한다.
+    if (!isPro) {
+      router.replace('/subscription/paywall');
+      return;
+    }
+
     const trimmedName = name.trim();
     if (!trimmedName) {
       showAlert(t('space.need_name'), t('space.name_placeholder'));
@@ -102,6 +112,11 @@ export default function CreateSpaceScreen() {
       // 생성된 Space 상세 화면으로 이동
       router.replace(`/space/${space.id}`);
     } catch (err) {
+      // 서버 트리거(마이그레이션 065)가 Pro 아님을 거부한 경우 → 페이월로 유도.
+      if (err instanceof Error && err.message.includes('PRO_REQUIRED')) {
+        router.replace('/subscription/paywall');
+        return;
+      }
       const message =
         err instanceof Error ? err.message : t('space.create_failed');
       void logError({ context: 'space.create.ui', error: err });
