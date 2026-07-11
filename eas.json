@@ -45,6 +45,13 @@
         "track": "SyncLink",
         "releaseStatus": "draft"
       }
+    },
+    "productionStore": {
+      "android": {
+        "serviceAccountKeyPath": "./credentials/google-play-service-account.json",
+        "track": "production",
+        "releaseStatus": "draft"
+      }
     }
   }
 }
