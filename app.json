@@ -184,7 +184,6 @@
           "android": {
             "targetSdkVersion": 35,
             "compileSdkVersion": 35,
-            "kotlinVersion": "1.9.25",
             "useLegacyPackaging": false,
             "extraMavenRepos": [
               "https://jitpack.io"
