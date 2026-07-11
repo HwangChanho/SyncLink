@@ -50,10 +50,15 @@ export interface LocalNotification {
 // empty stub would throw at module load and crash the entire web app.
 if (Platform.OS !== 'web') {
   ExpoNotifications.setNotificationHandler({
+    // SDK 53 (expo-notifications 0.31) split the deprecated `shouldShowAlert`
+    // into `shouldShowBanner` (heads-up banner) + `shouldShowList` (notification
+    // center). Keep `shouldShowAlert` for backward compat with older runtimes.
     handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge:  false,
+      shouldShowAlert:  true,
+      shouldShowBanner: true,
+      shouldShowList:   true,
+      shouldPlaySound:  true,
+      shouldSetBadge:   false,
     }),
   });
 }
