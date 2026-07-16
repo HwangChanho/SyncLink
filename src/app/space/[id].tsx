@@ -9,6 +9,9 @@
  *  - Leave Space action
  *
  * Accessed via: router.push('/space/SPACE_UUID')
+ *
+ * Invite links reuse this path with a code instead of a uuid
+ * (/space/ABC123) — those are redirected to the join preview, see below.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -27,7 +30,7 @@ import {
 import { Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { Redirect, router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '@/lib/supabase';
 import { useColors } from '@/hooks/useColors';
@@ -51,7 +54,28 @@ import type { Space, SpaceMember, Anniversary, FreeTimeSlot } from '@/types';
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+/**
+ * Space ids are database uuids. Invite codes are 6 chars drawn from
+ * generateCode()'s alphabet (A–Z minus I/O, digits 2–9), so a code can never
+ * be mistaken for an id.
+ */
+const SPACE_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default function SpaceDetailScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+
+  // Invite links are sent out as https://synclink.pages.dev/space/<inviteCode>
+  // (see buildInviteUrl below), and Expo Router matches that path to this
+  // screen. On native, the deep link handler in _layout.tsx rewrites those to
+  // /space/join/<code> before this ever mounts — but on web nothing does, so
+  // the code would reach getSpaceById() and fail its uuid lookup with
+  // "Space를 찾을 수 없습니다". Send anything that isn't a uuid to the join
+  // preview, which resolves codes via find_space_by_invite_code instead.
+  if (id && !SPACE_ID_RE.test(id)) {
+    return <Redirect href={`/space/join/${encodeURIComponent(id)}`} />;
+  }
+
   // 스페이스 상세가 (0-멤버 유령 스페이스 / orphan 데이터 등으로) 렌더 크래시해도
   // 검은화면 대신 폴백 + 재시도 UI 를 보여주고, 실제 에러를 error_logs 에 남긴다(2026-06-07).
   return (
