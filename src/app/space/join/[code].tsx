@@ -165,7 +165,7 @@ export default function SpaceJoinPreviewScreen() {
 
       {/* Description */}
       <Text style={styles.description}>
-        {t('space.join_fail_desc')}
+        {t('space.join_preview_description')}
       </Text>
 
       {/* Action buttons */}
