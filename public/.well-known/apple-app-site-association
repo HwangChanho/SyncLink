@@ -5,10 +5,7 @@
       {
         "appID": "QUVU2PY6PG.io.synclink.app",
         "paths": [
-          "/space/*",
-          "/event/*",
-          "/invite/*",
-          "/*"
+          "/space/*"
         ]
       }
     ]
