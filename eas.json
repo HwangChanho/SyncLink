@@ -26,7 +26,7 @@
       "channel": "production",
       "environment": "production",
       "ios": {
-        "image": "latest",
+        "image": "macos-sequoia-15.5-xcode-16.4",
         "cocoapods": "1.16.2"
       },
       "env": {
