@@ -59,7 +59,7 @@
             {
               "scheme": "https",
               "host": "synclink.pages.dev",
-              "pathPrefix": "/"
+              "pathPrefix": "/space/"
             }
           ],
           "category": [
