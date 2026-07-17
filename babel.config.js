@@ -1,10 +1,13 @@
 /**
- * Babel configuration for SyncDay (Expo SDK 52)
+ * Babel configuration for SyncDay (Expo SDK 54)
  *
  * Key configs:
  * - expo preset: handles React Native transformation
  * - module-resolver: enables @/* path alias (mirrors tsconfig.json paths)
- * - react-native-reanimated: must be listed LAST per library requirements
+ * - react-native-worklets/plugin: reanimated 4 moved its worklets Babel
+ *   plugin into the standalone react-native-worklets package. Must be LAST.
+ *   (reanimated/plugin still exists as a shim re-exporting this, but we
+ *   reference the canonical path directly to survive shim removal.)
  */
 
 // Stub only the service-specific EXPO_PUBLIC_* vars that babel-preset-expo's
@@ -50,8 +53,8 @@ module.exports = function (api) {
           },
         },
       ],
-      // Must be listed last
-      'react-native-reanimated/plugin',
+      // Must be listed last (reanimated 4 worklets plugin)
+      'react-native-worklets/plugin',
     ],
   };
 };

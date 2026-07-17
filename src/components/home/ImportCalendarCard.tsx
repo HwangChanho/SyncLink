@@ -18,7 +18,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { View, Text, Pressable, Alert, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+// SDK54(expo-file-system 19)에서 readAsStringAsync/EncodingType 등 함수형 API가
+// 'expo-file-system/legacy' 서브패스로 이동. 동작 동일 유지 위해 legacy 진입점 사용.
+import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors, type ColorTokens } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';

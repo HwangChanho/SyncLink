@@ -19,7 +19,9 @@ import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-si
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
-import * as FileSystem from 'expo-file-system';
+// SDK54(expo-file-system 19)에서 readAsStringAsync/EncodingType 등 함수형 API가
+// 'expo-file-system/legacy' 서브패스로 이동. 동작 동일 유지 위해 legacy 진입점 사용.
+import * as FileSystem from 'expo-file-system/legacy';
 import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase';
 import { logError } from '@/lib/errorLogger';

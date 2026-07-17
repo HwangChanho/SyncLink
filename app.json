@@ -19,8 +19,8 @@
       "supportsTablet": false,
       "bundleIdentifier": "io.synclink.app",
       "appleTeamId": "QUVU2PY6PG",
-      "newArchEnabled": false,
-      "buildNumber": "156",
+      "newArchEnabled": true,
+      "buildNumber": "157",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.io.synclink.app.widget"
@@ -195,7 +195,7 @@
       "./plugins/with16KbAlignment",
       "expo-web-browser"
     ],
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "experiments": {
       "typedRoutes": true
     },
