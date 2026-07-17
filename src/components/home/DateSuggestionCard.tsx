@@ -62,6 +62,13 @@ export function DateSuggestionCard() {
 
   const { spaces } = useSpaceStore();
 
+  // Rules of Hooks: useRequireAuth (which calls useAuthStore/useLoginPromptStore)
+  // must run on every render, so it lives ABOVE the `spaces.length === 0` early
+  // return below. Placing it after the early return changes the hook count
+  // between renders (React 19: "Rendered more hooks than during the previous
+  // render.") once spaces loads asynchronously.
+  const requireAuth = useRequireAuth();
+
   const [result, setResult] = useState<DateSuggestionResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -98,7 +105,6 @@ export function DateSuggestionCard() {
   // ─── Render ────────────────────────────────────────────────────────────────
 
   /** Navigate to event/create pre-filled with the first free slot. */
-  const requireAuth = useRequireAuth();
   const handleCreateEvent = () => requireAuth(() => {
     const firstSlot = result?.slots[0];
     if (firstSlot) {
