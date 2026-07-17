@@ -764,6 +764,16 @@ async function acquireKakaoCredentials(): Promise<{ email: string; password: str
 
   const result = await WebBrowser.openAuthSessionAsync(authUrl, appReturn, { showInRecents: false });
   if (result.type !== 'success') {
+    // Diagnostic (2026-07): this early return never logged, so native Kakao
+    // failures were invisible in error_logs. A non-'success' type is usually a
+    // genuine user cancel, but can also mean the synclink://auth/callback
+    // redirect wasn't captured (custom-tab / scheme handling). Log the type so
+    // the two are distinguishable when investigating "Kakao login doesn't work".
+    await logError({
+      context: 'auth.kakao.websession-not-success',
+      error:   new Error(`openAuthSessionAsync returned type=${result.type}`),
+      details: { type: result.type },
+    });
     throw new Error('cancelled');
   }
   const errParam = extractQueryParam(result.url, 'error');
