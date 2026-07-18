@@ -34,6 +34,13 @@
         "SENTRY_DISABLE_AUTO_UPLOAD": "true",
         "NPM_CONFIG_LEGACY_PEER_DEPS": "true"
       }
+    },
+    "production-apk": {
+      "extends": "production",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
     }
   },
   "submit": {
