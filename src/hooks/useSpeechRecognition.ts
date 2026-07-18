@@ -292,10 +292,13 @@ export function useSpeechRecognition({
 
   // ── Native implementation (iOS / Android) ──────────────────────────────────
 
-  // Dynamic import to avoid bundling @react-native-voice/voice on web
-  // (the package may crash during web initialisation).
+  // Dynamic import so the native speech module isn't evaluated on web
+  // (web uses the Web Speech API branch above). voiceCompat wraps
+  // expo-speech-recognition with the legacy @react-native-voice/voice API
+  // (see src/lib/voiceCompat.ts) — @react-native-voice/voice does not work
+  // under the New Architecture (SDK54+).
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const Voice = require('@react-native-voice/voice').default as {
+  const Voice = require('@/lib/voiceCompat').default as {
     start: (lang: string) => Promise<void>;
     stop: () => Promise<void>;
     destroy: () => Promise<void>;

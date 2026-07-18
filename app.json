@@ -20,7 +20,7 @@
       "bundleIdentifier": "io.synclink.app",
       "appleTeamId": "QUVU2PY6PG",
       "newArchEnabled": true,
-      "buildNumber": "158",
+      "buildNumber": "159",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.io.synclink.app.widget"
@@ -49,7 +49,7 @@
       },
       "package": "io.synclink.app",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 11,
+      "versionCode": 12,
       "softwareKeyboardLayoutMode": "resize",
       "intentFilters": [
         {
@@ -193,7 +193,17 @@
       ],
       "react-native-edge-to-edge",
       "./plugins/with16KbAlignment",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "음성으로 일정을 입력하는 데 사용됩니다.",
+          "speechRecognitionPermission": "음성을 텍스트로 변환하여 일정을 입력합니다.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
+        }
+      ]
     ],
     "newArchEnabled": true,
     "experiments": {

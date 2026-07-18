@@ -22,7 +22,10 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import Voice, { type SpeechResultsEvent, type SpeechErrorEvent } from '@react-native-voice/voice';
+// New Arch (SDK54): @react-native-voice/voice is unmaintained and non-functional
+// under the New Architecture. voiceCompat is a drop-in shim over
+// expo-speech-recognition (also adds the previously-missing mic permission request).
+import Voice, { type SpeechResultsEvent, type SpeechErrorEvent } from '@/lib/voiceCompat';
 import * as ImagePicker from 'expo-image-picker';
 import { ConfirmModal } from './ConfirmModal';
 import { QuotaExceededSheet } from '@/components/ai/QuotaExceededSheet';
