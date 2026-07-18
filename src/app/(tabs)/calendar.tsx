@@ -62,7 +62,7 @@ export default function CalendarScreen() {
   const router = useRouter();
   const requireAuth = useRequireAuth();
   // PRD 4.2 Tier 2 — i18n for free-time UI strings.
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { eventsByDate, fetchEvents, upsertEvent, removeEvent } = useEventStore();
   // Todos with a due date should surface on the calendar (MonthView only).
   // Build-74 — week/day view 에선 todo 미노출. drag-to-reschedule 도 X.
@@ -382,6 +382,22 @@ export default function CalendarScreen() {
 
   const todayEvents: EventSummary[] = sourceFilteredEvents[toDateKey(selectedDate)] ?? [];
 
+  // 월 좌우 스와이프 시 양옆에 살짝 드러나는 전월/다음월 라벨 (예: "2월"/"4월").
+  // locale 별 짧은 월 표기; Intl 미지원 시 한국어 "M월"로 폴백.
+  const monthPeekLabels = useMemo(() => {
+    const locale = i18n.language || 'ko';
+    const fmt = (d: Date) => {
+      try {
+        return d.toLocaleDateString(locale, { month: 'short' });
+      } catch {
+        return `${d.getMonth() + 1}월`;
+      }
+    };
+    const prev = new Date(selectedDate.getFullYear(), selectedDate.getMonth() - 1, 1);
+    const next = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 1);
+    return { prev: fmt(prev), next: fmt(next) };
+  }, [selectedDate, i18n.language]);
+
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -487,6 +503,54 @@ export default function CalendarScreen() {
             />
           )}
         </Animated.View>
+
+        {/* 월 좌우 스와이프 힌트 — 스와이프하는 방향의 전월/다음월을 양옆에 살짝
+            노출한다. swipeX(손가락 추적)에 opacity 를 연동해, 오른쪽으로 밀면(전월)
+            왼쪽 라벨이, 왼쪽으로 밀면(다음월) 오른쪽 라벨이 나타난다. 정지/탭
+            상태(swipeX≈0)에선 opacity 0 이라 보이지 않는다. pointerEvents=none 으로
+            제스처/탭을 가로막지 않는다. 데스크탑 master-detail 은 우측 패널이 있어 제외. */}
+        {viewMode === 'month' && !isDesktop && (
+          <>
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.monthPeek,
+                styles.monthPeekLeft,
+                {
+                  opacity: swipeX.interpolate({
+                    inputRange: [6, 24],
+                    outputRange: [0, 1],
+                    extrapolate: 'clamp',
+                  }),
+                },
+              ]}
+            >
+              <View style={styles.monthPeekPill}>
+                <Ionicons name="chevron-back" size={14} color={colors.textSecondary} />
+                <Text style={styles.monthPeekText}>{monthPeekLabels.prev}</Text>
+              </View>
+            </Animated.View>
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.monthPeek,
+                styles.monthPeekRight,
+                {
+                  opacity: swipeX.interpolate({
+                    inputRange: [-24, -6],
+                    outputRange: [1, 0],
+                    extrapolate: 'clamp',
+                  }),
+                },
+              ]}
+            >
+              <View style={styles.monthPeekPill}>
+                <Text style={styles.monthPeekText}>{monthPeekLabels.next}</Text>
+                <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
+              </View>
+            </Animated.View>
+          </>
+        )}
 
         {/* 데스크탑 월뷰 우측 선택일 일정 패널 (master-detail) */}
         {isDesktop && viewMode === 'month' && (
@@ -635,6 +699,38 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     },
     contentRow: {
       flexDirection: 'row',
+    },
+    // 월 좌우 스와이프 시 양옆에 나타나는 전월/다음월 힌트 (swipeX opacity 연동).
+    monthPeek: {
+      position: 'absolute',
+      top: 0,
+      bottom: 0,
+      justifyContent: 'center',
+      zIndex: 5,
+    },
+    monthPeekLeft: {
+      left: 10,
+      alignItems: 'flex-start',
+    },
+    monthPeekRight: {
+      right: 10,
+      alignItems: 'flex-end',
+    },
+    monthPeekPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+    },
+    monthPeekText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.textPrimary,
     },
     // Top-left category filter affordance.
     // Build-50 — single style for all left-toolbar overlay-toggle buttons
