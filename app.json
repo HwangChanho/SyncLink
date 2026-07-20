@@ -16,7 +16,7 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "io.synclink.app",
       "appleTeamId": "QUVU2PY6PG",
       "newArchEnabled": true,

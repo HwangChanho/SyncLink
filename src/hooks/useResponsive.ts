@@ -5,9 +5,10 @@
  * 재배치하기 위한 공통 기준점. `useWindowDimensions` 기반이라 창 리사이즈에
  * 실시간 반응한다.
  *
- * ⚠️ 네이티브 앱(iOS/Android)은 항상 phone 취급한다. 데스크탑 레이아웃은
- *    웹에서만 의미가 있고, 네이티브는 기존 모바일 UX 를 그대로 유지해 회귀를
- *    원천 차단하기 위함이다(폭이 큰 태블릿 기기여도 모바일 레이아웃).
+ * 폭 기준으로 웹·네이티브 모두에 적용한다. 네이티브 태블릿/대형화면(iPad,
+ * Android 태블릿·폴더블)도 반응형 레이아웃을 쓴다. 폰은 세로 고정
+ * (app.json orientation: portrait)이라 폭이 항상 768 미만 → isPhone 유지,
+ * 즉 기존 폰 UX 는 그대로다(회귀 없음).
  *
  * Breakpoint:
  *   - phone   : < 768            (현행 모바일 레이아웃)
@@ -34,9 +35,9 @@ export function useResponsive(): Responsive {
   const { width } = useWindowDimensions();
   const isWeb = Platform.OS === 'web';
 
-  // 네이티브는 폭과 무관하게 phone — 데스크탑 분기에 절대 들어가지 않게 한다.
-  const isDesktop = isWeb && width >= 1024;
-  const isTablet = isWeb && width >= 768 && width < 1024;
+  // 폭 기준(웹·네이티브 공통). 폰은 세로 고정이라 항상 <768 → isPhone 유지.
+  const isDesktop = width >= 1024;
+  const isTablet = width >= 768 && width < 1024;
   const isPhone = !isDesktop && !isTablet;
 
   return { width, isPhone, isTablet, isDesktop, isWeb };
