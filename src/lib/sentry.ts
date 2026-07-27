@@ -43,6 +43,35 @@ export function captureException(err: unknown): void {
   Sentry.captureException(err);
 }
 
+/**
+ * Capture a *handled* error (one a service already caught) with its logical
+ * origin attached as a searchable tag.
+ *
+ * Why this exists: production builds do not write to `error_logs` (see
+ * SHOULD_PERSIST_LOGS in errorLogger.ts — LEAD's "배포 버전은 로깅 제외"
+ * rule). Without this, a caught failure such as a Kakao sign-in that never
+ * returns 'success' left no trace anywhere in production, so the diagnostic
+ * logging added for exactly that investigation could never fire. Routing
+ * handled errors to Sentry restores visibility at zero DB cost.
+ *
+ * Privacy: only the context tag and the error's own message/stack are sent.
+ * `details` is deliberately NOT forwarded — callers put request bodies and
+ * responses in there, and shipping those to a third party would violate the
+ * "사용자 활동 비공개" intent behind disabling production DB logging.
+ *
+ * @param context Dot-separated origin id, e.g. 'auth.kakao.websession-not-success'
+ * @param err     The caught value (Error or otherwise; non-Errors are wrapped)
+ */
+export function captureHandledError(context: string, err: unknown): void {
+  Sentry.withScope((scope) => {
+    scope.setTag('context', context);
+    // Group by origin rather than by message, so one flaky endpoint doesn't
+    // shatter into dozens of separate Sentry issues.
+    scope.setFingerprint(['handled', context]);
+    Sentry.captureException(err instanceof Error ? err : new Error(String(err)));
+  });
+}
+
 /** Capture a message and send to Sentry. */
 export function captureMessage(msg: string, level: Sentry.SeverityLevel = 'info'): void {
   Sentry.captureMessage(msg, level);

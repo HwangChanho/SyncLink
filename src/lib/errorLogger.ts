@@ -19,6 +19,7 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { supabase } from './supabase';
+import { captureHandledError } from './sentry';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -107,6 +108,19 @@ export async function logError(opts: LogErrorOptions): Promise<void> {
       });
     } catch {
       // 로깅 실패는 무시 — 재귀 호출로 인한 무한 루프 방지
+    }
+  } else {
+    // production 빌드: error_logs 에는 쓰지 않는다(위 정책). 그렇다고 아무 데도
+    // 안 남기면 실사용자 실패가 완전히 관측 불가가 된다 — 실제로 2026-07 카카오
+    // 로그인 조사 때 "error_logs 에 에러 없음"을 정상 신호로 오독했고, 그때 추가한
+    // 진단 로그(auth.kakao.websession-not-success)도 production 에서는 영영
+    // 기록되지 않는 상태였다. handled 에러를 Sentry 로 보내 이 사각지대를 닫는다.
+    // (DB 비용 0, details 는 전송하지 않아 사용자 활동 비공개 원칙 유지 —
+    //  captureHandledError 주석 참조.)
+    try {
+      captureHandledError(opts.context, opts.error);
+    } catch {
+      // Sentry 미초기화/전송 실패도 삼킨다 — 로깅은 절대 앱 흐름을 깨지 않는다
     }
   }
 
