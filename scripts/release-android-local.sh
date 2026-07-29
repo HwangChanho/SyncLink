@@ -39,8 +39,13 @@ echo "[3/4] Gradle clean (Android native build cache)"
 ( cd android && ./gradlew clean )
 
 echo "[4/4] expo run:android --variant release"
-export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
-export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
+# 🔴 JAVA_HOME 이 없으면 기본 java 가 OpenJDK 26 으로 잡혀 RN Gradle 플러그인이
+#    "Error resolving plugin [com.facebook.react.settings] > 26" 로 즉시 죽는다. JDK 21 고정.
+export JAVA_HOME="${JAVA_HOME:-/Applications/Android Studio.app/Contents/jbr/Contents/Home}"
+# SDK 는 Android Studio 기본 경로가 아니라 homebrew commandlinetools 에 설치돼 있다.
+export ANDROID_HOME="${ANDROID_HOME:-/opt/homebrew/share/android-commandlinetools}"
+export ANDROID_SDK_ROOT="$ANDROID_HOME"
+export PATH="$JAVA_HOME/bin:$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
 if [[ -n "$DEVICE" ]]; then
   export ANDROID_SERIAL="$DEVICE"
 fi

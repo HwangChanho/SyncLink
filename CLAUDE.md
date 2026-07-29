@@ -23,9 +23,25 @@
 - TypeScript strict, any 지양 | 함수형 컴포넌트 + Hooks
 - 커밋: conventional commits | 코드/주석: 영어, 이슈/태스크: 한국어
 
+### 📦 스토어 빌드 = 로컬이 기본 (2026-07-29 LEAD 결정)
+EAS Free 크레딧을 아끼기 위해 **양 플랫폼 모두 `eas build --local`** 을 기본 경로로 쓴다.
+
+```
+npm run build:android   # aab  → build/synclink-android-<ver>-vc<n>.aab
+npm run build:ios       # ipa  → build/synclink-ios-<ver>-<build>.ipa
+npm run build:both      # 순차 (동시 실행 금지)
+```
+`scripts/build-store-local.sh` 가 사전점검(메모리·디스크·동시빌드)과 툴체인 환경변수를 자동 처리한다.
+- 🔴 **JAVA_HOME 필수** — 없으면 기본 java 가 OpenJDK 26 으로 잡혀 Gradle 이 2초 만에 죽는다
+  (`Error resolving plugin [com.facebook.react.settings] > 26`). 스크립트가 Android Studio JBR(JDK 21)로 고정.
+- 크레딧이 남아 클라우드가 필요하면 `npm run build:android-cloud` / `build:ios-cloud` (예외 경로).
+- ⚠️ 제출은 별도: `eas submit -p <platform> --path <산출물>`
+
 ### ⚠️ 하드웨어 뮤텍스 (MacBook Air M2 16GB — 위반 시 OOM 강제 종료)
 - **iOS Simulator + Android AVD 동시 실행 절대 금지**
-- **Android 빌드는 EAS Build(클라우드) 전담** — 로컬 `expo run:android` 금지
+- **로컬 빌드끼리 동시 실행 금지** — 형제 프로젝트(syncfortune 등) 빌드 포함. 위 스크립트가 활성
+  `xcodebuild`/`eas-cli-local-build` 를 감지하면 중단한다. 메모리 여유 3.5GB 미만이면 시작하지 않는다.
+- **`expo run:android` 는 여전히 금지** (기기 직결 빌드는 무겁다) — 기기 설치는 `release:android`(EAS preview APK).
 - `/qa all` = ios-sim → web 순차 실행. android-sim 병렬 spawn 금지
 - 에이전트 동시 실행 상한: **최대 2개** (메인 세션 + 작업 에이전트 1개)
 - 빌드 중(`expo run:ios`, `fastlane beta`) 다른 Heavy 작업 금지
