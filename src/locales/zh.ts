@@ -448,6 +448,7 @@ const zh = {
     nickname_too_long: '昵称不能超过20个字符。',
     nickname_required: '请输入昵称。',
     nickname_failed: '昵称保存失败。',
+    nickname_saved: '已保存',
     onboarding_title: '我们该怎么称呼您？',
     onboarding_subtitle: '设置共享日程时使用的昵称。\n您可以随时在"我的"标签中修改。',
     onboarding_skip: '稍后设置',

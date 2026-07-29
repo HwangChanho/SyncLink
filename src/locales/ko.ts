@@ -459,6 +459,7 @@ const ko = {
     nickname_too_long: '닉네임은 20자 이하로 입력해 주세요.',
     nickname_required: '닉네임을 입력해 주세요.',
     nickname_failed: '닉네임 저장에 실패했습니다.',
+    nickname_saved: '저장됨',
     onboarding_title: '어떻게 불러드릴까요?',
     onboarding_subtitle: '함께 일정을 공유할 때 사용할 닉네임을 설정해 주세요.\n나중에 My 탭에서 언제든 변경할 수 있습니다.',
     onboarding_skip: '나중에 설정하기',

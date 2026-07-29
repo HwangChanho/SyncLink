@@ -9,7 +9,7 @@
  * Note: My tab is 100% ad-free per PRD section 7.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -56,6 +56,13 @@ import { DevDashboard } from '@/components/DevDashboard';
  * sign-in prompt instead. The wrapper keeps hook order stable — the content
  * component's hooks only ever run once authenticated.
  */
+/**
+ * Idle time (ms) after the last keystroke before the nickname is written.
+ * Long enough that normal typing produces one request instead of one per
+ * character, short enough that pausing feels like an immediate save.
+ */
+const NICKNAME_AUTOSAVE_DELAY_MS = 700;
+
 export default function MyScreen() {
   const { t } = useTranslation();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -88,8 +95,18 @@ function MyScreenContent() {
   const [isEditingNickname, setIsEditingNickname] = useState(false);
   /** Draft value while editing; initialized from user.nickname */
   const [nicknameInput, setNicknameInput] = useState(user?.nickname ?? '');
-  /** True during nickname save network call */
-  const [isSavingNickname, setIsSavingNickname] = useState(false);
+  /**
+   * Autosave feedback state. There is no Save button anymore, so the user needs
+   * some signal that the typed name actually persisted.
+   *  'idle'   — nothing pending / nothing to report
+   *  'saving' — network call in flight
+   *  'saved'  — last write succeeded
+   */
+  const [nicknameSaveState, setNicknameSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  /** Pending autosave timer; null when nothing is scheduled. */
+  const nicknameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Latest text awaiting the timer, so a flush can write it without state reads. */
+  const pendingNicknameRef = useRef<string | null>(null);
   /** True during avatar upload */
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   /** True during sign-out */
@@ -110,42 +127,87 @@ function MyScreenContent() {
     setIsEditingNickname(true);
   }, [user?.nickname]);
 
-  /** Cancel edit: revert to saved nickname */
-  const handleCancelEditNickname = useCallback(() => {
-    setNicknameInput(user?.nickname ?? '');
-    setIsEditingNickname(false);
-  }, [user?.nickname]);
+  /**
+   * Write the nickname straight to the server. Called by the autosave timer and
+   * by any action that ends editing — never bound to a Save button.
+   *
+   * Validation failures return silently instead of alerting: while autosaving,
+   * an empty field usually means "mid-edit", and popping a dialog on every
+   * cleared character would be hostile. Length is already capped by maxLength
+   * on the input, so the check here is only a guard.
+   *
+   * @param raw Draft text as typed (untrimmed)
+   */
+  const persistNickname = useCallback(async (raw: string) => {
+    const trimmed = raw.trim();
+    if (trimmed.length === 0 || trimmed.length > 20) return;
+    if (trimmed === user?.nickname) return; // nothing changed — skip the round trip
 
-  /** Save nickname: call authService, update store */
-  const handleSaveNickname = useCallback(async () => {
-    const trimmed = nicknameInput.trim();
-
-    // Validation: at least 1 char, max 20 chars
-    if (trimmed.length === 0) {
-      showAlert(t('common.error'), t('profile.nickname_required'));
-      return;
-    }
-    if (trimmed.length > 20) {
-      showAlert(t('common.error'), t('profile.nickname_too_long'));
-      return;
-    }
-    // Skip network call if unchanged
-    if (trimmed === user?.nickname) {
-      setIsEditingNickname(false);
-      return;
-    }
-
-    setIsSavingNickname(true);
+    setNicknameSaveState('saving');
     try {
       const updated = await authService.updateProfile({ nickname: trimmed });
       setUser(updated);
-      setIsEditingNickname(false);
+      setNicknameSaveState('saved');
     } catch (err) {
+      setNicknameSaveState('idle');
       showAlert(t('common.error'), err instanceof Error ? err.message : t('profile.nickname_failed'));
-    } finally {
-      setIsSavingNickname(false);
     }
-  }, [nicknameInput, user?.nickname, setUser, t]);
+  }, [user?.nickname, setUser, t]);
+
+  // Keep a ref to the latest persist fn so the unmount cleanup below can flush
+  // a pending edit without re-running (and thus re-arming) on every render.
+  const persistNicknameRef = useRef(persistNickname);
+  useEffect(() => {
+    persistNicknameRef.current = persistNickname;
+  }, [persistNickname]);
+
+  /**
+   * Handle typing: update the draft and (re)arm the autosave timer.
+   * Each keystroke pushes the save further out, so a burst of typing results in
+   * a single write once the user pauses.
+   */
+  const handleChangeNickname = useCallback((text: string) => {
+    setNicknameInput(text);
+    pendingNicknameRef.current = text;
+    setNicknameSaveState('idle'); // a new edit invalidates the previous "저장됨"
+
+    if (nicknameTimerRef.current) clearTimeout(nicknameTimerRef.current);
+    nicknameTimerRef.current = setTimeout(() => {
+      nicknameTimerRef.current = null;
+      const pending = pendingNicknameRef.current;
+      pendingNicknameRef.current = null;
+      if (pending !== null) void persistNicknameRef.current(pending);
+    }, NICKNAME_AUTOSAVE_DELAY_MS);
+  }, []);
+
+  /** Cancel the pending timer and write immediately (blur, done, unmount). */
+  const flushNickname = useCallback(() => {
+    if (nicknameTimerRef.current) {
+      clearTimeout(nicknameTimerRef.current);
+      nicknameTimerRef.current = null;
+    }
+    const pending = pendingNicknameRef.current;
+    pendingNicknameRef.current = null;
+    if (pending !== null) void persistNicknameRef.current(pending);
+  }, []);
+
+  /** Leave edit mode. The value is already saved (or flushed here). */
+  const handleDoneEditNickname = useCallback(() => {
+    flushNickname();
+    setIsEditingNickname(false);
+  }, [flushNickname]);
+
+  // Flush on unmount so a name typed right before navigating away isn't lost
+  // in the debounce window.
+  useEffect(() => () => {
+    if (nicknameTimerRef.current) {
+      clearTimeout(nicknameTimerRef.current);
+      nicknameTimerRef.current = null;
+      const pending = pendingNicknameRef.current;
+      pendingNicknameRef.current = null;
+      if (pending !== null) void persistNicknameRef.current(pending);
+    }
+  }, []);
 
   // ─── Avatar change ───────────────────────────────────────────────────────
 
@@ -265,31 +327,33 @@ function MyScreenContent() {
               <TextInput
                 style={styles.nicknameInput}
                 value={nicknameInput}
-                onChangeText={setNicknameInput}
+                onChangeText={handleChangeNickname}
                 autoFocus
                 maxLength={20}
                 returnKeyType="done"
-                onSubmitEditing={handleSaveNickname}
+                onSubmitEditing={handleDoneEditNickname}
+                onBlur={flushNickname}
                 placeholder={t('profile.nickname_placeholder')}
                 placeholderTextColor={colors.textPlaceholder}
               />
-              <TouchableOpacity
-                style={[styles.nicknameSaveButton, isSavingNickname && styles.buttonDisabled]}
-                onPress={handleSaveNickname}
-                disabled={isSavingNickname}
-              >
-                {isSavingNickname ? (
-                  <ActivityIndicator size="small" color={colors.textInverse} />
-                ) : (
-                  <Text style={styles.nicknameSaveText}>{t('common.save')}</Text>
-                )}
-              </TouchableOpacity>
+              {/*
+                No Save button — typing autosaves after a short pause. What
+                replaces it is a status slot, so the user still gets confirmation
+                that the change stuck. Fixed width keeps the row from shifting
+                as the label swaps between spinner / "저장됨" / empty.
+              */}
+              <View style={styles.nicknameStatus}>
+                {nicknameSaveState === 'saving' ? (
+                  <ActivityIndicator size="small" color={colors.textSecondary} />
+                ) : nicknameSaveState === 'saved' ? (
+                  <Text style={styles.nicknameSavedText}>{t('profile.nickname_saved')}</Text>
+                ) : null}
+              </View>
               <TouchableOpacity
                 style={styles.nicknameCancelButton}
-                onPress={handleCancelEditNickname}
-                disabled={isSavingNickname}
+                onPress={handleDoneEditNickname}
               >
-                <Text style={styles.nicknameCancelText}>{t('common.cancel')}</Text>
+                <Text style={styles.nicknameCancelText}>{t('common.done')}</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -508,20 +572,17 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     ...textStyles.body,
     color: colors.textPrimary,
   },
-  nicknameSaveButton: {
+  // Autosave status slot that replaced the Save button. The fixed width stops
+  // the row from jumping as the content swaps between spinner, label and empty.
+  nicknameStatus: {
+    minWidth: 44,
     height: componentHeight.buttonSm,
-    paddingHorizontal: spacing[4],
-    borderRadius: radius.md,
-    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  nicknameSaveText: {
-    ...textStyles.label,
-    color: colors.textInverse,
+  nicknameSavedText: {
+    ...textStyles.caption,
+    color: colors.textSecondary,
   },
   nicknameCancelButton: {
     height: componentHeight.buttonSm,

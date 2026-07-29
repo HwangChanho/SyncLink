@@ -448,6 +448,7 @@ const en = {
     nickname_too_long: 'Nickname must be 20 characters or less.',
     nickname_required: 'Please enter a nickname.',
     nickname_failed: 'Failed to save nickname.',
+    nickname_saved: 'Saved',
     onboarding_title: 'What should we call you?',
     onboarding_subtitle: 'Set a nickname to use when sharing schedules.\nYou can change it anytime in the My tab.',
     onboarding_skip: 'Set up later',

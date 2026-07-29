@@ -445,6 +445,7 @@ const ja = {
     nickname_too_long: 'ニックネームは20文字以内にしてください。',
     nickname_required: 'ニックネームを入力してください。',
     nickname_failed: 'ニックネームの保存に失敗しました。',
+    nickname_saved: '保存しました',
     onboarding_title: 'なんとお呼びしますか？',
     onboarding_subtitle: '予定を共有するときに使うニックネームを設定してください。\nマイタブでいつでも変更できます。',
     onboarding_skip: '後で設定する',
