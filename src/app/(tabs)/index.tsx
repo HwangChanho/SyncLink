@@ -37,6 +37,7 @@ import { DateSuggestionCard }  from '@/components/home/DateSuggestionCard';
 import { UpcomingEventsCard }  from '@/components/home/UpcomingEventsCard';
 import { AISuggestionCard }     from '@/components/home/AISuggestionCard';
 import { ImportCalendarCard }   from '@/components/home/ImportCalendarCard';
+import { StartGuideCard }       from '@/components/home/StartGuideCard';
 import { findNextFreeSlot, deriveRecentStats } from '@/lib/freeTimeRecommend';
 import { useMemo }              from 'react';
 import { useColors } from '@/hooks/useColors';
@@ -173,6 +174,9 @@ export default function HomeScreen() {
 
         {/* Guest-only sign-in nudge (self-hides once authenticated). */}
         <LoginPromptBanner />
+
+        {/* 2026-08-05 — 시작 가이드 체크리스트 (신규 로그인 사용자용, 완료/닫기 시 영구 숨김). */}
+        <StartGuideCard />
 
         {/* v1.2 Phase 3 — AI 빈 시간 활동 제안 카드. AI 호출 없이 rule baseline. */}
         <AISuggestionCard slot={freeSlot} />

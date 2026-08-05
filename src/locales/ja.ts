@@ -168,6 +168,23 @@ const ja = {
     ],
     skip: 'スキップ',
     start: 'はじめる',
+    // 2026-08-05 — ページ2の体験デモ（韓国語UIのみ表示・パーサーが韓国語専用）
+    try_chips: ['내일 오후 3시 팀 회의', '다음 주 금요일 오후 2시 영화'],
+    try_placeholder: '自由に入力してみてください…',
+    try_parse: '変換してみる',
+    try_result: 'このように予定が作られます',
+    try_fail: '日付が見つかりませんでした。上の例をタップしてみてください！',
+  },
+
+  // 2026-08-05 — ログイン後のホーム「スタートガイド」チェックリスト (StartGuideCard)
+  startGuide: {
+    title: 'スタートガイド',
+    title_done: '準備完了！🎉',
+    step_event: '自然な言葉で最初の予定を登録',
+    step_calendar: 'カレンダーで予定を確認',
+    step_space: 'Spaceに参加または作成',
+    step_notif: '通知を許可',
+    a11y_dismiss: 'スタートガイドを閉じる',
   },
 
   event: {

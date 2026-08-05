@@ -168,6 +168,23 @@ const zh = {
     ],
     skip: '跳过',
     start: '开始使用',
+    // 2026-08-05 — 第2页交互体验（仅韩语UI显示，解析器仅支持韩语）
+    try_chips: ['내일 오후 3시 팀 회의', '다음 주 금요일 오후 2시 영화'],
+    try_placeholder: '试着自己输入…',
+    try_parse: '试试转换',
+    try_result: '日程就是这样创建的',
+    try_fail: '未能识别日期，请点击上方示例试试！',
+  },
+
+  // 2026-08-05 — 登录后首页"开始指南"清单 (StartGuideCard)
+  startGuide: {
+    title: '开始指南',
+    title_done: '一切就绪！🎉',
+    step_event: '用自然语言创建第一个日程',
+    step_calendar: '在日历中查看日程',
+    step_space: '加入或创建 Space',
+    step_notif: '允许通知',
+    a11y_dismiss: '关闭开始指南',
   },
 
   event: {

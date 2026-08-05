@@ -36,6 +36,7 @@ import { createEvent } from '@/services/eventService';
 import { getMySpaces } from '@/services/spaceService';
 import { useAuthStore } from '@/stores/authStore';
 import { useLoginPromptStore } from '@/stores/loginPromptStore';
+import { useNLFocusStore } from '@/stores/nlFocusStore';
 import { logError } from '@/lib/errorLogger';
 import { useEventStore } from '@/stores/eventStore';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
@@ -163,6 +164,14 @@ export function NLInputBar({ onEventCreated }: Props) {
    */
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const inputRef = useRef<TextInput>(null);
+
+  // 2026-08-05 — StartGuideCard "첫 일정 등록" 단계가 nlFocusStore 로 포커스를
+  // 요청하면 실제 입력바에 커서를 준다 (카드와 입력바는 서로 다른 서브트리라
+  // ref 전달 대신 스토어 브릿지 사용). requestId 는 단조증가 카운터.
+  const nlFocusRequestId = useNLFocusStore((s) => s.requestId);
+  useEffect(() => {
+    if (nlFocusRequestId > 0) inputRef.current?.focus();
+  }, [nlFocusRequestId]);
 
   // v1.2.9 — 사용자 스페이스 목록 로드. authStore.user 가 준비되면 fetch
   // (마운트 시 auth restore 가 아직 안 끝났을 수 있어 user 를 dep 으로 사용).

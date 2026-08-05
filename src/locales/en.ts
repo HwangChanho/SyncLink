@@ -168,6 +168,23 @@ const en = {
     ],
     skip: 'Skip',
     start: 'Get Started',
+    // 2026-08-05 — page-2 interactive sandbox (Korean-only; parser is Korean)
+    try_chips: ['내일 오후 3시 팀 회의', '다음 주 금요일 오후 2시 영화'],
+    try_placeholder: 'Try typing your own…',
+    try_parse: 'Parse it',
+    try_result: 'Your event, ready to go',
+    try_fail: "Couldn't find a date — try one of the examples above!",
+  },
+
+  // 2026-08-05 — post-login start guide checklist on Home (StartGuideCard)
+  startGuide: {
+    title: 'Getting started',
+    title_done: 'All set! 🎉',
+    step_event: 'Create your first event in plain words',
+    step_calendar: 'See it on the calendar',
+    step_space: 'Join or create a Space',
+    step_notif: 'Allow notifications',
+    a11y_dismiss: 'Dismiss start guide',
   },
 
   event: {

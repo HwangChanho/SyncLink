@@ -4,6 +4,8 @@
  * Displays 3 swipeable pages that introduce SyncLink's core value propositions:
  *  1. "함께 일정을 공유하세요" — Space-based sharing with anyone
  *  2. "자연어로 일정 등록"    — Natural language event creation
+ *                              + NLTryItDemo: live local-parser sandbox the user
+ *                              can actually type into (2026-08-05 interactive plan)
  *  3. "AI 리마인더"           — Smart reminders powered by AI
  *
  * Completion behaviour:
@@ -34,6 +36,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useOnboardingStore } from '@/stores/onboardingStore';
+import { NLTryItDemo } from '@/components/onboarding/NLTryItDemo';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
@@ -168,6 +171,8 @@ export default function OnboardingScreen() {
             page={{ ...page, icon: PAGE_ICONS[index] ?? 'help-circle' }}
             colors={colors}
             styles={styles}
+            // Page 2 (NL event creation) carries the interactive try-it sandbox.
+            showTryIt={index === 1}
           />
         ))}
       </ScrollView>
@@ -210,24 +215,29 @@ interface OnboardingPageProps {
   page: PageData;
   colors: ColorTokens;
   styles: ReturnType<typeof makeStyles>;
+  /** Render the interactive NL try-it sandbox under the copy (page 2 only). */
+  showTryIt?: boolean;
 }
 
 /**
- * Single onboarding page — icon, title, subtitle.
+ * Single onboarding page — icon, title, subtitle (+ optional try-it demo).
  * Width is fixed to SCREEN_WIDTH so ScrollView pagingEnabled works correctly.
  *
- * @param page   - Content data for this page
- * @param colors - Active theme color tokens
- * @param styles - Pre-built StyleSheet from makeStyles(colors)
+ * @param page      - Content data for this page
+ * @param colors    - Active theme color tokens
+ * @param styles    - Pre-built StyleSheet from makeStyles(colors)
+ * @param showTryIt - true on the NL page: embeds NLTryItDemo so the user can
+ *                    actually type a sentence and see it parsed before login
  */
-function OnboardingPage({ page, colors, styles }: OnboardingPageProps) {
+function OnboardingPage({ page, colors, styles, showTryIt = false }: OnboardingPageProps) {
   return (
     <View style={styles.page}>
-      {/* Feature icon in a circular primary-tinted container */}
-      <View style={styles.iconContainer}>
+      {/* Feature icon in a circular primary-tinted container.
+          The try-it page shrinks the icon so the demo fits without scrolling. */}
+      <View style={[styles.iconContainer, showTryIt && styles.iconContainerCompact]}>
         <Ionicons
           name={page.icon}
-          size={64}
+          size={showTryIt ? 40 : 64}
           color={colors.primary}
           accessibilityLabel=""
         />
@@ -236,6 +246,9 @@ function OnboardingPage({ page, colors, styles }: OnboardingPageProps) {
       {/* Page text */}
       <Text style={styles.pageTitle}>{page.title}</Text>
       <Text style={styles.pageSubtitle}>{page.subtitle}</Text>
+
+      {/* Interactive sandbox — local parser only, nothing is saved */}
+      {showTryIt && <NLTryItDemo />}
     </View>
   );
 }
@@ -295,6 +308,13 @@ function makeStyles(colors: ColorTokens) {
       alignItems: 'center',
       justifyContent: 'center',
       marginBottom: spacing[2],
+    },
+    // Try-it page variant — smaller icon leaves room for the interactive demo
+    // (chips + input + preview) without pushing the CTA off small screens.
+    iconContainerCompact: {
+      width: 80,
+      height: 80,
+      marginBottom: 0,
     },
 
     // ── Page text ────────────────────────────────────────────────────────────

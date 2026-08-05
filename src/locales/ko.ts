@@ -173,6 +173,23 @@ const ko = {
     ],
     skip: '건너뛰기',
     start: '시작하기',
+    // 2026-08-05 — 페이지 2 인터랙티브 체험 (로컬 파서 샌드박스, ko 전용)
+    try_chips: ['내일 오후 3시 팀 회의', '다음 주 금요일 오후 2시 영화'],
+    try_placeholder: '직접 입력해 보세요…',
+    try_parse: '변환해 보기',
+    try_result: '이렇게 일정이 만들어져요',
+    try_fail: '날짜를 찾지 못했어요. 위의 예시를 눌러 보세요!',
+  },
+
+  // 2026-08-05 — 로그인 후 홈 시작 가이드 체크리스트 (StartGuideCard)
+  startGuide: {
+    title: '시작 가이드',
+    title_done: '준비 완료! 🎉',
+    step_event: '자연어로 첫 일정 등록하기',
+    step_calendar: '캘린더에서 일정 확인하기',
+    step_space: 'Space 참여하거나 만들기',
+    step_notif: '알림 허용하기',
+    a11y_dismiss: '시작 가이드 닫기',
   },
 
   event: {
