@@ -711,9 +711,13 @@ export function MonthView({
                       !isCurrentMonth && styles.dimText,
                       // v1.1.4 — 휴일 (off !== false) 만 빨간날.
                       // 비휴일 기념일은 날짜 색 그대로, 텍스트만 밑에.
-                      isOffDay && !isToday && !isSelected && styles.holidayDateText,
+                      // Weekend tints go first and the holiday tint last: RN style arrays let
+                      // later entries win, so a public holiday stays red even when it falls on
+                      // a Saturday (2026: 현충일 6/6, 광복절 8/15, 개천절 10/3 are all Saturdays,
+                      // and used to render in the blue Saturday colour).
                       isSunday   && !isToday && !isSelected && styles.sundayText,
                       isSaturday && !isToday && !isSelected && styles.saturdayText,
+                      isOffDay   && !isToday && !isSelected && styles.holidayDateText,
                       isToday && styles.todayText,
                       isSelected && !isToday && styles.selectedText,
                     ]}

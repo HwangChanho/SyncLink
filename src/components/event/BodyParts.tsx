@@ -148,25 +148,27 @@ export function BodyParts({ selected, onToggle, readOnly }: BodyPartsProps) {
           {/* 활성 부위 color overlay — shape 에 따라 모양 (원/캡슐/타원).
               MaskedView 가 silhouette 밖은 자동 clip 하므로 borderRadius 가
               silhouette 윤곽과 결합돼 부위 형태가 더 자연스러워 보임. */}
-          {HIT_AREAS.map((rect, idx) => {
-            if (!isSelected(rect.part)) return null;
-            return (
-              <View
-                key={`fill-${idx}`}
-                pointerEvents="none"
-                style={[
-                  styles.fillArea,
-                  shapeStyle(rect.shape),
-                  {
-                    top:    `${rect.top * 100}%`,
-                    left:   `${rect.left * 100}%`,
-                    width:  `${rect.width * 100}%`,
-                    height: `${rect.height * 100}%`,
-                  },
-                ]}
-              />
-            );
-          })}
+          {/* Every overlay stays mounted and toggles opacity instead of being added and
+              removed. Unmounting a child does not reliably make MaskedView re-composite,
+              so deselecting a part left it still coloured on the silhouette even though
+              the chip below had already turned off. */}
+          {HIT_AREAS.map((rect, idx) => (
+            <View
+              key={`fill-${idx}`}
+              pointerEvents="none"
+              style={[
+                styles.fillArea,
+                shapeStyle(rect.shape),
+                {
+                  top:    `${rect.top * 100}%`,
+                  left:   `${rect.left * 100}%`,
+                  width:  `${rect.width * 100}%`,
+                  height: `${rect.height * 100}%`,
+                  opacity: isSelected(rect.part) ? 1 : 0,
+                },
+              ]}
+            />
+          ))}
         </MaskedView>
 
         {/* Hit detection layer — 투명 Pressable, MaskedView 밖에 두어 mask

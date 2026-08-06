@@ -53,6 +53,7 @@ import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
 import { useColors } from '@/hooks/useColors';
 import { logError } from '@/lib/errorLogger';
 import { useOnboardingStore } from '@/stores/onboardingStore';
+import { useAppearanceStore } from '@/stores/appearanceStore';
 import { useNoteSettingsStore } from '@/stores/noteSettingsStore';
 import { useFonts } from 'expo-font';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
@@ -426,6 +427,11 @@ export default function RootLayout() {
   // 모바일 앱(Platform.OS !== 'web')은 아래 분기에서 제외돼 영향 없음. (2026-06-08)
   const { width: winWidth } = useWindowDimensions();
   const colors = useColors();
+  // The status bar has to follow the *app's* theme, not the OS one. With the in-app
+  // appearance setting these diverge (OS dark + app light), and `StatusBar style="auto"`
+  // reads the OS scheme — which rendered white clock/battery glyphs on our light
+  // background, effectively invisible.
+  const resolvedScheme = useAppearanceStore((s) => s.resolvedScheme);
   // 데스크탑(>=1024): 풀폭 — (tabs) 좌측 사이드 네비가 가로를 활용하므로 중앙 maxWidth 해제.
   // 태블릿(600~1023): 720 중앙 + 여백 폴리시. 폰(<600): 520(현행). (S1 2026-06-08)
   const isTabletWeb = Platform.OS === 'web' && winWidth >= 600 && winWidth < 1024;
@@ -794,7 +800,8 @@ export default function RootLayout() {
         ]}
       >
       <SafeAreaProvider>
-        <StatusBar style="auto" />
+        {/* 'light' = light glyphs for a dark UI, 'dark' = dark glyphs for a light UI. */}
+        <StatusBar style={resolvedScheme === 'dark' ? 'light' : 'dark'} />
         {/* TASK-900: App lock overlay — rendered above all content when locked */}
         {isLocked && <LockOverlay onUnlock={unlock} />}
         {/*
