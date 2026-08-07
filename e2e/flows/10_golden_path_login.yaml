@@ -47,7 +47,7 @@ appId: io.synclink.app
 - tapOn:
     text: "비밀번호"
 - eraseText: 50
-- inputText: "e2etest1234"
+- inputText: ${TEST_PASSWORD}
 - tapOn:
     text: "이메일로 로그인"
 

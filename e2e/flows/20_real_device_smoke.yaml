@@ -8,7 +8,7 @@
 #   - 기기 UDID 확인: `xcrun xctrace list devices`
 #
 # 실행:
-#   TEST_EMAIL=e2e@synclink.test TEST_PASSWORD=e2etest1234 \
+#   TEST_EMAIL=e2e@synclink.test TEST_PASSWORD="$E2E_PASSWORD" \
 #   maestro --device <REAL_DEVICE_UDID> test e2e/flows/20_real_device_smoke.yaml
 #
 # 특이사항:
@@ -19,7 +19,7 @@
 appId: io.synclink.app
 env:
   TEST_EMAIL: ${TEST_EMAIL:-e2e@synclink.test}
-  TEST_PASSWORD: ${TEST_PASSWORD:-e2etest1234}
+  TEST_PASSWORD: ${TEST_PASSWORD}
 ---
 
 # ── 1. 앱 시작 ─────────────────────────────────────────────────────────────────

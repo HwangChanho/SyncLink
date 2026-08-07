@@ -14,6 +14,7 @@ import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { e2ePassword } from './lib/e2e-credentials.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: join(__dirname, '..', '.env') });
@@ -29,7 +30,8 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-const PASSWORD = 'e2etest1234';
+// Shared QA password. Kept out of the source because this repository is public.
+const PASSWORD = e2ePassword();
 const ACCOUNTS = [
   { env: 'ios-sim',         plan: 'pro',  email: 'e2e-ios-sim-pro@synclink.test',     nickname: 'iOS Sim Pro' },
   { env: 'ios-sim',         plan: 'free', email: 'e2e-ios-sim-free@synclink.test',    nickname: 'iOS Sim Free' },

@@ -18,7 +18,7 @@
 #   - Maestro 설치: brew install maestro
 #   - Android SDK PATH 설정 (android-sim / android-device)
 #   - Node.js + Playwright 설치 (web)
-#   - .env 파일에 TEST_EMAIL / TEST_PASSWORD 설정 (선택)
+#   - .env 파일에 E2E_PASSWORD 설정 (TEST_EMAIL / TEST_PASSWORD 로 개별 지정 가능)
 # =============================================================================
 
 set -euo pipefail
@@ -28,6 +28,16 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FLOWS_DIR="$PROJECT_ROOT/e2e/flows"
 REPORT_BASE="$PROJECT_ROOT/docs/handoffs"
 
+# ─── QA 계정 비밀번호 ─────────────────────────────────────────────────────────
+# 공개 저장소라 스크립트에 하드코딩하지 않는다. 셸 환경에 없으면 .env 에서 읽는다.
+if [ -z "${TEST_PASSWORD:-}" ] && [ -z "${E2E_PASSWORD:-}" ] && [ -f "$PROJECT_ROOT/.env" ]; then
+  E2E_PASSWORD="$(grep -E '^E2E_PASSWORD=' "$PROJECT_ROOT/.env" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//' | tr -d '"'"'"' \t\r')"
+fi
+if [ -z "${TEST_PASSWORD:-}" ] && [ -z "${E2E_PASSWORD:-}" ]; then
+  echo "E2E 계정 비밀번호가 없습니다. E2E_PASSWORD 를 환경변수나 .env 에 설정하세요." >&2
+  exit 1
+fi
+
 # ─── Android SDK PATH 주입 ─────────────────────────────────────────────────────
 export PATH="${HOME}/Library/Android/sdk/platform-tools:/opt/homebrew/bin:$PATH"
 
@@ -36,17 +46,17 @@ export PATH="${HOME}/Library/Android/sdk/platform-tools:/opt/homebrew/bin:$PATH"
 # iOS Simulator: iPhone 16 non-Pro
 IOS_SIM_UDID="5AA67030-E13E-45DA-B4B5-9B45CBC0AFE5"
 IOS_SIM_EMAIL="${TEST_EMAIL:-e2e-ios-sim-pro@synclink.test}"
-IOS_SIM_PASSWORD="${TEST_PASSWORD:-e2etest1234}"
+IOS_SIM_PASSWORD="${TEST_PASSWORD:-$E2E_PASSWORD}"
 
 # Android Emulator: Pixel_6 (emulator-5554)
 ANDROID_SIM_SERIAL="emulator-5554"
 ANDROID_SIM_EMAIL="${TEST_EMAIL:-e2e-android-sim-pro@synclink.test}"
-ANDROID_SIM_PASSWORD="${TEST_PASSWORD:-e2etest1234}"
+ANDROID_SIM_PASSWORD="${TEST_PASSWORD:-$E2E_PASSWORD}"
 
 # Android Real Device: Galaxy Note 8 (Android 9)
 ANDROID_DEV_SERIAL="ce071717b880b4730c7e"
 ANDROID_DEV_EMAIL="${TEST_EMAIL:-e2e-android-dev-pro@synclink.test}"
-ANDROID_DEV_PASSWORD="${TEST_PASSWORD:-e2etest1234}"
+ANDROID_DEV_PASSWORD="${TEST_PASSWORD:-$E2E_PASSWORD}"
 
 # ─── 스프린트 번호 자동 감지 ──────────────────────────────────────────────────
 # handoffs 폴더에서 가장 최신 sprint-N 폴더를 감지

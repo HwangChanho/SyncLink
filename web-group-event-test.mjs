@@ -20,11 +20,13 @@
  */
 import { chromium } from 'playwright';
 import * as fs from 'fs';
+import { e2ePassword } from './scripts/lib/e2e-credentials.mjs';
 
 const BASE = 'http://localhost:8081';
 const HEADLESS = process.env.HEADLESS === '1';
-const PRIMARY = { email: 'e2e-web-pro@synclink.test', password: 'e2etest1234' };
-const MEMBER = { email: 'e2e-web-free@synclink.test', password: 'e2etest1234' };
+const PW = e2ePassword();
+const PRIMARY = { email: 'e2e-web-pro@synclink.test', password: PW };
+const MEMBER = { email: 'e2e-web-free@synclink.test', password: PW };
 
 const results = [];
 const findings = [];

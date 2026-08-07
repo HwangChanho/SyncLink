@@ -16,7 +16,7 @@
 # 실행:
 #   maestro --device <UDID> test \
 #     -e TEST_EMAIL=e2e-ios-sim-pro@synclink.test \
-#     -e TEST_PASSWORD=e2etest1234 \
+#     -e TEST_PASSWORD="$E2E_PASSWORD" \
 #     e2e/flows/07_event_crud.yaml
 #
 # testID 참조:

@@ -1,4 +1,5 @@
 import { chromium } from 'playwright';
+import { e2ePassword } from './scripts/lib/e2e-credentials.mjs';
 
 const BASE = 'http://localhost:8081';
 const HEADLESS = process.env.HEADLESS === '1';
@@ -72,7 +73,7 @@ console.log('\n=== 2. 이메일 로그인 ===');
 try {
   const inputs = page.locator('input');
   await inputs.nth(0).fill('e2e@synclink.test');
-  await inputs.nth(1).fill('e2etest1234');
+  await inputs.nth(1).fill(e2ePassword());
   pass('이메일/비밀번호 입력');
 } catch(e) { fail('이메일/비밀번호 입력', e.message.slice(0, 80)); }
 

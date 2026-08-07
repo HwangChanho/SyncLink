@@ -17,6 +17,7 @@ import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { e2ePassword } from '../lib/e2e-credentials.mjs';
 
 const require = createRequire('/Users/danielhwang/Desktop/Projects/syncday/syncday/');
 const { chromium } = require('playwright');
@@ -121,7 +122,7 @@ async function patchSpaceLabels(page) {
 }
 
 /** Dev-only login form, present because the bundle is built with APP_ENV=development. */
-const DEV_ACCOUNT = { email: 'e2e-web-pro@synclink.test', password: 'e2etest1234' };
+const DEV_ACCOUNT = { email: 'e2e-web-pro@synclink.test', password: e2ePassword() };
 
 /**
  * Sign in through the dev login form.

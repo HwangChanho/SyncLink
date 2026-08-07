@@ -5,7 +5,7 @@
 ## 사전 조건
 
 - `.env` 의 `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY`
-- QA seed 계정 (`e2e-ios-sim-pro@synclink.test` / `e2etest1234`) 가 Supabase 에
+- QA seed 계정 (`e2e-ios-sim-pro@synclink.test` / `$E2E_PASSWORD`) 가 Supabase 에
   존재 — `node scripts/qa-seed-accounts.mjs` 으로 idempotent 생성
 - `npm install` 후 `@supabase/supabase-js` + `dotenv` (이미 deps)
 

@@ -7,7 +7,7 @@
 # 실행:
 #   maestro --device 5AA67030-E13E-45DA-B4B5-9B45CBC0AFE5 test \
 #     -e TEST_EMAIL=e2e-ios-sim-pro@synclink.test \
-#     -e TEST_PASSWORD=e2etest1234 \
+#     -e TEST_PASSWORD="$E2E_PASSWORD" \
 #     e2e/flows/04_planner_todo.yaml
 #
 # testID 참조:

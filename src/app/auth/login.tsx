@@ -37,6 +37,13 @@ type Provider = 'google' | 'kakao' | 'apple' | 'dev';
 // E2E 로컬 테스트: EXPO_PUBLIC_APP_ENV=development (in .env) 로 설정하면 표시됨.
 const IS_DEV_BUILD = __DEV__ && process.env.EXPO_PUBLIC_APP_ENV !== 'production';
 
+// Shared password of the `@synclink.test` QA accounts, used to log in from a single
+// field because Maestro cannot reliably move focus to the password input on iOS.
+// It is read from the environment rather than hardcoded: this repository is public.
+// Set EXPO_PUBLIC_E2E_PASSWORD in `.env` to use it; when unset the shortcut simply
+// does nothing and the typed password is used as normal.
+const E2E_PASSWORD = process.env.EXPO_PUBLIC_E2E_PASSWORD;
+
 export default function LoginScreen() {
   const { t } = useTranslation();
   const colors = useColors();
@@ -229,13 +236,13 @@ export default function LoginScreen() {
               // E2E test accounts (@synclink.test) use a fixed password injected below.
               returnKeyType="done"
               onSubmitEditing={() => {
-                // E2E: @synclink.test 계정은 고정 패스워드로 직접 로그인
+                // E2E: @synclink.test 계정은 공용 패스워드로 직접 로그인
                 // Return 키를 누르면 자동으로 로그인 처리
-                if (devEmail.trim().endsWith('@synclink.test')) {
+                if (E2E_PASSWORD && devEmail.trim().endsWith('@synclink.test')) {
                   if (isLoading) return;
                   setLoading('dev');
                   setError(null);
-                  signInWithEmail(devEmail.trim(), 'e2etest1234')
+                  signInWithEmail(devEmail.trim(), E2E_PASSWORD)
                     .then(() => router.replace('/(tabs)'))
                     .catch((err: unknown) => {
                       if (!isCancelError(err)) {
@@ -270,13 +277,13 @@ export default function LoginScreen() {
               testID="login-dev-submit"
               style={[styles.button, styles.devButton, isLoading && styles.disabled]}
               onPress={() => {
-                // E2E: @synclink.test 계정은 고정 패스워드로 직접 로그인
+                // E2E: @synclink.test 계정은 공용 패스워드로 직접 로그인
                 // (setDevPassword는 비동기 state update로 stale closure 문제 발생)
-                if (devEmail.trim().endsWith('@synclink.test') && !devPassword) {
+                if (E2E_PASSWORD && devEmail.trim().endsWith('@synclink.test') && !devPassword) {
                   if (isLoading) return;
                   setLoading('dev');
                   setError(null);
-                  signInWithEmail(devEmail.trim(), 'e2etest1234')
+                  signInWithEmail(devEmail.trim(), E2E_PASSWORD)
                     .then(() => router.replace('/(tabs)'))
                     .catch((err: unknown) => {
                       if (!isCancelError(err)) {
