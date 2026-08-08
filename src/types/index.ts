@@ -38,6 +38,7 @@ export type {
   Space, SpaceSummary, SpaceMember, SpaceType, SpaceMemberRole,
   CreateSpaceInput, UpdateSpaceInput,
   Anniversary, CreateAnniversaryInput,
+  Poll, PollOption, CreatePollInput, CreatePollOptionInput,
 } from './space';
 
 // Todo domain types

@@ -10,3 +10,4 @@ export * from './crud';
 export * from './joinCodes';
 export * from './members';
 export * from './anniversaries';
+export * from './polls';
