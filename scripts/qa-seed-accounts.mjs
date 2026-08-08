@@ -50,7 +50,11 @@ async function ensureUser(account) {
   const { data: existingList } = await supabase.auth.admin.listUsers({ perPage: 1000 });
   const existing = existingList?.users?.find((u) => u.email === account.email);
   if (existing) {
-    return { id: existing.id, created: false };
+    // Keep the stored password in step with .env. That makes rotation a one-liner:
+    // change E2E_PASSWORD and re-run this script, and every QA account follows.
+    const { error } = await supabase.auth.admin.updateUserById(existing.id, { password: PASSWORD });
+    if (error) throw new Error(`updateUser ${account.email}: ${error.message}`);
+    return { id: existing.id, created: false, passwordSynced: true };
   }
   const { data, error } = await supabase.auth.admin.createUser({
     email: account.email,
