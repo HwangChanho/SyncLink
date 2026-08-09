@@ -19,6 +19,7 @@ import {
   View, TextInput, Pressable, Text, ActivityIndicator, Image,
   StyleSheet, Keyboard, Alert, Platform, ScrollView,
 } from 'react-native';
+import Animated, { useAnimatedKeyboard, useAnimatedStyle } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -153,16 +154,28 @@ export function NLInputBar({ onEventCreated }: Props) {
     mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
   } | null>(null);
   /**
-   * Live keyboard height (px). Tracked via Keyboard events so the bar
-   * lifts above the software keyboard on both iOS and Android.
+   * Live keyboard height, read straight from the platform IME insets.
    *
-   * iOS:     keyboardWillShow fires before animation starts → smooth lift.
-   * Android: keyboardDidShow fires after the window has resized, but
-   *          windowSoftInputMode=adjustResize already shrinks the layout,
-   *          so we only need this as a safety net on Android.
-   * Web:     virtual keyboard is handled by the browser; no offset needed.
+   * 2026-08-09 — 이전에는 `Keyboard.addListener` 의 endCoordinates 를 state 로
+   * 받아 썼고, Android 는 `windowSoftInputMode=adjustResize` 가 레이아웃을
+   * 줄여주니 이건 보조 수단이라고 가정했다. **그 가정이 깨졌다**:
+   * `react-native-edge-to-edge` 를 켜면 창이 더 이상 리사이즈되지 않아
+   * (라이브러리 README 가 명시: "edge-to-edge disrupts adjustResize")
+   * 입력바가 안 올라가고 키보드에 그대로 가렸다.
+   *
+   * useAnimatedKeyboard 는 WindowInsets 의 IME inset 을 직접 읽으므로
+   * edge-to-edge 여부와 무관하게 정확하다. 값이 UI 스레드의 shared value 라
+   * 리렌더 없이 따라 올라가는 것도 이득.
    */
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const keyboard = useAnimatedKeyboard({
+    // 앱 전역이 edge-to-edge 라 두 바 모두 translucent 로 간주해야 inset 이 맞는다.
+    isStatusBarTranslucentAndroid: true,
+    isNavigationBarTranslucentAndroid: true,
+  });
+  /** 키보드 높이만큼만 정확히 들어올린다 (Build-76 LEAD: 추가 여백 없이). */
+  const keyboardLift = useAnimatedStyle(() => ({
+    paddingBottom: Platform.OS === 'web' ? 0 : keyboard.height.value,
+  }));
   const inputRef = useRef<TextInput>(null);
 
   // 2026-08-05 — StartGuideCard "첫 일정 등록" 단계가 nlFocusStore 로 포커스를
@@ -191,20 +204,7 @@ export function NLInputBar({ onEventCreated }: Props) {
     return () => { cancelled = true; };
   }, [authUserId]);
 
-  // ── Keyboard height tracking ─────────────────────────────────────────────────
-  useEffect(() => {
-    if (Platform.OS === 'web') return; // browser handles virtual keyboard
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const showSub = Keyboard.addListener(showEvent, (e) =>
-      setKeyboardHeight(e.endCoordinates.height),
-    );
-    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
+
 
   // ── Voice recognition setup ─────────────────────────────────────────────────
 
@@ -590,18 +590,10 @@ export function NLInputBar({ onEventCreated }: Props) {
 
   return (
     /**
-     * paddingBottom: keyboardHeight lifts the bar above the software keyboard
-     * when it rises. On web keyboardHeight is always 0 (browser handles it).
-     * On Android, windowSoftInputMode=adjustResize already shrinks the layout,
-     * so this acts as a secondary safety net for edge cases where the resize
-     * hasn't fully propagated yet.
+     * keyboardLift 가 IME inset 높이만큼 paddingBottom 을 주어 입력바를 키보드
+     * 위로 올린다. 웹은 브라우저가 알아서 처리하므로 0.
      */
-    <View style={[
-      styles.container,
-      // Build-76 LEAD: 키보드와 텍스트필드 사이 간격 제거. 이전 +8 px
-      // 여백이 사용자 보기에 너무 컸음. 정확히 keyboardHeight 만큼만 lift.
-      keyboardHeight > 0 && { paddingBottom: keyboardHeight },
-    ]}>
+    <Animated.View style={[styles.container, keyboardLift]}>
       {/* Suggestion chips removed (2026-06-28) — quick-add moved to the AI
           assistant empty state (QuickAddSuggestions). The chip/chipsRow styles
           below are still used by the STT voiceAlternatives block. */}
@@ -770,7 +762,7 @@ export function NLInputBar({ onEventCreated }: Props) {
           // The earned credit is now on the server; user can retry submit.
         }}
       />
-    </View>
+    </Animated.View>
   );
 }
 
