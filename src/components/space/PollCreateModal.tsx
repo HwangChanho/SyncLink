@@ -12,11 +12,12 @@
 import React, { useState } from 'react';
 import {
   Modal, View, Text, TextInput, Pressable, ScrollView, Switch,
-  ActivityIndicator, Alert, Platform, StyleSheet, KeyboardAvoidingView,
+  ActivityIndicator, Platform, StyleSheet, KeyboardAvoidingView,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import { showAlert } from '@/lib/webAlert';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
@@ -79,8 +80,8 @@ export function PollCreateModal({ visible, onClose, onSubmit }: Props) {
   const filled = options.filter((o) => o.label.trim() || o.startsAt);
 
   const handleSubmit = async () => {
-    if (!title.trim()) { Alert.alert(t('space.poll.need_title')); return; }
-    if (filled.length < 2) { Alert.alert(t('space.poll.need_options')); return; }
+    if (!title.trim()) { showAlert(t('space.poll.need_title')); return; }
+    if (filled.length < 2) { showAlert(t('space.poll.need_options')); return; }
     setSubmitting(true);
     try {
       await onSubmit({
@@ -98,7 +99,7 @@ export function PollCreateModal({ visible, onClose, onSubmit }: Props) {
       reset();
       onClose();
     } catch (err) {
-      Alert.alert(t('common.error'), err instanceof Error ? err.message : String(err));
+      showAlert(t('common.error'), err instanceof Error ? err.message : String(err));
     } finally {
       setSubmitting(false);
     }

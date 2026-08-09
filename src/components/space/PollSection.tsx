@@ -11,8 +11,9 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { showAlert } from '@/lib/webAlert';
 import { useColors } from '@/hooks/useColors';
 import { spacing } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
@@ -70,7 +71,7 @@ export function PollSection({ spaceId, isOwner, colors, styles }: Props) {
 
   const guarded = (fn: () => Promise<void>) => async () => {
     try { await fn(); } catch (err) {
-      Alert.alert(t('common.error'), err instanceof Error ? err.message : String(err));
+      showAlert(t('common.error'), err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -102,7 +103,7 @@ export function PollSection({ spaceId, isOwner, colors, styles }: Props) {
             onDecide={async (optionId) => {
               // PollCard 가 결과를 기다리지 않으므로(확인 Alert 뒤 void 호출) 여기서 잡는다.
               try { replace(await decidePoll(poll, optionId)); } catch (err) {
-                Alert.alert(t('common.error'), err instanceof Error ? err.message : String(err));
+                showAlert(t('common.error'), err instanceof Error ? err.message : String(err));
               }
             }}
             onClose={guarded(async () => { await closePoll(poll.id); await reload(); })}

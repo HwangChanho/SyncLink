@@ -9,9 +9,10 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import { showAlert } from '@/lib/webAlert';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
@@ -59,14 +60,14 @@ export function PollCard({ poll, canManage, onVote, onDecide, onClose, onDelete 
     try {
       await onVote(optionId);
     } catch (err) {
-      Alert.alert(t('common.error'), err instanceof Error ? err.message : String(err));
+      showAlert(t('common.error'), err instanceof Error ? err.message : String(err));
     } finally {
       setBusyOptionId(null);
     }
   };
 
   const confirmDecide = (option: PollOption) => {
-    Alert.alert(
+    showAlert(
       t('space.poll.decide_title'),
       // 날짜 후보면 일정이 만들어진다는 걸 미리 알린다 — 모르고 누르면 놀란다.
       option.startsAt ? t('space.poll.decide_desc_event') : t('space.poll.decide_desc'),
@@ -78,7 +79,7 @@ export function PollCard({ poll, canManage, onVote, onDecide, onClose, onDelete 
   };
 
   const confirmDelete = () => {
-    Alert.alert(t('space.poll.delete_title'), t('space.poll.delete_desc'), [
+    showAlert(t('space.poll.delete_title'), t('space.poll.delete_desc'), [
       { text: t('common.cancel'), style: 'cancel' },
       { text: t('common.delete'), style: 'destructive', onPress: () => { void onDelete(); } },
     ]);
