@@ -16,6 +16,10 @@
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# npm 전역 캐시(~/.npm)에 root 소유 파일이 섞여 있어 `npx` 가 EACCES 로 죽는다.
+# sudo chown 없이 우회하려고 프로젝트 전용 캐시를 쓴다(빌드 산출물에는 영향 없음).
+# `npm run` 이 npm_config_cache 를 ~/.npm 으로 주입하므로 :- 기본값은 안 먹는다 → 무조건 덮어쓴다.
+export npm_config_cache="/private/tmp/npmcache_synclink"
 cd "$PROJECT_ROOT"
 
 PLATFORM="${1:-}"
