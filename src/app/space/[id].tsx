@@ -41,6 +41,7 @@ import { showAlert } from '@/lib/webAlert';
 import { EditSpaceModal } from '@/components/space/EditSpaceModal';
 import { ContactPickerModal } from '@/components/space/ContactPickerModal';
 import { SectionCard } from '@/components/space/SectionCard';
+import { PollSection } from '@/components/space/PollSection';
 import { MemberRow } from '@/components/space/MemberRow';
 import { AnniversaryAddModal } from '@/components/space/AnniversaryAddModal';
 import { FreeTimeSlotRow } from '@/components/space/FreeTimeSlotRow';
@@ -848,6 +849,10 @@ function SpaceDetailScreenContent() {
             ))
           )}
         </SectionCard>
+
+        {/* Poll — 모임 날짜 조율 / 일반 투표 (2026-08-08).
+            기념일과 빈 시간 찾기 사이: "언제 볼까" 를 정하는 흐름상 자연스럽다. */}
+        <PollSection spaceId={spaceId} isOwner={isOwner} colors={colors} styles={styles} />
 
         {/* Free time finder (TASK-203) */}
         <SectionCard title={t('space.free_time_section')} colors={colors} styles={styles}>
