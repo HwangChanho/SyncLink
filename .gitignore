@@ -107,3 +107,8 @@ service-account*.json
 auth-token*
 AuthKey_*
 .npmrc
+
+# 스토어 스크린샷 합성 중간물 — 최종본은 images/store/ 에 커밋된다.
+# shots/(원본 캡처)는 추적한다: 없으면 브랜드 문구만 고칠 때도 dev 웹을 띄워
+# 전체 재촬영을 해야 한다(2026-08 리브랜딩 때 실제로 그랬다).
+scripts/store-screenshots/out/
