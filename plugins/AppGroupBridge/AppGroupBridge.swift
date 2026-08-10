@@ -56,4 +56,48 @@ class AppGroupBridge: NSObject {
 
     resolver(nil)
   }
+
+  /// Read a string back out of the App Group suite.
+  ///
+  /// Needed for the widget → app direction. A WidgetKit App Intent runs inside
+  /// the widget extension where no JS and no Supabase session exist, so it can
+  /// only queue the user's checkbox taps into the shared suite; the app drains
+  /// that queue on launch and this is how it gets at it.
+  ///
+  /// Resolves `nil` (not an error) when the key is absent — an empty queue is
+  /// the normal case on almost every launch.
+  @objc(read:key:resolver:rejecter:)
+  func read(_ suiteName: String,
+            key: String,
+            resolver: @escaping RCTPromiseResolveBlock,
+            rejecter: @escaping RCTPromiseRejectBlock) {
+    guard let defaults = UserDefaults(suiteName: suiteName) else {
+      rejecter("E_NO_SUITE",
+               "UserDefaults(suiteName: \(suiteName)) returned nil — check entitlements",
+               nil)
+      return
+    }
+    resolver(defaults.string(forKey: key))
+  }
+
+  /// Delete a key from the App Group suite.
+  ///
+  /// Used to clear the pending-toggle queue *after* the app has successfully
+  /// replayed it. Kept separate from `write("")` so an empty string and an
+  /// absent key never have to mean the same thing.
+  @objc(remove:key:resolver:rejecter:)
+  func remove(_ suiteName: String,
+              key: String,
+              resolver: @escaping RCTPromiseResolveBlock,
+              rejecter: @escaping RCTPromiseRejectBlock) {
+    guard let defaults = UserDefaults(suiteName: suiteName) else {
+      rejecter("E_NO_SUITE",
+               "UserDefaults(suiteName: \(suiteName)) returned nil — check entitlements",
+               nil)
+      return
+    }
+    defaults.removeObject(forKey: key)
+    defaults.synchronize()
+    resolver(nil)
+  }
 }

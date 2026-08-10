@@ -22,6 +22,7 @@
 
 import WidgetKit
 import SwiftUI
+import AppIntents
 
 // MARK: - Shared constants
 
@@ -30,6 +31,12 @@ import SwiftUI
 private enum WidgetConfig {
   static let appGroupSuite = "group.io.synclink.app.widget"
   static let widgetDataKey = "synclink.widgetSnapshot.v1"
+  /// v2 adds `done` on todos. Read first, with v1 as fallback so a widget that
+  /// wakes up before the updated app has written v2 still renders.
+  static let widgetDataKeyV2 = "synclink.widgetSnapshot.v2"
+  /// Checkbox taps waiting for the app to push them to Supabase.
+  /// The extension has no session, so queueing here is the only option.
+  static let pendingTogglesKey = "synclink.widgetPendingToggles.v1"
 }
 
 // MARK: - Snapshot model (mirror of WidgetSnapshot in widgetDataService.ts)
@@ -70,6 +77,70 @@ private struct WidgetTodo: Decodable, Identifiable {
   let title:   String
   let dueDate: String?
   let overdue: Bool
+  /// Optional because v1 payloads (and any build before the checkbox feature)
+  /// don't carry it. Absent means "not done" — v1 only ever emitted pending todos.
+  let done:    Bool?
+
+  var isDone: Bool { done ?? false }
+
+  /// Copy with a flipped completion state, used to paint a queued tap
+  /// optimistically before the app has synced it.
+  func withDone(_ value: Bool) -> WidgetTodo {
+    WidgetTodo(id: id, title: title, dueDate: dueDate, overdue: overdue, done: value)
+  }
+}
+
+// MARK: - Pending toggle queue (widget → app)
+
+/// One checkbox tap recorded in the widget extension.
+private struct PendingToggle: Codable {
+  let todoId: String
+  let done:   Bool
+  /// ISO8601 timestamp — the app resolves duplicates by taking the latest.
+  let at:     String
+}
+
+/// Read/append the queue the app drains on launch.
+///
+/// Why a queue at all: an App Intent runs inside the widget extension, which has
+/// no JS runtime and no Supabase session. It cannot write to the server itself,
+/// so it records intent here and the app replays it
+/// (`drainWidgetPendingToggles` in widgetDataService.ts).
+private enum PendingToggleStore {
+
+  static func load() -> [PendingToggle] {
+    guard
+      let defaults = UserDefaults(suiteName: WidgetConfig.appGroupSuite),
+      let raw = defaults.string(forKey: WidgetConfig.pendingTogglesKey),
+      let data = raw.data(using: .utf8)
+    else { return [] }
+    return (try? JSONDecoder().decode([PendingToggle].self, from: data)) ?? []
+  }
+
+  static func append(todoId: String, done: Bool) {
+    guard let defaults = UserDefaults(suiteName: WidgetConfig.appGroupSuite) else { return }
+    var queue = load()
+    let stamp = ISO8601DateFormatter().string(from: Date())
+    queue.append(PendingToggle(todoId: todoId, done: done, at: stamp))
+    guard
+      let data = try? JSONEncoder().encode(queue),
+      let json = String(data: data, encoding: .utf8)
+    else { return }
+    defaults.set(json, forKey: WidgetConfig.pendingTogglesKey)
+    defaults.synchronize()
+  }
+
+  /// Latest desired state per todo. Several taps on one row collapse to the last.
+  static func latestByTodo() -> [String: Bool] {
+    var result: [String: Bool] = [:]
+    var stamps: [String: String] = [:]
+    for t in load() {
+      if let prev = stamps[t.todoId], prev > t.at { continue }
+      stamps[t.todoId] = t.at
+      result[t.todoId] = t.done
+    }
+    return result
+  }
 }
 
 // MARK: - TimelineEntry
@@ -101,12 +172,76 @@ struct Provider: TimelineProvider {
   }
 
   private func loadSnapshot() -> WidgetSnapshot {
-    guard
-      let defaults = UserDefaults(suiteName: WidgetConfig.appGroupSuite),
-      let raw = defaults.string(forKey: WidgetConfig.widgetDataKey),
-      let data = raw.data(using: .utf8)
-    else { return .empty }
-    return (try? JSONDecoder().decode(WidgetSnapshot.self, from: data)) ?? .empty
+    guard let defaults = UserDefaults(suiteName: WidgetConfig.appGroupSuite) else { return .empty }
+
+    // v2 first (has `done`), v1 as fallback for the window between an app
+    // update and its first snapshot write.
+    var decoded: WidgetSnapshot?
+    for key in [WidgetConfig.widgetDataKeyV2, WidgetConfig.widgetDataKey] {
+      if
+        let raw = defaults.string(forKey: key),
+        let data = raw.data(using: .utf8),
+        let snap = try? JSONDecoder().decode(WidgetSnapshot.self, from: data)
+      {
+        decoded = snap
+        break
+      }
+    }
+    guard let snapshot = decoded else { return .empty }
+
+    return applyPendingToggles(to: snapshot)
+  }
+
+  /// Paint queued taps on top of the stored snapshot.
+  ///
+  /// Without this the checkbox would spring back the moment WidgetKit redraws:
+  /// the tap only lives in the queue until the app next runs, and the snapshot
+  /// on disk still says the todo is pending.
+  private func applyPendingToggles(to snapshot: WidgetSnapshot) -> WidgetSnapshot {
+    let pending = PendingToggleStore.latestByTodo()
+    guard !pending.isEmpty else { return snapshot }
+    let todos = snapshot.todos.map { todo -> WidgetTodo in
+      guard let want = pending[todo.id], want != todo.isDone else { return todo }
+      return todo.withDone(want)
+    }
+    return WidgetSnapshot(
+      generatedAt: snapshot.generatedAt,
+      events: snapshot.events,
+      todos: todos,
+      totals: snapshot.totals
+    )
+  }
+}
+
+// MARK: - App Intent (iOS 17+) — tapping a checkbox inside the widget
+
+/// Records a checkbox tap and asks WidgetKit to redraw.
+///
+/// iOS 17 is the floor for interactive widgets (`Button(intent:)`); on iOS 16
+/// the rows fall back to plain text and tapping opens the app instead. The
+/// widget target's deployment target stays at 16.0 so those users keep the
+/// widget — they just can't tick from it.
+@available(iOS 17.0, *)
+struct ToggleTodoIntent: AppIntent {
+  static var title: LocalizedStringResource = "할 일 완료 표시"
+  /// Keep the app closed — the whole point is ticking without launching.
+  static var openAppWhenRun: Bool = false
+
+  @Parameter(title: "todoId") var todoId: String
+  @Parameter(title: "done")   var done: Bool
+
+  init() {}
+
+  init(todoId: String, done: Bool) {
+    self.todoId = todoId
+    self.done = done
+  }
+
+  func perform() async throws -> some IntentResult {
+    PendingToggleStore.append(todoId: todoId, done: done)
+    // Redraw so applyPendingToggles picks the tap up immediately.
+    WidgetCenter.shared.reloadAllTimelines()
+    return .result()
   }
 }
 
@@ -120,14 +255,53 @@ struct SyncLinkWidgetEntryView: View {
     let snap = entry.snapshot
     switch family {
     case .systemLarge:
-      LargeView(snapshot: snap)
+      // The month grid moved to its own kind (SyncLinkCalendarWidget); this
+      // kind is the todo widget at every size now.
+      LargeTodoView(snapshot: snap)
         // v1.3.1 — LEAD: "위/아래 좌/우 padding 동일하게".
-        // 12 → 16 (좌우/상하 모두) + 내부 spacing 조정으로 시각적 균형.
         .padding(16)
     default:
       SmallView(snapshot: snap)
         .padding(16)
     }
+  }
+}
+
+// MARK: - Large 투두형 — today's events, then checkable todos
+
+private struct LargeTodoView: View {
+  let snapshot: WidgetSnapshot
+
+  var body: some View {
+    let events = Array(todayEvents(snapshot).prefix(4))
+    let todos  = Array(snapshot.todos.prefix(5))
+
+    VStack(alignment: .leading, spacing: 6) {
+      HStack {
+        Text(todayLabel())
+          .font(.system(size: 15, weight: .bold))
+        Spacer()
+        Text("SyncLink")
+          .font(.system(size: 10))
+          .foregroundColor(.secondary)
+      }
+
+      if events.isEmpty {
+        Text("오늘 일정 없음")
+          .font(.system(size: 12))
+          .foregroundColor(.secondary)
+      } else {
+        ForEach(events) { EventRow(event: $0, compact: false) }
+      }
+
+      if !todos.isEmpty {
+        Divider().padding(.vertical, 2)
+        ForEach(todos) { TodoRow(todo: $0) }
+      }
+
+      Spacer(minLength: 0)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
   }
 }
 
@@ -373,16 +547,102 @@ private struct EventRow: View {
 
 private struct TodoRow: View {
   let todo: WidgetTodo
+  /// Larger type + tap target for the 체크형 widget, which exists to be tapped.
+  var prominent: Bool = false
+
   var body: some View {
     HStack(spacing: 6) {
-      Image(systemName: todo.overdue ? "exclamationmark.circle.fill" : "circle")
-        .font(.system(size: 10))
-        .foregroundColor(todo.overdue ? .red : .secondary)
+      if #available(iOS 17.0, *) {
+        // Interactive: the tap is handled entirely inside the extension.
+        Button(intent: ToggleTodoIntent(todoId: todo.id, done: !todo.isDone)) {
+          checkboxIcon
+        }
+        .buttonStyle(.plain)
+      } else {
+        // iOS 16 and below have no Button(intent:) — the row still shows state,
+        // and tapping anywhere falls through to the widget's default deep link.
+        checkboxIcon
+      }
       Text(todo.title)
-        .font(.system(size: 11))
-        .lineLimit(1)
-        .foregroundColor(todo.overdue ? .red : .primary)
+        .font(.system(size: prominent ? 13 : 11))
+        .lineLimit(prominent ? 2 : 1)
+        .strikethrough(todo.isDone, color: .secondary)
+        .foregroundColor(titleColor)
     }
+  }
+
+  private var checkboxIcon: some View {
+    Image(systemName: iconName)
+      .font(.system(size: prominent ? 18 : 12))
+      .foregroundColor(iconColor)
+      // Pad the glyph out toward a thumb-sized target; SF Symbols at 12pt are
+      // far below Apple's 44pt guidance on their own.
+      .padding(prominent ? 4 : 2)
+      .contentShape(Rectangle())
+  }
+
+  private var iconName: String {
+    if todo.isDone { return "checkmark.square.fill" }
+    return todo.overdue ? "exclamationmark.square" : "square"
+  }
+
+  private var iconColor: Color {
+    if todo.isDone { return .accentColor }
+    return todo.overdue ? .red : .secondary
+  }
+
+  private var titleColor: Color {
+    if todo.isDone { return .secondary }
+    return todo.overdue ? .red : .primary
+  }
+}
+
+// MARK: - 체크형 (check) — todos only, thumb-sized rows
+
+private struct CheckView: View {
+  let snapshot: WidgetSnapshot
+  let limit: Int
+
+  var body: some View {
+    let todos = Array(snapshot.todos.prefix(limit))
+    let remaining = max(0, snapshot.totals.todos - todos.count)
+
+    VStack(alignment: .leading, spacing: 6) {
+      HStack {
+        Text("할 일")
+          .font(.system(size: 12, weight: .semibold))
+          .foregroundColor(.secondary)
+        Spacer(minLength: 0)
+        if remaining > 0 {
+          Text("+\(remaining)")
+            .font(.system(size: 10))
+            .foregroundColor(.secondary)
+        }
+      }
+
+      if todos.isEmpty {
+        Spacer(minLength: 0)
+        HStack {
+          Spacer()
+          VStack(spacing: 4) {
+            Image(systemName: "checkmark.circle")
+              .font(.system(size: 22))
+              .foregroundColor(.secondary)
+            Text("다 끝냈어요")
+              .font(.system(size: 11))
+              .foregroundColor(.secondary)
+          }
+          Spacer()
+        }
+        Spacer(minLength: 0)
+      } else {
+        ForEach(todos) { todo in
+          TodoRow(todo: todo, prominent: true)
+        }
+        Spacer(minLength: 0)
+      }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
   }
 }
 
@@ -433,7 +693,11 @@ private extension Color {
 
 // MARK: - Widget definition
 
-@main
+/// 투두형 — the original kind.
+///
+/// 🔴 The kind string "SyncLinkWidget" must never change: WidgetKit keys placed
+/// instances by it, so renaming would orphan every widget already on a home
+/// screen. Same constraint as the Android AppWidgetProvider class name.
 struct SyncLinkWidget: Widget {
   let kind = "SyncLinkWidget"
 
@@ -441,10 +705,61 @@ struct SyncLinkWidget: Widget {
     StaticConfiguration(kind: kind, provider: Provider()) { entry in
       SyncLinkWidgetEntryView(entry: entry)
     }
-    .configurationDisplayName("SyncLink")
-    .description("작은 위젯은 오늘 일정과 할 일을, 큰 위젯은 이번 달 달력을 보여줍니다.")
-    // iPad supportsTablet=false 인 v1.0 — extraLarge 제외. Medium 도
-    // 사용자 요구로 제거 (small + large 만 노출).
+    .configurationDisplayName("할 일")
+    .description("오늘 일정과 할 일. 체크박스를 눌러 바로 완료 처리.")
     .supportedFamilies([.systemSmall, .systemLarge])
+  }
+}
+
+/// 달력형 — the month grid, now its own kind so it can be placed alongside
+/// the todo widget rather than instead of it.
+struct SyncLinkCalendarWidget: Widget {
+  let kind = "SyncLinkCalendarWidget"
+
+  var body: some WidgetConfiguration {
+    StaticConfiguration(kind: kind, provider: Provider()) { entry in
+      LargeView(snapshot: entry.snapshot)
+        .padding(16)
+    }
+    .configurationDisplayName("달력")
+    .description("이번 달 일정을 달력으로 한눈에.")
+    // Large only — a 6×7 grid is unreadable at systemSmall, so we don't offer
+    // the placement rather than degrading into something that isn't a calendar.
+    .supportedFamilies([.systemLarge])
+  }
+}
+
+/// 체크형 — todos only, sized for tapping.
+struct SyncLinkCheckWidget: Widget {
+  let kind = "SyncLinkCheckWidget"
+
+  var body: some WidgetConfiguration {
+    StaticConfiguration(kind: kind, provider: Provider()) { entry in
+      CheckWidgetEntryView(entry: entry)
+        .padding(16)
+    }
+    .configurationDisplayName("체크")
+    .description("할 일만 크게. 홈 화면에서 바로 체크.")
+    .supportedFamilies([.systemSmall, .systemMedium])
+  }
+}
+
+/// Row count for 체크형 by family — padded rows are ~3× taller than 투두형's,
+/// so cramming more would defeat the purpose.
+private struct CheckWidgetEntryView: View {
+  let entry: SnapshotEntry
+  @Environment(\.widgetFamily) private var family
+
+  var body: some View {
+    CheckView(snapshot: entry.snapshot, limit: family == .systemMedium ? 3 : 2)
+  }
+}
+
+@main
+struct SyncLinkWidgetBundle: WidgetBundle {
+  var body: some Widget {
+    SyncLinkWidget()
+    SyncLinkCalendarWidget()
+    SyncLinkCheckWidget()
   }
 }

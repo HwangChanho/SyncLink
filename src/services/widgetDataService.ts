@@ -241,7 +241,7 @@ export function buildSnapshot(
 export async function drainWidgetPendingToggles(
   apply: (todoId: string, done: boolean) => Promise<void>,
 ): Promise<number> {
-  const raw = await AsyncStorage.getItem(WIDGET_PENDING_TOGGLES_KEY);
+  const raw = await readPendingQueueRaw();
   if (!raw) return 0;
 
   let queue: WidgetPendingToggle[];
@@ -249,11 +249,11 @@ export async function drainWidgetPendingToggles(
     queue = JSON.parse(raw) as WidgetPendingToggle[];
   } catch {
     // Corrupt payload is not worth retrying forever — drop it and move on.
-    await AsyncStorage.removeItem(WIDGET_PENDING_TOGGLES_KEY);
+    await clearPendingQueue();
     return 0;
   }
   if (!Array.isArray(queue) || queue.length === 0) {
-    await AsyncStorage.removeItem(WIDGET_PENDING_TOGGLES_KEY);
+    await clearPendingQueue();
     return 0;
   }
 
@@ -278,7 +278,7 @@ export async function drainWidgetPendingToggles(
     }
   }
 
-  await AsyncStorage.removeItem(WIDGET_PENDING_TOGGLES_KEY);
+  await clearPendingQueue();
   return applied;
 }
 
@@ -354,7 +354,7 @@ export async function enqueueWidgetPendingToggle(
 ): Promise<void> {
   let queue: WidgetPendingToggle[] = [];
   try {
-    const raw = await AsyncStorage.getItem(WIDGET_PENDING_TOGGLES_KEY);
+    const raw = await readPendingQueueRaw();
     if (raw) {
       const parsed = JSON.parse(raw) as WidgetPendingToggle[];
       if (Array.isArray(parsed)) queue = parsed;
@@ -363,7 +363,7 @@ export async function enqueueWidgetPendingToggle(
     // Unreadable queue is dropped rather than blocking this toggle.
   }
   queue.push({ todoId, done, at: at.toISOString() });
-  await AsyncStorage.setItem(WIDGET_PENDING_TOGGLES_KEY, JSON.stringify(queue));
+  await writePendingQueueRaw(JSON.stringify(queue));
 }
 
 // MAX_TODAY_EVENTS exported so tests can reason about truncation policy.
@@ -382,11 +382,66 @@ export const _WIDGET_LIMITS = { MAX_TODAY_EVENTS, MAX_WIDGET_TODOS, MONTH_GRID_D
  * target is added), we fall back to AsyncStorage only — the in-app data
  * still works, just no widget refresh.
  */
+/** App Group ID — must match the entitlement on both the app and widget targets. */
+const IOS_APP_GROUP = 'group.io.synclink.app.widget';
+
+interface AppGroupBridgeModule {
+  write:  (suite: string, key: string, value: string) => Promise<void>;
+  read?:  (suite: string, key: string) => Promise<string | null>;
+  remove?: (suite: string, key: string) => Promise<void>;
+}
+
+/** The native module, or undefined in dev builds made before the widget target existed. */
+function appGroupBridge(): AppGroupBridgeModule | undefined {
+  return (NativeModules as { AppGroupBridge?: AppGroupBridgeModule }).AppGroupBridge;
+}
+
 async function writeIOSAppGroup(json: string): Promise<void> {
-  const Bridge = (NativeModules as { AppGroupBridge?: { write: (suite: string, key: string, value: string) => Promise<void> } }).AppGroupBridge;
+  const Bridge = appGroupBridge();
   if (!Bridge?.write) return;
-  // App Group ID must match the entitlement on both targets.
-  await Bridge.write('group.io.synclink.app.widget', WIDGET_DATA_KEY, json);
+  // Both keys, same reasoning as the AsyncStorage mirror: a widget extension
+  // that hasn't reloaded yet may still be reading v1.
+  await Bridge.write(IOS_APP_GROUP, WIDGET_DATA_KEY, json);
+  await Bridge.write(IOS_APP_GROUP, WIDGET_DATA_KEY_V2, json);
+}
+
+// ─── Pending-toggle queue storage ─────────────────────────────────────────────
+//
+// 🔴 The queue lives in a different place on each platform, and getting this
+// wrong makes taps vanish silently:
+//   - iOS    : the App Intent runs in the widget extension, which cannot see
+//              AsyncStorage at all. It writes to the App Group suite.
+//   - Android: the headless JS task shares the app's AsyncStorage.
+// Reading from the wrong store means the queue is never drained and the user's
+// widget taps never reach the server.
+
+async function readPendingQueueRaw(): Promise<string | null> {
+  if (Platform.OS === 'ios') {
+    const Bridge = appGroupBridge();
+    if (!Bridge?.read) return null;
+    return Bridge.read(IOS_APP_GROUP, WIDGET_PENDING_TOGGLES_KEY);
+  }
+  return AsyncStorage.getItem(WIDGET_PENDING_TOGGLES_KEY);
+}
+
+async function writePendingQueueRaw(json: string): Promise<void> {
+  if (Platform.OS === 'ios') {
+    const Bridge = appGroupBridge();
+    if (!Bridge?.write) return;
+    await Bridge.write(IOS_APP_GROUP, WIDGET_PENDING_TOGGLES_KEY, json);
+    return;
+  }
+  await AsyncStorage.setItem(WIDGET_PENDING_TOGGLES_KEY, json);
+}
+
+async function clearPendingQueue(): Promise<void> {
+  if (Platform.OS === 'ios') {
+    const Bridge = appGroupBridge();
+    if (!Bridge?.remove) return;
+    await Bridge.remove(IOS_APP_GROUP, WIDGET_PENDING_TOGGLES_KEY);
+    return;
+  }
+  await AsyncStorage.removeItem(WIDGET_PENDING_TOGGLES_KEY);
 }
 
 /**

@@ -21,6 +21,21 @@ RCT_EXTERN_METHOD(write:(NSString *)suiteName
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+// Reads a string back out — the widget → app direction, used to drain the
+// pending-toggle queue an App Intent left behind.
+// JS contract: AppGroupBridge.read(suiteName, key) -> Promise<string | null>
+RCT_EXTERN_METHOD(read:(NSString *)suiteName
+                  key:(NSString *)key
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+// Clears a key, called only after the queue has been replayed successfully.
+// JS contract: AppGroupBridge.remove(suiteName, key) -> Promise<void>
+RCT_EXTERN_METHOD(remove:(NSString *)suiteName
+                  key:(NSString *)key
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 // Module is process-wide and stateless; no main-queue setup required.
 + (BOOL)requiresMainQueueSetup { return NO; }
 
