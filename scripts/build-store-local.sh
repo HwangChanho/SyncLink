@@ -93,15 +93,18 @@ preflight() {
     exit 1
   fi
 
-  # 5) 스왑 고갈. free+inactive 가 넉넉해 보여도 스왑이 꽉 차 있으면
-  #    NDK/CMake 단계에서 커널이 프로세스를 죽인다 — 2) 만으로는 못 잡는다.
-  #    08-10: free+inactive 5.4GB 였는데 스왑 잔여 688MB 에서 reanimated 빌드가 kill 됐다.
+  # 5) 스왑. free+inactive 만으로는 압력을 못 읽어서 같이 본다.
+  #
+  #    ⚠️ 임계값 주의: 08-10 실패 시점이 잔여 688MB 였지만, 시뮬레이터를 끈 직후에도
+  #    800MB 였다(macOS 는 스왑을 지연 회수한다) — 즉 **스왑 잔여는 후행 지표**이고
+  #    그날의 실제 원인은 시뮬레이터 경쟁이었다. 1GB 로 막으면 멀쩡한 빌드까지 세운다.
+  #    그래서 진짜 고갈(512MB)에서만 중단하고, 그 위는 참고용으로 출력만 한다.
   local swap_free
   swap_free=$(sysctl -n vm.swapusage 2>/dev/null | sed -n 's/.*free = \([0-9.]*\)M.*/\1/p')
   if [[ -n "$swap_free" ]]; then
     echo "  스왑 여유: ${swap_free} MB"
-    if (( $(echo "$swap_free < 1024" | bc -l) )); then
-      echo "[WARN] 스왑 여유가 1GB 미만입니다. 메모리 수치가 좋아 보여도 NDK 컴파일에서 죽습니다."
+    if (( $(echo "$swap_free < 512" | bc -l) )); then
+      echo "[WARN] 스왑이 고갈됐습니다. 메모리 수치가 좋아 보여도 NDK 컴파일에서 죽습니다."
       echo "       무거운 앱(시뮬레이터·Chrome·타 프로젝트 dev 서버)을 닫고 다시 실행하세요."
       exit 1
     fi
