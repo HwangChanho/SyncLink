@@ -14,5 +14,6 @@
   "frameworks": [
     "WidgetKit",
     "SwiftUI"
-  ]
+  ],
+  "displayName": "투투리스트"
 }
