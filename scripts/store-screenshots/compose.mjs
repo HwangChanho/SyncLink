@@ -28,7 +28,7 @@ const require = createRequire(`${REPO}/`);
 const { chromium } = require('playwright');
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const LOGO = `${REPO}/images/SyncDayLogo.png`;
+const LOGO = `${REPO}/images/TwotwoLogo.png`;
 
 // --- Brand tokens ------------------------------------------------------------
 const ACCENT = '#6C63FF';
@@ -108,7 +108,7 @@ const PROFILES = {
  * Frame 0 is the logo hero LEAD asked to lead with, so it has no source capture.
  */
 const PHONE_FRAMES = [
-  { kind: 'hero', slug: 'hero', title: 'SyncLink', sub: '말하듯 입력하면, 일정이 됩니다' },
+  { kind: 'hero', slug: 'hero', title: '투투리스트', sub: '할 일도 일정도, 말하듯 한 줄로' },
   {
     slug: 'nl-input',
     source: 'home',
@@ -143,7 +143,7 @@ const PHONE_FRAMES = [
 
 /** Tablet listings get a shorter, wider-format story. */
 const TABLET_FRAMES = [
-  { kind: 'hero', slug: 'hero', title: 'SyncLink', sub: '말하듯 입력하면, 일정이 됩니다' },
+  { kind: 'hero', slug: 'hero', title: '투투리스트', sub: '할 일도 일정도, 말하듯 한 줄로' },
   {
     slug: 'home',
     source: 'home',
@@ -257,9 +257,13 @@ ${
   isHero
     ? `<div class="hero">
          <div class="halo"><div class="tile"><img src="${dataUri(LOGO)}"></div></div>
-         <div class="wordmark">SyncLink</div>
+         <!-- 워드마크는 프레임 정의의 title 을 그대로 쓴다. 하드코딩해 두면
+              브랜드가 바뀔 때 여기만 남아 스크린샷에 옛 이름이 실린다. -->
+         <div class="wordmark">${f.title}</div>
          <div class="tagline">${f.sub}</div>
-         <div class="bullets"><span>자연어 일정 등록</span><span>Space 공유</span><span>빈 시간 찾기</span></div>
+         <!-- Play 짧은 설명("할 일도 일정도 말하듯 한 줄로. 함께 쓰는 캘린더로
+              모임 날짜까지 정해요.")과 결을 맞춘 세 축. -->
+         <div class="bullets"><span>말하듯 한 줄</span><span>함께 쓰는 캘린더</span><span>모임 날짜 투표</span></div>
        </div>`
     : `<div class="copy"><h1>${f.title}</h1><div class="sub">${f.sub}</div></div>
        <div class="device"><img src="${shot}"></div>`

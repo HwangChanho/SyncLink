@@ -431,8 +431,8 @@ const ja = {
     share_invite_copied_body: '招待メッセージをクリップボードにコピーしました。どこにでも貼り付けて送信できます。',
     share_invite_title: '招待メッセージ',
     join_preview_description: 'この Space に参加しますか？',
-    share_message: 'SyncLink Space "{{name}}" に招待します！\n招待コード：{{code}}\n参加リンク：{{link}}',
-    email_body: 'SyncDay Space "{{name}}" に招待します！\n\n招待コード：{{code}}\n参加リンク：{{link}}\n\n上のリンクをクリックするか、SyncDay アプリでコードを入力して参加してください。',
+    share_message: '투투리스트 Space "{{name}}" に招待します！\n招待コード：{{code}}\n参加リンク：{{link}}',
+    email_body: '투투리스트 Space "{{name}}" に招待します！\n\n招待コード：{{code}}\n参加リンク：{{link}}\n\n上のリンクをクリックするか、투투리스트 アプリでコードを入力して参加してください。',
     edit_accessibility: 'Space を編集',
     // IDEA-011 Phase B — 明示的な所有権譲渡 UX
     transfer_ownership: '管理者の変更',
@@ -445,7 +445,7 @@ const ja = {
   contact: {
     title: '連絡先から招待',
     unsupported: 'このブラウザは連絡先へのアクセスをサポートしていません。招待コードを直接共有してください。',
-    denied: '連絡先へのアクセスがブロックされています。\n設定 → SyncLink → 連絡先 → 許可 に変更すると友達を検索して招待できます。',
+    denied: '連絡先へのアクセスがブロックされています。\n設定 → 투투리스트 → 連絡先 → 許可 に変更すると友達を検索して招待できます。',
     search_placeholder: '名前・電話番号・メールで検索',
     empty_contacts: '電話番号またはメールアドレスのある連絡先がありません。',
     no_results: '検索結果がありません。',
@@ -589,7 +589,7 @@ const ja = {
     notif_web_enable: 'このブラウザで通知を有効化',
     notif_web_blocked: 'ブラウザで通知がブロックされています',
     notif_web_enabled: '✓ このブラウザで通知が有効になっています。',
-    notif_device_note: '通知を受け取るには端末の通知権限が許可されている必要があります。\n設定アプリで SyncLink の通知を許可してください。',
+    notif_device_note: '通知を受け取るには端末の通知権限が許可されている必要があります。\n設定アプリで 투투리스트 の通知を許可してください。',
     licenses_title: 'オープンソースライセンス',
     licenses_intro: 'このアプリは以下のオープンソースおよび外部ライブラリを使用しています。各ライセンスの全文は該当プロジェクトのリポジトリで確認できます。',
     cat_color_label: 'カラー',
@@ -719,7 +719,7 @@ const ja = {
   },
 
   paywall: {
-    title: 'SyncLink Pro',
+    title: '투투리스트 Pro',
     headline: 'すべての機能を無制限で利用',
     features: [
       'AI 自然語イベント無制限',
@@ -747,7 +747,7 @@ const ja = {
     purchase_unavailable_title: '購入不可',
     purchase_unavailable_desc: '現在、決済を処理できません。しばらくしてから再試行してください。',
     purchase_complete_title: 'ご購読完了',
-    purchase_complete_desc: 'SyncLink Pro をお楽しみください！',
+    purchase_complete_desc: '투투리스트 Pro をお楽しみください！',
     purchase_failed_title: '購入失敗',
     purchase_failed_desc: '決済中にエラーが発生しました。',
     restore_complete_title: '復元完了',

@@ -434,8 +434,8 @@ const en = {
     share_invite_copied_body: 'Invite message copied. Paste it anywhere — KakaoTalk, Slack, email, etc.',
     share_invite_title: 'Invite Message',
     join_preview_description: 'Would you like to join this Space?',
-    share_message: 'You are invited to SyncLink Space "{{name}}"!\nInvite code: {{code}}\nJoin link: {{link}}',
-    email_body: 'You are invited to SyncDay Space "{{name}}"!\n\nInvite code: {{code}}\nJoin link: {{link}}\n\nClick the link above or enter the code in the SyncDay app to join.',
+    share_message: 'You are invited to 투투리스트 Space "{{name}}"!\nInvite code: {{code}}\nJoin link: {{link}}',
+    email_body: 'You are invited to 투투리스트 Space "{{name}}"!\n\nInvite code: {{code}}\nJoin link: {{link}}\n\nClick the link above or enter the code in the 투투리스트 app to join.',
     edit_accessibility: 'Edit Space',
     // IDEA-011 Phase B — explicit ownership transfer UX
     transfer_ownership: 'Change Admin',
@@ -448,7 +448,7 @@ const en = {
   contact: {
     title: 'Invite from Contacts',
     unsupported: 'This browser does not support contact access. Please share the invite code directly.',
-    denied: 'Contact access is blocked.\nGo to Settings → SyncLink → Contacts → Allow to search and invite friends.',
+    denied: 'Contact access is blocked.\nGo to Settings → 투투리스트 → Contacts → Allow to search and invite friends.',
     search_placeholder: 'Search by name, phone, or email',
     empty_contacts: 'No contacts with a phone number or email.',
     no_results: 'No results found.',
@@ -593,7 +593,7 @@ const en = {
     notif_web_enable: 'Enable notifications in this browser',
     notif_web_blocked: 'Notifications blocked by browser',
     notif_web_enabled: '✓ Notifications are enabled in this browser.',
-    notif_device_note: 'Device-level notification permission must be granted.\nAllow SyncLink notifications in the system Settings app.',
+    notif_device_note: 'Device-level notification permission must be granted.\nAllow 투투리스트 notifications in the system Settings app.',
     licenses_title: 'Open-source licenses',
     licenses_intro: 'This app uses the following open-source and third-party libraries. Full license texts are available in each project repository.',
     cat_color_label: 'Color',
@@ -723,7 +723,7 @@ const en = {
   },
 
   paywall: {
-    title: 'SyncLink Pro',
+    title: '투투리스트 Pro',
     headline: 'Unlock all features without limits',
     features: [
       'Unlimited AI natural language events',
@@ -751,7 +751,7 @@ const en = {
     purchase_unavailable_title: 'Unavailable',
     purchase_unavailable_desc: 'Unable to process payment right now. Please try again later.',
     purchase_complete_title: 'Welcome to Pro',
-    purchase_complete_desc: 'Enjoy SyncLink Pro!',
+    purchase_complete_desc: 'Enjoy 투투리스트 Pro!',
     purchase_failed_title: 'Purchase Failed',
     purchase_failed_desc: 'An error occurred during payment.',
     restore_complete_title: 'Restored',

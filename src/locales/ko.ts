@@ -445,8 +445,8 @@ const ko = {
     share_invite_copied_body: '초대 메시지가 클립보드에 복사되었습니다. 카카오톡/Slack/이메일 등 원하는 곳에 붙여넣으세요.',
     share_invite_title: '초대 메시지',
     join_preview_description: '이 Space에 참여하시겠습니까?',
-    share_message: 'SyncLink Space "{{name}}"에 초대합니다!\n초대 코드: {{code}}\n참여 링크: {{link}}',
-    email_body: 'SyncDay Space "{{name}}"에 초대합니다!\n\n초대 코드: {{code}}\n참여 링크: {{link}}\n\n위 링크를 클릭하거나, SyncDay 앱에서 위 코드를 입력해 참여하세요.',
+    share_message: '투투리스트 Space "{{name}}"에 초대합니다!\n초대 코드: {{code}}\n참여 링크: {{link}}',
+    email_body: '투투리스트 Space "{{name}}"에 초대합니다!\n\n초대 코드: {{code}}\n참여 링크: {{link}}\n\n위 링크를 클릭하거나, 투투리스트 앱에서 위 코드를 입력해 참여하세요.',
     edit_accessibility: 'Space 편집',
     // IDEA-011 Phase B — 소유권 명시적 양도 UX
     transfer_ownership: '관리자 변경',
@@ -459,7 +459,7 @@ const ko = {
   contact: {
     title: '연락처에서 초대',
     unsupported: '이 브라우저는 연락처 접근을 지원하지 않습니다. 초대 코드를 직접 공유해 주세요.',
-    denied: '연락처 접근이 차단되어 있습니다.\n설정 → SyncLink → 연락처 → 허용으로 변경하면 친구를 검색해 초대할 수 있어요.',
+    denied: '연락처 접근이 차단되어 있습니다.\n설정 → 투투리스트 → 연락처 → 허용으로 변경하면 친구를 검색해 초대할 수 있어요.',
     search_placeholder: '이름, 전화번호, 이메일로 검색',
     empty_contacts: '연락처에 전화번호나 이메일이 있는 항목이 없어요.',
     no_results: '검색 결과가 없습니다.',
@@ -605,7 +605,7 @@ const ko = {
     notif_web_enable: '이 브라우저에 알림 활성화',
     notif_web_blocked: '브라우저에서 알림 차단됨',
     notif_web_enabled: '✓ 이 브라우저는 알림이 활성화되어 있습니다.',
-    notif_device_note: '알림을 받으려면 기기의 알림 권한이 허용되어 있어야 합니다.\n설정 앱에서 SyncLink의 알림을 허용해 주세요.',
+    notif_device_note: '알림을 받으려면 기기의 알림 권한이 허용되어 있어야 합니다.\n설정 앱에서 투투리스트의 알림을 허용해 주세요.',
     licenses_title: '오픈소스 라이선스',
     licenses_intro: '이 앱은 다음 오픈소스 및 외부 라이브러리를 사용합니다. 각 라이선스의 전문은 해당 프로젝트 저장소에서 확인할 수 있습니다.',
     cat_color_label: '색상',
@@ -736,7 +736,7 @@ const ko = {
   },
 
   paywall: {
-    title: 'SyncLink Pro',
+    title: '투투리스트 Pro',
     headline: '모든 기능을 제한 없이 사용하세요',
     features: [
       'AI 자연어 일정 무제한',
@@ -764,7 +764,7 @@ const ko = {
     purchase_unavailable_title: '결제 불가',
     purchase_unavailable_desc: '현재 결제를 처리할 수 없습니다. 잠시 후 다시 시도해 주세요.',
     purchase_complete_title: '구독 완료',
-    purchase_complete_desc: 'SyncLink Pro를 시작하세요.',
+    purchase_complete_desc: '투투리스트 Pro를 시작하세요.',
     purchase_failed_title: '결제 실패',
     purchase_failed_desc: '결제 중 오류가 발생했습니다.',
     restore_complete_title: '복원 완료',

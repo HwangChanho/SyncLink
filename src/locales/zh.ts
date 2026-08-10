@@ -434,8 +434,8 @@ const zh = {
     share_invite_copied_body: '邀请消息已复制到剪贴板，可粘贴到任意地方发送。',
     share_invite_title: '邀请消息',
     join_preview_description: '是否要加入此 Space？',
-    share_message: '邀请您加入 SyncLink Space "{{name}}"！\n邀请码：{{code}}\n加入链接：{{link}}',
-    email_body: '邀请您加入 SyncDay Space "{{name}}"！\n\n邀请码：{{code}}\n加入链接：{{link}}\n\n点击上方链接，或在 SyncDay 应用中输入邀请码加入。',
+    share_message: '邀请您加入 투투리스트 Space "{{name}}"！\n邀请码：{{code}}\n加入链接：{{link}}',
+    email_body: '邀请您加入 투투리스트 Space "{{name}}"！\n\n邀请码：{{code}}\n加入链接：{{link}}\n\n点击上方链接，或在 투투리스트 应用中输入邀请码加入。',
     edit_accessibility: '编辑 Space',
     // IDEA-011 Phase B — 明确所有权转让 UX
     transfer_ownership: '更换管理员',
@@ -448,7 +448,7 @@ const zh = {
   contact: {
     title: '从联系人中邀请',
     unsupported: '此浏览器不支持访问联系人。请直接分享邀请码。',
-    denied: '联系人访问被阻止。\n请前往设置 → SyncLink → 联系人 → 允许，以搜索并邀请朋友。',
+    denied: '联系人访问被阻止。\n请前往设置 → 투투리스트 → 联系人 → 允许，以搜索并邀请朋友。',
     search_placeholder: '按姓名、电话或邮箱搜索',
     empty_contacts: '联系人中没有包含电话号码或邮箱的记录。',
     no_results: '未找到结果。',
@@ -592,7 +592,7 @@ const zh = {
     notif_web_enable: '在此浏览器启用通知',
     notif_web_blocked: '此浏览器已阻止通知',
     notif_web_enabled: '✓ 此浏览器已启用通知。',
-    notif_device_note: '要接收通知，需要在设备端授予通知权限。\n请在系统设置中允许 SyncLink 的通知。',
+    notif_device_note: '要接收通知，需要在设备端授予通知权限。\n请在系统设置中允许 투투리스트 的通知。',
     licenses_title: '开源许可证',
     licenses_intro: '本应用使用以下开源和第三方库。各许可证全文可在对应项目仓库查看。',
     cat_color_label: '颜色',
@@ -722,7 +722,7 @@ const zh = {
   },
 
   paywall: {
-    title: 'SyncLink Pro',
+    title: '투투리스트 Pro',
     headline: '无限制使用所有功能',
     features: [
       'AI 自然语言日程无限制',
@@ -750,7 +750,7 @@ const zh = {
     purchase_unavailable_title: '无法购买',
     purchase_unavailable_desc: '当前无法处理付款，请稍后重试。',
     purchase_complete_title: '订阅成功',
-    purchase_complete_desc: '开始使用 SyncLink Pro！',
+    purchase_complete_desc: '开始使用 투투리스트 Pro！',
     purchase_failed_title: '购买失败',
     purchase_failed_desc: '付款过程中发生错误。',
     restore_complete_title: '恢复成功',

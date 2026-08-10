@@ -4,7 +4,7 @@
   "name": "SyncLinkWidget",
   "bundleIdentifier": "io.synclink.app.SyncLinkWidget",
   "appleTeamId": "QUVU2PY6PG",
-  "icon": "../../images/SyncDayLogo.png",
+  "icon": "../../images/TwotwoLogo.png",
   "deploymentTarget": "16.0",
   "entitlements": {
     "com.apple.security.application-groups": [
