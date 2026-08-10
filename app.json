@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "투투리스트",
+    "name": "SyncLink",
     "slug": "synclink",
     "version": "1.4.0",
     "orientation": "portrait",
@@ -39,7 +39,8 @@
         "NSFaceIDUsageDescription": "앱 잠금 기능을 위해 Face ID를 사용합니다.",
         "NSContactsUsageDescription": "Space 멤버를 초대할 때 연락처에서 친구를 검색하기 위해 사용됩니다. 선택한 연락처만 초대 메시지를 보낼 때 일시적으로 참조합니다.",
         "NSUserTrackingUsageDescription": "이 앱은 개인화된 광고를 표시하기 위해 기기 간 활동을 연결할 수 있는 권한을 요청합니다. 거부해도 앱 기능에 제한은 없으며, 광고가 개인화되지 않은 형태로 표시됩니다.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleDisplayName": "투투리스트"
       }
     },
     "android": {
@@ -231,7 +232,8 @@
             "com.google.android.googlequicksearchbox"
           ]
         }
-      ]
+      ],
+      "./plugins/withAndroidAppName"
     ],
     "newArchEnabled": true,
     "experiments": {
@@ -243,7 +245,8 @@
       },
       "eas": {
         "projectId": "c9ef6634-3221-4503-9ca0-3dee0e53ac45"
-      }
+      },
+      "androidAppName": "투투리스트"
     },
     "owner": "danielhwang",
     "runtimeVersion": {
