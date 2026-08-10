@@ -51,6 +51,15 @@ const SCREENS_AUTH = [
   { name: 'analytics', path: '/analytics', wait: 5000 },
   // The demo Space carries 9 members, so the detail view actually looks populated.
   { name: 'spaceDetail', path: '/space/f494c953-bcf0-4b96-89bc-ce9ca859fb43', wait: 5000, patch: 'space' },
+  // 투표(모임 날짜 정하기)는 스페이스 상세 하단에 있어 그냥 찍으면 화면 밖이다.
+  // Play 짧은 설명이 "모임 날짜까지 정해요" 라고 약속하는 기능이라 전용 컷이 필요하다.
+  {
+    name: 'poll',
+    path: '/space/f494c953-bcf0-4b96-89bc-ce9ca859fb43',
+    wait: 5000,
+    patch: 'space',
+    scrollToText: '투표',
+  },
 ];
 
 /**
@@ -237,6 +246,37 @@ for (const s of SCREENS) {
   // Metro-served bundles finish rendering well after `load`; fixed waits are what worked before.
   await page.waitForTimeout(12000 + s.wait);
   if (s.patch === 'space') await patchSpaceLabels(page);
+  // Scroll a named section to the top of the viewport. RN-web renders headings as
+  // plain elements, so match on the visible text rather than a testID that does not exist.
+  if (s.scrollToText) {
+    const moved = await page.evaluate((needle) => {
+      const el = [...document.querySelectorAll('div,span')]
+        .find((e) => e.textContent?.trim() === needle && e.getBoundingClientRect().height > 0);
+      if (!el) return false;
+      el.scrollIntoView({ block: 'start' });
+      // scrollIntoView alone leaves the section partway down: RN-web scrolls an
+      // inner container, not the document, and the sticky header offsets it.
+      // Measure where it landed and scroll the real scrollable ancestor the rest.
+      //
+      // Note: a section near the end of the page cannot reach the top — the
+      // container runs out of scroll first. 투표 is one of those (only 빈 시간 찾기
+      // and the leave button sit below it), so it lands mid-screen by necessity.
+      const scrollableAncestor = (node) => {
+        for (let n = node.parentElement; n; n = n.parentElement) {
+          const oy = getComputedStyle(n).overflowY;
+          if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight) return n;
+        }
+        return document.scrollingElement || document.documentElement;
+      };
+      const sc = scrollableAncestor(el);
+      // 64px keeps the sticky header from covering the section title.
+      const delta = el.getBoundingClientRect().top - 64;
+      sc.scrollTop = Math.max(0, sc.scrollTop + delta);
+      return true;
+    }, s.scrollToText);
+    if (!moved) console.log(`! scrollToText "${s.scrollToText}" not found — capturing unscrolled`);
+    await page.waitForTimeout(1200);
+  }
   for (const dir of p.outDirs) {
     const out = resolve(HERE, 'shots', dir, `${s.name}.png`);
     await page.screenshot({ path: out });

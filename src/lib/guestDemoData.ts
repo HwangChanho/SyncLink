@@ -10,6 +10,7 @@
  */
 
 import type { EventSummary } from '@/types';
+import type { Todo } from '@/types/todo';
 import { toDateKey } from '@/lib/calendarRange';
 import i18n from '@/lib/i18n';
 
@@ -96,4 +97,72 @@ export function buildGuestDemoEventsByDate(): Record<string, EventSummary[]> {
     (byDate[toDateKey(e.startAt)] ??= []).push(e);
   }
   return byDate;
+}
+
+/**
+ * Demo todos for a browsing guest, mirroring buildGuestDemoEventsByDate.
+ *
+ * Why todos need demo data too: Home renders an "오늘 할일" section, and a guest
+ * with events but no todos sees it empty. That reads as a missing feature rather
+ * than an empty state — and it undercuts the product's todo half, which is now
+ * the lead in the brand name.
+ *
+ * Dates are relative to today so the list never goes stale:
+ *   - two due today (one of them the one an overdue-free list needs)
+ *   - one overdue by a day, so the overdue styling is visible
+ *
+ * Nothing here is written to the server; the store swaps this in when the user
+ * is unauthenticated, exactly as eventStore does.
+ */
+export function buildGuestDemoTodos(): Todo[] {
+  const tr = (key: string): string => i18n.t(`auth.guest.${key}`);
+
+  /** Midnight-anchored date `dayOffset` days from today. */
+  const day = (dayOffset: number): Date => {
+    const d = new Date();
+    d.setDate(d.getDate() + dayOffset);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+
+  const base = {
+    userId:      '',
+    spaceId:     null,
+    content:     null,
+    contentType: 'todo' as const,
+    dueAt:       null,
+    isCompleted: false,
+    completedAt: null,
+    categoryId:  null,
+    eventId:     null,
+    createdAt:   new Date(),
+    updatedAt:   new Date(),
+  };
+
+  return [
+    {
+      ...base,
+      id: 'guest-demo-todo-report',
+      title: tr('demo_todo_report'),
+      dueDate: day(-1),          // overdue — shows the red/overdue treatment
+      priority: 'high' as const,
+      sortOrder: 0,
+    },
+    {
+      ...base,
+      id: 'guest-demo-todo-groceries',
+      title: tr('demo_todo_groceries'),
+      dueDate: day(0),
+      priority: 'medium' as const,
+      sortOrder: 1,
+    },
+    {
+      ...base,
+      id: 'guest-demo-todo-call',
+      title: tr('demo_todo_call'),
+      dueDate: day(0),
+      priority: 'low' as const,
+      sortOrder: 2,
+    },
+  ];
 }

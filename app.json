@@ -1,14 +1,14 @@
 {
   "expo": {
-    "name": "SyncLink",
+    "name": "투투리스트",
     "slug": "synclink",
     "version": "1.3.8",
     "orientation": "portrait",
-    "icon": "./images/SyncDayLogo.png",
+    "icon": "./images/TwotwoLogo.png",
     "scheme": "synclink",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./images/SyncDayLogo.png",
+      "image": "./images/TwotwoLogo.png",
       "resizeMode": "contain",
       "backgroundColor": "#000000"
     },
@@ -44,7 +44,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./images/SyncDayLogo.png",
+        "foregroundImage": "./images/TwotwoLogo_adaptive.png",
         "backgroundColor": "#000000"
       },
       "package": "io.synclink.app",
