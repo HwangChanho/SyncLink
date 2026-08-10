@@ -78,6 +78,35 @@ preflight() {
     echo "[WARN] 디스크 여유가 20GB 미만입니다. DerivedData/미사용 시뮬 런타임을 정리하세요."
     exit 1
   fi
+
+  # 4) 부팅된 iOS 시뮬레이터. CLAUDE.md 가 금지하는 조합인데 1) 의 pgrep 은
+  #    xcodebuild 만 봐서 "떠 있기만 한 시뮬레이터"를 놓친다.
+  #    08-10 vc19 빌드가 이것 때문에 죽었다(형제 프로젝트 SyncFortune 이 SF-repro 에서 실행 중).
+  local booted
+  booted=$(xcrun simctl list devices booted 2>/dev/null | sed -n 's/^ *\(.*(Booted)\)/\1/p' || true)
+  if [[ -n "$booted" ]]; then
+    echo "[WARN] iOS 시뮬레이터가 부팅돼 있습니다:"
+    echo "$booted" | sed 's/^/         /'
+    echo "       Android 로컬 빌드와 동시 실행하면 NDK 컴파일 단계에서 죽습니다."
+    echo "       종료: xcrun simctl shutdown all && osascript -e 'quit app \"Simulator\"'"
+    echo "       ⚠️ 형제 프로젝트의 재현용 시뮬레이터일 수 있으니 끄기 전에 확인하세요."
+    exit 1
+  fi
+
+  # 5) 스왑 고갈. free+inactive 가 넉넉해 보여도 스왑이 꽉 차 있으면
+  #    NDK/CMake 단계에서 커널이 프로세스를 죽인다 — 2) 만으로는 못 잡는다.
+  #    08-10: free+inactive 5.4GB 였는데 스왑 잔여 688MB 에서 reanimated 빌드가 kill 됐다.
+  local swap_free
+  swap_free=$(sysctl -n vm.swapusage 2>/dev/null | sed -n 's/.*free = \([0-9.]*\)M.*/\1/p')
+  if [[ -n "$swap_free" ]]; then
+    echo "  스왑 여유: ${swap_free} MB"
+    if (( $(echo "$swap_free < 1024" | bc -l) )); then
+      echo "[WARN] 스왑 여유가 1GB 미만입니다. 메모리 수치가 좋아 보여도 NDK 컴파일에서 죽습니다."
+      echo "       무거운 앱(시뮬레이터·Chrome·타 프로젝트 dev 서버)을 닫고 다시 실행하세요."
+      exit 1
+    fi
+  fi
+
   echo "── 점검 통과 ──"
 }
 
