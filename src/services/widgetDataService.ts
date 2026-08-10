@@ -43,8 +43,35 @@ const MONTH_GRID_DAYS = 42;
 /** Hard ceiling on emitted events to keep the IPC payload tiny. */
 const MAX_GRID_EVENTS = 100;
 
-/** Storage key used inside the App Group / SharedPreferences. */
-export const WIDGET_DATA_KEY = 'synclink.widgetSnapshot.v1';
+/**
+ * Storage key used inside the App Group / SharedPreferences.
+ *
+ * v2 adds `done` on todos so the widget can render — and optimistically flip —
+ * a checkbox. We keep writing v1 as well: a user who updates the app before the
+ * OS refreshes the widget extension would otherwise see an empty widget until
+ * the next reload.
+ */
+export const WIDGET_DATA_KEY    = 'synclink.widgetSnapshot.v1';
+export const WIDGET_DATA_KEY_V2 = 'synclink.widgetSnapshot.v2';
+
+/**
+ * Toggles made **on the widget** that have not reached the server yet.
+ *
+ * iOS only. A WidgetKit App Intent runs inside the widget extension where no
+ * JS (and no Supabase session) exists, so it appends here and the app drains
+ * the queue on next launch. Android has no such queue — its widget click runs
+ * in a headless JS task that can call the service directly.
+ */
+export const WIDGET_PENDING_TOGGLES_KEY = 'synclink.widgetPendingToggles.v1';
+
+/** One optimistic toggle recorded by the widget. */
+export interface WidgetPendingToggle {
+  todoId: string;
+  /** Desired completion state the user tapped for. */
+  done:   boolean;
+  /** ISO datetime of the tap — used to resolve ordering when several queue up. */
+  at:     string;
+}
 
 /** Snapshot shape persisted to the shared store. Stable contract — bump v1 if you change. */
 export interface WidgetSnapshot {
@@ -74,6 +101,10 @@ export interface WidgetEvent {
 export interface WidgetTodo {
   id:       string;
   title:    string;
+  /** Completion state. Always false today (only pending todos are emitted),
+   *  but the widget needs the field to render a checkbox and to flip it
+   *  optimistically after a tap. */
+  done:     boolean;
   /** ISO date (YYYY-MM-DD) when the todo is due. Past dates → overdue. */
   dueDate:  string | null;
   overdue:  boolean;
@@ -100,8 +131,13 @@ export async function refreshWidgetData(
 
   // Always mirror to AsyncStorage so non-widget code paths (e.g. an
   // in-app "today summary" card) can read the same shape without a
-  // platform branch.
-  await AsyncStorage.setItem(WIDGET_DATA_KEY, json);
+  // platform branch. Both keys carry the same JSON — v2 is a superset of v1
+  // (extra `done` field), so an old reader parsing v2 would still work; we
+  // write both only so a not-yet-reloaded widget extension never sees a gap.
+  await AsyncStorage.multiSet([
+    [WIDGET_DATA_KEY, json],
+    [WIDGET_DATA_KEY_V2, json],
+  ]);
 
   if (Platform.OS === 'ios') {
     await writeIOSAppGroup(json);
@@ -178,11 +214,72 @@ export function buildSnapshot(
     todos: pending.slice(0, MAX_WIDGET_TODOS).map((t) => ({
       id:      t.id,
       title:   t.title,
+      done:    false,   // only pending todos are emitted; see `pending` filter above
       dueDate: t.dueDate ? toDateKey(t.dueDate) : null,
       overdue: t.dueDate ? toDateKey(t.dueDate) < todayKey : false,
     })),
     totals: { events: todays.length, todos: pending.length },
   };
+}
+
+/**
+ * Drain toggles the **iOS widget** recorded while the app was closed.
+ *
+ * The widget extension cannot reach Supabase (no JS, no session), so an App
+ * Intent appends to WIDGET_PENDING_TOGGLES_KEY in the shared App Group and we
+ * reconcile here — on app launch / foreground.
+ *
+ * Ordering: if the same todo was toggled several times, only the **last** tap
+ * wins. Tapping check→uncheck→check must not produce three writes.
+ *
+ * The queue is cleared only after `apply` resolves, so a crash mid-sync leaves
+ * the toggles queued for the next launch rather than losing them.
+ *
+ * @param apply Callback that persists one todo's completion to the server.
+ * @returns number of todos actually reconciled.
+ */
+export async function drainWidgetPendingToggles(
+  apply: (todoId: string, done: boolean) => Promise<void>,
+): Promise<number> {
+  const raw = await AsyncStorage.getItem(WIDGET_PENDING_TOGGLES_KEY);
+  if (!raw) return 0;
+
+  let queue: WidgetPendingToggle[];
+  try {
+    queue = JSON.parse(raw) as WidgetPendingToggle[];
+  } catch {
+    // Corrupt payload is not worth retrying forever — drop it and move on.
+    await AsyncStorage.removeItem(WIDGET_PENDING_TOGGLES_KEY);
+    return 0;
+  }
+  if (!Array.isArray(queue) || queue.length === 0) {
+    await AsyncStorage.removeItem(WIDGET_PENDING_TOGGLES_KEY);
+    return 0;
+  }
+
+  // Last tap per todo wins.
+  const latest = new Map<string, WidgetPendingToggle>();
+  for (const t of queue) {
+    if (!t?.todoId) continue;
+    const prev = latest.get(t.todoId);
+    if (!prev || t.at > prev.at) latest.set(t.todoId, t);
+  }
+
+  let applied = 0;
+  for (const t of latest.values()) {
+    try {
+      await apply(t.todoId, t.done);
+      applied++;
+    } catch (err) {
+      // One failure must not block the rest; the queue is cleared regardless
+      // because the widget's optimistic state is already stale by now and the
+      // next refreshWidgetData will overwrite it with server truth.
+      console.warn('[widget] pending toggle failed:', t.todoId, err);
+    }
+  }
+
+  await AsyncStorage.removeItem(WIDGET_PENDING_TOGGLES_KEY);
+  return applied;
 }
 
 // MAX_TODAY_EVENTS exported so tests can reason about truncation policy.
