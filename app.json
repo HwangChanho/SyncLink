@@ -158,7 +158,7 @@
           "widgets": [
             {
               "name": "SyncLinkWidget",
-              "label": "SyncLink",
+              "label": "할 일",
               "minWidth": "180dp",
               "minHeight": "110dp",
               "targetCellWidth": 3,
@@ -166,7 +166,35 @@
               "maxResizeWidth": "640dp",
               "maxResizeHeight": "480dp",
               "resizeMode": "horizontal|vertical",
-              "description": "오늘의 일정과 마감 임박 할 일을 한눈에.",
+              "description": "오늘 일정과 할 일. 체크박스를 눌러 바로 완료 처리.",
+              "previewImage": "./assets/widget-preview.png",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "SyncLinkCalendarWidget",
+              "label": "달력",
+              "minWidth": "250dp",
+              "minHeight": "220dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 3,
+              "maxResizeWidth": "640dp",
+              "maxResizeHeight": "640dp",
+              "resizeMode": "horizontal|vertical",
+              "description": "이번 달 일정을 달력으로 한눈에.",
+              "previewImage": "./assets/widget-preview.png",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "SyncLinkCheckWidget",
+              "label": "체크",
+              "minWidth": "140dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "maxResizeWidth": "640dp",
+              "maxResizeHeight": "480dp",
+              "resizeMode": "horizontal|vertical",
+              "description": "할 일만 크게. 홈화면에서 바로 체크.",
               "previewImage": "./assets/widget-preview.png",
               "updatePeriodMillis": 1800000
             }

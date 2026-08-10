@@ -21,10 +21,36 @@ import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import { useEventStore } from '@/stores/eventStore';
 import { useTodoStore } from '@/stores/todoStore';
-import { refreshWidgetData } from '@/services/widgetDataService';
+import { refreshWidgetData, drainWidgetPendingToggles } from '@/services/widgetDataService';
+import { toggleTodoComplete } from '@/services/todoService';
 
 /** Debounce window — short enough to feel instant, long enough to coalesce sync bursts. */
 const DEBOUNCE_MS = 250;
+
+/**
+ * Replay checkbox taps the widget could not send itself.
+ *
+ * iOS always lands here: a WidgetKit App Intent runs in the widget extension
+ * with no JS and no Supabase session, so it can only queue. Android normally
+ * writes directly from its headless task and only queues when that task has no
+ * restored session or the device is offline.
+ *
+ * Runs before the first snapshot flush so the widget isn't briefly repainted
+ * with pre-toggle server state.
+ */
+async function replayWidgetToggles(): Promise<void> {
+  try {
+    const applied = await drainWidgetPendingToggles(
+      (todoId, done) => toggleTodoComplete(todoId, done).then(() => undefined),
+    );
+    // Only refetch when something actually changed — the common case is an
+    // empty queue, and a needless fetch on every launch is real latency.
+    if (applied > 0) await useTodoStore.getState().fetchTodos();
+  } catch (err) {
+    // Never block widget sync (or app start) on queue replay.
+    console.warn('[widget] replay failed:', err);
+  }
+}
 
 export function useWidgetSync(): void {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -49,8 +75,10 @@ export function useWidgetSync(): void {
       debounceRef.current = setTimeout(flush, DEBOUNCE_MS);
     };
 
-    // Initial render: hydrate the widget with whatever we have right now.
-    scheduleFlush();
+    // Drain anything the widget queued while the app was closed, then hydrate.
+    // scheduleFlush() is called regardless of replay outcome so a failed replay
+    // can't leave the widget showing nothing.
+    void replayWidgetToggles().finally(scheduleFlush);
 
     const unsubEvents = useEventStore.subscribe(scheduleFlush);
     const unsubTodos  = useTodoStore.subscribe(scheduleFlush);

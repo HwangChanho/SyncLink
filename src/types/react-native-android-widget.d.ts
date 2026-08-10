@@ -32,6 +32,8 @@ declare module 'react-native-android-widget' {
     paddingBottom?:   number;
     paddingLeft?:     number;
     paddingRight?:    number;
+    paddingVertical?:   number;
+    paddingHorizontal?: number;
     margin?:          number;
     marginTop?:       number;
     marginBottom?:    number;
@@ -44,30 +46,52 @@ declare module 'react-native-android-widget' {
     borderColor?:     string;
   }
 
+  /**
+   * Tap handling, shared by every widget element.
+   *
+   * `OPEN_APP` and `OPEN_URI` are handled natively by the package and never
+   * reach the task handler. Any other string is delivered to
+   * registerWidgetTaskHandler as a `WIDGET_CLICK` carrying `clickActionData`.
+   */
+  interface ClickActionProps {
+    clickAction?:     'OPEN_APP' | 'OPEN_URI' | string;
+    clickActionData?: Record<string, unknown>;
+  }
+
   interface TextWidgetStyle {
     fontSize?:   number;
     fontWeight?: '100' | '200' | '300' | '400' | '500' | '600' | '700' | '800' | '900';
     color?:      string;
     textAlign?:  'left' | 'center' | 'right';
     flex?:       number;
-    marginLeft?: number;
-    marginRight?: number;
+    marginLeft?:   number;
+    marginRight?:  number;
+    marginTop?:    number;
+    marginBottom?: number;
   }
 
   interface IconWidgetStyle {
-    color?:       string;
-    marginLeft?:  number;
-    marginRight?: number;
+    color?:        string;
+    marginLeft?:   number;
+    marginRight?:  number;
+    marginTop?:    number;
+    marginBottom?: number;
   }
 
-  export const FlexWidget: (props: { style?: FlexWidgetStyle; children?: ReactNode }) => ReactElement;
-  export const TextWidget: (props: { text: string; maxLines?: number; style?: TextWidgetStyle }) => ReactElement;
-  export const IconWidget: (props: {
-    font?:  'material' | 'material_community';
-    icon:   string;
-    size:   number;
-    style?: IconWidgetStyle;
-  }) => ReactElement;
+  export const FlexWidget: (
+    props: ClickActionProps & { style?: FlexWidgetStyle; children?: ReactNode },
+  ) => ReactElement;
+  export const TextWidget: (
+    props: ClickActionProps & { text: string; maxLines?: number; style?: TextWidgetStyle },
+  ) => ReactElement;
+  export const IconWidget: (
+    props: ClickActionProps & {
+      font?:  'material' | 'material_community';
+      icon:   string;
+      size:   number;
+      style?: IconWidgetStyle;
+    },
+  ) => ReactElement;
 
   // ─── Headless task ────────────────────────────────────────────────────────
 
@@ -88,6 +112,10 @@ declare module 'react-native-android-widget' {
     widgetInfo:   WidgetInfo;
     widgetAction: WidgetAction;
     renderWidget: (component: ReactElement) => void;
+    /** Set only when widgetAction is 'WIDGET_CLICK'. */
+    clickAction?:     string;
+    /** Payload attached to the tapped element's clickActionData. */
+    clickActionData?: Record<string, unknown>;
   }
 
   export function registerWidgetTaskHandler(

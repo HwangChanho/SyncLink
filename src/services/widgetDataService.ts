@@ -282,6 +282,90 @@ export async function drainWidgetPendingToggles(
   return applied;
 }
 
+/**
+ * Read the snapshot the widgets render from.
+ *
+ * Prefers v2 and falls back to v1 so a widget process that starts up between
+ * an app update and the first refreshWidgetData still finds data.
+ */
+export async function readWidgetSnapshot(): Promise<WidgetSnapshot | null> {
+  for (const key of [WIDGET_DATA_KEY_V2, WIDGET_DATA_KEY]) {
+    try {
+      const raw = await AsyncStorage.getItem(key);
+      if (raw) return JSON.parse(raw) as WidgetSnapshot;
+    } catch {
+      // Corrupt entry under one key shouldn't hide a good one under the other.
+    }
+  }
+  return null;
+}
+
+/**
+ * Flip one todo's `done` inside the stored snapshot and persist it.
+ *
+ * Android's widget click runs in a headless task that has no access to the
+ * Zustand stores, so it cannot rebuild a full snapshot via refreshWidgetData.
+ * Patching the stored copy is what makes the checkbox *stay* ticked across the
+ * re-render Android triggers right after the tap — without it the widget would
+ * redraw from stale data and appear to undo the tap.
+ *
+ * Server truth overwrites this on the next refreshWidgetData; at that point a
+ * completed todo drops out of the list entirely (only pending ones are
+ * emitted), which is the intended end state.
+ *
+ * @returns the patched snapshot, or null if there was nothing to patch.
+ */
+export async function patchWidgetSnapshotTodo(
+  todoId: string,
+  done: boolean,
+): Promise<WidgetSnapshot | null> {
+  const snapshot = await readWidgetSnapshot();
+  if (!snapshot) return null;
+
+  let changed = false;
+  const todos = snapshot.todos.map((t) => {
+    if (t.id !== todoId || t.done === done) return t;
+    changed = true;
+    return { ...t, done };
+  });
+  if (!changed) return snapshot;
+
+  const patched: WidgetSnapshot = { ...snapshot, todos };
+  const json = JSON.stringify(patched);
+  await AsyncStorage.multiSet([
+    [WIDGET_DATA_KEY, json],
+    [WIDGET_DATA_KEY_V2, json],
+  ]);
+  return patched;
+}
+
+/**
+ * Record a toggle that could not reach the server, for the app to replay.
+ *
+ * Built for iOS (whose widget extension has no session at all), but Android
+ * uses it too whenever its headless task has no restored Supabase session or
+ * is offline — otherwise that tap would be silently lost, which is worse than
+ * a delayed sync because the widget already drew it as done.
+ */
+export async function enqueueWidgetPendingToggle(
+  todoId: string,
+  done: boolean,
+  at: Date = new Date(),
+): Promise<void> {
+  let queue: WidgetPendingToggle[] = [];
+  try {
+    const raw = await AsyncStorage.getItem(WIDGET_PENDING_TOGGLES_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as WidgetPendingToggle[];
+      if (Array.isArray(parsed)) queue = parsed;
+    }
+  } catch {
+    // Unreadable queue is dropped rather than blocking this toggle.
+  }
+  queue.push({ todoId, done, at: at.toISOString() });
+  await AsyncStorage.setItem(WIDGET_PENDING_TOGGLES_KEY, JSON.stringify(queue));
+}
+
 // MAX_TODAY_EVENTS exported so tests can reason about truncation policy.
 export const _WIDGET_LIMITS = { MAX_TODAY_EVENTS, MAX_WIDGET_TODOS, MONTH_GRID_DAYS, MAX_GRID_EVENTS };
 
@@ -306,27 +390,48 @@ async function writeIOSAppGroup(json: string): Promise<void> {
 }
 
 /**
+ * Every widget name declared in app.json's react-native-android-widget config.
+ *
+ * ⚠️ Must stay in sync with app.json and with widgetTaskHandler's
+ * NAME_TO_COMPONENT map. A name missing here means that widget keeps showing
+ * stale data after a change — it renders fine, so nothing looks broken.
+ */
+const ANDROID_WIDGET_NAMES = [
+  'SyncLinkWidget',         // 투두형
+  'SyncLinkCalendarWidget', // 달력형
+  'SyncLinkCheckWidget',    // 체크형
+] as const;
+
+/**
  * Notify Android the widget data changed.
  *
  * react-native-android-widget exposes `requestWidgetUpdate({ widgetName })`
  * which forces all instances of the named widget to re-render. The widget
- * component reads the same AsyncStorage key (mirrored above).
+ * components read the same AsyncStorage key (mirrored above).
  *
  * Loaded lazily so iOS / web bundles don't pay the require cost.
  */
-function writeAndroidWidget(_json: string): Promise<void> {
+async function writeAndroidWidget(_json: string): Promise<void> {
   // require() rather than dynamic import so TS doesn't choke and so the
   // package can be missing without a build error in development.
+  let mod: { requestWidgetUpdate?: (opts: { widgetName: string }) => Promise<void> };
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const mod = require('react-native-android-widget') as {
-      requestWidgetUpdate?: (opts: { widgetName: string }) => Promise<void>;
-    };
-    return mod.requestWidgetUpdate?.({ widgetName: 'SyncLinkWidget' }) ?? Promise.resolve();
+    mod = require('react-native-android-widget');
   } catch {
     // Package missing in dev builds without prebuild → silent fall-through.
-    return Promise.resolve();
+    return;
   }
+  if (!mod.requestWidgetUpdate) return;
+
+  // One widget type failing to refresh must not stop the others — a user who
+  // only placed the calendar shouldn't lose updates because the check widget
+  // has no instances.
+  await Promise.all(
+    ANDROID_WIDGET_NAMES.map((widgetName) =>
+      mod.requestWidgetUpdate!({ widgetName }).catch(() => undefined),
+    ),
+  );
 }
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
