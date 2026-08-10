@@ -31,6 +31,8 @@ import {
   deleteNote,
 } from '@/services/todoService';
 import type { CreateNoteInput, UpdateNoteInput } from '@/types';
+import { useAuthStore } from '@/stores/authStore';
+import { buildGuestDemoTodos } from '@/lib/guestDemoData';
 
 // ─── Store interface ──────────────────────────────────────────────────────────
 
@@ -132,6 +134,14 @@ export const useTodoStore = create<TodoState>((set, get) => ({
   fetchTodos: async (filter?: TodoFilter) => {
     set({ isLoading: true, error: null });
     try {
+      // A browsing guest has no rows under RLS, so the server would return []
+      // and Home's "오늘 할일" would render empty. Swap in demo todos instead —
+      // same short-circuit eventStore.fetchEvents uses for demo events.
+      if (!useAuthStore.getState().isAuthenticated) {
+        set({ todos: buildGuestDemoTodos(), isLoading: false });
+        return;
+      }
+
       const merged: TodoFilter = { ...filter, contentType: 'todo' };
 
       // getTodos returns TodoSummary[], but we need Todo[] for the store.

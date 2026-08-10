@@ -134,6 +134,12 @@ const PHONE_FRAMES = [
     sub: '모두가 되는 빈 시간까지 자동으로',
   },
   {
+    slug: 'poll',
+    source: 'poll',
+    title: '모임 날짜는\n투표로 정해요',
+    sub: '후보를 올리고 다 같이 고르면 일정으로 바로 확정',
+  },
+  {
     slug: 'planner',
     source: 'planner',
     title: '할 일과 노트를\n한 곳에',
