@@ -267,35 +267,47 @@ struct SyncLinkWidgetEntryView: View {
   }
 }
 
-// MARK: - Large 투두형 — today's events, then checkable todos
+// MARK: - Large 투두형 — month calendar on top, checkable todos underneath
 
+/**
+ * LEAD 결정(2026-08-11): 큰 위젯은 **달력을 유지하면서** 할 일도 보여준다.
+ *
+ * 배경: 이 kind 의 large 는 원래 월 달력이었다. 위젯을 3종으로 나누면서 투두 목록으로
+ * 바꿨더니, 홈 화면에 큰 위젯을 올려둔 기존 사용자는 달력을 잃고 새 위젯을 직접
+ * 추가해야 하는 상태가 됐다. 달력을 되돌리되 할 일 두 줄을 덧붙여 양쪽을 만족시킨다.
+ *
+ * 대가: 한 화면에 둘 다 넣으므로 달력 셀과 할 일 줄이 모두 작아진다. 할 일은 2줄까지만
+ * 두어 달력이 읽을 수 있는 크기를 유지한다 — 3줄 이상이면 6주 그리드가 뭉개진다.
+ */
 private struct LargeTodoView: View {
   let snapshot: WidgetSnapshot
 
+  /// 달력이 읽히는 선. 이 이상 늘리면 6주 그리드가 뭉개진다.
+  private static let todoLimit = 2
+
   var body: some View {
-    let events = Array(todayEvents(snapshot).prefix(4))
-    let todos  = Array(snapshot.todos.prefix(5))
+    let todos = Array(snapshot.todos.prefix(Self.todoLimit))
 
     VStack(alignment: .leading, spacing: 6) {
       HStack {
-        Text(todayLabel())
+        Text(monthHeaderLabel())
           .font(.system(size: 15, weight: .bold))
         Spacer()
-        Text("SyncLink")
+        Text("\(snapshot.totals.events)개 일정")
           .font(.system(size: 10))
           .foregroundColor(.secondary)
       }
+      WeekdayHeader()
+      MonthGrid(events: snapshot.events)
 
-      if events.isEmpty {
-        Text("오늘 일정 없음")
-          .font(.system(size: 12))
+      if todos.isEmpty {
+        // 빈 상태에서도 구분선을 유지해 달력 높이가 들쭉날쭉해지지 않게 한다.
+        Divider().padding(.vertical, 1)
+        Text("오늘 할 일 없음")
+          .font(.system(size: 11))
           .foregroundColor(.secondary)
       } else {
-        ForEach(events) { EventRow(event: $0, compact: false) }
-      }
-
-      if !todos.isEmpty {
-        Divider().padding(.vertical, 2)
+        Divider().padding(.vertical, 1)
         ForEach(todos) { TodoRow(todo: $0) }
       }
 
@@ -705,8 +717,8 @@ struct SyncLinkWidget: Widget {
     StaticConfiguration(kind: kind, provider: Provider()) { entry in
       SyncLinkWidgetEntryView(entry: entry)
     }
-    .configurationDisplayName("할 일")
-    .description("오늘 일정과 할 일. 체크박스를 눌러 바로 완료 처리.")
+    .configurationDisplayName("달력 + 할 일")
+    .description("큰 위젯은 이번 달 달력과 할 일을 함께. 체크박스를 눌러 바로 완료 처리.")
     .supportedFamilies([.systemSmall, .systemLarge])
   }
 }
