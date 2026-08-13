@@ -256,7 +256,10 @@
       "url": "https://u.expo.dev/c9ef6634-3221-4503-9ca0-3dee0e53ac45",
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 0
+      "fallbackToCacheTimeout": 0,
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
     }
   }
 }
