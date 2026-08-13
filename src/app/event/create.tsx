@@ -18,6 +18,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useEventForm } from '@/hooks/useEventForm';
+import { useAdGate } from '@/hooks/useAdGate';
 import { useAuthStore } from '@/stores/authStore';
 import {
   View, Text, TextInput, ScrollView, Switch, Pressable,
@@ -470,6 +471,9 @@ export default function EventCreateScreen() {
   // ── Handlers ───────────────────────────────────────────────────────────────
 
   /** Toggle a space in the sharing list. */
+  // 공유 일정 등록 게이트(하루 1회). Pro·광고 불가 환경은 훅 안에서 면제된다.
+  const sharedEventAdGate = useAdGate('shared_event', 'daily');
+
   const toggleSpace = useCallback((spaceId: string) => {
     setShareSpaceIds((prev) =>
       prev.includes(spaceId)
@@ -662,6 +666,7 @@ export default function EventCreateScreen() {
   }, [
     title, allDay, startAt, repeatType, location, description, categoryId,
     eventColor, shareSpaceIds, reminderMinutes, editableByMembers,
+    sharedEventAdGate,
     relativeEnabled, baseDate, offsetDays, offsetLabel,
     upsertEvent, router, colors.primary, t, showToast,
   ]);
@@ -685,6 +690,16 @@ export default function EventCreateScreen() {
     if (!allDay && endAt <= startAt) {
       showAlert(t('common.error'), t('event.end_after_start'));
       return;
+    }
+
+    // 2026-08-13 LEAD 결정: 공유 일정 등록에 보상형 광고(하루 1회).
+    // 🔴 **공유를 실제로 선택했을 때만** 띄운다 — 개인 일정까지 막으면 앱의 기본
+    //    동작에 광고를 붙이는 셈이다. Pro 는 useAdGate 안에서 면제된다.
+    //    입력 검증 뒤에 두는 이유: 제목도 안 적은 상태에서 광고부터 보여주고
+    //    그 다음 "제목을 입력하세요" 라고 하면 최악이다.
+    if (shareSpaceIds.length > 0) {
+      const passed = await sharedEventAdGate.pass();
+      if (!passed) return; // 사용자가 보상 지점 전에 닫음 — 저장하지 않는다
     }
 
     setIsSaving(true);

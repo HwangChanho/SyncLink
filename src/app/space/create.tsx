@@ -20,6 +20,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { showAlert } from '@/lib/webAlert';
+import { useAdGate } from '@/hooks/useAdGate';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -28,7 +29,6 @@ import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import * as spaceService from '@/services/spaceService';
 import { useSpaceStore } from '@/stores/spaceStore';
-import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import type { SpaceType } from '@/types';
 import { logError } from '@/lib/errorLogger';
 
@@ -50,8 +50,10 @@ export default function CreateSpaceScreen() {
   const [name, setName] = useState('');
   const [selectedType, setSelectedType] = useState<SpaceType>('couple');
   const [isLoading, setIsLoading] = useState(false);
-  // 스페이스 생성은 Pro 전용 (참여는 free 허용 — 정책: 생성만 Pro).
-  const isPro = useSubscriptionStore((s) => s.plan === 'pro');
+  // 2026-08-13 LEAD 결정: 생성은 **무료 + 보상형 광고**(Pro 는 면제).
+  // 종전엔 Pro 전용이었는데, 스페이스는 이 앱의 핵심 가치로 들어가는 진입 장벽이라
+  // 여기서 막으면 무료 사용자가 기능을 한 번도 못 써보고 Pro 로 올라갈 이유도 안 생긴다.
+  const adGate = useAdGate('space_create', 'always');
 
   /** Space type options built from i18n translations. */
   const SPACE_TYPE_OPTIONS: SpaceTypeOption[] = [
@@ -72,18 +74,16 @@ export default function CreateSpaceScreen() {
   const { fetchMySpaces, setActiveSpaceId, setSpaceDetail } = useSpaceStore();
 
   const handleCreate = async () => {
-    // 생성은 Pro 전용 — free 유저가 버튼 게이트를 우회해 이 화면에 진입한 경우
-    // (웹 딥링크 등) 네트워크 호출 전에 페이월로 유도한다.
-    if (!isPro) {
-      router.replace('/subscription/paywall');
-      return;
-    }
-
     const trimmedName = name.trim();
     if (!trimmedName) {
       showAlert(t('space.need_name'), t('space.name_placeholder'));
       return;
     }
+
+    // 광고는 입력 검증을 통과한 뒤에 띄운다 — 이름도 안 적은 상태에서 광고부터
+    // 보여주고 그 다음 "이름을 입력하세요" 라고 하면 최악이다.
+    const passed = await adGate.pass();
+    if (!passed) return; // 사용자가 보상 지점 전에 닫음 — 조용히 취소
 
     setIsLoading(true);
     try {
@@ -112,11 +112,8 @@ export default function CreateSpaceScreen() {
       // 생성된 Space 상세 화면으로 이동
       router.replace(`/space/${space.id}`);
     } catch (err) {
-      // 서버 트리거(마이그레이션 065)가 Pro 아님을 거부한 경우 → 페이월로 유도.
-      if (err instanceof Error && err.message.includes('PRO_REQUIRED')) {
-        router.replace('/subscription/paywall');
-        return;
-      }
+      // 마이그레이션 068 로 서버의 Pro 전용 트리거를 제거했으므로 PRO_REQUIRED 는
+      // 더 이상 오지 않는다. 혹시 구버전 서버를 만나면 일반 오류로 표시된다.
       const message =
         err instanceof Error ? err.message : t('space.create_failed');
       void logError({ context: 'space.create.ui', error: err });

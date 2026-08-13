@@ -24,7 +24,6 @@ import { desktopContentCentered } from '@/constants/webLayout';
 import { useAuthStore } from '@/stores/authStore';
 import { GuestGate } from '@/components/common/GuestGate';
 import { useSpaceStore } from '@/stores/spaceStore';
-import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { SpaceCard } from '@/components/space/SpaceCard';
@@ -66,16 +65,10 @@ function SpacesScreenContent() {
   // v1.2.1 — Space 별 안 본 메시지 수.
   const [unread, setUnread] = useState<Record<string, number>>({});
 
-  // 스페이스 "생성"은 Pro 전용 (참여는 free 허용 — 정책: 생성만 Pro). 서버 트리거
-  // (마이그레이션 065)가 최종 방어선이지만, free 유저는 생성 화면 대신 페이월로 보낸다.
-  const isPro = useSubscriptionStore((s) => s.plan === 'pro');
-  const goCreateSpace = () => {
-    if (!isPro) {
-      router.push('/subscription/paywall');
-      return;
-    }
-    router.push('/space/create');
-  };
+  // 2026-08-13 — 생성은 무료가 됐다(마이그 068 이 Pro 트리거를 제거).
+  // 광고 게이트는 **생성 화면 안**에 있다. 여기서 미리 광고를 띄우면 사용자가
+  // 이름도 입력하기 전에 광고를 보게 되고, 마음이 바뀌어 나가면 헛본 게 된다.
+  const goCreateSpace = () => router.push('/space/create');
 
   // Tab mount 시 + focus 마다 재조회 (다른 탭에서 변경된 경우 동기화)
   useEffect(() => {
