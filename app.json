@@ -2,7 +2,7 @@
   "expo": {
     "name": "SyncLink",
     "slug": "synclink",
-    "version": "1.4.0",
+    "version": "1.4.1",
     "orientation": "portrait",
     "icon": "./images/TwotwoLogo.png",
     "scheme": "synclink",
@@ -20,7 +20,7 @@
       "bundleIdentifier": "io.synclink.app",
       "appleTeamId": "QUVU2PY6PG",
       "newArchEnabled": true,
-      "buildNumber": "166",
+      "buildNumber": "168",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.io.synclink.app.widget"
@@ -50,7 +50,7 @@
       },
       "package": "io.synclink.app",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 20,
+      "versionCode": 21,
       "softwareKeyboardLayoutMode": "resize",
       "intentFilters": [
         {

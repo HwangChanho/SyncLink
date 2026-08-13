@@ -90,6 +90,14 @@ platform :ios do
          "archive")
 
       # 3. IPA export
+      # 🔴 exportArchive 는 archive 와 달리 OTHER_CODE_SIGN_FLAGS 를 받지 않아
+      #    **전역 키체인 검색목록**에 의존한다. 형제 프로젝트의 EAS 로컬 빌드가
+      #    그 목록을 자기 임시 키체인으로 리셋하면 login.keychain 이 빠지고
+      #    export 만 "no identity found" 로 깨진다(2026-08-13 실제 발생, archive 는 통과했다).
+      #    기존 항목을 보존한 채 login.keychain 을 **추가**한다 — 교체하면 진행 중인
+      #    형제 빌드를 깨뜨린다.
+      sh("security list-keychains -d user -s $(security list-keychains -d user | sed 's/[[:space:]]*\"//;s/\"$//' | tr '\\n' ' ') ~/Library/Keychains/login.keychain-db")
+
       sh("xcodebuild -exportArchive " \
          "-archivePath '#{PROJECT_ROOT}/build/SyncLink.xcarchive' " \
          "-exportPath '#{PROJECT_ROOT}/build/SyncLink-ipa' " \
