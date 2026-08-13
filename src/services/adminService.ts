@@ -249,6 +249,76 @@ export async function getAdminUsers(
   return data as AdminUsersResult;
 }
 
+// ─── 버그 제보 / 문의 ────────────────────────────────────────────────────────
+
+/** 제보 처리 상태. DB CHECK 제약과 같은 값이어야 한다. */
+export type SupportStatus = 'open' | 'in_progress' | 'resolved' | 'ignored';
+
+export interface SupportRequestRow {
+  id: string;
+  kind: 'bug' | 'inquiry';
+  message: string;
+  reply_email: string | null;
+  status: SupportStatus;
+  admin_note: string | null;
+  created_at: string;
+  /** 앱 버전·플랫폼 등 자동 첨부 정보. 스키마 고정이 아니라 자유 형태다. */
+  diagnostics: Record<string, unknown>;
+  /** 제보 후 닉네임이 바뀌었을 수 있어 현재 값을 함께 받는다. */
+  current_nickname: string | null;
+}
+
+export interface SupportRequestList {
+  counts: {
+    total: number; open: number; in_progress: number; resolved: number;
+    ignored: number; bug: number; inquiry: number;
+  };
+  items: SupportRequestRow[];
+}
+
+/**
+ * 제보 목록 + 상태별 건수.
+ * @param status null/미지정이면 전체. 건수는 필터와 무관하게 항상 전체 기준이다.
+ */
+export async function getSupportRequests(
+  token: string,
+  status?: SupportStatus | null,
+  limit = 50,
+  offset = 0,
+): Promise<SupportRequestList> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc('admin_get_support_requests', {
+    p_token: token,
+    p_status: status ?? null,
+    p_limit: limit,
+    p_offset: offset,
+  });
+  if (error) {
+    if (isSessionError(error)) await clearSession();
+    throw error;
+  }
+  return (data ?? { counts: {}, items: [] }) as SupportRequestList;
+}
+
+/** 상태·메모 갱신. 넘기지 않은 항목은 그대로 둔다(상태만/메모만 변경 지원). */
+export async function updateSupportRequest(
+  token: string,
+  id: string,
+  patch: { status?: SupportStatus; note?: string },
+): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any).rpc('admin_update_support_request', {
+    p_token: token,
+    p_id: id,
+    p_status: patch.status ?? null,
+    p_note: patch.note ?? null,
+  });
+  if (error) {
+    if (isSessionError(error)) await clearSession();
+    throw error;
+  }
+}
+
 // ─── 호환 — 화면에서 import 하는 이름 그대로 유지 (오래된 import 보호) ──────
 // AdminCredentials 는 더 이상 사용 안 함. 단 코드 references 가 남아있으면
 // 컴파일 에러 → 다음 cycle 정리.

@@ -40,6 +40,11 @@ import {
   type AdminSession,
   type AdminUsersResult,
   type UsersSort,
+  getSupportRequests,
+  updateSupportRequest,
+  type SupportRequestList,
+  type SupportRequestRow,
+  type SupportStatus,
 } from '@/services/adminService';
 
 type Days = 1 | 7 | 30;
@@ -344,6 +349,9 @@ export default function AdminDashboard() {
               </View>
             )}
 
+            {/* 버그 제보 / 문의 카드 — 사용자 목록보다 위. 미확인 건은 빨리 봐야 한다. */}
+            <SupportCard token={session.token} styles={styles} colors={colors} />
+
             {/* 사용자 목록 카드 */}
             <UsersCard token={session.token} styles={styles} colors={colors} />
           </>
@@ -554,6 +562,273 @@ const hardStyles = StyleSheet.create({
     lineHeight: 16,
   },
 });
+
+/** 상태 필터 탭. null = 전체. */
+const SUPPORT_FILTERS: { k: SupportStatus | null; label: string }[] = [
+  { k: null, label: '전체' },
+  { k: 'open', label: '미확인' },
+  { k: 'in_progress', label: '진행중' },
+  { k: 'resolved', label: '완료' },
+];
+
+/** 상태별 표시 이름 + 색. 색은 pill 배경으로 쓴다. */
+const SUPPORT_STATUS_META: Record<SupportStatus, { label: string; tone: 'open' | 'progress' | 'done' }> = {
+  open:        { label: '미확인', tone: 'open' },
+  in_progress: { label: '진행중', tone: 'progress' },
+  resolved:    { label: '완료',   tone: 'done' },
+  ignored:     { label: '보류',   tone: 'done' },
+};
+
+/** diagnostics 에서 사람이 볼 만한 값만 한 줄로 뽑는다. 없는 키는 조용히 건너뛴다. */
+function formatDiagnostics(d: Record<string, unknown>): string {
+  const get = (k: string) => (d[k] == null ? null : String(d[k]));
+  return [
+    get('platform') && `${get('platform')} ${get('osVersion') ?? ''}`.trim(),
+    get('appVersion') && `v${get('appVersion')}(${get('buildNumber') ?? '?'})`,
+    get('locale'),
+  ].filter(Boolean).join(' · ');
+}
+
+/**
+ * 버그 제보 / 문의 카드 (마이그레이션 069).
+ *
+ * 메일 알림이 없는 구조라 **여기가 유일한 확인 창구**다. 그래서
+ *   - 미확인(open) 건수를 카드 제목에 크게 띄우고
+ *   - 서버 정렬이 open 을 항상 위로 올린다
+ * 행을 누르면 펼쳐져 본문 전체 · 진단 정보 · 상태 변경 · 메모가 보인다.
+ */
+function SupportCard({
+  token,
+  styles,
+  colors,
+}: {
+  token: string;
+  styles: ReturnType<typeof makeStyles>;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const [filter, setFilter] = useState<SupportStatus | null>(null);
+  const [data, setData] = useState<SupportRequestList | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  /** 펼쳐진 행 id. 한 번에 하나만 펼친다(목록이 길어지는 걸 막는다). */
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  /** 저장 중인 행 id — 중복 탭 방지. */
+  const [savingId, setSavingId] = useState<string | null>(null);
+  /** 편집 중인 메모. 행 id → 텍스트. 저장 전까지 로컬에만 둔다. */
+  const [notes, setNotes] = useState<Record<string, string>>({});
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setData(await getSupportRequests(token, filter, 50));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '제보를 불러오지 못했어요.');
+    } finally {
+      setLoading(false);
+    }
+  }, [token, filter]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  /**
+   * 상태·메모 저장 후 목록을 다시 읽는다.
+   * 낙관적 갱신을 하지 않는 이유: 필터가 걸려 있으면 상태를 바꾼 행이 목록에서
+   * 빠져야 하는데, 그 판단을 클라이언트에서 흉내 내면 건수와 어긋난다.
+   */
+  const apply = useCallback(
+    async (id: string, patch: { status?: SupportStatus; note?: string }) => {
+      setSavingId(id);
+      try {
+        await updateSupportRequest(token, id, patch);
+        await load();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '저장하지 못했어요.');
+      } finally {
+        setSavingId(null);
+      }
+    },
+    [token, load],
+  );
+
+  const counts = data?.counts;
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.headerRow}>
+        <Text style={styles.cardTitle}>제보 · 문의</Text>
+        {counts ? (
+          counts.open > 0 ? (
+            <View style={styles.warnPill}>
+              <Text style={styles.warnPillText}>미확인 {counts.open}</Text>
+            </View>
+          ) : (
+            <Text style={styles.subText}>미확인 없음</Text>
+          )
+        ) : null}
+      </View>
+
+      {counts && (
+        <Text style={styles.subText}>
+          전체 {counts.total} · 버그 {counts.bug} · 문의 {counts.inquiry} · 진행중 {counts.in_progress} · 완료 {counts.resolved}
+        </Text>
+      )}
+
+      {/* 상태 필터 */}
+      <View style={styles.segment}>
+        {SUPPORT_FILTERS.map(({ k, label }) => (
+          <TouchableOpacity
+            key={label}
+            onPress={() => setFilter(k)}
+            style={[styles.segmentBtn, filter === k && styles.segmentBtnActive]}
+          >
+            <Text style={[styles.segmentText, filter === k && styles.segmentTextActive]}>
+              {label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {loading ? (
+        <ActivityIndicator color={colors.primary} style={{ paddingVertical: spacing[3] }} />
+      ) : error ? (
+        <Text style={styles.errorText}>{error}</Text>
+      ) : data && data.items.length > 0 ? (
+        <View style={styles.tableWrap}>
+          {data.items.map((it) => (
+            <SupportRow
+              key={it.id}
+              item={it}
+              expanded={expandedId === it.id}
+              saving={savingId === it.id}
+              note={notes[it.id] ?? it.admin_note ?? ''}
+              onToggle={() => setExpandedId(expandedId === it.id ? null : it.id)}
+              onNoteChange={(t) => setNotes((prev) => ({ ...prev, [it.id]: t }))}
+              onApply={(patch) => void apply(it.id, patch)}
+              styles={styles}
+              colors={colors}
+            />
+          ))}
+        </View>
+      ) : (
+        <Text style={styles.emptyText}>
+          {filter ? '해당 상태의 제보가 없어요' : '들어온 제보가 없어요'}
+        </Text>
+      )}
+    </View>
+  );
+}
+
+/**
+ * 제보 한 건. 접힌 상태는 요약만, 펼치면 전체 + 처리 UI.
+ * 상태 관리는 전부 부모가 한다(이 컴포넌트는 표시와 콜백만 담당).
+ */
+function SupportRow({
+  item,
+  expanded,
+  saving,
+  note,
+  onToggle,
+  onNoteChange,
+  onApply,
+  styles,
+  colors,
+}: {
+  item: SupportRequestRow;
+  expanded: boolean;
+  saving: boolean;
+  note: string;
+  onToggle: () => void;
+  onNoteChange: (text: string) => void;
+  onApply: (patch: { status?: SupportStatus; note?: string }) => void;
+  styles: ReturnType<typeof makeStyles>;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const meta = SUPPORT_STATUS_META[item.status];
+  const isBug = item.kind === 'bug';
+  const diag = formatDiagnostics(item.diagnostics ?? {});
+  // 제보 후 닉네임이 바뀌었으면 둘 다 보여준다.
+  const savedNickname = item.diagnostics?.nickname as string | undefined;
+  const who = item.current_nickname ?? savedNickname ?? '(비로그인)';
+
+  return (
+    <View style={[styles.userRow, item.status === 'open' && styles.supportRowOpen]}>
+      <TouchableOpacity onPress={onToggle} activeOpacity={0.7}>
+        <View style={styles.userTitleRow}>
+          <View style={[styles.kindPill, isBug ? styles.kindPillBug : styles.kindPillInquiry]}>
+            <Text style={styles.proPillText}>{isBug ? '버그' : '문의'}</Text>
+          </View>
+          <View style={[styles.statusPill, styles[`statusPill_${meta.tone}`]]}>
+            <Text style={styles.statusPillText}>{meta.label}</Text>
+          </View>
+          <Text style={styles.userName} numberOfLines={1}>{who}</Text>
+          <Text style={styles.userMeta}>{item.created_at.slice(0, 16).replace('T', ' ')}</Text>
+        </View>
+        <Text
+          style={styles.supportMessage}
+          numberOfLines={expanded ? undefined : 2}
+        >
+          {item.message}
+        </Text>
+      </TouchableOpacity>
+
+      {expanded && (
+        <View style={styles.supportDetail}>
+          <Text style={styles.userMeta}>
+            {[item.reply_email ?? '회신 메일 없음', diag].filter(Boolean).join(' · ')}
+          </Text>
+          {savedNickname && item.current_nickname && savedNickname !== item.current_nickname && (
+            <Text style={styles.userMeta}>제보 당시 닉네임: {savedNickname}</Text>
+          )}
+
+          {/* 상태 변경 */}
+          <View style={styles.supportActions}>
+            {(['open', 'in_progress', 'resolved', 'ignored'] as const).map((st) => (
+              <TouchableOpacity
+                key={st}
+                disabled={saving || st === item.status}
+                onPress={() => onApply({ status: st })}
+                style={[
+                  styles.supportActionBtn,
+                  st === item.status && styles.supportActionBtnActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.supportActionText,
+                    st === item.status && styles.supportActionTextActive,
+                  ]}
+                >
+                  {SUPPORT_STATUS_META[st].label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* 관리자 메모 */}
+          <TextInput
+            style={[styles.searchInput, styles.supportNoteInput]}
+            placeholder="처리 메모 (답변 내용, 원인 등)"
+            placeholderTextColor={colors.textTertiary}
+            value={note}
+            onChangeText={onNoteChange}
+            multiline
+          />
+          <TouchableOpacity
+            disabled={saving || note === (item.admin_note ?? '')}
+            onPress={() => onApply({ note })}
+            style={[
+              styles.supportSaveBtn,
+              (saving || note === (item.admin_note ?? '')) && styles.supportSaveBtnDisabled,
+            ]}
+          >
+            <Text style={styles.supportSaveText}>{saving ? '저장 중…' : '메모 저장'}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+}
 
 /**
  * 사용자 목록 카드. 정렬 (recent/active/usage) 토글 + 행 50개.
@@ -1099,5 +1374,79 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       fontWeight: '700',
       fontSize: 9,
     },
+
+    // ─── 069 제보/문의 카드 ────────────────────────────────────────────
+    /** 미확인 제보 행 강조 — 목록에서 바로 눈에 띄게. */
+    supportRowOpen: {
+      backgroundColor: 'rgba(124, 58, 237, 0.06)',
+      borderRadius: radius.sm,
+      paddingHorizontal: spacing[2],
+    },
+    /** 종류(버그/문의) pill. */
+    kindPill: {
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      borderRadius: radius.full,
+    },
+    kindPillBug: { backgroundColor: colors.error },
+    kindPillInquiry: { backgroundColor: colors.textSecondary },
+    /** 처리 상태 pill — tone 별 배경. */
+    statusPill: {
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      borderRadius: radius.full,
+      borderWidth: StyleSheet.hairlineWidth,
+    },
+    statusPill_open: { borderColor: colors.primary, backgroundColor: 'transparent' },
+    statusPill_progress: { borderColor: colors.warning, backgroundColor: 'transparent' },
+    statusPill_done: { borderColor: colors.border, backgroundColor: 'transparent' },
+    statusPillText: {
+      ...textStyles.caption,
+      color: colors.textSecondary,
+      fontWeight: '600',
+      fontSize: 9,
+    },
+    /** 제보 본문 — 접힘 2줄 / 펼침 전체. */
+    supportMessage: {
+      ...textStyles.body,
+      color: colors.textPrimary,
+      marginTop: 4,
+      fontSize: 13,
+    },
+    supportDetail: {
+      marginTop: spacing[2],
+      gap: spacing[2],
+    },
+    supportActions: {
+      flexDirection: 'row',
+      gap: 6,
+      flexWrap: 'wrap',
+    },
+    supportActionBtn: {
+      paddingHorizontal: spacing[3],
+      paddingVertical: 6,
+      borderRadius: radius.full,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    supportActionBtnActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    supportActionText: { ...textStyles.caption, color: colors.textSecondary, fontWeight: '600' },
+    supportActionTextActive: { color: colors.textInverse },
+    supportNoteInput: {
+      minHeight: 60,
+      textAlignVertical: 'top',
+    },
+    supportSaveBtn: {
+      alignSelf: 'flex-start',
+      paddingHorizontal: spacing[4],
+      paddingVertical: spacing[2],
+      borderRadius: radius.md,
+      backgroundColor: colors.primary,
+    },
+    supportSaveBtnDisabled: { opacity: 0.4 },
+    supportSaveText: { ...textStyles.caption, color: colors.textInverse, fontWeight: '700' },
   });
 }
