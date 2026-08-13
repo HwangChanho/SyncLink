@@ -448,6 +448,26 @@ const zh = {
   },
 
   // IDEA-015 — contact picker modal i18n
+  support: {
+    title: '问题反馈 · 联系我们',
+    intro: '请告诉我们遇到的问题或想了解的内容，会直接发送给开发者。',
+    kind_bug: '问题反馈',
+    kind_inquiry: '咨询',
+    placeholder_bug: '请描述在什么情况下出现了什么问题。\n例：在日历中点击8月15日时应用会闪退。',
+    placeholder_inquiry: '请随意写下您的问题。',
+    reply_email_label: '接收回复的邮箱（选填）',
+    reply_email_placeholder: 'you@example.com',
+    diagnostics_note: '将一并发送应用版本、设备型号等用于排查的信息。不包含您的通讯录和日程内容。',
+    submit: '发送',
+    thanks_title: '感谢您',
+    thanks_body: '感谢您的宝贵意见，我们已经收到了。',
+    error_title: '发送失败',
+    error_failed: '请稍后再试。',
+    error_too_short: '请再补充一些细节。',
+    error_too_long: '内容过长，请适当精简。',
+    error_invalid_email: '请检查邮箱地址。',
+    error_rate_limited: '短时间内无法重复发送，请稍后再试。',
+  },
   contact: {
     title: '从联系人中邀请',
     unsupported: '此浏览器不支持访问联系人。请直接分享邀请码。',

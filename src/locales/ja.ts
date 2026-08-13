@@ -445,6 +445,26 @@ const ja = {
   },
 
   // IDEA-015 — contact picker modal i18n
+  support: {
+    title: '不具合の報告・お問い合わせ',
+    intro: '不便な点やご質問をお知らせください。開発者に直接届きます。',
+    kind_bug: '不具合の報告',
+    kind_inquiry: 'お問い合わせ',
+    placeholder_bug: 'どの操作で何が起きたかをご記入ください。\n例：カレンダーで8月15日を押すとアプリが終了します。',
+    placeholder_inquiry: 'ご質問を自由にご記入ください。',
+    reply_email_label: '返信先メール（任意）',
+    reply_email_placeholder: 'you@example.com',
+    diagnostics_note: 'アプリのバージョンや端末の種類など、確認に必要な情報が一緒に送信されます。連絡先や予定の内容は含まれません。',
+    submit: '送信',
+    thanks_title: 'ありがとうございます',
+    thanks_body: '貴重なご意見をありがとうございます。無事に届きました。',
+    error_title: '送信できませんでした',
+    error_failed: 'しばらくしてからもう一度お試しください。',
+    error_too_short: 'もう少し詳しくご記入ください。',
+    error_too_long: '内容が長すぎます。少し短くしてください。',
+    error_invalid_email: 'メールアドレスをご確認ください。',
+    error_rate_limited: '短時間に何度も送信することはできません。',
+  },
   contact: {
     title: '連絡先から招待',
     unsupported: 'このブラウザは連絡先へのアクセスをサポートしていません。招待コードを直接共有してください。',

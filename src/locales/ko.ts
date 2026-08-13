@@ -459,6 +459,26 @@ const ko = {
   },
 
   // IDEA-015 — 연락처 초대 모달 i18n
+  support: {
+    title: '버그 제보 · 문의',
+    intro: '불편한 점이나 궁금한 점을 남겨주세요. 개발자에게 바로 전달됩니다.',
+    kind_bug: '버그 제보',
+    kind_inquiry: '문의',
+    placeholder_bug: '어떤 상황에서 무엇이 잘못됐는지 적어주세요.\n예: 캘린더에서 8월 15일을 눌렀는데 앱이 종료돼요.',
+    placeholder_inquiry: '궁금한 점을 자유롭게 적어주세요.',
+    reply_email_label: '회신받을 이메일 (선택)',
+    reply_email_placeholder: 'you@example.com',
+    diagnostics_note: '앱 버전·기기 종류 등 문제 확인에 필요한 정보가 함께 전송됩니다. 연락처나 일정 내용은 포함되지 않습니다.',
+    submit: '보내기',
+    thanks_title: '감사합니다',
+    thanks_body: '소중한 의견 감사합니다. 잘 전달되었어요.',
+    error_title: '전송하지 못했어요',
+    error_failed: '잠시 후 다시 시도해 주세요.',
+    error_too_short: '내용을 조금 더 자세히 적어주세요.',
+    error_too_long: '내용이 너무 깁니다. 조금 줄여주세요.',
+    error_invalid_email: '이메일 주소를 다시 확인해 주세요.',
+    error_rate_limited: '잠시 후 다시 보내주세요. 짧은 시간에 여러 번 보낼 수 없어요.',
+  },
   contact: {
     title: '연락처에서 초대',
     unsupported: '이 브라우저는 연락처 접근을 지원하지 않습니다. 초대 코드를 직접 공유해 주세요.',

@@ -448,6 +448,26 @@ const en = {
   },
 
   // IDEA-015 — contact picker modal i18n
+  support: {
+    title: 'Report a bug · Contact us',
+    intro: 'Tell us what went wrong or what you would like to know. It goes straight to the developer.',
+    kind_bug: 'Bug report',
+    kind_inquiry: 'Question',
+    placeholder_bug: 'Describe what happened and when.\ne.g. The app closes when I tap Aug 15 on the calendar.',
+    placeholder_inquiry: 'Ask us anything.',
+    reply_email_label: 'Email for our reply (optional)',
+    reply_email_placeholder: 'you@example.com',
+    diagnostics_note: 'App version and device type are sent along to help us reproduce the issue. Your contacts and event contents are not included.',
+    submit: 'Send',
+    thanks_title: 'Thank you',
+    thanks_body: 'Thanks for taking the time — your message reached us.',
+    error_title: "Couldn't send",
+    error_failed: 'Please try again in a moment.',
+    error_too_short: 'Please add a little more detail.',
+    error_too_long: 'That is a bit too long. Please shorten it.',
+    error_invalid_email: 'Please check the email address.',
+    error_rate_limited: 'Please wait a bit before sending again.',
+  },
   contact: {
     title: 'Invite from Contacts',
     unsupported: 'This browser does not support contact access. Please share the invite code directly.',

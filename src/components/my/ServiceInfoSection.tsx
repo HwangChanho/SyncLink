@@ -1,61 +1,29 @@
 /**
- * Service info section of the My tab — open-source licenses link, contact
- * developer mailto, app version display.
+ * Service info section of the My tab — open-source licenses link, in-app
+ * bug report / inquiry form, app version display.
  *
  * Sprint 19 TASK-1903 — extracted from src/app/(tabs)/my.tsx.
+ * 2026-08 — "개발자에게 문의" 가 `mailto:` 를 여는 방식이었는데 앱 내 양식으로 바꿨다.
+ *   mailto 의 문제: 웹에서 브라우저가 막으면 아무 일도 안 일어나고(사용자는 보낸 줄 안다),
+ *   메일 앱이 없는 기기엔 경로가 아예 없었다. 진단 정보도 사용자가 지울 수 있었다.
  */
 
-import { Linking, Platform, Text, TouchableOpacity, View } from 'react-native';
+import { Text, TouchableOpacity, View } from 'react-native';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
-import { useAuthStore } from '@/stores/authStore';
-import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { makeMenuStyles } from './menuStyles';
 
 // v1.1.5 — app.json 의 version/buildNumber 자동 추출. 매 release 마다 수동
 // 갱신할 필요 X. native 빌드 시점의 값이 박힘 (OTA 후엔 OTA 시점 코드는
 // 같지만 native version 은 빌드 시점 그대로).
-const APP_VERSION  = Constants.expoConfig?.version ?? '?';
-const BUILD_NUMBER =
-  (Platform.OS === 'ios'
-    ? Constants.expoConfig?.ios?.buildNumber
-    : Constants.expoConfig?.android?.versionCode?.toString())
-  ?? '?';
-const CONTACT_EMAIL = 'cksgh0316@gmail.com';
+const APP_VERSION = Constants.expoConfig?.version ?? '?';
 
 export function ServiceInfoSection() {
   const colors = useColors();
   const menu = makeMenuStyles(colors);
-  const user = useAuthStore((s) => s.user);
-  const plan = useSubscriptionStore((s) => s.plan);
-
-  const handleContactDeveloper = () => {
-    const subject = encodeURIComponent('[SyncLink] 개발자 문의');
-    // Auto-prepend diagnostic block so support can correlate the report
-    // with server logs without a back-and-forth. Kept below the writing
-    // area so the user types their message above the divider.
-    const diagnostic = [
-      '',
-      '',
-      '여기에 문의 내용을 작성해주세요.',
-      '',
-      '──────────────────',
-      '※ 아래 정보는 문제 확인을 위해 자동 첨부됩니다.',
-      `User ID: ${user?.id ?? '(로그아웃 상태)'}`,
-      `Nickname: ${user?.nickname ?? '-'}`,
-      `Email: ${user?.email ?? '-'}`,
-      `Plan: ${plan}`,
-      `Push: ${user?.push_enabled ? 'on' : 'off'} (token: ${user?.push_token ? 'registered' : 'none'})`,
-      `Platform: ${Platform.OS} ${Platform.Version}`,
-      `App Version: ${APP_VERSION} (build ${BUILD_NUMBER})`,
-      '──────────────────',
-    ].join('\n');
-    const body = encodeURIComponent(diagnostic);
-    Linking.openURL(`mailto:${CONTACT_EMAIL}?subject=${subject}&body=${body}`)
-      // mailto unsupported on web in some browsers — silently ignore.
-      .catch(() => { /* no-op */ });
-  };
+  const { t } = useTranslation();
 
   return (
     <View style={menu.section}>
@@ -72,10 +40,10 @@ export function ServiceInfoSection() {
         <View style={menu.menuDivider} />
         <TouchableOpacity
           style={menu.menuItem}
-          onPress={handleContactDeveloper}
+          onPress={() => router.push('/settings/support')}
           activeOpacity={0.7}
         >
-          <Text style={menu.menuItemText}>개발자에게 문의</Text>
+          <Text style={menu.menuItemText}>{t('support.title')}</Text>
           <Text style={menu.menuItemChevron}>›</Text>
         </TouchableOpacity>
         <View style={menu.menuDivider} />
