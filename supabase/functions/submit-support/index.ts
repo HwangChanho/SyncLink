@@ -45,6 +45,79 @@ const LIMIT_ANON = 2;
 const KINDS = ['bug', 'inquiry'] as const;
 type Kind = (typeof KINDS)[number];
 
+/** Expo Push 엔드포인트. dispatch-notifications 와 같은 경로를 쓴다. */
+const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
+
+/**
+ * 새 제보를 관리자에게 푸시로 알린다.
+ *
+ * 대상은 `admin_credentials.notify_user_id` 로 연결된 앱 계정(070). 이메일을
+ * 하드코딩하지 않는 이유는, 계정이 바뀌었을 때 조용히 알림이 끊기는 걸 막기 위해서다.
+ *
+ * @param admin      service_role 클라이언트(RLS 우회 — 관리자 테이블을 읽어야 한다)
+ * @param kind       'bug' | 'inquiry' — 알림 제목에 쓴다
+ * @param message    제보 본문. 길면 잘라서 미리보기로 넣는다
+ * @param nickname   제보자 닉네임(없으면 비로그인)
+ * @throws 네트워크/Expo 오류. 호출부가 삼켜서 접수 자체는 성공시킨다.
+ */
+async function notifyAdmins(
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+  kind: string,
+  message: string,
+  nickname: string | null,
+): Promise<void> {
+  const { data: admins } = await admin
+    .from('admin_credentials')
+    .select('notify_user_id')
+    .not('notify_user_id', 'is', null);
+
+  const ids = (admins ?? [])
+    .map((a: { notify_user_id: string }) => a.notify_user_id)
+    .filter(Boolean);
+  if (ids.length === 0) return; // 연결된 관리자 계정이 없으면 조용히 생략
+
+  // 푸시를 끈 관리자에게는 보내지 않는다 — 설정을 무시하면 안 된다.
+  const { data: users } = await admin
+    .from('users')
+    .select('push_token, push_enabled')
+    .in('id', ids);
+
+  const tokens = (users ?? [])
+    .filter((u: { push_token: string | null; push_enabled: boolean | null }) =>
+      u.push_enabled !== false && typeof u.push_token === 'string' && u.push_token.startsWith('ExponentPushToken'))
+    .map((u: { push_token: string }) => u.push_token);
+  if (tokens.length === 0) return;
+
+  const preview = message.length > 80 ? `${message.slice(0, 80)}…` : message;
+  const who = nickname ?? '비로그인';
+
+  const res = await fetch(EXPO_PUSH_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'Accept-Encoding': 'gzip, deflate',
+    },
+    body: JSON.stringify(
+      tokens.map((to: string) => ({
+        to,
+        title: kind === 'bug' ? '🐛 새 버그 제보' : '💬 새 문의',
+        body: `${who}: ${preview}`,
+        sound: 'default',
+        // 탭하면 관리자 페이지로. 앱 라우터가 이 경로를 처리한다.
+        data: { url: '/admin', type: 'support' },
+      })),
+    ),
+  });
+  if (!res.ok) throw new Error(`Expo HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
+
+  // Expo 는 HTTP 200 으로도 개별 실패(DeviceNotRegistered 등)를 돌려준다 — 로그로 남긴다.
+  const body = await res.json().catch(() => ({}));
+  const errors = (body?.data ?? []).filter((t: { status?: string }) => t.status === 'error');
+  if (errors.length) console.error('[submit-support] push tickets error:', JSON.stringify(errors).slice(0, 300));
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
@@ -135,7 +208,17 @@ Deno.serve(async (req: Request) => {
   // 메일은 보내지 않는다(LEAD 결정 2026-08-13). 관리자 페이지에서 조회한다.
   //   · Resend 무료 티어는 일일 한도가 있고 스팸함으로 새기도 한다
   //   · 어차피 관리자 페이지가 있으니 한 곳에서 보는 편이 낫다
-  // ⚠️ 대신 새 제보를 알려주는 푸시가 없다 — 관리자가 주기적으로 확인해야 한다.
+  // 대신 **관리자에게 푸시**를 보낸다(070) — 알림이 없으면 /admin 을 열어보기 전까지
+  // 제보가 들어온 줄도 모른다.
+
+  // ── 2) 관리자 푸시 ─────────────────────────────────────────────────────────
+  // 🔴 실패해도 200 을 준다. 저장은 이미 끝났고, 알림이 안 갔다고 사용자에게
+  //    "제보 실패"라고 말하면 같은 제보를 반복해서 보내게 된다.
+  try {
+    await notifyAdmins(admin, kind, message, nickname);
+  } catch (err) {
+    console.error('[submit-support] admin push failed:', (err as Error).message);
+  }
 
   return json({ ok: true, id: inserted.id });
 });
