@@ -20,7 +20,7 @@
       "bundleIdentifier": "io.synclink.app",
       "appleTeamId": "QUVU2PY6PG",
       "newArchEnabled": true,
-      "buildNumber": "168",
+      "buildNumber": "169",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.io.synclink.app.widget"
@@ -227,7 +227,8 @@
             "compileSdkVersion": 36,
             "useLegacyPackaging": false,
             "extraMavenRepos": [
-              "https://jitpack.io"
+              "https://jitpack.io",
+              "https://devrepo.kakao.com/nexus/content/groups/public/"
             ]
           }
         }
