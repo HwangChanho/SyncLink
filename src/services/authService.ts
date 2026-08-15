@@ -16,6 +16,8 @@
 
 import { Platform } from 'react-native';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import { initializeKakaoSDK } from '@react-native-kakao/core';
+import { login as kakaoNativeLogin } from '@react-native-kakao/user';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
@@ -90,6 +92,25 @@ if (Platform.OS !== 'web') {
     // offlineAccess: true allows getting a serverAuthCode if needed later
     offlineAccess: true,
   });
+
+  // Kakao native SDK — same "configure once at module load" pattern as Google.
+  //
+  // Why native SDK (2026-08-15): the previous web-OAuth flow had a 0% success rate.
+  // Sentry showed 34 failures / 11 users, all ending in `type=cancel` after the user
+  // spent up to 3 minutes typing in the Kakao web login form. Opening kauth.kakao.com
+  // in a webview forces users to type their Kakao *account* password, which most
+  // KakaoTalk users don't remember. The native SDK hands off to the KakaoTalk app
+  // instead. See docs/plans/2026-08-15-kakao-native-sdk.md.
+  //
+  // initializeKakaoSDK is async but we intentionally don't await it here: module
+  // scope can't await, and the SDK queues calls made before init completes. A
+  // failure here must not break Google/Apple sign-in, so it's caught and logged.
+  const kakaoNativeAppKey = process.env.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY;
+  if (kakaoNativeAppKey) {
+    initializeKakaoSDK(kakaoNativeAppKey).catch((error: unknown) => {
+      void logError({ context: 'auth.kakao.sdk-init', error });
+    });
+  }
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -761,6 +782,47 @@ function buildKakaoAuthUrl(appReturn: string): string {
  * appReturn?email=..&password=.. 로 되돌려보낸 값을 추출 (클라이언트 무관).
  */
 async function acquireKakaoCredentials(): Promise<{ email: string; password: string }> {
+  // ── 네이티브: Kakao SDK (2026-08-15~) ──────────────────────────────────────
+  // 카카오톡이 깔려 있으면 앱으로 넘어가 인증하고, 없으면 SDK 가 카카오계정 로그인으로
+  // 알아서 폴백한다. 종전 웹뷰 방식은 성공률 0% 였다(계정 비밀번호를 요구해서).
+  if (Platform.OS !== 'web') {
+    let accessToken: string;
+    try {
+      const token = await kakaoNativeLogin();
+      accessToken = token.accessToken;
+    } catch (error) {
+      // 사용자가 카카오 화면에서 취소한 경우도 여기로 온다. 종전 진단 컨텍스트를
+      // 유지해 Sentry 에서 이전 기록과 이어 볼 수 있게 한다.
+      await logError({ context: 'auth.kakao.native-login', error });
+      throw new Error('cancelled');
+    }
+
+    // 🔴 access token 을 서버로 보내 **서버가 카카오에 검증**한다.
+    //    email 을 클라이언트가 만들어 보내면 남의 계정을 가져갈 수 있다.
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/kakao-auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY },
+      body: JSON.stringify({ accessToken }),
+    });
+    const payload = (await res.json().catch(() => null)) as
+      | { email?: string; password?: string; error?: string }
+      | null;
+
+    if (!res.ok || !payload?.email || !payload?.password) {
+      const err = new Error(payload?.error ?? 'Kakao 로그인 응답이 올바르지 않습니다.');
+      await logError({
+        context: 'auth.kakao.native-exchange',
+        error:   err,
+        details: { status: res.status, hasEmail: !!payload?.email },
+      });
+      throw err;
+    }
+    return { email: payload.email, password: payload.password };
+  }
+
+  // ── 웹: 기존 WebBrowser 경로 유지 ──────────────────────────────────────────
+  // (웹에서는 signInWithKakao 가 window.location.assign 으로 먼저 빠지므로 여기까지
+  //  오지 않지만, 통합 로그인의 B 계정 로그인 등 다른 호출부를 위해 남겨 둔다.)
   const appReturn = Linking.createURL('/auth/callback');
   const authUrl = buildKakaoAuthUrl(appReturn);
 

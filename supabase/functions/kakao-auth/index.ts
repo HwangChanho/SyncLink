@@ -110,14 +110,27 @@ serve(async (req: Request): Promise<Response> => {
     }
   }
 
-  // ── POST: kept for backward-compat testing, not used by production client ──
+  // ── POST ────────────────────────────────────────────────────────────────────
+  // 두 가지 입력을 받는다:
+  //   { accessToken }            ← **네이티브 SDK 경로**(@react-native-kakao). 앱이 카카오톡으로
+  //                                이미 인증을 마쳐 access token 을 들고 있으므로 교환이 불필요하다.
+  //   { code, redirect_uri }     ← 기존 경로(웹/테스트 호환). 유지한다.
+  //
+  // 🔴 클라이언트가 email 을 직접 보내게 하면 안 된다 — 아무 이메일이나 보내 남의 계정을
+  //    가져갈 수 있다. **토큰을 서버가 카카오에 물어 검증**하는 이 구조를 지켜야 한다.
   if (req.method === 'POST') {
     try {
       const body = (await req.json().catch(() => null)) as
-        | { code?: string; redirect_uri?: string }
+        | { accessToken?: string; code?: string; redirect_uri?: string }
         | null;
+
+      if (body?.accessToken) {
+        const { email, password } = await provisionFromAccessToken(body.accessToken);
+        return jsonResponse({ email, password }, 200);
+      }
+
       if (!body?.code || !body?.redirect_uri) {
-        return jsonResponse({ error: 'code and redirect_uri required' }, 400);
+        return jsonResponse({ error: 'accessToken or (code and redirect_uri) required' }, 400);
       }
       const { email, password } = await exchangeCode(body.code, body.redirect_uri);
       return jsonResponse({ email, password }, 200);
@@ -171,9 +184,34 @@ async function exchangeCode(
 
   const tokens = (await tokenRes.json()) as KakaoTokenResponse;
 
+  // 2~3 단계는 access token 만 있으면 되므로 분리해 네이티브 경로와 공유한다.
+  return provisionFromAccessToken(tokens.access_token);
+}
+
+/**
+ * Kakao access token → 프로필 조회 → Supabase 계정 upsert → 로그인용 자격 반환.
+ *
+ * code 교환 경로(웹)와 네이티브 SDK 경로가 **공유**하는 부분이다. 네이티브 SDK 는
+ * 카카오톡으로 인증을 마치고 access token 을 직접 주므로 교환 단계가 없다.
+ *
+ * @param accessToken 카카오 access token. 서버가 카카오에 직접 물어 검증한다.
+ * @returns Supabase `signInWithPassword` 에 쓸 email/password
+ * @throws 프로필 조회 실패, 계정 생성/갱신 실패
+ */
+async function provisionFromAccessToken(
+  accessToken: string,
+): Promise<{ email: string; password: string }> {
+  const kakaoRestApiKey = Deno.env.get('KAKAO_REST_API_KEY');
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+  if (!kakaoRestApiKey || !supabaseUrl || !serviceRoleKey) {
+    throw new Error('server misconfigured: missing env');
+  }
+
   // 2. Fetch Kakao profile
   const userRes = await fetch('https://kapi.kakao.com/v2/user/me', {
-    headers: { Authorization: `Bearer ${tokens.access_token}` },
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
 
   if (!userRes.ok) {

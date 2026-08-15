@@ -2,7 +2,7 @@
   "expo": {
     "name": "SyncLink",
     "slug": "synclink",
-    "version": "1.4.1",
+    "version": "1.4.2",
     "orientation": "portrait",
     "icon": "./images/TwotwoLogo.png",
     "scheme": "synclink",
@@ -50,7 +50,7 @@
       },
       "package": "io.synclink.app",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 21,
+      "versionCode": 22,
       "softwareKeyboardLayoutMode": "resize",
       "intentFilters": [
         {
@@ -113,6 +113,18 @@
         "@react-native-google-signin/google-signin",
         {
           "iosUrlScheme": "com.googleusercontent.apps.566250367732-cr1eindrr7rn5tpdivo21md5u5l3je14"
+        }
+      ],
+      [
+        "@react-native-kakao/core",
+        {
+          "nativeAppKey": "5e43e8a397577f03e205798c03769079",
+          "android": {
+            "authCodeHandlerActivity": true
+          },
+          "ios": {
+            "handleKakaoOpenUrl": true
+          }
         }
       ],
       [
