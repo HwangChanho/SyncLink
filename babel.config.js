@@ -29,6 +29,13 @@ if (process.env.NODE_ENV === 'test') {
   if (!process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY) {
     process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY = 'test-kakao-rest-api-key';
   }
+  // Kakao 네이티브 SDK 초기화 키. authService 는 모듈 로드 시 이 값으로
+  // initializeKakaoSDK 를 부르고, 값이 없으면 네이티브 로그인 호출 자체를 막는
+  // 가드가 걸린다(초기화 안 된 SDK 를 부르면 네이티브에서 앱이 죽기 때문).
+  // 테스트가 실제 로그인 경로를 타려면 transform 시점에 값이 있어야 한다.
+  if (!process.env.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY) {
+    process.env.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY = 'test-kakao-native-app-key';
+  }
   // Note: EXPO_PUBLIC_SUPABASE_URL / _ANON_KEY are intentionally NOT stubbed
   // here. `__tests__/lib/supabase.test.ts` asserts the "missing env vars"
   // warning path by deleting process.env.EXPO_PUBLIC_SUPABASE_URL; stubbing

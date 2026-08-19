@@ -232,6 +232,13 @@ $SKIP_CHECKS || preflight
 # 드리프트는 "나갈 산출물이 맞나"(정확성)라 넘기면 조용히 잘못된 걸 스토어에 올린다.
 config_drift
 
+# EAS 환경변수 누락 점검 — "코드는 읽는데 EAS 환경에는 없는" EXPO_PUBLIC_* 를 잡는다.
+# 드리프트 점검과 같은 이유로 --skip-checks 로도 건너뛰지 않는다. eas build 는 로컬
+# .env 가 아니라 eas.json 의 environment 를 쓰므로, 여기서 빠진 값은 undefined 인 채
+# 스토어로 나가고 기능이 조용히 죽는다 — 2026-08-15 카카오 네이티브 앱키가 그렇게
+# 빠져 Android 앱이 로그인 시 강제종료됐다(Sentry SYNKLINK-19).
+node "$PROJECT_ROOT/scripts/check-eas-env.mjs" production
+
 if $CHECK_ONLY; then
   echo
   echo "✅ 점검만 수행했습니다 (--check-only). 빌드는 하지 않았습니다."

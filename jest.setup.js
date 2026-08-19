@@ -262,29 +262,12 @@ jest.mock('react-i18next', () => {
   };
 });
 
-// ─── @react-native-voice/voice mock ──────────────────────────────────────────
-// The native voice package calls `new NativeEventEmitter(NativeModules.Voice)`
-// at module load time. In Jest, NativeModules.Voice is null → throws.
-// This mock prevents the NativeEventEmitter crash and makes Voice methods
-// available as jest.fn() stubs for components that use voice input.
-jest.mock('@react-native-voice/voice', () => ({
-  __esModule: true,
-  default: {
-    isAvailable:            jest.fn().mockResolvedValue(true),
-    start:                  jest.fn().mockResolvedValue(undefined),
-    stop:                   jest.fn().mockResolvedValue(undefined),
-    cancel:                 jest.fn().mockResolvedValue(undefined),
-    destroy:                jest.fn().mockResolvedValue(undefined),
-    removeAllListeners:     jest.fn(),
-    onSpeechStart:          null,
-    onSpeechRecognized:     null,
-    onSpeechEnd:            null,
-    onSpeechError:          null,
-    onSpeechResults:        null,
-    onSpeechPartialResults: null,
-    onSpeechVolumeChanged:  null,
-  },
-}));
+// ─── @react-native-voice/voice mock 제거됨 (2026-08-19) ──────────────────────
+// SDK54(New Architecture)에서 @react-native-voice/voice 를 걷어내고
+// src/lib/voiceCompat.ts(expo-speech-recognition 기반 드롭인 대체)로 옮겼는데,
+// 이 mock 만 남아 있었다. 없는 모듈을 jest.mock 하면 모듈 해석 단계에서 바로
+// 던지므로 setup 이 통째로 실패했고 → **테스트 스위트 전체가 실행조차 되지
+// 않았다**. 음성 입력을 mock 해야 하면 대상은 '@/lib/voiceCompat' 이다.
 
 // ─── EXPO_PUBLIC_* env vars ───────────────────────────────────────────────────
 // babel-preset-expo inlines EXPO_PUBLIC_* at Babel transform time (not at runtime).

@@ -21,6 +21,9 @@ import { login as kakaoNativeLogin } from '@react-native-kakao/user';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+// 앱 매니페스트(assets/app.config)에 박힌 플러그인 설정을 런타임에 읽기 위해 사용.
+// Kakao 네이티브 앱키를 env 없이도 얻는 폴백 경로다 — resolveKakaoNativeAppKey 참고.
+import Constants from 'expo-constants';
 // SDK54(expo-file-system 19)에서 readAsStringAsync/EncodingType 등 함수형 API가
 // 'expo-file-system/legacy' 서브패스로 이동. 동작 동일 유지 위해 legacy 진입점 사용.
 import * as FileSystem from 'expo-file-system/legacy';
@@ -85,6 +88,58 @@ export interface SignInResult {
  *
  * See: docs/escalations/NOTIFY-TASK204-WEB-IMPORT.md
  */
+// ─── Kakao native SDK bootstrap ───────────────────────────────────────────────
+
+/**
+ * Whether initializeKakaoSDK() actually ran with a real app key.
+ *
+ * MUST be checked before calling any @react-native-kakao API. When the SDK was
+ * never initialised, Kakao throws UninitializedPropertyAccessException
+ * ("lateinit property hosts") from a native main-thread Handler. That exception
+ * reaches Android's UncaughtExceptionHandler and **kills the app** — a JS
+ * try/catch around the login call cannot intercept it, so the only defence is
+ * to never make the call at all.
+ *
+ * Observed in production: Sentry SYNKLINK-19, Android 1.4.2 / vc22 (2026-08-16).
+ */
+let kakaoSdkInitialized = false;
+
+/**
+ * Resolve the Kakao native app key from the two places it can live.
+ *
+ *  1. EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY — inlined at build time by
+ *     babel-preset-expo's inline-env-vars plugin.
+ *  2. The @react-native-kakao/core plugin options in the app manifest — the
+ *     value the *native* side was configured with. It is embedded into the
+ *     binary as assets/app.config and surfaced through expo-constants.
+ *
+ * Why the fallback exists (2026-08-19): EAS resolves EXPO_PUBLIC_* from the EAS
+ * environment named in eas.json (environment: "production"), NOT from the local
+ * .env file. The key was added to .env on 2026-08-15 but never to the EAS
+ * environment, so the Android store build shipped with it undefined — the SDK
+ * was never initialised and every Kakao login crashed the app. iOS was fine
+ * because fastlane builds do read .env.
+ *
+ * Reading the plugin options makes JS and native share one source of truth, so
+ * a missing env var can no longer silently disable login.
+ *
+ * @returns The Kakao native app key, or null when neither source provides one.
+ */
+function resolveKakaoNativeAppKey(): string | null {
+  const fromEnv = process.env.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY;
+  if (fromEnv) return fromEnv;
+
+  // plugins entries are either "name" or ["name", options] — only the latter
+  // can carry the key.
+  const plugins = Constants.expoConfig?.plugins ?? [];
+  for (const entry of plugins) {
+    if (!Array.isArray(entry) || entry[0] !== '@react-native-kakao/core') continue;
+    const options = entry[1] as { nativeAppKey?: string } | undefined;
+    if (options?.nativeAppKey) return options.nativeAppKey;
+  }
+  return null;
+}
+
 if (Platform.OS !== 'web') {
   GoogleSignin.configure({
     webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
@@ -102,13 +157,24 @@ if (Platform.OS !== 'web') {
   // KakaoTalk users don't remember. The native SDK hands off to the KakaoTalk app
   // instead. See docs/plans/2026-08-15-kakao-native-sdk.md.
   //
-  // initializeKakaoSDK is async but we intentionally don't await it here: module
-  // scope can't await, and the SDK queues calls made before init completes. A
-  // failure here must not break Google/Apple sign-in, so it's caught and logged.
-  const kakaoNativeAppKey = process.env.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY;
+  // initializeKakaoSDK is declared async but only forwards to a synchronous
+  // native call, so the SDK is usable as soon as this returns — hence setting
+  // the flag eagerly. A rejection means the native module is missing entirely,
+  // in which case we mark Kakao unusable again rather than crash later.
+  // A failure here must not break Google/Apple sign-in, so it is only logged.
+  const kakaoNativeAppKey = resolveKakaoNativeAppKey();
   if (kakaoNativeAppKey) {
+    kakaoSdkInitialized = true;
     initializeKakaoSDK(kakaoNativeAppKey).catch((error: unknown) => {
+      kakaoSdkInitialized = false;
       void logError({ context: 'auth.kakao.sdk-init', error });
+    });
+  } else {
+    // No key anywhere: disable Kakao login instead of letting the first tap
+    // take the whole app down. See resolveKakaoNativeAppKey for how we got here.
+    void logError({
+      context: 'auth.kakao.sdk-key-missing',
+      error:   new Error('Kakao native app key missing from both env and app config'),
     });
   }
 }
@@ -786,6 +852,16 @@ async function acquireKakaoCredentials(): Promise<{ email: string; password: str
   // 카카오톡이 깔려 있으면 앱으로 넘어가 인증하고, 없으면 SDK 가 카카오계정 로그인으로
   // 알아서 폴백한다. 종전 웹뷰 방식은 성공률 0% 였다(계정 비밀번호를 요구해서).
   if (Platform.OS !== 'web') {
+    // 🔴 SDK 가 초기화되지 않은 상태로 kakaoNativeLogin() 을 부르면 네이티브
+    //    메인스레드 Handler 안에서 예외가 터져 **앱이 강제종료**된다. 아래의
+    //    try/catch 는 JS 예외만 잡으므로 그 크래시는 막지 못한다 — 그래서
+    //    호출 자체를 차단한다. (Sentry SYNKLINK-19)
+    if (!kakaoSdkInitialized) {
+      const err = new Error('카카오 로그인을 사용할 수 없습니다. 앱을 최신 버전으로 업데이트해 주세요.');
+      await logError({ context: 'auth.kakao.sdk-not-ready', error: err });
+      throw err;
+    }
+
     let accessToken: string;
     try {
       const token = await kakaoNativeLogin();

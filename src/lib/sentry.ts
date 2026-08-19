@@ -1,5 +1,6 @@
 import * as Sentry from '@sentry/react-native';
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 /**
  * Initialize Sentry error tracking.
@@ -15,11 +16,19 @@ export function initSentry(): void {
   if (!dsn) return;
 
   // expo-constants exposes the same values reading from app.json that the
-  // native build embeds, so this works on both iOS native and web.
+  // native build embeds, so this works on every platform.
   const expo = Constants.expoConfig;
   const version = expo?.version ?? '0.0.0';
+  // 🔴 빌드 식별자는 플랫폼마다 다르다. 종전처럼 ios.buildNumber 를 먼저 읽으면
+  //    Android 이벤트까지 iOS 빌드번호로 태깅된다 — 실제로 Android vc22 크래시가
+  //    "1.4.2+168"(iOS 빌드번호)로 올라와 어느 빌드의 에러인지 분간할 수 없었다
+  //    (2026-08-19, Sentry SYNKLINK-19). 반드시 실행 중인 플랫폼 기준으로 고른다.
   const buildNumber =
-    expo?.ios?.buildNumber ?? expo?.android?.versionCode?.toString() ?? '0';
+    Platform.OS === 'android' ? (expo?.android?.versionCode?.toString() ?? '0')
+    : Platform.OS === 'ios'   ? (expo?.ios?.buildNumber ?? '0')
+    // 웹은 네이티브 빌드번호가 없다. 숫자를 억지로 붙이면 없는 빌드를 가리키므로
+    // 배포 채널 자체를 식별자로 쓴다.
+    :                           'web';
   const release = `synclink@${version}+${buildNumber}`;
 
   Sentry.init({
