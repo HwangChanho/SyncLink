@@ -269,6 +269,20 @@ jest.mock('react-i18next', () => {
 // 던지므로 setup 이 통째로 실패했고 → **테스트 스위트 전체가 실행조차 되지
 // 않았다**. 음성 입력을 mock 해야 하면 대상은 '@/lib/voiceCompat' 이다.
 
+// ─── @react-native-kakao mock ────────────────────────────────────────────────
+// 네이티브 모듈이라 Jest 환경에서는 실제로 동작할 수 없다. authService 는 모듈
+// 로드 시점에 initializeKakaoSDK 를 호출하므로, mock 이 없으면 초기화가 실패로
+// 기록되고(kakaoSdkInitialized=false) → 이후 모든 Kakao 로그인 테스트가
+// "SDK 미초기화" 가드에 걸려 실제 로그인 경로를 검증하지 못한다.
+//
+// 반환값은 테스트 파일에서 jest.mocked(...)로 덮어쓴다.
+jest.mock('@react-native-kakao/core', () => ({
+  initializeKakaoSDK: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock('@react-native-kakao/user', () => ({
+  login: jest.fn().mockResolvedValue({ accessToken: 'test-kakao-access-token' }),
+}));
+
 // ─── EXPO_PUBLIC_* env vars ───────────────────────────────────────────────────
 // babel-preset-expo inlines EXPO_PUBLIC_* at Babel transform time (not at runtime).
 // These stubs must be set before any module is transformed so the inlined value

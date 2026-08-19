@@ -10,7 +10,7 @@
  *
  * 커버리지:
  *  signInWithGoogle  — 정상 흐름 (v12 / v13 API), 취소, 에러
- *  signInWithKakao   — 정상 흐름, 브라우저 취소, OAuth 에러
+ *  signInWithKakao   — 네이티브 SDK 흐름: 정상, 사용자 취소, Edge 에러/응답불량, 세션 실패
  *  signInWithApple   — 정상 흐름, 취소, identityToken 없음
  *  signOut           — 정상, GoogleSignin 실패 무시, Supabase 에러
  *  getSession        — 세션 있음 / 없음 / Supabase 에러
@@ -100,6 +100,9 @@ const fetchMock = jest.fn();
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as WebBrowser from 'expo-web-browser';
+// 2026-08-15~ Kakao 는 네이티브 SDK 로 로그인한다(카카오톡 앱으로 전환).
+// 실제 mock 은 jest.setup.js 에 있고, 여기서는 반환값만 테스트별로 덮어쓴다.
+import { login as kakaoNativeLogin } from '@react-native-kakao/user';
 import { supabase } from '@/lib/supabase';
 import {
   signInWithGoogle,
@@ -375,32 +378,44 @@ describe('authService', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   /**
-   * signInWithKakao는 이제 Supabase 내장 Kakao 프로바이더를 우회하고
-   * 자체 Edge Function(`kakao-auth`)을 호출한다. 커버리지:
-   *  - 정상 흐름: WebBrowser → Edge Function → signInWithPassword
-   *  - 브라우저 취소 (cancel / dismiss)
-   *  - redirect URL에 code 파라미터 없음
-   *  - Edge Function이 에러 반환
-   *  - Edge Function 응답이 불완전(email/password 누락)
-   *  - signInWithPassword 실패
+   * signInWithKakao — 네이티브 SDK 흐름 (2026-08-15~)
+   *
+   * 종전에는 kauth.kakao.com 을 WebBrowser 로 열어 code 를 받았는데 성공률이
+   * 0% 였다 — 웹뷰가 카카오 "계정" 비밀번호를 요구해서, 카카오톡만 쓰는
+   * 사용자가 통과하지 못했다. 지금은 네이티브 SDK 가 카카오톡 앱에 넘긴다:
+   *
+   *   kakaoNativeLogin() -> accessToken
+   *     -> POST kakao-auth Edge Function (서버가 카카오에 토큰을 검증)
+   *     -> { email, password } -> supabase.auth.signInWithPassword
+   *
+   * 웹 플랫폼만 옛 리다이렉트 경로를 유지한다(authService.web.test.ts 참조).
+   *
+   * 커버리지: 정상 흐름 / 사용자 취소 / Edge 에러 / Edge 응답 불완전 /
+   *          JSON 파싱 실패 / signInWithPassword 실패 / session=null
    */
   describe('signInWithKakao', () => {
-    /**
-     * New architecture: Edge Function IS the Kakao redirect target (GET).
-     * The Edge Function does the full exchange server-side and redirects the
-     * user-agent to the app via `appReturn?email=...&password=...`. The client
-     * therefore never calls the Edge Function directly — it only reads
-     * email/password from the final redirect URL.
-     */
+    /** Edge Function 이 돌려주는 정상 자격 픽스처 */
+    const OK_BODY = { email: 'kakao_123@kakao.synclink.app', password: 'derived-password' };
+
     beforeEach(() => {
       fetchMock.mockReset();
+      // 네이티브 로그인 기본값 = 성공. 실패 케이스는 각 테스트에서 덮어쓴다.
+      (kakaoNativeLogin as jest.Mock).mockResolvedValue({ accessToken: 'kakao-access-token' });
     });
 
-    it('정상 흐름: WebBrowser → Edge Function 리다이렉트 → signInWithPassword', async () => {
-      (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({
-        type: 'success',
-        url: 'synclink://auth/callback?email=kakao_123%40kakao.synclink.app&password=derived-password',
-      });
+    /**
+     * kakao-auth Edge Function 응답을 mock 한다.
+     *
+     * @param body   - 응답 JSON 본문
+     * @param ok     - res.ok (기본 true)
+     * @param status - HTTP 상태 코드 (기본 200)
+     */
+    function mockEdgeResponse(body: unknown, ok = true, status = 200) {
+      fetchMock.mockResolvedValue({ ok, status, json: jest.fn().mockResolvedValue(body) });
+    }
+
+    it('정상 흐름: 네이티브 로그인 → accessToken 을 Edge 에 전달 → signInWithPassword', async () => {
+      mockEdgeResponse(OK_BODY);
       (supabase.auth.signInWithPassword as jest.Mock).mockResolvedValue({
         data: { session: mockSession },
         error: null,
@@ -408,88 +423,111 @@ describe('authService', () => {
 
       const result = await signInWithKakao();
 
-      // Kakao authorize URL 검증
-      const browserCall = (WebBrowser.openAuthSessionAsync as jest.Mock).mock.calls[0];
-      expect(browserCall[0]).toContain('https://kauth.kakao.com/oauth/authorize');
-      expect(browserCall[0]).toContain('client_id=test-kakao-rest-api-key');
-      expect(browserCall[0]).toContain('response_type=code');
-      // redirect_uri = Edge Function URL (HTTPS, Kakao-compatible)
-      expect(browserCall[0]).toContain(
-        encodeURIComponent('https://test.supabase.co/functions/v1/kakao-auth'),
-      );
-      // state = app-return URL (custom scheme)
-      expect(browserCall[0]).toContain(encodeURIComponent('synclink://auth/callback'));
-      // WebBrowser watches for the app-return URL
-      expect(browserCall[1]).toBe('synclink://auth/callback');
+      // 카카오톡 앱으로 넘기는 네이티브 로그인을 쓴다 — 웹뷰를 열지 않는다.
+      expect(kakaoNativeLogin).toHaveBeenCalledTimes(1);
+      expect(WebBrowser.openAuthSessionAsync).not.toHaveBeenCalled();
 
-      // 클라이언트는 Edge Function을 직접 호출하지 않음 (Kakao가 호출)
-      expect(fetchMock).not.toHaveBeenCalled();
+      // 🔴 accessToken 만 서버로 보낸다. 클라이언트가 email 을 만들어 보내면
+      //    남의 계정을 가져갈 수 있으므로 검증은 반드시 서버가 한다.
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe('https://test.supabase.co/functions/v1/kakao-auth');
+      expect(init.method).toBe('POST');
+      expect(JSON.parse(init.body)).toEqual({ accessToken: 'kakao-access-token' });
+      expect(init.headers.apikey).toBe('test-anon-key');
 
-      // 최종 URL에서 파싱한 email/password로 세션 생성
-      expect(supabase.auth.signInWithPassword).toHaveBeenCalledWith({
-        email: 'kakao_123@kakao.synclink.app',
-        password: 'derived-password',
-      });
-
+      // Edge 가 돌려준 자격으로만 세션을 만든다.
+      expect(supabase.auth.signInWithPassword).toHaveBeenCalledWith(OK_BODY);
       expect(result.session.userId).toBe('user-123');
       expect(result.user).toEqual(mockUserRow);
     });
 
-    it('취소: 브라우저 type=cancel → "cancelled" 에러 throw', async () => {
-      (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({ type: 'cancel' });
+    it('사용자가 카카오 화면에서 취소: "cancelled" throw, 서버 호출 없음', async () => {
+      (kakaoNativeLogin as jest.Mock).mockRejectedValue(new Error('user cancelled'));
+
       await expect(signInWithKakao()).rejects.toThrow('cancelled');
       expect(fetchMock).not.toHaveBeenCalled();
-    });
-
-    it('취소: 브라우저 type=dismiss → "cancelled" 에러 throw', async () => {
-      (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({ type: 'dismiss' });
-      await expect(signInWithKakao()).rejects.toThrow('cancelled');
-    });
-
-    it('Edge Function이 ?error=로 리다이렉트 시 에러 throw', async () => {
-      (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({
-        type: 'success',
-        url: 'synclink://auth/callback?error=kakao%20token%20exchange%20failed',
-      });
-
-      await expect(signInWithKakao()).rejects.toThrow(/Kakao 로그인 오류/);
       expect(supabase.auth.signInWithPassword).not.toHaveBeenCalled();
     });
 
-    it('email/password 누락된 리다이렉트 URL: 에러 throw', async () => {
-      (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({
-        type: 'success',
-        url: 'synclink://auth/callback?email=only%40email.com',
+    it('Edge Function 이 에러 반환: 그 메시지를 throw', async () => {
+      mockEdgeResponse({ error: 'kakao token invalid' }, false, 401);
+
+      await expect(signInWithKakao()).rejects.toThrow('kakao token invalid');
+      expect(supabase.auth.signInWithPassword).not.toHaveBeenCalled();
+    });
+
+    it('Edge 응답에 password 누락: 에러 throw', async () => {
+      mockEdgeResponse({ email: 'only@email.com' });
+
+      await expect(signInWithKakao()).rejects.toThrow('Kakao 로그인 응답이 올바르지 않습니다.');
+      expect(supabase.auth.signInWithPassword).not.toHaveBeenCalled();
+    });
+
+    it('Edge 응답이 JSON 이 아님: 에러 throw', async () => {
+      // json() 이 throw 하면 코드가 null 로 흡수한다 → 같은 "응답 불량" 경로를 탄다.
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: jest.fn().mockRejectedValue(new SyntaxError('Unexpected token')),
       });
 
       await expect(signInWithKakao()).rejects.toThrow('Kakao 로그인 응답이 올바르지 않습니다.');
     });
 
     it('signInWithPassword 실패: 에러 그대로 throw', async () => {
-      (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({
-        type: 'success',
-        url: 'synclink://auth/callback?email=a%40b.com&password=pw',
-      });
-      const authError = new Error('Invalid login credentials');
+      mockEdgeResponse(OK_BODY);
       (supabase.auth.signInWithPassword as jest.Mock).mockResolvedValue({
         data: { session: null },
-        error: authError,
+        error: new Error('Invalid login credentials'),
       });
 
       await expect(signInWithKakao()).rejects.toThrow('Invalid login credentials');
     });
 
-    it('signInWithPassword session=null 반환: "세션을 생성하지 못했습니다." throw', async () => {
-      (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({
-        type: 'success',
-        url: 'synclink://auth/callback?email=a%40b.com&password=pw',
-      });
+    it('signInWithPassword session=null: "세션을 생성하지 못했습니다." throw', async () => {
+      mockEdgeResponse(OK_BODY);
       (supabase.auth.signInWithPassword as jest.Mock).mockResolvedValue({
         data: { session: null },
         error: null,
       });
 
       await expect(signInWithKakao()).rejects.toThrow('세션을 생성하지 못했습니다.');
+    });
+
+    /**
+     * 🔴 앱 크래시 방어 (Sentry SYNKLINK-19, Android 1.4.2/vc22)
+     *
+     * 초기화되지 않은 카카오 SDK 에 login 을 걸면 네이티브 메인스레드 Handler 안에서
+     * UninitializedPropertyAccessException 이 터진다. 그건 Android 의
+     * UncaughtExceptionHandler 로 올라가 **앱을 강제종료**시키며, JS try/catch 로는
+     * 절대 잡을 수 없다. 따라서 유일한 방어는 "호출을 아예 하지 않는 것"이고,
+     * 이 테스트는 그 규약이 지켜지는지를 본다.
+     *
+     * 모듈 스코프에서 초기화하므로, 초기화 실패 상황을 만들려면 모듈을 다시 로드해야 한다.
+     */
+    it('SDK 초기화 실패 시: 네이티브 로그인을 호출조차 하지 않는다 (앱 크래시 방어)', async () => {
+      jest.resetModules();
+      /* eslint-disable @typescript-eslint/no-require-imports */
+      const core = require('@react-native-kakao/core');
+      const user = require('@react-native-kakao/user');
+      // 네이티브 모듈이 없는 상황을 재현 — 초기화가 실패한다.
+      core.initializeKakaoSDK.mockRejectedValue(new Error('native module unavailable'));
+      const freshAuthService = require('@/services/authService');
+      /* eslint-enable @typescript-eslint/no-require-imports */
+
+      // 모듈 로드 시 걸어 둔 .catch 가 실행되도록 마이크로태스크 큐를 비운다.
+      await Promise.resolve();
+      await Promise.resolve();
+
+      await expect(freshAuthService.signInWithKakao()).rejects.toThrow(
+        '카카오 로그인을 사용할 수 없습니다',
+      );
+      // 핵심: 크래시를 유발하는 네이티브 호출이 일어나지 않아야 한다.
+      expect(user.login).not.toHaveBeenCalled();
+
+      // 뒤 테스트가 원래 모듈 레지스트리를 쓰도록 되돌린다.
+      jest.resetModules();
     });
   });
 
@@ -1036,14 +1074,42 @@ describe('authService', () => {
       await expect(linkProvider('google')).rejects.toThrow('먼저 로그인');
     });
 
-    it('세션 있고 linkIdentity 성공', async () => {
+    /**
+     * 네이티브(RN)에서는 linkIdentity 가 브라우저를 자동으로 열지 못한다(window 없음).
+     * skipBrowserRedirect 로 OAuth URL 만 받아 WebBrowser 로 직접 열고, 돌아온 콜백의
+     * PKCE code 를 exchangeCodeForSession 으로 교환해야 연동이 완료된다(2026-06-05 수정).
+     * 이 테스트는 그 3단계가 실제로 이어지는지를 본다 — 예전에는 linkIdentity 호출만
+     * 확인해서, RN 에서 아무 일도 일어나지 않던 시절의 코드도 통과했다.
+     */
+    it('세션 있고 linkIdentity 성공: OAuth URL 을 브라우저로 열고 code 를 교환한다', async () => {
       (supabase.auth.getSession as jest.Mock).mockResolvedValue({
         data: { session: { access_token: 't', refresh_token: 'r', expires_at: 0, user: { id: 'u' } } },
         error: null,
       });
-      (supabase.auth.linkIdentity as jest.Mock).mockResolvedValue({ error: null });
+      (supabase.auth.linkIdentity as jest.Mock).mockResolvedValue({
+        data: { url: 'https://test.supabase.co/auth/v1/authorize?provider=kakao' },
+        error: null,
+      });
+      (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({
+        type: 'success',
+        url: 'synclink://auth/callback?code=link-code-123',
+      });
+      (supabase.auth.exchangeCodeForSession as jest.Mock).mockResolvedValue({ error: null });
+
       await expect(linkProvider('kakao')).resolves.toBeUndefined();
-      expect(supabase.auth.linkIdentity).toHaveBeenCalledWith({ provider: 'kakao' });
+
+      // URL 만 받아오도록 요청해야 한다(자동 리다이렉트 금지).
+      expect(supabase.auth.linkIdentity).toHaveBeenCalledWith({
+        provider: 'kakao',
+        options: { redirectTo: 'synclink://auth/callback', skipBrowserRedirect: true },
+      });
+      // 받은 URL 을 실제로 열고, 콜백의 code 를 세션으로 교환한다.
+      expect(WebBrowser.openAuthSessionAsync).toHaveBeenCalledWith(
+        'https://test.supabase.co/auth/v1/authorize?provider=kakao',
+        'synclink://auth/callback',
+        { showInRecents: false },
+      );
+      expect(supabase.auth.exchangeCodeForSession).toHaveBeenCalledWith('link-code-123');
     });
 
     it('linkIdentity 에러 throw', async () => {
