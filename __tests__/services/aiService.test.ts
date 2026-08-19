@@ -154,17 +154,24 @@ describe('parseNaturalLanguage', () => {
     await AsyncStorage.clear();
   });
 
-  test('confidence=high → AI 호출 없음, 로컬 결과 그대로 반환', async () => {
+  // v1.2.9 — LEAD 결정으로 로컬 정규식 파서를 걷어내고 모든 텍스트 입력을 AI 로
+  // 통일했다(regex 가 "6~9시" 같은 경계 패턴을 놓치고 title 잔여물도 흘렸다).
+  // 그래서 로컬 confidence 가 high/medium 이어도 AI 를 부른다 — parseLocally 는
+  // 이제 "일일 한도 초과 시 graceful degrade" 용도로만 남아 있다.
+  test('confidence=high 여도 AI 를 호출한다 (v1.2.9~ AI 통일)', async () => {
     mockParseLocally.mockReturnValue(makeLocalResult('high'));
+    mockFunctionsInvoke.mockResolvedValue(makeAiResponse());
 
     const result = await parseNaturalLanguage('내일 오후 3시 미팅');
 
-    expect(mockFunctionsInvoke).not.toHaveBeenCalled();
-    expect(result.confidence).toBe('high');
-    expect(result.source).toBe('local');
+    expect(mockFunctionsInvoke).toHaveBeenCalledTimes(1);
+    expect(result.source).toBe('ai');
   });
 
-  test('confidence=medium → AI 호출 없음, 로컬 결과 그대로 반환', async () => {
+  // 로컬 파서가 남아 있는 유일한 이유 — 한도 초과 시 사용자를 막는 대신,
+  // 로컬이 쓸 만한 결과(high/medium)를 냈다면 그걸 돌려준다.
+  test('한도 초과 + 로컬 confidence=medium → 로컬 결과로 degrade(AI 미호출)', async () => {
+    await setUsageRecord({ date: today(), callCount: 5, tokensUsed: 250 });
     mockParseLocally.mockReturnValue(makeLocalResult('medium'));
 
     const result = await parseNaturalLanguage('내일 점심');

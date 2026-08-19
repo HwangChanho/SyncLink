@@ -35,6 +35,9 @@ jest.mock('@/services/eventService', () => ({
 
 import * as eventService from '@/services/eventService';
 import { useEventStore } from '@/stores/eventStore';
+// 1.4.0 부터 비로그인 게스트에게는 데모 일정을 보여준다. 서버 응답 경로를
+// 검증하려면 인증이 '확정된' 상태여야 한다(isLoading=false + isAuthenticated=true).
+import { useAuthStore } from '@/stores/authStore';
 import type { EventSummary } from '@/types';
 
 // ─── 픽스처 ───────────────────────────────────────────────────────────────────
@@ -80,6 +83,8 @@ describe('eventStore', () => {
    * Zustand 싱글톤 특성상 테스트 간 상태 오염 방지 필수.
    */
   beforeEach(() => {
+    // 비인증/인증복원중이면 fetchEvents 가 게스트 데모로 단락된다(eventStore.ts).
+    useAuthStore.setState({ isAuthenticated: true, isLoading: false });
     useEventStore.setState({
       eventsByDate:    {},
       selectedDate:    new Date('2026-01-15T00:00:00.000Z'),

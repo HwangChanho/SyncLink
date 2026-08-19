@@ -38,8 +38,20 @@ jest.mock('@/stores/authStore', () => ({
   useAuthStore: jest.fn(),
 }));
 
-jest.mock('@/stores/spaceStore', () => ({
-  useSpaceStore: jest.fn(),
+// StartGuideCard 는 selector 패턴과 getState() 를 모두 쓴다
+//   const spaces = useSpaceStore((s) => s.spaces)
+//   useSpaceStore.getState().spaces
+// 빈 jest.fn() 은 undefined 를 돌려주므로 spaces.length 에서 트리 전체가 크래시했다.
+jest.mock('@/stores/spaceStore', () => {
+  const state = { spaces: [], setSpaces: jest.fn() };
+  const useSpaceStore = jest.fn((selector) => (selector ? selector(state) : state));
+  useSpaceStore.getState = () => state;
+  return { useSpaceStore };
+});
+
+// StartGuideCard 가 마운트 시 스페이스 목록을 가져온다 — 네트워크 차단.
+jest.mock('@/services/spaceService', () => ({
+  getMySpaces: jest.fn().mockResolvedValue([]),
 }));
 
 // SpaceActivityFeed의 realtime 구독 차단

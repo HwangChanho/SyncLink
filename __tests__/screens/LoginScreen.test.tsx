@@ -150,10 +150,13 @@ describe('LoginScreen', () => {
       expect(getByText('Apple로 시작하기')).toBeTruthy();
     });
 
-    it('Android: Apple 로그인 버튼 미렌더링 (Build-80 LEAD: web/Android Apple hide)', () => {
+    // v1.2.9 부터 Apple 로그인은 web/Android 에서도 쓴다(iOS=네이티브,
+    // web/Android=Supabase OAuth 리다이렉트. signInWithApple 내부에서 분기).
+    // Build-80 의 "iOS 전용" 결정은 그때 뒤집혔다.
+    it('Android: Apple 로그인 버튼도 렌더링됨 (v1.2.9~ web/Android 지원)', () => {
       Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
       const { queryByText } = render(<LoginScreen />);
-      expect(queryByText('Apple로 시작하기')).toBeNull();
+      expect(queryByText('Apple로 시작하기')).toBeTruthy();
     });
 
     it('초기 상태에서 에러 메시지가 없음', () => {
@@ -188,7 +191,7 @@ describe('LoginScreen', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('Google 로그인', () => {
-    it('기존 유저: signInWithGoogle 성공 후 /(tabs)로 이동', async () => {
+    it('기존 유저: signInWithGoogle 호출 — 라우팅은 가드에 위임', async () => {
       (signInWithGoogle as jest.Mock).mockResolvedValue(mockExistingUserResult);
 
       const { getByText } = render(<LoginScreen />);
@@ -196,18 +199,24 @@ describe('LoginScreen', () => {
 
       await waitFor(() => {
         expect(signInWithGoogle).toHaveBeenCalledTimes(1);
-        expect(router.replace).toHaveBeenCalledWith('/(tabs)');
+        // 🔴 화면은 라우팅하지 않는다. useAuthGuard 가 단독으로 신규→온보딩,
+        //    기존→(tabs) 를 처리한다. 예전처럼 여기서 replace 하면 가드와 겹쳐
+        //    더블 네비게이션이 난다(2026-06-06 수정).
+        expect(router.replace).not.toHaveBeenCalled();
       });
     });
 
-    it('신규 유저: isNewUser=true → /auth/onboarding으로 이동', async () => {
+    it('신규 유저: 화면은 라우팅하지 않는다(가드가 온보딩으로 보낸다)', async () => {
       (signInWithGoogle as jest.Mock).mockResolvedValue(mockNewUserResult);
 
       const { getByText } = render(<LoginScreen />);
       fireEvent.press(getByText('Google로 시작하기'));
 
       await waitFor(() => {
-        expect(router.replace).toHaveBeenCalledWith('/(tabs)');
+        // 🔴 화면은 라우팅하지 않는다. useAuthGuard 가 단독으로 신규→온보딩,
+        //    기존→(tabs) 를 처리한다. 예전처럼 여기서 replace 하면 가드와 겹쳐
+        //    더블 네비게이션이 난다(2026-06-06 수정).
+        expect(router.replace).not.toHaveBeenCalled();
       });
     });
 
@@ -277,7 +286,7 @@ describe('LoginScreen', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('Kakao 로그인', () => {
-    it('기존 유저: signInWithKakao 성공 후 /(tabs)로 이동', async () => {
+    it('기존 유저: signInWithKakao 호출 — 라우팅은 가드에 위임', async () => {
       (signInWithKakao as jest.Mock).mockResolvedValue(mockExistingUserResult);
 
       const { getByText } = render(<LoginScreen />);
@@ -285,7 +294,10 @@ describe('LoginScreen', () => {
 
       await waitFor(() => {
         expect(signInWithKakao).toHaveBeenCalledTimes(1);
-        expect(router.replace).toHaveBeenCalledWith('/(tabs)');
+        // 🔴 화면은 라우팅하지 않는다. useAuthGuard 가 단독으로 신규→온보딩,
+        //    기존→(tabs) 를 처리한다. 예전처럼 여기서 replace 하면 가드와 겹쳐
+        //    더블 네비게이션이 난다(2026-06-06 수정).
+        expect(router.replace).not.toHaveBeenCalled();
       });
     });
 
@@ -322,7 +334,7 @@ describe('LoginScreen', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('Apple 로그인 (iOS 전용)', () => {
-    it('iOS: signInWithApple 성공 후 /(tabs)로 이동', async () => {
+    it('iOS: signInWithApple 호출 — 라우팅은 가드에 위임', async () => {
       // beforeEach에서 Platform.OS = 'ios' 설정됨
       (signInWithApple as jest.Mock).mockResolvedValue(mockExistingUserResult);
 
@@ -331,27 +343,34 @@ describe('LoginScreen', () => {
 
       await waitFor(() => {
         expect(signInWithApple).toHaveBeenCalledTimes(1);
-        expect(router.replace).toHaveBeenCalledWith('/(tabs)');
+        // 🔴 화면은 라우팅하지 않는다. useAuthGuard 가 단독으로 신규→온보딩,
+        //    기존→(tabs) 를 처리한다. 예전처럼 여기서 replace 하면 가드와 겹쳐
+        //    더블 네비게이션이 난다(2026-06-06 수정).
+        expect(router.replace).not.toHaveBeenCalled();
       });
     });
 
-    it('iOS: 신규 유저 → /auth/onboarding으로 이동', async () => {
+    it('iOS: 신규 유저도 화면은 라우팅하지 않는다', async () => {
       (signInWithApple as jest.Mock).mockResolvedValue(mockNewUserResult);
 
       const { getByText } = render(<LoginScreen />);
       fireEvent.press(getByText('Apple로 시작하기'));
 
       await waitFor(() => {
-        expect(router.replace).toHaveBeenCalledWith('/(tabs)');
+        // 🔴 화면은 라우팅하지 않는다. useAuthGuard 가 단독으로 신규→온보딩,
+        //    기존→(tabs) 를 처리한다. 예전처럼 여기서 replace 하면 가드와 겹쳐
+        //    더블 네비게이션이 난다(2026-06-06 수정).
+        expect(router.replace).not.toHaveBeenCalled();
       });
     });
 
-    it('Android: Apple 버튼 미렌더링 (Build-80 LEAD: iOS only)', () => {
+    it('Android: Apple 버튼이 있어도 누르기 전엔 호출되지 않는다', () => {
       Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
 
       const { queryByText } = render(<LoginScreen />);
 
-      expect(queryByText('Apple로 시작하기')).toBeNull();
+      // v1.2.9~ Android 에서도 버튼을 노출한다(위 렌더링 테스트 참고).
+      expect(queryByText('Apple로 시작하기')).toBeTruthy();
       expect(signInWithApple).not.toHaveBeenCalled();
     });
 
@@ -427,16 +446,18 @@ describe('LoginScreen', () => {
       await act(async () => { resolveSignIn(mockExistingUserResult); });
     });
 
-    it('로그인 완료 후 버튼 활성화됨', async () => {
+    it('로그인 완료 후 버튼이 다시 눌린다(로딩 해제)', async () => {
       (signInWithGoogle as jest.Mock).mockResolvedValue(mockExistingUserResult);
 
       const { getByLabelText } = render(<LoginScreen />);
       fireEvent.press(getByLabelText('Google로 로그인'));
+      await waitFor(() => expect(signInWithGoogle).toHaveBeenCalledTimes(1));
 
-      // router.replace 호출 후 finally에서 setLoading(null) → 버튼 활성화
-      await waitFor(() => {
-        expect(router.replace).toHaveBeenCalledWith('/(tabs)');
-      });
+      // 라우팅은 가드 몫이라 화면은 replace 하지 않는다. 대신 finally 의
+      // setLoading(null) 이 실제로 풀렸는지를 확인한다 — handleSignIn 은 첫 줄에서
+      // isLoading 이면 곧장 return 하므로, 두 번째 누름이 먹히면 로딩이 풀린 것이다.
+      fireEvent.press(getByLabelText('Google로 로그인'));
+      await waitFor(() => expect(signInWithGoogle).toHaveBeenCalledTimes(2));
     });
   });
 

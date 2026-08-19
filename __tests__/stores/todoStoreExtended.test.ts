@@ -41,6 +41,9 @@ import {
   deleteNote,
 } from '@/services/todoService';
 import { useTodoStore } from '@/stores/todoStore';
+// 1.4.0 부터 비로그인 게스트에게는 데모 할 일을 보여준다(fetchTodos 가 즉시 단락).
+// 서버 응답·에러 경로를 검증하려면 인증된 상태여야 한다.
+import { useAuthStore } from '@/stores/authStore';
 import type { Todo } from '@/types';
 
 // ─── 픽스처 ───────────────────────────────────────────────────────────────────
@@ -90,6 +93,7 @@ const INITIAL_STATE = {
 describe('useTodoStore — 확장 커버리지', () => {
   beforeEach(() => {
     useTodoStore.setState(INITIAL_STATE);
+    useAuthStore.setState({ isAuthenticated: true, isLoading: false });
     jest.clearAllMocks();
   });
 

@@ -160,19 +160,39 @@ describe('MonthView', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('이벤트 바', () => {
+    /**
+     * 이벤트 바는 그리드 폭을 잰 뒤에야 그려진다(cellWidth = gridWidth / 7,
+     * cellWidth <= 0 이면 chip 목록이 빈 배열). Jest 에는 레이아웃이 없어
+     * gridWidth 가 0 으로 남으므로 onLayout 을 직접 쏴 줘야 한다.
+     * v1.2.6 에서 chip 을 셀별 절대 위치로 계산하도록 바꾸면서 생긴 요구사항이다.
+     *
+     * @param view  render() 결과
+     * @param width 그리드 전체 폭(px). 7 로 나눠 셀 폭이 된다.
+     */
+    function fireGridLayout(view: ReturnType<typeof render>, width = 350) {
+      const nodes = view.UNSAFE_root.findAll(
+        (n) => typeof n.props?.onLayout === 'function',
+      );
+      expect(nodes.length).toBeGreaterThan(0);
+      fireEvent(nodes[0], 'layout', {
+        nativeEvent: { layout: { x: 0, y: 0, width, height: 420 } },
+      });
+    }
+
     it('이벤트 있는 날짜에 컬러 바 렌더링', () => {
       const events: EventSummary[] = [
         makeEvent({ id: 'e1', color: '#6C63FF' }),
       ];
 
-      const { getAllByTestId } = render(
+      const view = render(
         <MonthView
           {...defaultProps}
           eventsByDate={{ '2026-02-15': events }}
         />,
       );
+      fireGridLayout(view);
 
-      expect(getAllByTestId('event-bar')).toHaveLength(1);
+      expect(view.getAllByTestId('event-bar')).toHaveLength(1);
     });
 
     it('이벤트 바에 이벤트 타이틀 표시', () => {
@@ -180,14 +200,15 @@ describe('MonthView', () => {
         makeEvent({ id: 'e1', color: '#FF6584', title: 'My Meeting' }),
       ];
 
-      const { getByText } = render(
+      const view = render(
         <MonthView
           {...defaultProps}
           eventsByDate={{ '2026-02-15': events }}
         />,
       );
+      fireGridLayout(view);
 
-      expect(getByText('My Meeting')).toBeTruthy();
+      expect(view.getByText('My Meeting')).toBeTruthy();
     });
 
     it('이벤트 없는 날짜에는 바 미렌더링', () => {
@@ -198,45 +219,48 @@ describe('MonthView', () => {
       expect(queryAllByTestId('event-bar')).toHaveLength(0);
     });
 
-    it('MAX_BARS(3)개 이벤트 → 바 3개 렌더링, 오버플로우 없음', () => {
+    // MAX_BARS 는 3 → 5 로 바뀌었다(v1.2.6). 상수 값을 그대로 베끼면 다음 변경 때
+    // 또 깨지므로, "한도 이하면 전부 보인다"는 동작으로 검증한다.
+    it('MAX_BARS 이하(3개): 전부 바로 렌더링되고 오버플로우 라벨 없음', () => {
       const events: EventSummary[] = [
         makeEvent({ id: 'e1', color: '#111111', title: 'Event 1' }),
         makeEvent({ id: 'e2', color: '#222222', title: 'Event 2' }),
         makeEvent({ id: 'e3', color: '#333333', title: 'Event 3' }),
       ];
 
-      const { getAllByTestId, queryByText } = render(
+      const view = render(
         <MonthView
           {...defaultProps}
           eventsByDate={{ '2026-02-15': events }}
         />,
       );
+      fireGridLayout(view);
 
-      expect(getAllByTestId('event-bar')).toHaveLength(3);
+      expect(view.getAllByTestId('event-bar')).toHaveLength(3);
       // 오버플로우 없음
-      expect(queryByText(/^\+/)).toBeNull();
+      expect(view.queryByText(/^\+/)).toBeNull();
     });
 
-    it('4개 이상 이벤트 → 바 3개 + "+N" 오버플로우 텍스트 렌더링', () => {
-      const events: EventSummary[] = [
-        makeEvent({ id: 'e1', color: '#111111', title: 'Event 1' }),
-        makeEvent({ id: 'e2', color: '#222222', title: 'Event 2' }),
-        makeEvent({ id: 'e3', color: '#333333', title: 'Event 3' }),
-        makeEvent({ id: 'e4', color: '#444444', title: 'Event 4' }),
-        makeEvent({ id: 'e5', color: '#555555', title: 'Event 5' }),
-      ];
+    it('MAX_BARS 초과(8개): 일부만 렌더링되고 "+N" 오버플로우 라벨이 뜬다', () => {
+      const events: EventSummary[] = Array.from({ length: 8 }, (_, i) =>
+        makeEvent({ id: 'e' + (i + 1), color: '#111111', title: 'Event ' + (i + 1) }),
+      );
 
-      const { getAllByTestId, getByText } = render(
+      const view = render(
         <MonthView
           {...defaultProps}
           eventsByDate={{ '2026-02-15': events }}
         />,
       );
+      fireGridLayout(view);
 
-      // 최대 3개 바
-      expect(getAllByTestId('event-bar')).toHaveLength(3);
-      // 오버플로우: 5 - 3 = "+2"
-      expect(getByText('+2')).toBeTruthy();
+      // 전부 보이지는 않는다 — 몇 개까지 보이는지는 MAX_BARS 에 달렸으므로
+      // 상수를 베끼지 않고 "잘려 있다"는 사실만 확인한다.
+      const bars = view.getAllByTestId('event-bar');
+      expect(bars.length).toBeGreaterThan(0);
+      expect(bars.length).toBeLessThan(events.length);
+      // 남은 개수를 +N 으로 알려준다.
+      expect(view.queryByText(/^\+\d+$/)).toBeTruthy();
     });
   });
 

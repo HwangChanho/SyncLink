@@ -48,6 +48,9 @@ import {
   getNotes,
 } from '@/services/todoService';
 import { useTodoStore } from '@/stores/todoStore';
+// 1.4.0 부터 비로그인 게스트에게는 데모 할 일을 보여준다. 서버 응답 경로를
+// 검증하려면 인증된 상태여야 해서 authStore 를 직접 세팅한다.
+import { useAuthStore } from '@/stores/authStore';
 import type { Todo, TodoSummary } from '@/types';
 
 // ─── 픽스처 ───────────────────────────────────────────────────────────────────
@@ -109,6 +112,8 @@ describe('useTodoStore', () => {
   beforeEach(() => {
     // 각 테스트 전 스토어 상태 초기화 (테스트 간 상태 격리)
     useTodoStore.setState(INITIAL_STATE);
+    // 비인증이면 fetchTodos 가 게스트 데모 할 일로 즉시 단락된다(todoStore.ts).
+    useAuthStore.setState({ isAuthenticated: true, isLoading: false });
     jest.clearAllMocks();
   });
 

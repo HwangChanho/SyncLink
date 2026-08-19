@@ -269,6 +269,23 @@ jest.mock('react-i18next', () => {
 // 던지므로 setup 이 통째로 실패했고 → **테스트 스위트 전체가 실행조차 되지
 // 않았다**. 음성 입력을 mock 해야 하면 대상은 '@/lib/voiceCompat' 이다.
 
+// ─── expo-speech-recognition mock ────────────────────────────────────────────
+// src/lib/voiceCompat.ts 가 모듈 로드 시점에 ExpoSpeechRecognitionModule 을 잡는다.
+// Expo 네이티브 모듈이라 Jest 에서는 "Cannot find native module" 로 죽고, 이 훅을
+// 쓰는 화면(HomeScreen·sprint0.navigation 등)의 스위트가 통째로 실행되지 못한다.
+//
+// voiceCompat 이 실제로 쓰는 API 만 채운다. addListener 는 EventSubscription 을
+// 돌려줘야 하므로 remove 를 가진 객체를 반환한다.
+jest.mock('expo-speech-recognition', () => ({
+  ExpoSpeechRecognitionModule: {
+    addListener: jest.fn(() => ({ remove: jest.fn() })),
+    requestPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
+    start: jest.fn(),
+    stop: jest.fn(),
+    abort: jest.fn(),
+  },
+}));
+
 // ─── @react-native-kakao mock ────────────────────────────────────────────────
 // 네이티브 모듈이라 Jest 환경에서는 실제로 동작할 수 없다. authService 는 모듈
 // 로드 시점에 initializeKakaoSDK 를 호출하므로, mock 이 없으면 초기화가 실패로
