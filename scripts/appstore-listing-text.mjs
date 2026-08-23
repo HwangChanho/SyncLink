@@ -220,10 +220,13 @@ if (spec.scope === 'appInfo') {
     const l = await api(`/v1/appStoreVersionLocalizations/${loc.id}`);
     return l.data.attributes[field];
   };
+  // promotionalText 는 심사 없이 반영되지만, 그건 **라이브 버전에 쓸 때** 얘기다.
+  // 아직 출시 전인 버전에 쓰면 그 버전이 출시될 때 함께 나간다.
   const st = stateOf(version.attributes);
+  const isLive = st === 'READY_FOR_SALE';
   console.log(
     `대상: 버전 ${version.attributes.versionString} (${st}) — ` +
-      (field === 'promotionalText' ? '즉시 반영' : '이 버전 출시 때 반영'),
+      (field === 'promotionalText' && isLive ? '즉시 반영 (심사 불필요)' : '이 버전 출시 때 반영'),
   );
 }
 
