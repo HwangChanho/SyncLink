@@ -145,6 +145,13 @@ const PHONE_FRAMES = [
     title: '할 일과 노트를\n한 곳에',
     sub: '일정과 함께 관리하는 플래너',
   },
+  // 1.3.2 부터 있던 상대일 일정인데 어느 스토어 컷에도 없었다(2026-08-23 추가).
+  {
+    slug: 'dday',
+    source: 'dday',
+    title: '“3일 뒤 도착”을\n날짜 계산 없이',
+    sub: '기준일에 N일만 더하면 목표일과 D-day가 자동으로',
+  },
 ];
 
 /** Tablet listings get a shorter, wider-format story. */
