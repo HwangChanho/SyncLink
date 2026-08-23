@@ -29,7 +29,7 @@
     "release:ios": "./scripts/release-ios.sh",
     "release:android": "./scripts/release-android.sh",
     "release:both": "./scripts/release-both.sh",
-    "web:build": "EXPO_PUBLIC_APP_ENV=production expo export -p web && mv dist/assets/node_modules dist/assets/vendor && find dist/_expo/static/js/web -name '*.js' -exec sed -i '' 's|assets/node_modules|assets/vendor|g' {} +",
+    "web:build": "EXPO_PUBLIC_APP_ENV=production expo export -p web && mv dist/assets/node_modules dist/assets/vendor && find dist/_expo/static/js/web -name '*.js' -exec sed -i '' 's|assets/node_modules|assets/vendor|g' {} + && node scripts/web/patch-index-head.mjs",
     "release:web": "npm run web:build && npx -y wrangler@latest pages deploy dist --project-name=synclink --branch=main --commit-dirty=true --commit-message=\"web release\"",
     "feature": "node scripts/notion-sync.mjs",
     "feature:start": "node scripts/notion-sync.mjs --status 진행 --feature",
