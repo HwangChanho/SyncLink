@@ -60,8 +60,13 @@ export function TodoWidget({ snapshot, width, height }: Props) {
       <FlexWidget
         style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}
       >
+        {/*
+          The 1.4.0 rebrand renamed the app but missed this label, so the widget kept
+          showing the old name on users' home screens. The widget *name* stays
+          `SyncLinkWidget` — renaming that would break every placed widget.
+        */}
         <TextWidget
-          text="SyncLink"
+          text="투투리스트"
           style={{ fontSize: 11, fontWeight: '700', color: C.textLo }}
         />
         <TextWidget text={formatToday()} style={{ fontSize: 11, color: C.textLo }} />
