@@ -213,11 +213,124 @@ async function captureOnboarding(page, outDirs) {
   }
 }
 
+/**
+ * Capture the D-day(상대일 일정) editor with a filled-in example.
+ *
+ * 1.4.4 store refresh: this is a real feature since 1.3.2 that no store shot ever showed.
+ * It cannot be a plain SCREENS entry — the fields only exist once the toggle is on, so the
+ * shot has to be driven: title → toggle → +N days → preset label, then scroll it into view.
+ *
+ * The example mirrors the in-app hint ("발급일·주문일에서 며칠 뒤"): 택배 3일 뒤 도착예상.
+ * @param {import('playwright').Page} page
+ * @param {string[]} outDirs
+ */
+async function captureDday(page, outDirs) {
+  await page.goto(`${BASE}/event/create`, { waitUntil: 'load', timeout: 60000 });
+  await page.waitForTimeout(14000);
+
+  await page.locator('[data-testid="event-create-title-input"]').fill('택배 도착');
+  await page.waitForTimeout(600);
+
+  // RN-web renders <Switch> as a checkbox input, and the section carries no testID.
+  // Walking up the DOM picks up an unrelated switch (the first one in that subtree is
+  // 종일, not this one), so match on geometry: the checkbox sharing the heading's row.
+  const toggled = await page.evaluate(() => {
+    const head = [...document.querySelectorAll('div,span')].find((e) =>
+      e.textContent?.trim().startsWith('상대일 일정') && e.getBoundingClientRect().height > 0);
+    if (!head) return false;
+    const hr = head.getBoundingClientRect();
+    const mid = hr.top + hr.height / 2;
+    const [nearest] = [...document.querySelectorAll('input[type="checkbox"]')]
+      .map((b) => {
+        const r = b.getBoundingClientRect();
+        return { b, d: Math.abs(r.top + r.height / 2 - mid) };
+      })
+      .sort((a, z) => a.d - z.d);
+    if (!nearest || nearest.d > 60) return false;
+    nearest.b.click();
+    return true;
+  });
+  if (!toggled) throw new Error('상대일 일정 토글을 찾지 못했습니다');
+  await page.waitForTimeout(1800);
+
+  // Stepper: bump the default 1일 up to 3일 to match the hint's 택배 example.
+  // The buttons render as plain text nodes, so pick the "+" on the "N일 뒤" row.
+  for (let i = 0; i < 2; i++) {
+    const bumped = await page.evaluate(() => {
+      const label = [...document.querySelectorAll('div,span')].find((e) =>
+        e.textContent?.trim() === 'N일 뒤' && e.getBoundingClientRect().height > 0);
+      if (!label) return false;
+      const lr = label.getBoundingClientRect();
+      const mid = lr.top + lr.height / 2;
+      const plus = [...document.querySelectorAll('div,span')]
+        .filter((e) => e.textContent?.trim() === '+' && e.getBoundingClientRect().height > 0)
+        .map((e) => {
+          const r = e.getBoundingClientRect();
+          return { e, d: Math.abs(r.top + r.height / 2 - mid) };
+        })
+        .sort((a, z) => a.d - z.d)[0];
+      if (!plus || plus.d > 60) return false;
+      plus.e.click();
+      return true;
+    });
+    if (!bumped) throw new Error('N일 뒤 스테퍼를 찾지 못했습니다');
+    await page.waitForTimeout(500);
+  }
+  await page.getByText('도착예상', { exact: true }).first().click();
+  await page.waitForTimeout(1200);
+
+  // The web build renders 기준일 as a native <input type="date">, which Chromium paints
+  // in US order (08/23/2026) regardless of the ko-KR locale. The app on a phone shows
+  // `toLocaleDateString('ko', …)` instead, so repaint it to match — render-only, the
+  // stored value is untouched. Same spirit as patchSpaceLabels.
+  await page.evaluate(() => {
+    const input = document.querySelector('input[type="date"]');
+    if (!input) return;
+    const [y, m, d] = input.value.split('-').map(Number);
+    if (!y) return;
+    const label = document.createElement('div');
+    label.textContent = new Date(y, m - 1, d).toLocaleDateString('ko', {
+      year: 'numeric', month: 'long', day: 'numeric',
+    });
+    const cs = getComputedStyle(input);
+    label.style.cssText = `font-size:16px;color:${cs.color};font-family:${cs.fontFamily};`;
+    input.replaceWith(label);
+  });
+
+  // The QA space is literally named "E2E Test Space" — test scaffolding has no place
+  // in a public listing, so reuse the same render-only relabeling as the other shots.
+  await patchSpaceLabels(page);
+
+  // The section sits below the fold on the create form; bring it up so the live
+  // "목표일: … (D-3)" preview is what the frame shows.
+  await page.evaluate(() => {
+    const el = [...document.querySelectorAll('div,span')].find((e) =>
+      e.textContent?.trim().startsWith('상대일 일정') && e.getBoundingClientRect().height > 0);
+    if (!el) return;
+    const scrollable = (node) => {
+      for (let n = node.parentElement; n; n = n.parentElement) {
+        const oy = getComputedStyle(n).overflowY;
+        if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight) return n;
+      }
+      return document.scrollingElement || document.documentElement;
+    };
+    const sc = scrollable(el);
+    sc.scrollTop = Math.max(0, sc.scrollTop + el.getBoundingClientRect().top - 220);
+  });
+  await page.waitForTimeout(1200);
+
+  for (const dir of outDirs) {
+    await page.screenshot({ path: resolve(HERE, 'shots', dir, 'dday.png') });
+    console.log(`✓ ${dir}/dday.png`);
+  }
+}
+
 const profileName = process.argv[2] || 'phone';
 const authMode = process.argv.includes('--auth');
 const seedMode = process.argv.includes('--seed');
 const onboardingMode = process.argv.includes('--onboarding');
-const SCREENS = onboardingMode ? [] : authMode ? SCREENS_AUTH : SCREENS_GUEST;
+const ddayMode = process.argv.includes('--dday');
+const SCREENS = onboardingMode || ddayMode ? [] : authMode ? SCREENS_AUTH : SCREENS_GUEST;
 const p = PROFILES[profileName];
 if (!p) throw new Error(`usage: capture.mjs <${Object.keys(PROFILES).join('|')}>`);
 
@@ -233,9 +346,13 @@ const page = await browser.newPage({
 
 for (const dir of p.outDirs) mkdirSync(resolve(HERE, 'shots', dir), { recursive: true });
 
-if (authMode || onboardingMode) await login(page);
+if (authMode || onboardingMode || ddayMode) await login(page);
 // The onboarding shot has to be taken while the flow is still on screen.
 if (onboardingMode) await captureOnboarding(page, p.outDirs);
+if (ddayMode) {
+  await dismissOnboarding(page);
+  await captureDday(page, p.outDirs);
+}
 if (authMode) {
   await dismissOnboarding(page);
   if (seedMode) await seedTodos(page);
