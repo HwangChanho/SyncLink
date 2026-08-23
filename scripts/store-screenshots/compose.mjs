@@ -152,6 +152,14 @@ const PHONE_FRAMES = [
     title: '“3일 뒤 도착”을\n날짜 계산 없이',
     sub: '기준일에 N일만 더하면 목표일과 D-day가 자동으로',
   },
+  // 1.4.0 위젯 3종. 앱 화면이 아니라 실제 iOS 홈 화면 캡처다 — 웹 캡처로는 못 만든다.
+  // 만드는 법은 seed-widget-sim.mjs / inject-widgets.py 주석 참고.
+  {
+    slug: 'widgets',
+    source: 'widgets',
+    title: '앱을 열지 않고\n홈 화면에서 바로',
+    sub: '달력·할 일 위젯으로 확인하고 체크박스로 그 자리에서 완료',
+  },
 ];
 
 /** Tablet listings get a shorter, wider-format story. */
