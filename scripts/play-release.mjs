@@ -97,11 +97,27 @@ try {
 
   if (!vcArg || !notesFile) throw new Error('usage: play-release.mjs <vc> <notesFile> --release');
 
-  // 대상 릴리스는 반드시 이미 트랙에 올라와 있어야 한다(= eas submit 이 draft 로 올린 것).
-  // 여기서 versionCodes 를 새로 만들지 않는 이유: 없는 vc 를 넣으면 커밋 때 실패하는데,
-  // 그 실패가 "업로드 안 됨"인지 "상태 전환 실패"인지 구분되지 않아 진단이 어려워진다.
-  const target = (track.releases ?? []).find((r) => (r.versionCodes ?? []).includes(String(vcArg)));
-  if (!target) throw new Error(`vc ${vcArg} 가 ${TRACK} 트랙에 없습니다 — 먼저 eas submit 하세요`);
+  // 대상 vc 를 production 트랙에서 찾는다.
+  //
+  // 🔴 없다고 바로 실패하면 안 된다. `eas submit` 은 eas.json production 프로파일의
+  //    `track` 설정을 따르는데 그 값이 **"SyncLink"** 라, 번들은 앱에 올라가지만
+  //    production 트랙에는 안 들어온다(2026-08-24 vc24 에서 실제로 겪음).
+  //    그래서 "업로드는 됐는지"를 번들 목록으로 먼저 확인하고, 업로드돼 있으면
+  //    production 으로 **승격**한다. 업로드 자체가 안 된 경우에만 실패시킨다 —
+  //    이러면 "업로드 안 됨"과 "트랙만 다름"이 구분된다.
+  let target = (track.releases ?? []).find((r) => (r.versionCodes ?? []).includes(String(vcArg)));
+  if (!target) {
+    const { bundles = [] } = await api(`${editUrl}/bundles`);
+    const uploaded = bundles.some((b) => String(b.versionCode) === String(vcArg));
+    if (!uploaded) {
+      throw new Error(`vc ${vcArg} 번들이 업로드되지 않았습니다 — 먼저 eas submit 하세요`);
+    }
+    const where = (await api(`${editUrl}/tracks`)).tracks
+      .filter((t) => (t.releases ?? []).some((r) => (r.versionCodes ?? []).includes(String(vcArg))))
+      .map((t) => t.track);
+    console.log(`  vc ${vcArg} 는 ${TRACK} 에 없지만 업로드돼 있습니다(현재 트랙: ${where.join(', ') || '없음'}) → 승격합니다`);
+    target = { versionCodes: [String(vcArg)], status: 'draft' };
+  }
   if (target.status === 'completed') {
     console.log(`\nvc ${vcArg} 는 이미 completed 입니다. 변경 없이 종료합니다.`);
     await fetch(editUrl, { method: 'DELETE', headers: H });
