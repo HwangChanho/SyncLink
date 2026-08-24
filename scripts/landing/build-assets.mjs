@@ -17,8 +17,7 @@
  */
 
 import { createRequire } from 'node:module';
-import { readFileSync, mkdirSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -41,19 +40,106 @@ const BRAND = {
 
 mkdirSync(OUT, { recursive: true });
 
-// ── logo.png ────────────────────────────────────────────────────────────────
-// `sips` is a macOS built-in, so this step needs no npm dependency. sharp was
-// deliberately avoided: it compiles from source on this project's CI image.
-execFileSync('sips', ['-Z', '512', BRAND.logo, '--out', path.join(OUT, 'logo.png')], {
-  stdio: 'ignore',
-});
-console.log('✅ logo.png (512×512)');
+/**
+ * Cut the app-icon tile away and keep only the mark, on transparency.
+ *
+ * Why: the source is the **app icon** — a near-black rounded tile with the purple
+ * outline + white check inside it. Stores require that opaque tile, but on the web it
+ * reads as a dark box pasted onto the page. LEAD asked for the mark alone (누끼).
+ *
+ * 🔴 A plain luma key is not enough. The area *inside* the purple outline is the same
+ * near-black as the tile, so keying by brightness punches it out too — and then the
+ * white check vanishes on any light background (verified: on #fff only an empty purple
+ * square remains). The favicon shows up on light browser tabs, so that breaks the mark.
+ *
+ * So the cut is by **shape, not brightness**: flood-fill the dark region inward from the
+ * borders. Dark pixels reachable from outside are the tile → transparent. Dark pixels
+ * enclosed by the purple stroke are the mark's own fill → kept. Edge pixels get partial
+ * alpha from the brightness ramp, with colour un-premultiplied so they keep their hue.
+ *
+ * sharp is deliberately not used — it compiles from source on this project's CI image.
+ * Playwright is already a dependency here for og.png, so the canvas does the work.
+ *
+ * @param {string} outPath  where to write the PNG
+ * @param {number} size     output width/height in px
+ */
+async function writeCutoutLogo(browser, outPath, size) {
+  const page = await browser.newPage({ viewport: { width: size, height: size } });
+  const dataUri = await page.evaluate(
+    async ([src, size]) => {
+      const img = new Image();
+      img.src = src;
+      await img.decode();
+      const c = document.createElement('canvas');
+      c.width = c.height = size;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0, size, size);
+      const image = ctx.getImageData(0, 0, size, size);
+      const d = image.data;
+      const n = size * size;
+      const level = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        level[i] = Math.max(d[i * 4], d[i * 4 + 1], d[i * 4 + 2]) / 255;
+      }
+      // 0.5 is a deliberately loose "dark" test so anti-aliased tile→stroke pixels are
+      // swept into the flood too; their final alpha comes from the ramp below.
+      const DARK = 0.5;
+      const outside = new Uint8Array(n);
+      const stack = [];
+      for (let x = 0; x < size; x++) {
+        stack.push(x, (size - 1) * size + x);
+      }
+      for (let y = 0; y < size; y++) {
+        stack.push(y * size, y * size + size - 1);
+      }
+      while (stack.length) {
+        const i = stack.pop();
+        if (outside[i] || level[i] >= DARK) continue;
+        outside[i] = 1;
+        const x = i % size;
+        const y = (i / size) | 0;
+        if (x > 0) stack.push(i - 1);
+        if (x < size - 1) stack.push(i + 1);
+        if (y > 0) stack.push(i - size);
+        if (y < size - 1) stack.push(i + size);
+      }
+      // Tile brightness tops out at 63/255 ≈ 0.247; 0.28 clears it with margin.
+      const LO = 0.28;
+      for (let i = 0; i < n; i++) {
+        const o = i * 4;
+        if (!outside[i]) continue; // enclosed → the mark itself, leave untouched
+        const a = (level[i] - LO) / (1 - LO);
+        if (a <= 0) {
+          d[o + 3] = 0;
+          continue;
+        }
+        d[o + 3] = Math.round(Math.min(1, a) * 255);
+        d[o] = Math.min(255, Math.round(d[o] / level[i]));
+        d[o + 1] = Math.min(255, Math.round(d[o + 1] / level[i]));
+        d[o + 2] = Math.min(255, Math.round(d[o + 2] / level[i]));
+      }
+      ctx.putImageData(image, 0, 0);
+      return c.toDataURL('image/png');
+    },
+    [`data:image/png;base64,${readFileSync(BRAND.logo).toString('base64')}`, size],
+  );
+  writeFileSync(outPath, Buffer.from(dataUri.split(',')[1], 'base64'));
+  await page.close();
+}
 
 // ── og.png ──────────────────────────────────────────────────────────────────
 const logoDataUri = `data:image/png;base64,${readFileSync(BRAND.logo).toString('base64')}`;
 const A = BRAND.accent;
 
 const browser = await chromium.launch();
+
+// 웹에 나가는 로고 두 장은 타일을 벗긴 누끼로 만든다. 앱 아이콘(images/TwotwoLogo.png)
+// 자체는 그대로 둔다 — 스토어는 불투명 아이콘을 요구한다.
+await writeCutoutLogo(browser, path.join(OUT, 'logo.png'), 512);
+console.log('✅ logo.png (512×512, 투명)');
+await writeCutoutLogo(browser, path.join(REPO, 'assets/favicon.png'), 64);
+console.log('✅ assets/favicon.png (64×64, 투명)');
+
 const page = await browser.newPage({
   viewport: { width: 1200, height: 630 },
   deviceScaleFactor: 1,
