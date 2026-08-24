@@ -319,6 +319,45 @@ export async function updateSupportRequest(
   }
 }
 
+// ─── 스토어 별점 (store-ratings Edge Function) ─────────────────────────────
+
+/** 한 플랫폼의 별점. rating 이 null 이고 error 도 없으면 "아직 평가 없음". */
+export interface PlatformRating {
+  rating: number | null;
+  count: number | null;
+  /** iOS 전용 — 현재 버전 기준. */
+  currentVersionRating?: number | null;
+  currentVersionCount?: number | null;
+  version?: string | null;
+  /** 조회 실패 사유. 값이 없는 것과 못 가져온 것을 구분한다. */
+  error?: string;
+}
+
+export interface StoreRatings {
+  fetchedAt: string;
+  ios: PlatformRating;
+  android: PlatformRating;
+  cached?: boolean;
+}
+
+/**
+ * 양 스토어 별점을 가져온다.
+ *
+ * 관리자 RPC 들과 달리 token 을 쓰지 않는다 — 공개 스토어 정보라 서버가 인증을 걸지 않는다.
+ * Play 는 집계 별점을 주는 공식 API 가 없어 함수가 스토어 페이지를 읽는다. 리뷰가 없으면
+ * Play 가 별점 블록 자체를 그리지 않으므로 rating=null 로 온다(오류가 아니다).
+ *
+ * 함수 쪽에 30분 캐시가 있어 새로고침을 눌러도 매번 크롤링하지는 않는다.
+ */
+export async function getStoreRatings(): Promise<StoreRatings> {
+  const { data, error } = await supabase.functions.invoke<StoreRatings>('store-ratings', {
+    body: {},
+  });
+  if (error) throw error;
+  if (!data) throw new Error('빈 응답');
+  return data;
+}
+
 // ─── 호환 — 화면에서 import 하는 이름 그대로 유지 (오래된 import 보호) ──────
 // AdminCredentials 는 더 이상 사용 안 함. 단 코드 references 가 남아있으면
 // 컴파일 에러 → 다음 cycle 정리.

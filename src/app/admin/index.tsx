@@ -36,8 +36,10 @@ import {
   getAdminStats,
   getAdminUsers,
   getSavedSession,
+  getStoreRatings,
   type AdminStats,
   type AdminSession,
+  type StoreRatings,
   type AdminUsersResult,
   type UsersSort,
   getSupportRequests,
@@ -95,6 +97,8 @@ export default function AdminDashboard() {
   const [sessionChecked, setSessionChecked] = useState(false);
   const [days, setDays] = useState<Days>(7);
   const [stats, setStats] = useState<AdminStats | null>(null);
+  /** 스토어 별점 — 통계와 별개 소스라 실패해도 대시보드는 그대로 뜬다. */
+  const [ratings, setRatings] = useState<StoreRatings | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -159,6 +163,9 @@ export default function AdminDashboard() {
     try {
       const res = await getAdminStats(token, days);
       setStats(res);
+      // 별점은 외부 스토어 의존이라 느리거나 실패할 수 있다. 통계 렌더를 막지 않게
+      // 기다리지 않고 따로 채운다.
+      getStoreRatings().then(setRatings).catch(() => setRatings(null));
     } catch (err) {
       const msg = err instanceof Error ? err.message : '통계를 불러오지 못했습니다.';
       if (/invalid or expired session|permission denied/i.test(msg)) {
@@ -284,6 +291,9 @@ export default function AdminDashboard() {
                 </View>
               )}
             </View>
+
+            {/* 스토어 별점 카드 — 양 스토어 집계 */}
+            <StoreRatingsCard ratings={ratings} styles={styles} />
 
             {/* 확장 인사이트 카드 (054) — 비용/리텐션/성장. 데이터 없으면 각자 skip */}
             <InsightCards stats={stats} days={days} styles={styles} colors={colors} />
@@ -1178,6 +1188,74 @@ function InsightCards({
         </View>
       )}
     </>
+  );
+}
+
+/**
+ * 스토어 별점 카드 — store-ratings Edge Function 결과를 보여준다.
+ *
+ * 세 상태를 구분해서 표시한다. 뭉뚱그리면 "0점"과 "못 가져옴"을 헷갈리게 된다.
+ *   · 값 있음      → 3.0 처럼 별점 + 평가 수
+ *   · 아직 평가 없음 → "—"  (Play 는 리뷰가 쌓여야 집계 별점을 만든다)
+ *   · 조회 실패     → "오류" + 사유
+ */
+function StoreRatingsCard({
+  ratings,
+  styles,
+}: {
+  ratings: StoreRatings | null;
+  styles: ReturnType<typeof makeStyles>;
+}) {
+  /** 별점 표기. 소수 한 자리까지만(스토어 표기와 맞춘다). */
+  const fmt = (p: { rating: number | null; error?: string } | undefined) => {
+    if (!p) return '—';
+    if (p.error) return '오류';
+    return p.rating == null ? '—' : `${p.rating.toFixed(1)}★`;
+  };
+  const fmtCount = (p: { count: number | null; error?: string } | undefined) =>
+    !p || p.error || p.count == null ? '—' : `${p.count.toLocaleString()}개`;
+
+  if (!ratings) {
+    return (
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>스토어 별점</Text>
+        <Text style={styles.subText}>불러오는 중…</Text>
+      </View>
+    );
+  }
+
+  const { ios, android } = ratings;
+  const notes: string[] = [];
+  if (ios.error) notes.push(`App Store 조회 실패: ${ios.error}`);
+  if (android.error) notes.push(`Play 조회 실패: ${android.error}`);
+  if (!android.error && android.rating == null) {
+    notes.push('Play 는 리뷰가 일정 수 이상 쌓여야 집계 별점이 생깁니다.');
+  }
+  if (ios.currentVersionRating != null && ios.version) {
+    notes.push(
+      `App Store ${ios.version} 기준 ${ios.currentVersionRating.toFixed(1)}★ (${(ios.currentVersionCount ?? 0).toLocaleString()}개)`,
+    );
+  }
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>스토어 별점</Text>
+      <View style={styles.row}>
+        <Stat label="App Store" value={fmt(ios)} styles={styles} />
+        <Stat label="App Store 평가" value={fmtCount(ios)} styles={styles} />
+      </View>
+      <View style={styles.row}>
+        <Stat label="Play" value={fmt(android)} styles={styles} />
+        <Stat label="Play 평가" value={fmtCount(android)} styles={styles} />
+      </View>
+      {notes.map((n) => (
+        <Text key={n} style={styles.subText}>{n}</Text>
+      ))}
+      <Text style={styles.subText}>
+        조회 {new Date(ratings.fetchedAt).toLocaleString('ko-KR')}
+        {ratings.cached ? ' (캐시)' : ''}
+      </Text>
+    </View>
   );
 }
 
