@@ -51,6 +51,7 @@ import { AppSplash } from '@/components/common/AppSplash';
 import { initAdMob } from '@/services/adService';
 import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
 import { useColors } from '@/hooks/useColors';
+import { APP_BRAND } from '@/constants/config';
 import { logError } from '@/lib/errorLogger';
 import { useOnboardingStore } from '@/stores/onboardingStore';
 import { useAppearanceStore } from '@/stores/appearanceStore';
@@ -298,7 +299,7 @@ function LockOverlay({ onUnlock }: { onUnlock: () => void }) {
   if (showPinPad) {
     return (
       <View style={[lockStyles.overlay, { backgroundColor: colors.background }]}>
-        <Text style={[lockStyles.title, { color: colors.textPrimary }]}>SyncLink</Text>
+        <Text style={[lockStyles.title, { color: colors.textPrimary }]}>{APP_BRAND}</Text>
         <PinPad
           label={t('pin_lock.enter')}
           subLabel={pinError ?? undefined}
@@ -325,7 +326,7 @@ function LockOverlay({ onUnlock }: { onUnlock: () => void }) {
   // ── Biometric mode (with optional "Use passcode" fallback link) ────────────
   return (
     <View style={[lockStyles.overlay, { backgroundColor: colors.background }]}>
-      <Text style={[lockStyles.title, { color: colors.textPrimary }]}>SyncLink</Text>
+      <Text style={[lockStyles.title, { color: colors.textPrimary }]}>{APP_BRAND}</Text>
       <Text style={[lockStyles.subtitle, { color: colors.textSecondary }]}>
         {t('settings.app_lock')}
       </Text>

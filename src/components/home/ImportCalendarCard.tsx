@@ -24,6 +24,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors, type ColorTokens } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
+import { APP_BRAND } from '@/constants/config';
 import { textStyles } from '@/constants/typography';
 import { sendAssistantTurn } from '@/services/assistantChatService';
 import { useEventStore } from '@/stores/eventStore';
@@ -73,7 +74,7 @@ export function ImportCalendarCard() {
 
       const turn = await sendAssistantTurn({
         text:
-          '첨부한 캘린더 스크린샷의 모든 일정을 SyncLink 에 등록해줘. ' +
+          `첨부한 캘린더 스크린샷의 모든 일정을 ${APP_BRAND} 에 등록해줘. ` +
           '각 일정의 날짜/시간/제목을 정확히 추출해서 createEvent 도구로 순서대로 호출. ' +
           '시간이 명시되지 않은 일정은 allDay 로 처리.',
         image: {

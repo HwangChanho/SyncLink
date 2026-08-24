@@ -76,6 +76,7 @@ import {
   signInWithApple,
 } from '@/services/authService';
 import type { UserRow } from '@/types';
+import { APP_BRAND } from '@/constants/config';
 
 // ─── 픽스처 ───────────────────────────────────────────────────────────────────
 
@@ -129,9 +130,11 @@ describe('LoginScreen', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('렌더링', () => {
-    it('SyncLink 로고 텍스트가 렌더링됨', () => {
+    // 브랜드명은 APP_BRAND 하나로 관리한다. 여기서 문자열을 다시 하드코딩하면
+    // 다음 리브랜딩 때 이 테스트가 또 혼자 남아 깨진다(2026-08-24 실제로 그랬다).
+    it('앱 브랜드 로고 텍스트가 렌더링됨', () => {
       const { getByText } = render(<LoginScreen />);
-      expect(getByText('SyncLink')).toBeTruthy();
+      expect(getByText(APP_BRAND)).toBeTruthy();
     });
 
     it('Google 로그인 버튼이 렌더링됨', () => {

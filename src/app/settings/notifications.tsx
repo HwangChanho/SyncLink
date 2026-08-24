@@ -39,6 +39,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
+import { APP_BRAND } from '@/constants/config';
 import { textStyles } from '@/constants/typography';
 import {
   updateNotificationPreferences,
@@ -123,7 +124,7 @@ export default function NotificationsSettingsScreen() {
           '알림 권한 필요',
           '브라우저에서 이 사이트의 알림이 차단되어 있어 다시 요청할 수 없습니다.\n\n' +
           '• Chrome: 주소창 왼쪽 자물쇠/정보 아이콘 → 알림 → 허용\n' +
-          '• Safari: 환경설정 → 웹사이트 → 알림 → SyncLink → 허용\n' +
+          `• Safari: 환경설정 → 웹사이트 → 알림 → ${APP_BRAND} → 허용\n` +
           '• Firefox: 주소창 왼쪽 방패 아이콘 → 사이트 권한 → 알림 → 허용',
         );
       } else if (result === 'no-user') {

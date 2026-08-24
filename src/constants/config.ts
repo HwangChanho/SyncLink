@@ -8,6 +8,21 @@
  * IMPORTANT: Do not put secrets here. Use environment variables for secrets.
  */
 
+// ─── Brand ────────────────────────────────────────────────────────────────────
+
+/**
+ * 사용자에게 보이는 앱 이름.
+ *
+ * 화면마다 하드코딩하면 리브랜딩 때 반드시 몇 곳이 남는다 — 실제로 1.4.0 리브랜딩이
+ * App Store 설명 본문, 위젯 라벨, 웹 <title>, 그리고 앱 UI 6곳을 놓쳤고 그 상태로
+ * 2주를 나갔다. 브랜드명을 쓸 일이 생기면 이 상수를 쓸 것.
+ *
+ * i18n 문자열 안의 브랜드명은 ko/en/ja/zh 모두 같은 값이라 로케일 분기가 필요 없다.
+ * ⚠️ app.json 의 `expo.name` 은 별개다 — 한글로 바꾸면 prebuild 가 Xcode 프로젝트를
+ *    개명해 fastlane 경로와 AppGroupBridge 가 깨진다. 그건 "SyncLink" 로 둔다.
+ */
+export const APP_BRAND = '투투리스트';
+
 // ─── AI Usage Limits ──────────────────────────────────────────────────────────
 
 /** Free tier: max AI (Claude API) calls per day per user. */

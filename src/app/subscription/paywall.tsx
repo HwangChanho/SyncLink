@@ -325,7 +325,7 @@ export default function PaywallScreen() {
       >
         {/* ── Header ────────────────────────────────────────────────── */}
         <View style={styles.header}>
-          <Text style={styles.appName}>SyncLink Pro</Text>
+          <Text style={styles.appName}>{t('paywall.title')}</Text>
           <Text style={styles.headline}>{t('paywall.headline')}</Text>
         </View>
 

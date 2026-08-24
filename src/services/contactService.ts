@@ -15,6 +15,7 @@
 
 import { Platform } from 'react-native';
 import * as Contacts from 'expo-contacts';
+import { APP_BRAND } from '@/constants/config';
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
@@ -145,7 +146,7 @@ export function buildInviteMessage(
     'https://synclink.pages.dev';
   const link = `${base}/space/${inviteCode}`;
   return [
-    `${greeting}SyncLink Space "${spaceName}"에 초대합니다!`,
+    `${greeting}${APP_BRAND} Space "${spaceName}"에 초대합니다!`,
     `초대 코드: ${inviteCode}`,
     `참여 링크: ${link}`,
   ].join('\n');

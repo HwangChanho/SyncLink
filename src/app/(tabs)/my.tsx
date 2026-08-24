@@ -29,6 +29,7 @@ import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { useResponsive } from '@/hooks/useResponsive';
 import { desktopContentCentered } from '@/constants/webLayout';
+import { APP_BRAND } from '@/constants/config';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
@@ -395,7 +396,7 @@ function MyScreenContent() {
                 { color: plan === 'pro' ? colors.textInverse : colors.textSecondary },
               ]}
             >
-              {plan === 'pro' ? 'SyncLink Pro' : 'SyncLink Free'}
+              {plan === 'pro' ? `${APP_BRAND} Pro` : `${APP_BRAND} Free`}
             </Text>
           </View>
         </View>
@@ -412,7 +413,7 @@ function MyScreenContent() {
               activeOpacity={0.85}
             >
               <View style={styles.subscriptionInfo}>
-                <Text style={styles.subscriptionTitle}>SyncLink Free</Text>
+                <Text style={styles.subscriptionTitle}>{`${APP_BRAND} Free`}</Text>
                 <Text style={styles.subscriptionUsage}>
                   AI {aiUsageToday}/5
                 </Text>
@@ -434,7 +435,7 @@ function MyScreenContent() {
               activeOpacity={0.85}
             >
               <View style={styles.subscriptionInfo}>
-                <Text style={styles.subscriptionTitle}>SyncLink Pro</Text>
+                <Text style={styles.subscriptionTitle}>{`${APP_BRAND} Pro`}</Text>
                 <Text style={styles.subscriptionUsage}>구독 갱신 / 취소 관리</Text>
               </View>
               <View style={styles.subscriptionCta}>

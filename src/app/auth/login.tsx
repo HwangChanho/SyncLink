@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
+import { APP_BRAND } from '@/constants/config';
 import { textStyles } from '@/constants/typography';
 import {
   signInWithGoogle,
@@ -109,7 +110,7 @@ export default function LoginScreen() {
       <View style={styles.content}>
 
         <View style={styles.hero}>
-          <Text style={styles.logo}>SyncLink</Text>
+          <Text style={styles.logo}>{APP_BRAND}</Text>
           <Text style={styles.tagline}>{t('auth.login.tagline')}</Text>
         </View>
 
