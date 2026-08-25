@@ -844,6 +844,38 @@ function buildKakaoAuthUrl(appReturn: string): string {
 }
 
 /**
+ * Kakao SDK 가 reject 한 에러에서 네이티브 실패 코드를 꺼낸다.
+ *
+ * @react-native-kakao 는 양 플랫폼 모두 Promise reject 의 첫 인자(JS 의
+ * `error.code`)에 카카오 SDK 의 실패 사유 이름을 그대로 싣는다.
+ *   - iOS     : RNCKakaoUtil.reject  -> "\(ClientFailureReason)"
+ *   - Android : Promise.rejectWith   -> ClientError.reason.name
+ * 그래서 로케일마다 달라지는 message 문자열이 아니라 이 code 로 분기해야 한다.
+ *
+ * @param error kakaoNativeLogin() 이 reject 한 값 (Error 가 아닐 수도 있다)
+ * @returns 코드 문자열. 코드를 못 찾으면 null
+ */
+function kakaoErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' && code.length > 0 ? code : null;
+}
+
+/**
+ * 사용자가 카카오 인증 화면(카카오톡 앱 / 카카오계정 웹)을 스스로 닫았는지.
+ *
+ * 취소는 정상 흐름이므로 에러로 기록하면 안 된다. 2026-08-25 조사에서 Sentry
+ * 의 카카오 에러가 **전부** 이 취소였고(4건/4명), 그 노이즈 때문에 "카카오
+ * 로그인이 실패하고 있다"고 오판할 뻔했다. 진짜 실패만 남아야 관측이 뜻을 갖는다.
+ *
+ * @param error kakaoNativeLogin() 이 reject 한 값
+ * @returns 사용자 취소면 true
+ */
+function isKakaoUserCancel(error: unknown): boolean {
+  return kakaoErrorCode(error) === 'Cancelled';
+}
+
+/**
  * Kakao 네이티브 자격(email/password) 획득. WebBrowser 로 Kakao 동의 → Edge 가
  * appReturn?email=..&password=.. 로 되돌려보낸 값을 추출 (클라이언트 무관).
  */
@@ -867,9 +899,19 @@ async function acquireKakaoCredentials(): Promise<{ email: string; password: str
       const token = await kakaoNativeLogin();
       accessToken = token.accessToken;
     } catch (error) {
-      // 사용자가 카카오 화면에서 취소한 경우도 여기로 온다. 종전 진단 컨텍스트를
-      // 유지해 Sentry 에서 이전 기록과 이어 볼 수 있게 한다.
-      await logError({ context: 'auth.kakao.native-login', error });
+      // 사용자가 스스로 닫은 것은 정상 흐름이라 기록하지 않는다. 기록하면 진짜
+      // 실패가 그 노이즈에 묻힌다 — 실제로 묻혀 있었다(2026-08-25 조사).
+      if (!isKakaoUserCancel(error)) {
+        // 실패 사유 코드를 context 에 붙여 Sentry 에서 원인별로 갈라 보이게 한다.
+        // production 빌드는 details 를 Sentry 로 보내지 않으므로(errorLogger 의
+        // 사용자 활동 비공개 정책) code 를 남길 자리는 context 밖에 없다.
+        const code = kakaoErrorCode(error);
+        await logError({
+          context: code ? `auth.kakao.native-login.${code}` : 'auth.kakao.native-login',
+          error,
+          details: { code },
+        });
+      }
       throw new Error('cancelled');
     }
 
@@ -905,15 +947,19 @@ async function acquireKakaoCredentials(): Promise<{ email: string; password: str
   const result = await WebBrowser.openAuthSessionAsync(authUrl, appReturn, { showInRecents: false });
   if (result.type !== 'success') {
     // Diagnostic (2026-07): this early return never logged, so native Kakao
-    // failures were invisible in error_logs. A non-'success' type is usually a
-    // genuine user cancel, but can also mean the synclink://auth/callback
-    // redirect wasn't captured (custom-tab / scheme handling). Log the type so
-    // the two are distinguishable when investigating "Kakao login doesn't work".
-    await logError({
-      context: 'auth.kakao.websession-not-success',
-      error:   new Error(`openAuthSessionAsync returned type=${result.type}`),
-      details: { type: result.type },
-    });
+    // failures were invisible in error_logs. A non-'success' type can mean the
+    // synclink://auth/callback redirect wasn't captured (custom-tab / scheme
+    // handling) — that is a real failure worth logging.
+    //
+    // But 'cancel'/'dismiss' are the user simply closing the sheet, and logging
+    // those buried the real failures in noise (2026-08-25). Log only the rest.
+    if (result.type !== 'cancel' && result.type !== 'dismiss') {
+      await logError({
+        context: `auth.kakao.websession-not-success.${result.type}`,
+        error:   new Error(`openAuthSessionAsync returned type=${result.type}`),
+        details: { type: result.type },
+      });
+    }
     throw new Error('cancelled');
   }
   const errParam = extractQueryParam(result.url, 'error');

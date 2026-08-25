@@ -87,6 +87,14 @@ jest.mock('@/lib/supabase', () => ({
   },
 }));
 
+// errorLogger — logError 호출 **여부** 자체가 검증 대상이라 mock 한다.
+// 카카오 사용자 취소를 에러로 기록하지 않는다는 계약(2026-08-25)이 회귀하면
+// Sentry 가 다시 취소 노이즈로 덮여 진짜 실패를 가린다.
+jest.mock('@/lib/errorLogger', () => ({
+  logError:          jest.fn().mockResolvedValue(undefined),
+  serializePgError:  jest.fn((e: unknown) => ({ message: String(e) })),
+}));
+
 // fetch — kakao-auth Edge Function 호출을 가로채기 위해 jest.fn()으로 덮어씀.
 // 각 테스트에서 필요에 따라 mockResolvedValueOnce로 응답을 지정한다.
 const fetchMock = jest.fn();
@@ -104,6 +112,7 @@ import * as WebBrowser from 'expo-web-browser';
 // 실제 mock 은 jest.setup.js 에 있고, 여기서는 반환값만 테스트별로 덮어쓴다.
 import { login as kakaoNativeLogin } from '@react-native-kakao/user';
 import { supabase } from '@/lib/supabase';
+import { logError } from '@/lib/errorLogger';
 import {
   signInWithGoogle,
   signInWithKakao,
@@ -442,12 +451,52 @@ describe('authService', () => {
       expect(result.user).toEqual(mockUserRow);
     });
 
-    it('사용자가 카카오 화면에서 취소: "cancelled" throw, 서버 호출 없음', async () => {
-      (kakaoNativeLogin as jest.Mock).mockRejectedValue(new Error('user cancelled'));
+    /**
+     * 실제 SDK 는 사용자 취소를 code='Cancelled' 로 알려준다
+     * (iOS: ClientFailureReason, Android: ClientErrorCause.name — 양쪽 동일).
+     * 취소는 정상 흐름이므로 에러로 기록하면 안 된다.
+     */
+    it('사용자가 카카오 화면에서 취소: "cancelled" throw, 서버 호출·에러기록 없음', async () => {
+      (kakaoNativeLogin as jest.Mock).mockRejectedValue(
+        Object.assign(new Error('The authentication session has been canceled by user.'), {
+          code: 'Cancelled',
+        }),
+      );
 
       await expect(signInWithKakao()).rejects.toThrow('cancelled');
       expect(fetchMock).not.toHaveBeenCalled();
       expect(supabase.auth.signInWithPassword).not.toHaveBeenCalled();
+      // 핵심: 취소는 Sentry/error_logs 로 나가지 않는다
+      expect(logError).not.toHaveBeenCalled();
+    });
+
+    /**
+     * 취소가 아닌 실패는 반드시 남아야 한다. code 를 context 에 붙여 Sentry 에서
+     * 원인별로 갈리도록 한다 — production 빌드는 details 를 보내지 않으므로
+     * code 가 드러날 자리가 context 뿐이다.
+     */
+    it('취소가 아닌 카카오 SDK 실패: code 를 context 에 담아 기록', async () => {
+      (kakaoNativeLogin as jest.Mock).mockRejectedValue(
+        Object.assign(new Error('KakaoTalk is not available'), { code: 'NotSupported' }),
+      );
+
+      await expect(signInWithKakao()).rejects.toThrow('cancelled');
+      expect(logError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: 'auth.kakao.native-login.NotSupported',
+          details: { code: 'NotSupported' },
+        }),
+      );
+    });
+
+    /** code 가 없는 실패도 취소로 오인하지 않고 기록한다(안전한 기본값). */
+    it('code 없는 실패: 기존 context 로 기록', async () => {
+      (kakaoNativeLogin as jest.Mock).mockRejectedValue(new Error('boom'));
+
+      await expect(signInWithKakao()).rejects.toThrow('cancelled');
+      expect(logError).toHaveBeenCalledWith(
+        expect.objectContaining({ context: 'auth.kakao.native-login' }),
+      );
     });
 
     it('Edge Function 이 에러 반환: 그 메시지를 throw', async () => {
