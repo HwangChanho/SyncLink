@@ -72,30 +72,38 @@ export function ImportCalendarCard() {
         encoding: FileSystem.EncodingType.Base64,
       });
 
-      const turn = await sendAssistantTurn({
-        text:
-          `첨부한 캘린더 스크린샷의 모든 일정을 ${APP_BRAND} 에 등록해줘. ` +
-          '각 일정의 날짜/시간/제목을 정확히 추출해서 createEvent 도구로 순서대로 호출. ' +
-          '시간이 명시되지 않은 일정은 allDay 로 처리.',
+      // Edge Fn 은 messages 배열을 요구한다(비면 400 no_messages).
+      const { result: turn, error } = await sendAssistantTurn({
+        messages: [{
+          role: 'user',
+          content:
+            `첨부한 캘린더 스크린샷의 모든 일정을 ${APP_BRAND} 에 등록해줘. ` +
+            '각 일정의 날짜/시간/제목을 정확히 추출해서 createEvent 도구로 순서대로 호출. ' +
+            '시간이 명시되지 않은 일정은 allDay 로 처리.',
+        }],
         image: {
           base64,
           mediaType: 'image/jpeg',
         },
-        history: [],
       });
 
-      if (turn.kind === 'error') {
-        Alert.alert('가져오기 실패', turn.error ?? '알 수 없는 오류');
+      if (error) {
+        Alert.alert('가져오기 실패', error.message);
+        return;
+      }
+      if (!turn) {
+        Alert.alert('가져오기 실패', '알 수 없는 오류가 발생했어요.');
         return;
       }
 
-      // turn.executed 가 있으면 createEvent 호출 횟수 확인.
-      const createdCount = turn.executed?.filter((e: any) => e.name === 'createEvent').length ?? 0;
+      // executed 항목은 { tool, ok, summary } 다. 실패한 호출은 세지 않는다 —
+      // "N개 일정을 추가했어요" 는 실제로 등록된 수여야 한다.
+      const createdCount = turn.executed.filter((e) => e.tool === 'createEvent' && e.ok).length;
       Alert.alert(
         '가져오기 완료',
         createdCount > 0
-          ? `${createdCount}개 일정을 추가했어요.\n\nAI: ${turn.reply ?? ''}`
-          : (turn.reply ?? '인식된 일정이 없어요. 다른 사진으로 다시 시도해 보세요.'),
+          ? `${createdCount}개 일정을 추가했어요.\n\nAI: ${turn.text}`
+          : (turn.text || '인식된 일정이 없어요. 다른 사진으로 다시 시도해 보세요.'),
       );
 
       // 캘린더 즉시 갱신 — 현재 보이는 month range 다시 fetch.

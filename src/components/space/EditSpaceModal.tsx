@@ -170,7 +170,7 @@ export function EditSpaceModal({ visible, space, onClose, onSaved }: EditSpaceMo
           disabled={saving}
         >
           {coverUri ? (
-            <Image source={{ uri: coverUri }} style={styles.cover} contentFit="cover" />
+            <Image source={{ uri: coverUri }} style={styles.cover} resizeMode="cover" />
           ) : (
             <View style={[styles.cover, { backgroundColor: colors.primaryLight }]} />
           )}

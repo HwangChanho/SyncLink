@@ -109,7 +109,7 @@ export function deriveRecentStats(events: { startAt: Date; endAt: Date; title?: 
   let weekdayCount = 0;
   for (const e of recent) {
     const d = e.startAt.getDay();
-    dowCount[d] += 1;
+    dowCount[d] = (dowCount[d] ?? 0) + 1;  // noUncheckedIndexedAccess 가드
     if (d >= 1 && d <= 5) weekdayCount += 1;
     if (e.eventKind === 'workout' || e.eventKind === 'running') workout += 1;
     else if (/미팅|회의|meeting|약속/i.test(e.title ?? '')) meeting += 1;

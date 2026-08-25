@@ -10,7 +10,7 @@
     "web": "expo start --web",
     "test": "jest --watchAll --maxWorkers=2",
     "test:ci": "jest --ci --passWithNoTests --forceExit --runInBand",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node scripts/typecheck.mjs",
     "lint": "eslint src --ext .ts,.tsx --max-warnings 30",
     "postinstall": "patch-package",
     "test:e2e": "maestro test e2e/flows/",

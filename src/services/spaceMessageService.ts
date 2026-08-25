@@ -262,7 +262,7 @@ export function subscribeToTyping(
 export async function markSpaceAsRead(spaceId: string): Promise<void> {
   const userId = await getCurrentUserId();
   if (!userId) return;
-  await (supabase as any)
+  await supabase
     .from('space_members')
     .update({ last_read_at: new Date().toISOString() })
     .eq('space_id', spaceId)
@@ -281,14 +281,14 @@ export async function getSpaceNotificationsEnabled(spaceId: string): Promise<boo
     .eq('space_id', spaceId)
     .eq('user_id', userId)
     .single();
-  return (data?.notifications_enabled ?? true) as boolean;
+  return data?.notifications_enabled ?? true;
 }
 
 /** Space 알림 toggle. */
 export async function setSpaceNotificationsEnabled(spaceId: string, enabled: boolean): Promise<void> {
   const userId = await getCurrentUserId();
   if (!userId) return;
-  await (supabase as any)
+  await supabase
     .from('space_members')
     .update({ notifications_enabled: enabled })
     .eq('space_id', spaceId)

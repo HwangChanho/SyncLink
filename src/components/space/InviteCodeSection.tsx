@@ -320,7 +320,7 @@ export function InviteCodeSection({
                   <Image
                     source={{ uri: qrUrl }}
                     style={{ width: 200, height: 200 }}
-                    contentFit="contain"
+                    resizeMode="contain"
                     accessibilityLabel="QR code for space invite"
                   />
                   <Text style={styles.webQrHint}>{qrUrl}</Text>

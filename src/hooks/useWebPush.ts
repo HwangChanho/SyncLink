@@ -41,11 +41,14 @@ export type WebPushRegistrationResult =
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Convert URL-safe base64 VAPID key into Uint8Array for PushManager.subscribe. */
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+// 반환 타입을 Uint8Array<ArrayBuffer> 로 좁힌다 — TS 5.7 부터 Uint8Array 는
+// 버퍼 종류를 제네릭으로 갖고, PushManager.subscribe 의 applicationServerKey
+// (BufferSource) 는 SharedArrayBuffer 기반을 받지 않는다.
+function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
   const raw = (globalThis as typeof globalThis & { atob: (s: string) => string }).atob(base64);
-  const out = new Uint8Array(raw.length);
+  const out = new Uint8Array(new ArrayBuffer(raw.length));
   for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
   return out;
 }

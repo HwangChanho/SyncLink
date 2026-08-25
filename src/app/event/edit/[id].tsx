@@ -1026,7 +1026,7 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     gap: spacing[2],
   },
   runningLabel: {
-    ...textStyles.bodyMd,
+    ...textStyles.body,
     color: colors.textPrimary,
     minWidth: 90,
   },
@@ -1054,7 +1054,7 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     textAlign: 'center',
   },
   runningUnit: {
-    ...textStyles.bodyMd,
+    ...textStyles.body,
     color: colors.textSecondary,
   },
   // v1.1.2 이미지 첨부
