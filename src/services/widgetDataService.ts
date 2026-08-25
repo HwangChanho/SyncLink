@@ -471,7 +471,7 @@ async function writeAndroidWidget(_json: string): Promise<void> {
   // package can be missing without a build error in development.
   let mod: { requestWidgetUpdate?: (opts: { widgetName: string }) => Promise<void> };
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     mod = require('react-native-android-widget');
   } catch {
     // Package missing in dev builds without prebuild → silent fall-through.

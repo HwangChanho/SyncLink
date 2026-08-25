@@ -225,7 +225,7 @@ export async function getCostByFeatureArea(windowMs: number = ONE_MONTH_MS): Pro
     .gte('called_at', since);
   if (error) throw error;
 
-  const rows = (data ?? []) as Array<{ feature_area: string | null; cost_usd: number }>;
+  const rows = (data ?? []) as { feature_area: string | null; cost_usd: number }[];
   const buckets = new Map<string, { calls: number; cost: number }>();
   for (const r of rows) {
     const key = r.feature_area ?? 'other';

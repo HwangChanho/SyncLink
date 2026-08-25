@@ -22,6 +22,11 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
+import { useColors } from '@/hooks/useColors';
+import { useVoiceRecorder } from '@/hooks/useVoiceRecorder';
+import { spacing, radius } from '@/constants/spacing';
+import { textStyles } from '@/constants/typography';
 
 // Lazy-require expo-image-manipulator — release builds occasionally fail to
 // resolve the native binding at module-load time, which would crash the
@@ -39,11 +44,6 @@ function loadImageManipulator() {
   }
   return ImageManipulator;
 }
-import { useTranslation } from 'react-i18next';
-import { useColors } from '@/hooks/useColors';
-import { useVoiceRecorder } from '@/hooks/useVoiceRecorder';
-import { spacing, radius } from '@/constants/spacing';
-import { textStyles } from '@/constants/typography';
 
 /** Stub upload item — `localUri` exists until the parent uploads the file. */
 export interface PendingPhoto {

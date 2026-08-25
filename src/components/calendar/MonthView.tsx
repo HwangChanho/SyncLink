@@ -197,7 +197,7 @@ export function MonthView({
   currentMonth,
   selectedDate,
   eventsByDate,
-  todosByDate,
+  // todosByDate — v1.2.1 부터 의도적으로 무시(타입은 backward-compat 으로 유지).
   anniversariesByDate,
   density = 'detailed',
   onDateSelect,
@@ -309,13 +309,13 @@ export function MonthView({
   const { eventLayouts, weekHeights, overflowLabels } = useMemo<{
     eventLayouts: MonthEventLayout[];
     weekHeights: number[];
-    overflowLabels: Array<{
+    overflowLabels: {
       dateKey: string;
       count: number;
       left: number;
       top: number;
       width: number;
-    }>;
+    }[];
   }>(() => {
     // 1) 각 주의 packed chip 정보 먼저 산출 (top 은 아직 미정).
     type PackedChip = {

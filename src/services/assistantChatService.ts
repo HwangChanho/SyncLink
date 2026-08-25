@@ -36,7 +36,7 @@ export interface AssistantTurnError {
 }
 
 export interface SendTurnPayload {
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+  messages: { role: 'user' | 'assistant'; content: string }[];
   locale?: string;
   /** v1.2 마무리 — Pro 전용 사진 첨부. 마지막 user 메시지에 attach. */
   image?: {

@@ -34,7 +34,7 @@ export async function getWorkoutPartStats(days: number = 30): Promise<WorkoutPar
   if (error) return [];
 
   const counts = new Map<WorkoutPartDb, number>();
-  for (const row of (data ?? []) as Array<{ part: WorkoutPartDb }>) {
+  for (const row of (data ?? []) as { part: WorkoutPartDb }[]) {
     counts.set(row.part, (counts.get(row.part) ?? 0) + 1);
   }
   return [...counts.entries()]
@@ -69,7 +69,7 @@ export async function getRunningWeeklyStats(weeks: number = 12): Promise<Running
 
   // 주 단위 grouping. 시작일을 일요일 기준으로 정규화.
   const buckets = new Map<string, { totalKm: number; paceSum: number; count: number }>();
-  for (const r of (data ?? []) as Array<{ start_at: string; distance_km: number | null; avg_pace_seconds: number | null }>) {
+  for (const r of (data ?? []) as { start_at: string; distance_km: number | null; avg_pace_seconds: number | null }[]) {
     const d = new Date(r.start_at);
     // 일요일 = 0 으로 그 주 일요일 ISO date 추출.
     const sunday = new Date(d);

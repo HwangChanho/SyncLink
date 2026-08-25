@@ -200,7 +200,7 @@ export async function getUnreadCounts(): Promise<Record<string, number>> {
     .eq('user_id', userId);
   if (error) return {};
   const out: Record<string, number> = {};
-  for (const r of (data ?? []) as Array<{ space_id: string; unread_count: number }>) {
+  for (const r of (data ?? []) as { space_id: string; unread_count: number }[]) {
     out[r.space_id] = r.unread_count;
   }
   return out;

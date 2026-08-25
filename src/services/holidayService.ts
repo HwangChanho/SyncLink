@@ -42,7 +42,7 @@ const BUNDLES: Record<Exclude<CountryCode, 'other'>, HolidayBundle> = {
 };
 
 /** 지원 국가 목록 (드롭다운 등 UI 용). */
-export const SUPPORTED_COUNTRIES: Array<{ code: CountryCode; label: string }> = [
+export const SUPPORTED_COUNTRIES: { code: CountryCode; label: string }[] = [
   { code: 'KR', label: '대한민국' },
   { code: 'US', label: '미국' },
   { code: 'JP', label: '일본' },

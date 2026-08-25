@@ -502,10 +502,10 @@ function AnalyticsPaywallView({
   // 데스크탑 웹: 페이월 콘텐츠 적정폭(880) 중앙 정렬. (웹 반응형 S2)
   const { isDesktop } = useResponsive();
   // Pro 분석이 제공하는 핵심 가치 — paywall feature 목록과 톤 일치.
-  const features: Array<{
+  const features: {
     icon: React.ComponentProps<typeof Ionicons>['name'];
     text: string;
-  }> = [
+  }[] = [
     { icon: 'pie-chart-outline', text: t('analytics.feature_distribution') },
     { icon: 'trending-up-outline', text: t('analytics.feature_trend') },
     { icon: 'sparkles-outline', text: t('analytics.feature_ai') },

@@ -28,7 +28,7 @@ interface Props {
   /** 사용자가 입력 중인 일정 정보. */
   proposed: { title: string; startAt: Date; endAt: Date } | null;
   /** 같은 날의 다른 일정들 (overlap 검사 + Edge Fn 컨텍스트). */
-  busySlots: Array<{ startAt: Date; endAt: Date }>;
+  busySlots: { startAt: Date; endAt: Date }[];
   /** 사용자가 대안 선택 시 호출 — 새 startAt/endAt 으로 갱신. */
   onSelectAlternative: (startAt: Date, endAt: Date) => void;
 }

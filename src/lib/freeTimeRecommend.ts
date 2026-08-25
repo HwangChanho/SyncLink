@@ -98,7 +98,7 @@ function buildPersonalizedSuggestion(slot: SimpleEvent, stats: RecentStats | nul
 /**
  * Recent events 에서 통계 추출. AISuggestionCard caller (홈) 가 호출.
  */
-export function deriveRecentStats(events: Array<{ startAt: Date; endAt: Date; title?: string; eventKind?: string }>): RecentStats {
+export function deriveRecentStats(events: { startAt: Date; endAt: Date; title?: string; eventKind?: string }[]): RecentStats {
   const now = Date.now();
   const TWO_WEEKS_MS = 14 * 24 * 3600 * 1000;
   const recent = events.filter((e) => now - e.startAt.getTime() < TWO_WEEKS_MS && e.startAt.getTime() < now);

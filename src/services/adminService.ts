@@ -40,34 +40,34 @@ export interface AdminStats {
     pro_users?: number;
     free_users?: number;
   };
-  by_function: Array<{
+  by_function: {
     function_name: string;
     calls: number;
     users: number;
     in_tok: number;
     out_tok: number;
     usd: number;
-  }>;
-  by_day: Array<{ day: string; calls: number; users: number; out_tok: number; usd: number }>;
-  by_day_function: Array<{ function_name: string; day: string; calls: number }>;
+  }[];
+  by_day: { day: string; calls: number; users: number; out_tok: number; usd: number }[];
+  by_day_function: { function_name: string; day: string; calls: number }[];
 
   // ─── 마이그레이션 054 신규 (모두 optional — 구버전 서버 안전) ───────────────
   /** 모델(Haiku/Sonnet 등)별 비용 분해. */
-  by_model?: Array<{
+  by_model?: {
     model: string;
     calls: number;
     in_tok: number;
     out_tok: number;
     usd: number;
-  }>;
+  }[];
   /** 기능영역(feature_area)별 비용. */
-  by_feature?: Array<{ feature_area: string; calls: number; usd: number }>;
+  by_feature?: { feature_area: string; calls: number; usd: number }[];
   /** 일별 신규 가입 수 (기간 내). */
-  signups_by_day?: Array<{ day: string; signups: number }>;
+  signups_by_day?: { day: string; signups: number }[];
   /** last_event_at 기반 리텐션 버킷. */
   retention?: { active_7d: number; active_30d: number; dormant: number };
   /** 국가 분포 top (NULL = '미상'). */
-  country_dist?: Array<{ country_code: string; users: number }>;
+  country_dist?: { country_code: string; users: number }[];
 
   // ─── 마이그레이션 064 신규 (optional — 구버전 서버 안전) ────────────────────
   /**

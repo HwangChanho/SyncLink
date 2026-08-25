@@ -16,7 +16,7 @@ export interface ChatUiMessage {
   role: 'user' | 'assistant';
   content: string;
   /** assistant 메시지에 부수된 실행 결과 (예: "일정 1건 생성됨"). */
-  executed?: Array<{ tool: string; ok: boolean; summary: string }>;
+  executed?: { tool: string; ok: boolean; summary: string }[];
   createdAt: number;
 }
 
@@ -35,7 +35,7 @@ interface ChatState {
   clear: () => void;
 
   /** Edge Fn 으로 보낼 메시지 페이로드. 최근 20턴 또는 30분 내. */
-  getOutgoingMessages: () => Array<{ role: 'user' | 'assistant'; content: string }>;
+  getOutgoingMessages: () => { role: 'user' | 'assistant'; content: string }[];
 }
 
 const WINDOW_TURNS = 20;

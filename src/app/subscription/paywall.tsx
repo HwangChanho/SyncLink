@@ -29,12 +29,6 @@ import {
   Linking,
 } from 'react-native';
 import { router } from 'expo-router';
-
-// Apple Guideline 3.1.2(c): paywall must show functional links to the EULA
-// and privacy policy. App Store reviewers reject otherwise. iTunes Standard
-// EULA URL — used unless we author a custom EULA in App Store Connect.
-const EULA_URL = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
-const PRIVACY_URL = 'https://www.notion.so/34aabec15d588054bc31d0b6f5f51c0b';
 import type { PurchasesPackage } from 'react-native-purchases';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
@@ -46,6 +40,12 @@ import {
   restorePurchases,
 } from '@/services/purchaseService';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
+
+// Apple Guideline 3.1.2(c): paywall must show functional links to the EULA
+// and privacy policy. App Store reviewers reject otherwise. iTunes Standard
+// EULA URL — used unless we author a custom EULA in App Store Connect.
+const EULA_URL = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
+const PRIVACY_URL = 'https://www.notion.so/34aabec15d588054bc31d0b6f5f51c0b';
 
 // ─── Static plan display data — replaced by i18n inside the component ─────────
 
