@@ -71,6 +71,13 @@ export function ImportCalendarCard() {
       const base64 = await FileSystem.readAsStringAsync(asset.uri, {
         encoding: FileSystem.EncodingType.Base64,
       });
+      // 선언 형식과 실제 바이트가 어긋나면 API 가 거부한다. ChatComposer 와 같은 방식.
+      const ext = asset.uri.split('.').pop()?.toLowerCase();
+      const mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' =
+        ext === 'png'  ? 'image/png'  :
+        ext === 'webp' ? 'image/webp' :
+        ext === 'gif'  ? 'image/gif'  :
+        'image/jpeg';
 
       // Edge Fn 은 messages 배열을 요구한다(비면 400 no_messages).
       const { result: turn, error } = await sendAssistantTurn({
@@ -83,7 +90,9 @@ export function ImportCalendarCard() {
         }],
         image: {
           base64,
-          mediaType: 'image/jpeg',
+          // 🔴 하드코딩하면 안 된다 — iOS 스크린샷은 기본이 PNG 라,
+          //    jpeg 로 선언하면 Anthropic 이 형식 불일치로 거부한다.
+          mediaType,
         },
       });
 

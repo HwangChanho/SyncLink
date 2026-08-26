@@ -689,6 +689,19 @@ Deno.serve(async (req: Request) => {
         headers: { 'Content-Type': 'application/json' },
       });
     }
+    // 사진이 붙은 요청에서 모델이 400 을 주면 원인은 거의 이미지다
+    // (형식 불일치·손상·크기). 500 으로 흘려보내면 클라이언트에 단서가 없다.
+    if (attach) {
+      const status = (err as { status?: number })?.status;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (status === 400 || /image|media_type|media type/i.test(msg)) {
+        console.error('[assistant-chat] image rejected by model:', msg);
+        return new Response(JSON.stringify({ error: 'image_rejected', detail: msg.slice(0, 300) }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    }
     throw err;  // 그 외 에러는 기존 동작(상위 핸들러/500).
   }
 
