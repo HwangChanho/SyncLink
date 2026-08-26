@@ -99,11 +99,12 @@ export function ImportCalendarCard() {
       // executed 항목은 { tool, ok, summary } 다. 실패한 호출은 세지 않는다 —
       // "N개 일정을 추가했어요" 는 실제로 등록된 수여야 한다.
       const createdCount = turn.executed.filter((e) => e.tool === 'createEvent' && e.ok).length;
+      // 0건이면 성공이 아니다 — 제목까지 "완료" 로 두면 실패가 성공처럼 읽힌다.
       Alert.alert(
-        '가져오기 완료',
+        createdCount > 0 ? '가져오기 완료' : '가져온 일정이 없어요',
         createdCount > 0
-          ? `${createdCount}개 일정을 추가했어요.\n\nAI: ${turn.text}`
-          : (turn.text || '인식된 일정이 없어요. 다른 사진으로 다시 시도해 보세요.'),
+          ? `${createdCount}개 일정을 추가했어요.\n\n${turn.text}`
+          : (turn.text || '사진에서 일정을 찾지 못했어요. 다른 사진으로 다시 시도해 보세요.'),
       );
 
       // 캘린더 즉시 갱신 — 현재 보이는 month range 다시 fetch.

@@ -34,6 +34,11 @@ interface ChatRequest {
   locale?: string;
   /** 클라이언트의 "지금 시각" — UTC offset 으로 시간 의도 해석에 사용. */
   clientNowIso?: string;
+  /**
+   * 사진 첨부 1장. 마지막 user 메시지에 image 블록으로 붙는다.
+   * base64 는 data URI 접두사 없이 순수 페이로드. 접두사가 와도 아래에서 벗겨 낸다.
+   */
+  image?: { base64: string; mediaType: string };
 }
 
 interface ChatResponse {
@@ -59,6 +64,13 @@ const buildSystemPrompt = (locale: string, nowIso: string): string => {
     return [
       '당신은 SyncLink 사용자의 **일정 분석 비서**입니다.',
       todayPart,
+      '',
+      '출력 형식 (반드시 지킬 것):',
+      '- 이모지를 쓰지 말 것. 하나도.',
+      '- 마크다운 서식을 쓰지 말 것 — **굵게**, ##제목, ---, 표 모두 금지.',
+      '  앱은 답변을 네이티브 알림·텍스트로 그대로 보여주므로 별표와 우물정자가',
+      '  글자 그대로 노출된다.',
+      '- 평문과 줄바꿈만 사용. 목록이 필요하면 "1." "2." 또는 "- " 정도만.',
       '',
       '핵심 역할 (1순위) — 분석과 인사이트:',
       '- 사용자의 일정 데이터를 listEventsInRange 로 모은 뒤, 패턴·빈도·요약',
@@ -129,6 +141,12 @@ const buildSystemPrompt = (locale: string, nowIso: string): string => {
   return [
     'You are SyncLink\'s **schedule analysis assistant**.',
     todayPart,
+    '',
+    'Output format (strict):',
+    '- Never use emoji.',
+    '- Never use markdown — no **bold**, ## headings, ---, or tables. The app',
+    '  renders replies as plain native text, so the raw characters show up.',
+    '- Plain text and line breaks only. At most "1." / "- " for short lists.',
     '',
     'Primary role — analysis & insights:',
     '- Use listEventsInRange to gather data, then deliver patterns, frequencies,',
@@ -400,6 +418,16 @@ async function runTool(
   }
 }
 
+/** Anthropic vision 이 받는 형식. 이 외에는 400 으로 거른다. */
+const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+
+/**
+ * base64 문자열 길이 상한. Anthropic 이미지 상한이 원본 5MB 이고 base64 는 약 4/3 로
+ * 부푸니 여유를 두고 자른다. 넘으면 모델에 보내기 전에 400 으로 돌려준다 —
+ * 그래야 토큰을 태우지 않고 사용자에게도 이유가 분명하다.
+ */
+const MAX_IMAGE_BASE64_CHARS = 6_800_000;
+
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -428,6 +456,26 @@ Deno.serve(async (req: Request) => {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     });
+  }
+
+  // 사진이 오면 모델 호출 전에 형식·크기를 확인한다.
+  if (body.image !== undefined) {
+    const raw = body.image?.base64;
+    if (typeof raw !== 'string' || raw.length === 0) {
+      return new Response(JSON.stringify({ error: 'invalid_image' }), {
+        status: 400, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (!ALLOWED_IMAGE_TYPES.has(body.image.mediaType)) {
+      return new Response(JSON.stringify({ error: 'unsupported_image_type' }), {
+        status: 400, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (raw.length > MAX_IMAGE_BASE64_CHARS) {
+      return new Response(JSON.stringify({ error: 'image_too_large' }), {
+        status: 400, headers: { 'Content-Type': 'application/json' },
+      });
+    }
   }
 
   const authHeader = req.headers.get('Authorization') ?? '';
@@ -503,8 +551,30 @@ Deno.serve(async (req: Request) => {
   // 시 input token 가격이 대폭 절감 (Sonnet 4.6 기준 약 1/10).
   const system = [{ type: 'text', text: systemText, cache_control: { type: 'ephemeral' } }];
 
-  // Anthropic SDK 메시지 형식으로 변환 (간단 케이스: text only).
-  const messages = body.messages.map((m) => ({ role: m.role, content: m.content }));
+  // Anthropic SDK 메시지 형식으로 변환.
+  // 사진이 있으면 **마지막 user 메시지**에만 붙인다. 히스토리의 옛 user 메시지에
+  // 붙이면 매 턴 같은 이미지를 다시 태워 토큰이 낭비된다.
+  // 블록 순서는 image → text. 모델이 지시를 읽기 전에 그림을 보게 하는 쪽이 낫다.
+  const attach = body.image
+    ? {
+        // 클라이언트가 data URI 째로 보내는 경우가 있어 접두사를 벗겨 낸다.
+        data: body.image.base64.replace(/^data:[^;]+;base64,/, ''),
+        mediaType: body.image.mediaType,
+      }
+    : null;
+  const lastUserIdx = body.messages.reduce((acc, m, i) => (m.role === 'user' ? i : acc), -1);
+
+  const messages = body.messages.map((m, i) => {
+    if (!attach || i !== lastUserIdx) return { role: m.role, content: m.content };
+    const blocks: unknown[] = [
+      { type: 'image', source: { type: 'base64', media_type: attach.mediaType, data: attach.data } },
+    ];
+    // 빈 text 블록은 API 가 거부한다. 내용이 있을 때만 넣는다.
+    if (m.content.trim().length > 0) blocks.push({ type: 'text', text: m.content });
+    // system / tools 와 같은 관례로 캐스팅한다 — SDK 의 ContentBlockParam 타입을
+    // 이 파일이 직접 import 하지 않기 때문.
+    return { role: m.role, content: blocks as never };
+  });
 
   const executed: ChatResponse['executed'] = [];
   let tokensUsed = 0;
