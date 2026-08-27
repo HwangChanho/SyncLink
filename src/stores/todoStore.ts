@@ -32,6 +32,7 @@ import {
 } from '@/services/todoService';
 import type { CreateNoteInput, UpdateNoteInput } from '@/types';
 import { useAuthStore } from '@/stores/authStore';
+import { recordPositiveMoment } from '@/services/storeReviewService';
 import { buildGuestDemoTodos } from '@/lib/guestDemoData';
 
 // ─── Store interface ──────────────────────────────────────────────────────────
@@ -379,6 +380,12 @@ export const useTodoStore = create<TodoState>((set, get) => ({
     try {
       const updated = await toggleTodoComplete(id, newCompleted);
       set({ todos: get().todos.map(t => t.id === id ? updated : t) });
+
+      // 할 일에 체크가 들어가는 순간이 앱에서 성취를 느끼는 지점이라, 인앱 리뷰 노출
+      // 판단의 "긍정 순간"으로 센다. 체크 해제는 세지 않는다(성취가 아니다).
+      // 🔑 서버 반영이 성공한 뒤에만 센다 — 실패한 조작을 좋은 경험으로 셀 수는 없다.
+      // 실제로 시트가 뜨는 건 누적 조건이 다 찼을 때뿐이다(storeReviewService 참고).
+      if (newCompleted) void recordPositiveMoment();
     } catch (err) {
       // Revert
       set({

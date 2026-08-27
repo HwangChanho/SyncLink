@@ -168,6 +168,16 @@ jest.mock('expo-web-browser', () => ({
   dismissBrowser: jest.fn(),
 }));
 
+// ─── expo-store-review mock ───────────────────────────────────────────────────
+// 네이티브 모듈이라 Jest 에서는 못 부른다. 기본값은 "리뷰 시트를 띄울 수 있는 기기".
+// 개별 테스트에서 필요하면 jest.mocked(...)로 값을 바꾼다.
+jest.mock('expo-store-review', () => ({
+  isAvailableAsync: jest.fn().mockResolvedValue(true),
+  requestReview: jest.fn().mockResolvedValue(undefined),
+  hasAction: jest.fn().mockResolvedValue(true),
+  storeUrl: jest.fn(() => 'https://apps.apple.com/kr/app/id6763083903'),
+}));
+
 // ─── expo-linking mock ────────────────────────────────────────────────────────
 // Requires app.json manifest at runtime — unavailable in Jest environment.
 jest.mock('expo-linking', () => ({

@@ -49,6 +49,8 @@ import { useLoginPromptStore } from '@/stores/loginPromptStore';
 import { AppSplash } from '@/components/common/AppSplash';
 // Sprint 14 TASK-1402/1406 — AdMob SDK initialization after ATT consent.
 import { initAdMob } from '@/services/adService';
+// 인앱 리뷰 노출 판단용 — 앱 실행 횟수를 센다(시트는 여기서 띄우지 않는다).
+import { recordAppOpen } from '@/services/storeReviewService';
 import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
 import { useColors } from '@/hooks/useColors';
 import { APP_BRAND } from '@/constants/config';
@@ -487,6 +489,16 @@ export default function RootLayout() {
   // with the system locale at module load time, so there is no flash of untranslated text.
   useEffect(() => {
     void initI18n();
+  }, []);
+
+  /*
+   * 인앱 리뷰 노출 판단용 — 앱을 켠 횟수를 센다. 여기서 시트를 띄우지는 않는다.
+   * 앱을 켠 직후는 "좋은 경험을 한 순간"이 아니라서, 실제 노출은 할 일 완료 같은
+   * 긍정 순간(storeReviewService.recordPositiveMoment)에서만 일어난다.
+   * 실패해도 무시한다 — 부가 기능이라 앱 시작을 막을 이유가 없다.
+   */
+  useEffect(() => {
+    void recordAppOpen();
   }, []);
 
   /*

@@ -19,6 +19,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "io.synclink.app",
       "appleTeamId": "QUVU2PY6PG",
+      "appStoreUrl": "https://apps.apple.com/kr/app/id6763083903",
       "newArchEnabled": true,
       "buildNumber": "173",
       "entitlements": {
@@ -49,6 +50,7 @@
         "backgroundColor": "#000000"
       },
       "package": "io.synclink.app",
+      "playStoreUrl": "https://play.google.com/store/apps/details?id=io.synclink.app",
       "googleServicesFile": "./google-services.json",
       "versionCode": 25,
       "softwareKeyboardLayoutMode": "resize",
