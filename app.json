@@ -2,7 +2,7 @@
   "expo": {
     "name": "SyncLink",
     "slug": "synclink",
-    "version": "1.4.7",
+    "version": "1.4.8",
     "orientation": "portrait",
     "icon": "./images/TwotwoLogo.png",
     "scheme": "synclink",
@@ -52,7 +52,7 @@
       "package": "io.synclink.app",
       "playStoreUrl": "https://play.google.com/store/apps/details?id=io.synclink.app",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 26,
+      "versionCode": 27,
       "softwareKeyboardLayoutMode": "resize",
       "intentFilters": [
         {
