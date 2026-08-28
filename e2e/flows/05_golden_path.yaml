@@ -135,8 +135,6 @@ env:
 - assertVisible:
     id: "tab-button-calendar"
 - assertVisible:
-    id: "tab-button-planner"
-- assertVisible:
     id: "tab-button-my"
 - takeScreenshot: screenshots/gp_02_home
 
@@ -153,8 +151,17 @@ env:
 - takeScreenshot: screenshots/gp_03_calendar
 
 - waitForAnimationToEnd
+# 플래너 진입 — 2026-08-28 UX 단순화로 탭바에서 내려가 "나" 탭 바로가기 경유가 됐다.
 - tapOn:
-    id: "tab-button-planner"
+    id: "tab-button-my"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      id: "shortcut-button-planner"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: "shortcut-button-planner"
 - waitForAnimationToEnd
 # RevenueCat 배너 dismiss
 - repeat:
@@ -240,8 +247,17 @@ env:
 # ── 6. 할일 생성 ──────────────────────────────────────────────────────────────
 # planner 탭 전환 — RevenueCat 배너 대응 + 좌표 fallback (04_planner_todo와 동일 패턴)
 - waitForAnimationToEnd
+# 플래너 진입 — 2026-08-28 UX 단순화로 탭바에서 내려가 "나" 탭 바로가기 경유가 됐다.
 - tapOn:
-    id: "tab-button-planner"
+    id: "tab-button-my"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      id: "shortcut-button-planner"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: "shortcut-button-planner"
 - waitForAnimationToEnd
 # 배너 dismiss
 - repeat:

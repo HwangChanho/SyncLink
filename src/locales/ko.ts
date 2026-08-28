@@ -4,6 +4,9 @@
  */
 const ko = {
   common: {
+    more_options: "더보기",
+    today_suggestions: "오늘의 제안",
+    see_all: '전체 보기',
     ok: '확인',
     link_warning_title: '외부 링크 열기',
     link_warning_message: '외부 사이트로 이동합니다. 신뢰할 수 있는 링크인지 확인하세요.\n\n{{url}}',

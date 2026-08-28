@@ -1,5 +1,8 @@
 const ja = {
   common: {
+    more_options: "その他の設定",
+    today_suggestions: "今日の提案",
+    see_all: 'すべて表示',
     ok: 'OK',
     link_warning_title: '外部リンクを開く',
     link_warning_message: '外部サイトを開きます。信頼できるリンクか確認してください。\n\n{{url}}',

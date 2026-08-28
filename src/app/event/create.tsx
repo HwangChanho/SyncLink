@@ -1,15 +1,22 @@
 /**
  * Event creation screen.
  *
- * Form fields:
- *  - Title (required)
- *  - All-day toggle
- *  - Start date + time (pre-filled from ?date= query param)
- *  - End date + time (defaults to start + 1 hour)
- *  - Repeat type selector
- *  - Location (optional)
- *  - Description (optional)
- *  - Space sharing toggles (one per space the user belongs to)
+ * Form fields (2026-08-28 UX 단순화 이후 — 순서가 곧 화면 순서다):
+ *  기본 노출
+ *   - Title (required)          ← 이전엔 종류 토글·사진 첨부 아래에 있었다
+ *   - All-day toggle
+ *   - Start date + time (pre-filled from ?date= query param)
+ *   - End date + time (defaults to start + 1 hour)
+ *   - Category / Color / Description
+ *  "더보기" 접이식 안 (MoreOptionsSection)
+ *   - 종류 토글(일반·헬스·러닝) + 헬스 부위 + 러닝 거리/페이스
+ *   - 사진 첨부 · Repeat · Location · Reminders
+ *  항상
+ *   - Space sharing toggles (one per space the user belongs to)
+ *
+ * 🔴 필드는 하나도 제거되지 않았다. 실측상 거의 안 쓰이는 것들(장소 0.4%,
+ *    반복 1.3%, 운동/러닝 사용자 1명)을 접었을 뿐이다.
+ *    → docs/plans/2026-08-28-ux-simplification.md
  *
  * On save: calls createEvent → upsertEvent in store → back to calendar.
  *
@@ -52,6 +59,7 @@ import { CategoryPickerSheet } from '@/components/planner/CategoryPickerSheet';
 import { ColorPicker } from '@/components/event/ColorPicker';
 import { BodyParts } from '@/components/event/BodyParts';
 import { EventImagePicker } from '@/components/event/EventImagePicker';
+import { MoreOptionsSection } from '@/components/event/MoreOptionsSection';
 import { uploadEventImage } from '@/services/eventImageService';
 import { getCategories } from '@/services/categoryService';
 import { logError } from '@/lib/errorLogger';
@@ -865,91 +873,6 @@ export default function EventCreateScreen() {
           onSelectAlternative={(s, e) => { setStartAt(s); setEndAt(e); }}
         />
 
-        {/* v1.1.2 — 일반 / 헬스 / 러닝 3단 토글. 같은 시트 안에서 mode 만
-            바뀌고 다른 필드는 공통 사용. 헬스→BodyParts, 러닝→거리/페이스. */}
-        <View style={styles.kindToggle}>
-          {(['general', 'workout', 'running'] as const).map((kind) => {
-            const active = eventKind === kind;
-            const label = kind === 'general' ? '일반' : kind === 'workout' ? '헬스' : '러닝';
-            return (
-              <Pressable
-                key={kind}
-                onPress={() => setEventKind(kind)}
-                style={[
-                  styles.kindToggleBtn,
-                  active && { backgroundColor: colors.primary },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.kindToggleText,
-                    { color: active ? colors.textInverse : colors.textSecondary },
-                  ]}
-                >
-                  {label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {/* 헬스 모드일 때만 BodyParts picker 노출. */}
-        {eventKind === 'workout' && (
-          <View style={styles.bodyPartsWrap}>
-            <BodyParts
-              selected={workoutParts}
-              onToggle={toggleWorkoutPart}
-            />
-          </View>
-        )}
-
-        {/* 러닝 모드일 때 거리(km) + 평균 페이스(분/km) 입력. */}
-        {eventKind === 'running' && (
-          <View style={styles.runningWrap}>
-            <View style={styles.runningRow}>
-              <Text style={styles.runningLabel}>거리</Text>
-              <TextInput
-                value={distanceKm}
-                onChangeText={setDistanceKm}
-                keyboardType="decimal-pad"
-                placeholder="0.0"
-                placeholderTextColor={colors.textTertiary}
-                style={styles.runningInput}
-              />
-              <Text style={styles.runningUnit}>km</Text>
-            </View>
-            <View style={styles.runningRow}>
-              <Text style={styles.runningLabel}>평균 페이스</Text>
-              <TextInput
-                value={paceMinutes}
-                onChangeText={setPaceMinutes}
-                keyboardType="number-pad"
-                placeholder="5"
-                placeholderTextColor={colors.textTertiary}
-                style={styles.runningInputSm}
-                maxLength={2}
-              />
-              <Text style={styles.runningUnit}>분</Text>
-              <TextInput
-                value={paceSeconds}
-                onChangeText={setPaceSeconds}
-                keyboardType="number-pad"
-                placeholder="30"
-                placeholderTextColor={colors.textTertiary}
-                style={styles.runningInputSm}
-                maxLength={2}
-              />
-              <Text style={styles.runningUnit}>초 / km</Text>
-            </View>
-          </View>
-        )}
-
-        {/* v1.1.2 — 일정 이미지 첨부 (모든 kind 공통, max 5장). 저장 시 압축 + 업로드. */}
-        <View style={styles.imagePickerWrap}>
-          <Text style={styles.imagePickerLabel}>사진 첨부</Text>
-          <EventImagePicker uris={imageUris} onChange={setImageUris} />
-        </View>
-
         {/* Title with autocomplete from prior calendar events */}
         <View style={styles.titleWrapper}>
           <TextInput
@@ -1079,6 +1002,152 @@ export default function EventCreateScreen() {
             />
           )}
 
+          {/*
+            Category — inline chip; tap to open the picker.  When a category
+            is chosen the chip inherits its colour so the event's accent is
+            visible at a glance before saving.
+          */}
+          <FormRow label={t('event.form.category')} rowStyle={rowStyle}>
+            {(() => {
+              const cat = categoryId ? categoryMap.get(categoryId) : null;
+              return (
+                <Pressable
+                  style={[
+                    styles.categoryChip,
+                    cat && { backgroundColor: cat.color + '22', borderColor: cat.color },
+                  ]}
+                  onPress={() => setCategoryPickerVisible(true)}
+                >
+                  <Ionicons
+                    name="pricetag-outline"
+                    size={14}
+                    color={cat ? cat.color : colors.textSecondary}
+                  />
+                  <Text
+                    style={[
+                      styles.categoryChipLabel,
+                      cat && { color: cat.color },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {cat ? cat.name : t('planner.category_none', '없음')}
+                  </Text>
+                  <Ionicons
+                    name="chevron-down"
+                    size={14}
+                    color={cat ? cat.color : colors.textSecondary}
+                  />
+                </Pressable>
+              );
+            })()}
+          </FormRow>
+
+          {/* Color picker — user can override the default category/member color */}
+          <FormRow label={t('event.form.color')} rowStyle={rowStyle}>
+            <ColorPicker value={eventColor} onChange={setEventColor} />
+          </FormRow>
+
+          {/* Description */}
+          <FormRow label={t('event.form.memo')} rowStyle={rowStyle}>
+            <TextInput
+              style={[styles.inlineInput, styles.multilineInput]}
+              placeholder=""
+              placeholderTextColor={colors.textSecondary}
+              value={description}
+              onChangeText={setDescription}
+              multiline
+              returnKeyType="default"
+            />
+          </FormRow>
+
+          {/* ── 2026-08-28 UX 단순화 — 거의 쓰이지 않는 필드는 접어 둔다 ──
+              실측(전체 223건): 장소 1건(0.4%) · 반복 3건(1.3%) · 운동/러닝은 1명.
+              지운 게 아니라 접은 것이다. 펼치면 이전과 똑같이 전부 있다. */}
+          <MoreOptionsSection label={t('common.more_options')}>
+        {/* v1.1.2 — 일반 / 헬스 / 러닝 3단 토글. 같은 시트 안에서 mode 만
+            바뀌고 다른 필드는 공통 사용. 헬스→BodyParts, 러닝→거리/페이스. */}
+        <View style={styles.kindToggle}>
+          {(['general', 'workout', 'running'] as const).map((kind) => {
+            const active = eventKind === kind;
+            const label = kind === 'general' ? '일반' : kind === 'workout' ? '헬스' : '러닝';
+            return (
+              <Pressable
+                key={kind}
+                onPress={() => setEventKind(kind)}
+                style={[
+                  styles.kindToggleBtn,
+                  active && { backgroundColor: colors.primary },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.kindToggleText,
+                    { color: active ? colors.textInverse : colors.textSecondary },
+                  ]}
+                >
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* 헬스 모드일 때만 BodyParts picker 노출. */}
+        {eventKind === 'workout' && (
+          <View style={styles.bodyPartsWrap}>
+            <BodyParts
+              selected={workoutParts}
+              onToggle={toggleWorkoutPart}
+            />
+          </View>
+        )}
+
+        {/* 러닝 모드일 때 거리(km) + 평균 페이스(분/km) 입력. */}
+        {eventKind === 'running' && (
+          <View style={styles.runningWrap}>
+            <View style={styles.runningRow}>
+              <Text style={styles.runningLabel}>거리</Text>
+              <TextInput
+                value={distanceKm}
+                onChangeText={setDistanceKm}
+                keyboardType="decimal-pad"
+                placeholder="0.0"
+                placeholderTextColor={colors.textTertiary}
+                style={styles.runningInput}
+              />
+              <Text style={styles.runningUnit}>km</Text>
+            </View>
+            <View style={styles.runningRow}>
+              <Text style={styles.runningLabel}>평균 페이스</Text>
+              <TextInput
+                value={paceMinutes}
+                onChangeText={setPaceMinutes}
+                keyboardType="number-pad"
+                placeholder="5"
+                placeholderTextColor={colors.textTertiary}
+                style={styles.runningInputSm}
+                maxLength={2}
+              />
+              <Text style={styles.runningUnit}>분</Text>
+              <TextInput
+                value={paceSeconds}
+                onChangeText={setPaceSeconds}
+                keyboardType="number-pad"
+                placeholder="30"
+                placeholderTextColor={colors.textTertiary}
+                style={styles.runningInputSm}
+                maxLength={2}
+              />
+              <Text style={styles.runningUnit}>초 / km</Text>
+            </View>
+          </View>
+        )}
+
+        {/* v1.1.2 — 일정 이미지 첨부 (모든 kind 공통, max 5장). 저장 시 압축 + 업로드. */}
+        <View style={styles.imagePickerWrap}>
+          <Text style={styles.imagePickerLabel}>사진 첨부</Text>
+          <EventImagePicker uris={imageUris} onChange={setImageUris} />
+        </View>
           {/* Repeat */}
           <FormRow label={t('event.form.repeat')} rowStyle={rowStyle}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -1155,52 +1224,6 @@ export default function EventCreateScreen() {
               </View>
             </FormRow>
           )}
-
-          {/*
-            Category — inline chip; tap to open the picker.  When a category
-            is chosen the chip inherits its colour so the event's accent is
-            visible at a glance before saving.
-          */}
-          <FormRow label={t('event.form.category')} rowStyle={rowStyle}>
-            {(() => {
-              const cat = categoryId ? categoryMap.get(categoryId) : null;
-              return (
-                <Pressable
-                  style={[
-                    styles.categoryChip,
-                    cat && { backgroundColor: cat.color + '22', borderColor: cat.color },
-                  ]}
-                  onPress={() => setCategoryPickerVisible(true)}
-                >
-                  <Ionicons
-                    name="pricetag-outline"
-                    size={14}
-                    color={cat ? cat.color : colors.textSecondary}
-                  />
-                  <Text
-                    style={[
-                      styles.categoryChipLabel,
-                      cat && { color: cat.color },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {cat ? cat.name : t('planner.category_none', '없음')}
-                  </Text>
-                  <Ionicons
-                    name="chevron-down"
-                    size={14}
-                    color={cat ? cat.color : colors.textSecondary}
-                  />
-                </Pressable>
-              );
-            })()}
-          </FormRow>
-
-          {/* Color picker — user can override the default category/member color */}
-          <FormRow label={t('event.form.color')} rowStyle={rowStyle}>
-            <ColorPicker value={eventColor} onChange={setEventColor} />
-          </FormRow>
-
           {/* Location — GPS shortcut + Google Places Autocomplete (TASK-901 / TASK-1302) */}
           <FormRow label={t('event.form.location')} rowStyle={rowStyle}>
             <View style={styles.locationRow}>
@@ -1233,20 +1256,6 @@ export default function EventCreateScreen() {
               </View>
             </View>
           </FormRow>
-
-          {/* Description */}
-          <FormRow label={t('event.form.memo')} rowStyle={rowStyle}>
-            <TextInput
-              style={[styles.inlineInput, styles.multilineInput]}
-              placeholder=""
-              placeholderTextColor={colors.textSecondary}
-              value={description}
-              onChangeText={setDescription}
-              multiline
-              returnKeyType="default"
-            />
-          </FormRow>
-
           {/* Reminders — users can add multiple offsets (TASK-1304) */}
           <FormRow label={t('reminder.title')} rowStyle={rowStyle}>
             <ReminderPicker
@@ -1259,6 +1268,7 @@ export default function EventCreateScreen() {
               }
             />
           </FormRow>
+          </MoreOptionsSection>
 
           {/* Space sharing */}
           {spaces.length > 0 && (

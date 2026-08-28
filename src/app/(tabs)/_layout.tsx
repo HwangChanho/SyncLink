@@ -1,8 +1,19 @@
 /**
- * Tab bar layout — defines the 4 main app tabs.
+ * Tab bar layout — defines the 3 main app tabs.
  *
- * Tab order: Home → Calendar → Planner → My
+ * Tab order: Home → Calendar → My
  * (No AI tab — AI is embedded in Home and Calendar)
+ *
+ * 2026-08-28 UX 단순화 (docs/plans/2026-08-28-ux-simplification.md):
+ * 탭이 6개까지 늘어나 있었다(홈/캘린더/플래너/분석/스페이스/마이).
+ * 원격 DB 실측 결과 실사용자 25명 중 할 일 1명·노트 0명·Space 2명이었고,
+ * iOS HIG 권장 상한도 5개다. **화면은 하나도 지우지 않고** 탭바에서만 내렸다.
+ *  - planner / spaces → `href: null` + "나" 탭의 ShortcutsSection 에서 진입
+ *  - analytics        → LEAD 결정으로 제거(진입 경로 없음). 라우트 파일은 보존
+ * 되돌리려면 각 Screen 의 `href: null` 한 줄만 지우면 된다 —
+ * 2026-06-07 에 분석 탭을 같은 방식으로 숨겼다가 06-08 에 되살린 전례가 있다.
+ * ResponsiveTabBar 는 href===null 라우트를 웹 사이드 네비에서도 제외하므로
+ * 데스크탑 웹은 별도 처리가 필요 없다.
  *
  * TASK-1301: Each tab exposes a language-picker button in the top-right header.
  * The header is now visible (headerShown: true) for all tab screens so that the
@@ -132,9 +143,12 @@ export default function TabLayout() {
           ),
         }}
       />
+      {/* 할 일 / 노트 — 탭바에서 내리고 "나" 탭 바로가기로 진입한다.
+          화면(`planner.tsx`)과 기능은 그대로다. */}
       <Tabs.Screen
         name="planner"
         options={{
+          href: null,
           title: t('tabs.planner'),
           tabBarButtonTestID: 'tab-button-planner',
           tabBarIcon: ({ color, focused }) => (
@@ -146,11 +160,14 @@ export default function TabLayout() {
           ),
         }}
       />
-      {/* 분석 탭 — 차트 빈데이터 가드 + AppErrorBoundary(cf14de1) 적용으로 검은화면
-          크래시 원인을 제거하여 재노출(2026-06-08). 06-07 에 href:null 로 숨겼던 것 복구. */}
+      {/* 분석 탭 — 2026-08-28 LEAD 결정으로 제거. 코드 주석이 스스로 "Phase 2 스켈레톤"
+          이라고 밝히던 미완성 화면이었다. 탭·바로가기 어디에도 진입점을 두지 않는다.
+          라우트 파일(`analytics.tsx`)은 되살릴 수 있게 남겨 둔다 — 되살리려면
+          아래 `href: null` 을 지우면 된다(2026-06-08 에 같은 방식으로 복구한 적 있다). */}
       <Tabs.Screen
         name="analytics"
         options={{
+          href: null,
           title: t('tabs.analytics', { defaultValue: '분석' }),
           tabBarButtonTestID: 'tab-button-analytics',
           tabBarIcon: ({ color, focused }) => (
@@ -162,9 +179,12 @@ export default function TabLayout() {
           ),
         }}
       />
+      {/* Space — 실사용 가입자 2명. 탭바에서 내리고 "나" 탭 바로가기 + 홈의
+          Space 활동 피드로 진입한다. 화면·초대·채팅은 전부 그대로다. */}
       <Tabs.Screen
         name="spaces"
         options={{
+          href: null,
           title: t('tabs.spaces', { defaultValue: 'Space' }),
           tabBarButtonTestID: 'tab-button-spaces',
           tabBarIcon: ({ color, focused }) => (

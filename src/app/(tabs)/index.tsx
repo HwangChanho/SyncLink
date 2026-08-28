@@ -1,14 +1,22 @@
 /**
- * Home tab — Today summary, upcoming events, todos, and Space activity feed.
+ * Home tab — 오늘 / 다음 / 오늘의 제안 세 덩어리.
  *
- * Layout:
- *  ┌──────────────────────┐
- *  │ HomeHeader            │  ← 인사 + 날짜
- *  │ NLInputBar            │  ← AI 자연어 입력 (TASK-302)
- *  │ TodayEventList        │  ← 오늘 일정
- *  │ TodayTodoList         │  ← 오늘 할일
- *  │ SpaceActivityFeed     │  ← Space 실시간 활동
- *  └──────────────────────┘
+ * Layout (2026-08-28 UX 단순화 이후):
+ *  ┌────────────────────────────┐
+ *  │ HomeHeader                  │  ← 인사 + 날짜
+ *  │ LoginPromptBanner           │  ← 게스트에게만
+ *  │ StartGuideCard              │  ← 신규 사용자에게만
+ *  │ ─ 1. 오늘 ─                 │
+ *  │   TodayEventList            │  ← 앱을 여는 이유. 이전엔 9번째였다
+ *  │   TodayTodoList             │
+ *  │ ─ 2. 다음 ─                 │
+ *  │   UpcomingEventsCard        │
+ *  │ ─ 3. 오늘의 제안 (접힘) ─    │  ← AI·날씨·가져오기 5장을 한 덩어리로
+ *  │ SpaceActivityFeed           │  ← Space 가 있을 때만
+ *  │ NLInputBar (하단 고정)       │  ← AI 자연어 입력 (TASK-302)
+ *  └────────────────────────────┘
+ *
+ * 🔴 카드는 하나도 제거되지 않았다. 제안 묶음을 펼치면 전부 그대로 있다.
  *
  * Data loading:
  *  - Today's events: eventStore.fetchEvents(today)
@@ -35,6 +43,7 @@ import { WeeklyReviewCard }    from '@/components/home/WeeklyReviewCard';
 import { WeatherWidget }       from '@/components/home/WeatherWidget';
 import { DateSuggestionCard }  from '@/components/home/DateSuggestionCard';
 import { UpcomingEventsCard }  from '@/components/home/UpcomingEventsCard';
+import { SuggestionsSection }    from '@/components/home/SuggestionsSection';
 import { AISuggestionCard }     from '@/components/home/AISuggestionCard';
 import { ImportCalendarCard }   from '@/components/home/ImportCalendarCard';
 import { StartGuideCard }       from '@/components/home/StartGuideCard';
@@ -178,46 +187,34 @@ export default function HomeScreen() {
         {/* 2026-08-05 — 시작 가이드 체크리스트 (신규 로그인 사용자용, 완료/닫기 시 영구 숨김). */}
         <StartGuideCard />
 
-        {/* v1.2 Phase 3 — AI 빈 시간 활동 제안 카드. AI 호출 없이 rule baseline. */}
-        <AISuggestionCard slot={freeSlot} />
-
-        {/* v1.2.2 — 다른 캘린더 사진으로 일정 가져오기 (AI Vision). */}
-        <ImportCalendarCard />
-
-        {/* Current weather widget — TASK-903 */}
-        <WeatherWidget />
-
         {/*
-         * Visual breathing room between the weather widget and the cards
-         * that follow. Previously these sections touched each other with
-         * no margin, making the home screen feel cramped. A single shared
-         * spacer keeps the gap consistent regardless of which widgets are
-         * rendered (WeatherWidget may collapse to null when location
-         * permission is denied).
+         * ── 2026-08-28 UX 단순화 (docs/plans/2026-08-28-ux-simplification.md) ──
+         * 이전에는 이 자리에 AI·날씨·가져오기 카드가 먼저 오고 "오늘 일정"이
+         * **9번째**였다. 앱을 여는 이유를 맨 위로 올린다:
+         *   1) 오늘  2) 다음  3) 오늘의 제안(접힘)
+         * 카드는 하나도 지우지 않았다 — 3번 안에 전부 살아 있다.
          */}
-        <View style={styles.sectionSpacer} />
 
-        {/* AI date suggestion card — TASK-904 */}
-        <DateSuggestionCard />
-
-        <View style={styles.sectionSpacer} />
-
-        {/* Weekly AI review card — TASK-504 */}
-        <WeeklyReviewCard />
-
-        {/* Section spacer */}
-        <NLInputBarSpacer />
-
-        {/* Today's events */}
+        {/* ── 1. 오늘 ── */}
         <TodayEventList />
-
-        {/* Upcoming events (tomorrow → +6 days) */}
-        <UpcomingEventsCard />
-
-        {/* Today's todos */}
         <TodayTodoList />
 
-        {/* Space activity feed */}
+        {/* ── 2. 다음 (내일 → +6일) ── */}
+        <UpcomingEventsCard />
+
+        {/* ── 3. 오늘의 제안 — 기본 접힘 ──
+            접힘일 때는 마운트되지 않으므로 AI 카드의 자동 호출도 함께 멈춘다. */}
+        <SuggestionsSection title={t('common.today_suggestions')}>
+          <AISuggestionCard slot={freeSlot} />
+          <WeatherWidget />
+          <View style={styles.sectionSpacer} />
+          <DateSuggestionCard />
+          <View style={styles.sectionSpacer} />
+          <WeeklyReviewCard />
+          <ImportCalendarCard />
+        </SuggestionsSection>
+
+        {/* Space 활동 — Space 에 속한 사용자에게만 의미가 있어 스스로 숨는다. */}
         <SpaceActivityFeed />
       </ScrollView>
 
@@ -227,14 +224,6 @@ export default function HomeScreen() {
       <NLInputBar />
     </SafeAreaView>
   );
-}
-
-/**
- * Spacer that creates the visual gap where the NLInputBar "belongs"
- * within the scroll content hierarchy (even though it's absolutely positioned).
- */
-function NLInputBarSpacer() {
-  return null; // NLInputBar handles its own layout
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────

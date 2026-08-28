@@ -1,5 +1,8 @@
 const zh = {
   common: {
+    more_options: "更多选项",
+    today_suggestions: "今日建议",
+    see_all: '查看全部',
     ok: '确认',
     link_warning_title: '打开外部链接',
     link_warning_message: '您即将打开一个外部网站。请确认该链接可信。\n\n{{url}}',

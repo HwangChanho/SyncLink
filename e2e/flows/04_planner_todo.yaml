@@ -147,8 +147,17 @@ env:
 # ── 플래너 탭으로 이동 ─────────────────────────────────────────────────────────
 # 배너 dismiss 후 탭 이동
 - waitForAnimationToEnd
+# 플래너 진입 — 2026-08-28 UX 단순화로 탭바에서 내려가 "나" 탭 바로가기 경유가 됐다.
 - tapOn:
-    id: "tab-button-planner"
+    id: "tab-button-my"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      id: "shortcut-button-planner"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: "shortcut-button-planner"
 - waitForAnimationToEnd
 # 탭 후 배너가 다시 나타나면 dismiss
 - repeat:

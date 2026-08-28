@@ -1,5 +1,8 @@
 const en = {
   common: {
+    more_options: "More options",
+    today_suggestions: "Today's suggestions",
+    see_all: 'See all',
     ok: 'OK',
     link_warning_title: 'Open external link',
     link_warning_message: 'You are about to open an external site. Make sure you trust this link.\n\n{{url}}',

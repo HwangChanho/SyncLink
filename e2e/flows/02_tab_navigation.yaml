@@ -93,8 +93,17 @@ env:
 - takeScreenshot: screenshots/02_calendar_tab
 
 # 플래너 탭
+# 플래너 진입 — 2026-08-28 UX 단순화로 탭바에서 내려가 "나" 탭 바로가기 경유가 됐다.
 - tapOn:
-    id: "tab-button-planner"
+    id: "tab-button-my"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      id: "shortcut-button-planner"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: "shortcut-button-planner"
 - waitForAnimationToEnd
 - takeScreenshot: screenshots/02_planner_tab
 

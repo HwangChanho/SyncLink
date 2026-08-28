@@ -189,8 +189,18 @@ describe('EventCreateScreen', () => {
       expect(getByText('종료')).toBeTruthy();
     });
 
-    it('반복 옵션 칩 5개가 모두 렌더링됨', () => {
-      const { getByText } = render(<EventCreateScreen />);
+    // 2026-08-28 UX 단순화: 반복은 "더보기" 안으로 접혔다(실측 사용률 1.3%).
+    // 이 두 테스트가 단순화의 핵심 약속을 지킨다 —
+    //   ① 기본 화면에서는 안 보인다(= 폼이 실제로 짧아졌다)
+    //   ② 펼치면 전부 그대로다(= 기능을 지운 게 아니다)
+    it('반복 옵션은 기본 화면에서 접혀 있음', () => {
+      const { queryByText } = render(<EventCreateScreen />);
+      expect(queryByText('반복 없음')).toBeNull();
+    });
+
+    it('"더보기"를 펼치면 반복 옵션 칩 5개가 모두 렌더링됨', () => {
+      const { getByTestId, getByText } = render(<EventCreateScreen />);
+      fireEvent.press(getByTestId('event-form-more-toggle'));
       // i18n 적용 후: t('time.*') keys
       expect(getByText('반복 없음')).toBeTruthy();
       expect(getByText('매일')).toBeTruthy();

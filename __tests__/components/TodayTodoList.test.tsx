@@ -25,10 +25,15 @@ jest.mock('@/stores/todoStore', () => ({
   useTodoStore: jest.fn(),
 }));
 
+// 헤더의 "전체 보기" 가 할 일/노트 화면으로 이동한다(2026-08-28 UX 단순화로
+// 플래너가 탭바에서 내려오면서 홈에 남긴 진입점). 실제 네비게이션은 차단한다.
+jest.mock('expo-router', () => ({
+  router: { push: jest.fn() },
+}));
+
 // ─── Imports ──────────────────────────────────────────────────────────────────
 
 import React from 'react';
-import { TouchableOpacity } from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
 import { useTodoStore } from '@/stores/todoStore';
 import { TodayTodoList } from '@/components/home/TodayTodoList';
@@ -223,11 +228,10 @@ describe('TodayTodoList', () => {
       const mockToggle = jest.fn();
       mockStore({ todos: [baseTodo], toggleTodo: mockToggle });
 
-      // TouchableOpacity는 자동으로 role=button을 갖지 않으므로
-      // UNSAFE_getAllByType으로 직접 탐색 (testID가 없는 상황의 차선책)
-      const { UNSAFE_getAllByType } = render(<TodayTodoList />);
-      const checkboxes = UNSAFE_getAllByType(TouchableOpacity);
-      fireEvent.press(checkboxes[0]);
+      // 체크박스를 testID 로 찾는다. 예전엔 UNSAFE_getAllByType(TouchableOpacity)[0]
+      // 이었는데, 헤더에 "전체 보기" 버튼이 추가되자 그게 [0] 이 되어 깨졌다.
+      const { getByTestId } = render(<TodayTodoList />);
+      fireEvent.press(getByTestId('todo-checkbox-todo-1'));
 
       expect(mockToggle).toHaveBeenCalledWith('todo-1');
     });
@@ -236,9 +240,8 @@ describe('TodayTodoList', () => {
       const mockToggle = jest.fn();
       mockStore({ todos: [completedTodo], toggleTodo: mockToggle });
 
-      const { UNSAFE_getAllByType } = render(<TodayTodoList />);
-      const checkboxes = UNSAFE_getAllByType(TouchableOpacity);
-      fireEvent.press(checkboxes[0]);
+      const { getByTestId } = render(<TodayTodoList />);
+      fireEvent.press(getByTestId('todo-checkbox-todo-2'));
 
       expect(mockToggle).toHaveBeenCalledWith('todo-2');
     });

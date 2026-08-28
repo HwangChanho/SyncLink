@@ -8,6 +8,7 @@
  */
 
 import { View, Text, TouchableOpacity, StyleSheet, Vibration } from 'react-native';
+import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTodoStore } from '@/stores/todoStore';
 import type { Todo } from '@/types';
@@ -50,11 +51,15 @@ interface TodoRowProps {
 function TodoRow({ todo, onToggle, colors: _colors, styles }: TodoRowProps) {
   return (
     <View style={styles.row}>
-      {/* Checkbox */}
+      {/* Checkbox
+          testID 를 붙인 이유: 테스트가 UNSAFE_getAllByType(TouchableOpacity)[0] 로
+          체크박스를 찾고 있었다. 헤더에 버튼이 하나 생기자 곧바로 깨졌다(2026-08-28).
+          순서가 아니라 이름으로 찾게 해서 같은 함정을 다시 밟지 않게 한다. */}
       <TouchableOpacity
         style={[styles.checkbox, todo.isCompleted && styles.checkboxChecked]}
         onPress={onToggle}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        testID={`todo-checkbox-${todo.id}`}
       >
         {todo.isCompleted && <Text style={styles.checkmark}>✓</Text>}
       </TouchableOpacity>
@@ -100,11 +105,23 @@ export function TodayTodoList() {
       {/* Section header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>{t('todo.today_list_title')}</Text>
-        {todayTodos.length > 0 && (
-          <Text style={styles.headerCount}>
-            {completed.length}/{todayTodos.length}
-          </Text>
-        )}
+        {/* 2026-08-28 — 할 일/노트가 탭바에서 내려왔으므로(UX 단순화) 홈에서
+            전체 목록으로 갈 수 있는 길을 남긴다. 오늘 할 일이 하나도 없을 때야말로
+            전체 목록으로 갈 이유가 크므로 개수와 달리 항상 보인다. */}
+        <View style={styles.headerRight}>
+          {todayTodos.length > 0 && (
+            <Text style={styles.headerCount}>
+              {completed.length}/{todayTodos.length}
+            </Text>
+          )}
+          <TouchableOpacity
+            onPress={() => router.push('/(tabs)/planner')}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            testID="home-todo-see-all"
+          >
+            <Text style={styles.headerLink}>{t('common.see_all')}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {todayTodos.length === 0 ? (
@@ -171,6 +188,16 @@ function makeStyles(colors: ColorTokens) {
     headerCount: {
       ...textStyles.caption,
       color: colors.textTertiary,
+    },
+    /** 개수와 "전체 보기" 를 헤더 오른쪽에 나란히 묶는다. */
+    headerRight: {
+      flexDirection: 'row',
+      alignItems:    'center',
+      gap:           spacing[2],
+    },
+    headerLink: {
+      ...textStyles.caption,
+      color: colors.primary,
     },
     list: {
       backgroundColor: colors.surface,

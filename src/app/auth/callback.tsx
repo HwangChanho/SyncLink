@@ -18,9 +18,9 @@
  * NOTE for DEV (TASK-204):
  * - Use `supabase.auth.exchangeCodeForSession(url)` for PKCE code flow
  * - Use `supabase.auth.setSession({ access_token, refresh_token })` for implicit flow
- * - After setting the session, check `isNewUser` and redirect accordingly:
- *   - New user  → '/auth/onboarding'
- *   - Returning → '/(tabs)'
+ * - After setting the session, redirect into the app:
+ *   - 2026-08-28 UX 단순화로 신규/기존 구분 없이 '/(tabs)' 로 보낸다.
+ *     (이전에는 신규 사용자만 '/auth/onboarding' 닉네임 입력을 거쳤다)
  * - Show a loading spinner while processing; show error if exchange fails
  */
 
@@ -160,9 +160,19 @@ export default function AuthCallbackScreen() {
       return;
     }
 
-    // Detect first-time sign-in (same 30-second window used in authService.ts)
-    const isNewUser = Date.now() - new Date(session.user.created_at).getTime() < 30_000;
-    router.replace(isNewUser ? '/auth/onboarding' : '/(tabs)');
+    // 2026-08-28 UX 단순화 — 신규 사용자도 곧장 앱으로 보낸다.
+    //
+    // 이전에는 첫 로그인 시 닉네임 입력 화면(/auth/onboarding)을 한 번 더 거쳤다.
+    // 실사용자 25명 중 20명(80%)이 가입한 날 이후로 다시 오지 않았고, 가입 직후의
+    // 추가 입력은 그 마찰의 후보 중 하나다. 닉네임은 "나" 탭에서 언제든 바꿀 수
+    // 있으므로(my.tsx 의 닉네임 편집) **기능이 사라지는 것은 아니다**.
+    //
+    // 🔴 다만 이탈 지점을 기록하고 있지 않아 사람들이 실제로 이 화면에서
+    //    떠났는지는 모른다 — 검증 계획의 1번이 "이탈 지점 로깅 먼저"인 이유다.
+    //    되돌리려면 아래 한 줄을 이전의 삼항 분기로 돌리면 된다:
+    //    router.replace(isNewUser ? '/auth/onboarding' : '/(tabs)');
+    //    (화면 `auth/onboarding.tsx` 는 지우지 않고 그대로 둔다)
+    router.replace('/(tabs)');
   }
 
   if (error) {

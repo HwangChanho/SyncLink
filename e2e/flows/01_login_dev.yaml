@@ -117,8 +117,6 @@ env:
 - assertVisible:
     id: "tab-button-calendar"
 - assertVisible:
-    id: "tab-button-planner"
-- assertVisible:
     id: "tab-button-my"
 
 - takeScreenshot: screenshots/01_home_tab

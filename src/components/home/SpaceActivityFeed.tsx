@@ -15,6 +15,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { subscribeToSharedEvents } from '@/services/eventRealtimeService';
+import { useSpaceStore } from '@/stores/spaceStore';
 import type { EventSummary } from '@/types';
 import { useColors } from '@/hooks/useColors';
 import type { ColorTokens } from '@/hooks/useColors';
@@ -76,6 +77,10 @@ export function SpaceActivityFeed() {
   const colors = useColors();
   const styles = makeStyles(colors);
   const router = useRouter();
+  // 2026-08-28 UX 단순화 — Space 가 하나도 없으면 이 피드는 영구히 "활동 없음"
+  // 빈 상태만 보여주며 홈 한 칸을 차지한다(실사용 Space 가입자 2명).
+  // 기능을 없앤 게 아니라 **빈 껍데기를 숨기는 것**이다. Space 에 들어가면 즉시 돌아온다.
+  const spaces = useSpaceStore((s) => s.spaces);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const getActivityLabel = useActivityLabel();
   const formatRelative = useRelativeTimeFormatter();
@@ -117,6 +122,9 @@ export function SpaceActivityFeed() {
     );
     return unsubscribe;
   }, [addActivity, colors.border, t]);
+
+  // 훅을 모두 호출한 뒤에 판단한다 — 훅 순서가 렌더마다 달라지면 안 된다.
+  if (spaces.length === 0) return null;
 
   return (
     <View style={styles.container}>
