@@ -39,7 +39,6 @@ import { useAuthStore } from '@/stores/authStore';
 import { GuestGate } from '@/components/common/GuestGate';
 import { showAlert } from '@/lib/webAlert';
 import { logError } from '@/lib/errorLogger';
-import { ShortcutsSection } from '@/components/my/ShortcutsSection';
 import { SettingsSection } from '@/components/my/SettingsSection';
 // AccountMergeSection(통합 로그인) — 2026-06-07 LEAD 결정으로 UI 비활성(숨김).
 // 계정 통합이 구조적으로 데이터 손실/크래시 리스크가 커 보류. 컴포넌트·서버는 유지(추후 복구).
@@ -448,10 +447,6 @@ function MyScreenContent() {
 
         {/* ── 통합 로그인 — 2026-06-07 LEAD 결정으로 비활성(숨김). 구조적 불안정으로 보류. ── */}
         {/* <AccountMergeSection /> */}
-
-        {/* 2026-08-28 — 탭바에서 내린 화면들(할 일·노트 / Space)의 진입점.
-            설정보다 위에 둔다: 이건 "설정"이 아니라 콘텐츠로 가는 길이다. */}
-        <ShortcutsSection />
 
         <SettingsSection />
 

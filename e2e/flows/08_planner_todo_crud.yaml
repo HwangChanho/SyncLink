@@ -121,17 +121,8 @@ env:
     timeout: 30000
 
 # ── 3. 플래너 탭 이동 ──────────────────────────────────────────────────────────
-# 플래너 진입 — 2026-08-28 UX 단순화로 탭바에서 내려가 "나" 탭 바로가기 경유가 됐다.
 - tapOn:
-    id: "tab-button-my"
-- waitForAnimationToEnd
-- scrollUntilVisible:
-    element:
-      id: "shortcut-button-planner"
-    direction: DOWN
-    timeout: 10000
-- tapOn:
-    id: "shortcut-button-planner"
+    id: "tab-button-planner"
 - waitForAnimationToEnd
 
 # Todo 탭이 기본이지만 명시적으로 탭 선택
