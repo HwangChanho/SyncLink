@@ -70,6 +70,7 @@ import { FreeTimeRecommendSheet } from '@/components/calendar/FreeTimeRecommendS
 import type { FreeSlot } from '@/types/freeTime';
 import { RelativeDateSection } from '@/components/event/RelativeDateSection';
 import { addDays } from '@/lib/relativeDate';
+import { trackFunnel } from '@/services/funnelService';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -659,6 +660,11 @@ export default function EventCreateScreen() {
         color: newEvent.color ?? colors.primary,
         isOwn: true,
       });
+
+      // 퍼널: 이 앱의 핵심 행동. 홈까지 왔지만 여기까지 못 온 사람이
+      // "써봤지만 쓸모를 못 찾은" 구간이다. 여러 번 만드는 것도 의미가 있어
+      // 세션당 1회 제한을 풀고 매번 남긴다.
+      void trackFunnel('event_created', { always: true });
 
       // IDEA-019: Show a brief success toast before navigating back.
       // We show first, then navigate so the toast is briefly visible on the

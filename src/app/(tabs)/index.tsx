@@ -33,6 +33,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEventStore } from '@/stores/eventStore';
 import { useTodoStore } from '@/stores/todoStore';
 import { useAuthStore } from '@/stores/authStore';
+import { trackFunnel } from '@/services/funnelService';
 import { getViewRange } from '@/lib/calendarRange';
 import { NLInputBar } from '@/components/nl/NLInputBar';
 import { HomeHeader }         from '@/components/home/HomeHeader';
@@ -127,7 +128,12 @@ export default function HomeScreen() {
   // 데모/실데이터를 잘못 채울 수 있어(데모 누수), 인증 확정 시점에 (재)로드한다.
   const authReady = useAuthStore((s) => !s.isLoading);
   useEffect(() => {
-    if (authReady) loadTodayData();
+    if (authReady) {
+      loadTodayData();
+      // 퍼널: 여기까지 와야 앱을 "써본" 것이다. 세션당 1회만 남는다
+      // (탭을 옮길 때마다 홈이 다시 그려지므로 그대로 두면 수십 줄이 쌓인다).
+      void trackFunnel('home_view');
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authReady]);
 

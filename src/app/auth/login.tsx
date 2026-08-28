@@ -3,7 +3,7 @@
  * Order: Google → Kakao → Apple (iOS only)
  */
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ActivityIndicator, Platform, TextInput, KeyboardAvoidingView,
@@ -17,6 +17,7 @@ import { useColors } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { APP_BRAND } from '@/constants/config';
 import { textStyles } from '@/constants/typography';
+import { trackFunnel } from '@/services/funnelService';
 import {
   signInWithGoogle,
   signInWithKakao,
@@ -46,6 +47,9 @@ const IS_DEV_BUILD = __DEV__ && process.env.EXPO_PUBLIC_APP_ENV !== 'production'
 const E2E_PASSWORD = process.env.EXPO_PUBLIC_E2E_PASSWORD;
 
 export default function LoginScreen() {
+  // 퍼널: 로그인 화면에 도달. 여기서 멈춘 사람이 곧 로그인 마찰이다.
+  useEffect(() => { void trackFunnel('login_view'); }, []);
+
   const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
@@ -76,6 +80,10 @@ export default function LoginScreen() {
             : signInWithApple;
         await fn();
       }
+      // 퍼널: 로그인 성공. login_view 는 있는데 이게 없는 anon_id 가
+      // "로그인에서 막힌 사람"이다. 취소(isCancelError)는 실패로 세지 않으므로
+      // 여기서만 남긴다.
+      void trackFunnel('signed_in');
       // 로그인 성공 후 라우팅은 useAuthGuard 가 단독으로 처리한다
       // (신규 → /onboarding, 기존 → /(tabs)). 예전엔 여기서 '/(tabs)' 로 무조건
       // replace 한 뒤 가드가 신규 유저를 다시 /onboarding 으로 보내, 온보딩이 두 번

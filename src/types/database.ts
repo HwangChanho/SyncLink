@@ -355,6 +355,31 @@ export type SpaceMessageInsert =
   Pick<SpaceMessageRow, 'space_id' | 'sender_id'>
   & Partial<Pick<SpaceMessageRow, 'id' | 'body' | 'image_url' | 'tags' | 'created_at'>>;
 
+// ─── FUNNEL EVENTS (073) ──────────────────────────────────────────────────────
+
+/**
+ * Raw DB row for `funnel_events` — 이탈 지점 기록.
+ *
+ * 🔴 `interface` 가 아니라 `type` 이어야 한다. interface 는 암묵적 인덱스 시그니처를
+ *    못 받아서 Supabase 타입 클라이언트 전체가 `never` 로 죽는다(2026-08-26 사례).
+ */
+export type FunnelEventRow = {
+  /** bigint identity — append-only 로그라 시간순으로 증가한다. */
+  id: number;
+  /** 로그인 전 단계는 null. */
+  user_id: string | null;
+  /** 기기 로컬 난수. 로그인 전/후를 잇는 유일한 연결고리. */
+  anon_id: string;
+  /** FunnelStep union 값 (DB 는 자유 text, 통제는 funnelService 에서). */
+  step: string;
+  platform: string | null;
+  app_version: string | null;
+  created_at: string;
+};
+
+/** id 와 created_at 은 DB 가 채운다. */
+export type FunnelEventInsert = Omit<FunnelEventRow, 'id' | 'created_at'>;
+
 // ─── DATABASE SCHEMA (aggregate type for Supabase client generics) ────────────
 
 /**
@@ -448,6 +473,13 @@ export interface Database {
         Insert: SpaceMessageInsert;
         // 전송된 메시지는 수정하지 않는다 — tags 는 Edge Function 이 채운다.
         Update: Partial<Pick<SpaceMessageRow, 'tags'>>;
+        Relationships: [];
+      };
+      funnel_events: {
+        Row: FunnelEventRow;
+        Insert: FunnelEventInsert;
+        // append-only 로그다. 남긴 기록은 고치지 않는다.
+        Update: never;
         Relationships: [];
       };
     };

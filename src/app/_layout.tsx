@@ -58,6 +58,7 @@ import { logError } from '@/lib/errorLogger';
 import { useOnboardingStore } from '@/stores/onboardingStore';
 import { useAppearanceStore } from '@/stores/appearanceStore';
 import { useNoteSettingsStore } from '@/stores/noteSettingsStore';
+import { trackFunnel } from '@/services/funnelService';
 import { useFonts } from 'expo-font';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
 
@@ -128,6 +129,9 @@ function useAuthGuard(): { routingReady: boolean } {
     void useOnboardingStore.getState().hydrate();
     // Restore note settings (YouTube thumbnail toggle) from AsyncStorage.
     void useNoteSettingsStore.getState().hydrate();
+    // 퍼널의 분모. 이 줄이 있어야 "앱은 켰는데 어느 화면에도 도달하지 못한" 경우까지
+    // 셀 수 있다. 실패해도 조용히 삼키므로 부팅 경로에 영향을 주지 않는다.
+    void trackFunnel('app_open');
   }, []);
 
   useEffect(() => {

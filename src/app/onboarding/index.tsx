@@ -22,7 +22,7 @@
  * TASK-602 (Sprint 6)
  */
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -43,6 +43,7 @@ import { useColors } from '@/hooks/useColors';
 import type { ColorTokens } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { trackFunnel } from '@/services/funnelService';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -77,6 +78,9 @@ const PAGE_ICONS: (keyof typeof import('@expo/vector-icons').Ionicons.glyphMap)[
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function OnboardingScreen() {
+  // 퍼널: 최초 실행 소개에 도달. 퍼널의 첫 관문이다.
+  useEffect(() => { void trackFunnel('onboarding_view'); }, []);
+
   const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
@@ -100,6 +104,9 @@ export default function OnboardingScreen() {
    * 더 띄우고 로그인 화면이 깜빡였다 — 2026-06-06 수정.)
    */
   const handleFinish = useCallback(async () => {
+    // 퍼널: 소개를 끝냈다(건너뛰기 포함). 이 줄이 없으면 "소개에서 떠난 사람"을
+    // 셀 수 없다 — onboarding_view 는 있는데 onboarding_done 이 없는 anon_id 가 그들이다.
+    void trackFunnel('onboarding_done');
     await useOnboardingStore.getState().complete();
     router.replace('/(tabs)');
   }, []);
