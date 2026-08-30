@@ -40,6 +40,7 @@ import { useAppLockStore } from '@/stores/appLockStore';
 import { authenticate, isBiometricAvailable } from '@/services/appLockService';
 import { verifyPin } from '@/services/pinLockService';
 import { useIdleLogout } from '@/hooks/useIdleLogout';
+import { useRouteBreadcrumb } from '@/hooks/useRouteBreadcrumb';
 import { useWebPush } from '@/hooks/useWebPush';
 import { useWidgetSync } from '@/hooks/useWidgetSync';
 import { PinPad } from '@/components/common/PinPad';
@@ -449,6 +450,10 @@ export default function RootLayout() {
   // protect the device; the threat model on the web (shared computers)
   // is what makes idle-logout worth the friction.
   useIdleLogout();
+
+  // 화면이 바뀔 때마다 Sentry 에 흔적을 남긴다. 2026-08-30 fatal 크래시를 조사할 때
+  // **직전 화면을 알 수 없어** 원인을 끝내 특정하지 못했다 — 그 벽을 없애는 한 줄이다.
+  useRouteBreadcrumb();
 
   // Web-only: register the Service Worker + PushSubscription so the
   // smart-reminder pipeline can fan out notifications to open browser

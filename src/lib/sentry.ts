@@ -53,6 +53,32 @@ export function captureException(err: unknown): void {
 }
 
 /**
+ * 화면 이동을 breadcrumb 으로 남긴다 — 크래시 **직전에 어느 화면이었는지** 알기 위해서다.
+ *
+ * 왜 넣었나: 2026-08-30 의 fatal 크래시(SYNKLINK-1A,
+ * `|presentingViewController| must be set`)에서 스택은 "RN Fabric 이 뷰를 만들다가
+ * Expo 모듈 초기화 중 터졌다"까지만 말해줬다. **어느 화면인지는 끝내 알 수 없었다** —
+ * breadcrumb 에 ui.lifecycle 만 있고 라우트가 없었고, 퍼널은 7단계만 기록하기 때문이다.
+ * 화면 하나만 알았어도 후보가 즉시 좁혀졌다.
+ *
+ * 🔴 경로에서 식별자는 지운다. `/event/9a3f-…` 같은 값은 화면을 아는 데 필요 없고,
+ *    제3자 서비스로 나가는 데이터는 최소여야 한다(captureHandledError 가 `details` 를
+ *    일부러 안 보내는 것과 같은 판단).
+ *
+ * @param from 직전 경로. 첫 진입이면 null
+ * @param to   새 경로
+ */
+export function addNavigationBreadcrumb(from: string | null, to: string): void {
+  Sentry.addBreadcrumb({
+    category: 'navigation',
+    type: 'navigation',
+    level: 'info',
+    message: to,
+    data: { from: from ?? '(첫 진입)', to },
+  });
+}
+
+/**
  * Capture a *handled* error (one a service already caught) with its logical
  * origin attached as a searchable tag.
  *
