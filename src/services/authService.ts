@@ -14,7 +14,7 @@
  *  - EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID
  */
 
-import { Platform } from 'react-native';
+import { Platform, AppState } from 'react-native';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { initializeKakaoSDK } from '@react-native-kakao/core';
 import { login as kakaoNativeLogin } from '@react-native-kakao/user';
@@ -30,6 +30,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase';
 import { logError } from '@/lib/errorLogger';
+import { captureMessage } from '@/lib/sentry';
 import type { UserRow } from '@/types';
 
 // ─── Notification preferences types ──────────────────────────────────────────
@@ -764,6 +765,35 @@ async function acquireGoogleIdToken(forceAccountChooser = false): Promise<string
   if (Platform.OS === 'web') {
     throw new Error('Google 네이티브 로그인은 앱에서만 지원됩니다.');
   }
+
+  /*
+   * 🔴 iOS 네이티브 크래시 방어 — 2026-08-30, Sentry SYNKLINK-1B.
+   *
+   * `GIDSignIn` 은 로그인 모달을 띄울 presentingViewController 를 스스로 찾는데,
+   * 앱이 활성 상태가 아니면 그게 nil 이라
+   *   NSInvalidArgumentException: |presentingViewController| must be set.
+   * 로 **앱이 그 자리에서 죽는다**(fatal). 실제로 1.4.8+175 에서 한 번 잡혔고,
+   * 사용자는 로그인 화면까지 왔다가 그대로 이탈했다(퍼널 login_view → signed_in 없음).
+   *
+   * 이건 Objective-C 예외라 **JS try/catch 로는 잡을 수 없다.** 카카오 SDK 에서도
+   * 같은 교훈을 얻었다(초기화 전 호출을 막는 것이 유일한 방어였다).
+   * 그러므로 여기서 **호출 자체를 막는다.**
+   *
+   * 차단됐다는 사실은 Sentry 로 남긴다 — 이 방어가 실제로 발동하는 상황이
+   * 있는지 알아야 다음 판단(라이브러리 업그레이드 등)을 사실 위에서 할 수 있다.
+   *
+   * 🔴 조건이 `!== 'active'` 가 **아니라** "명확히 비활성일 때"인 이유:
+   *    `AppState.currentState` 는 앱이 막 뜬 직후 'unknown' 이거나 null 일 수 있다.
+   *    `!== 'active'` 로 막았더니 **멀쩡한 로그인까지 차단돼 기존 테스트 12건이
+   *    전부 깨졌다**(2026-08-30). 방어 코드가 정상 동작을 막으면 크래시보다 나쁘다.
+   *    막아야 하는 건 화면이 확실히 없는 상태(background/inactive)뿐이다.
+   */
+  const appState = AppState.currentState;
+  if (Platform.OS === 'ios' && (appState === 'background' || appState === 'inactive')) {
+    captureMessage('auth.google.blocked-inactive', 'warning');
+    throw new Error('앱이 활성화된 뒤 다시 시도해 주세요.');
+  }
+
   // Ensure Google Play Services are available (Android only; no-op on iOS)
   await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
 

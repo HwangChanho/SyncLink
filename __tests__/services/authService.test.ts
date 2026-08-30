@@ -105,6 +105,7 @@ const fetchMock = jest.fn();
 
 // ─── Imports ──────────────────────────────────────────────────────────────────
 
+import { AppState } from 'react-native';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as WebBrowser from 'expo-web-browser';
@@ -1210,5 +1211,51 @@ describe('authService', () => {
       });
       await expect(unlinkProvider('apple')).rejects.toThrow('연결되지 않았습니다');
     });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Google 로그인 — iOS 네이티브 크래시 방어 (Sentry SYNKLINK-1B)
+  // ══════════════════════════════════════════════════════════════════════════
+
+  /*
+   * GIDSignIn 은 모달을 띄울 presentingViewController 를 스스로 찾는데, 앱이
+   * 확실히 비활성이면 그게 nil 이라 NSException 으로 **앱이 즉사한다**.
+   * Objective-C 예외라 JS try/catch 로는 못 막으므로 호출 자체를 차단한다.
+   *
+   * 🔴 이 테스트가 지키는 것은 **양쪽**이다:
+   *   ① background/inactive 에서는 막는다 (크래시 방지)
+   *   ② 그 외에서는 절대 막지 않는다 — 특히 'unknown'/null.
+   *      처음에 `!== 'active'` 로 짰다가 **정상 로그인까지 막아 기존 테스트 12건이
+   *      깨졌다**. 방어가 정상 동작을 막으면 크래시보다 나쁘다.
+   */
+  describe('Google 로그인 크래시 방어 (iOS)', () => {
+    const setAppState = (s: string | null) => {
+      (AppState as unknown as { currentState: unknown }).currentState = s;
+    };
+    const original = AppState.currentState;
+    afterEach(() => setAppState(original as string));
+
+    it.each(['background', 'inactive'])(
+      'AppState=%s 이면 네이티브 로그인을 호출조차 하지 않는다',
+      async (state) => {
+        setAppState(state);
+        await expect(signInWithGoogle()).rejects.toThrow('앱이 활성화된 뒤');
+        expect(GoogleSignin.signIn).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([['active'], ['unknown'], [null]])(
+      'AppState=%s 이면 막지 않는다 (정상 로그인을 방해하면 안 된다)',
+      async (state) => {
+        setAppState(state as string | null);
+        (GoogleSignin.signIn as jest.Mock).mockResolvedValue({ data: { idToken: 'tok' } });
+        (supabase.auth.signInWithIdToken as jest.Mock).mockResolvedValue({
+          data: { session: { user: { id: 'u1' } } },
+          error: null,
+        });
+        await signInWithGoogle().catch(() => { /* 이후 단계 실패는 이 테스트의 관심사가 아니다 */ });
+        expect(GoogleSignin.signIn).toHaveBeenCalled();
+      },
+    );
   });
 });

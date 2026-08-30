@@ -10,7 +10,7 @@
     "splash": {
       "image": "./images/TwotwoLogo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#000000"
+      "backgroundColor": "#0E0D16"
     },
     "assetBundlePatterns": [
       "**/*"
