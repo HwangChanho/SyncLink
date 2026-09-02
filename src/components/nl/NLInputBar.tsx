@@ -46,6 +46,16 @@ import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 
+/**
+ * 웹에서 입력바 아래에 두는 여백(px).
+ *
+ * 네이티브는 탭바가 insets.bottom 만큼 띄워 주지만 **웹은 그 inset 이 0** 이라
+ * 입력창이 브라우저 창 바닥에 붙는다(2026-09-02 LEAD 지적: "여백을 좀 줘").
+ * 🔴 네이티브 값은 건드리지 않는다 — Build 44 실기 피드백이 정확히 반대였다
+ *    ("텍스트필드 좀더 낮춰야").
+ */
+const WEB_INPUT_BOTTOM_GAP = 24;
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type InputState = 'idle' | 'loading' | 'preview' | 'error';
@@ -172,9 +182,16 @@ export function NLInputBar({ onEventCreated }: Props) {
     isStatusBarTranslucentAndroid: true,
     isNavigationBarTranslucentAndroid: true,
   });
-  /** 키보드 높이만큼만 정확히 들어올린다 (Build-76 LEAD: 추가 여백 없이). */
+  /**
+   * 키보드 높이만큼만 정확히 들어올린다 (Build-76 LEAD: 추가 여백 없이).
+   *
+   * 🔴 이 스타일은 `styles.container` **뒤에** 배열로 합쳐지므로 여기의
+   *    paddingBottom 이 container 의 값을 덮어쓴다. 2026-09-02 에 웹 여백을
+   *    container 에서 올렸다가 화면이 그대로여서 한참 헤맸다 — 웹 값을 여기서
+   *    함께 올려야 실제로 반영된다.
+   */
   const keyboardLift = useAnimatedStyle(() => ({
-    paddingBottom: Platform.OS === 'web' ? 0 : keyboard.height.value,
+    paddingBottom: Platform.OS === 'web' ? WEB_INPUT_BOTTOM_GAP : keyboard.height.value,
   }));
   const inputRef = useRef<TextInput>(null);
 
@@ -780,6 +797,8 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     paddingHorizontal: spacing[4],
     // Symmetric vertical padding around the input row.
     paddingTop:    spacing[3],
+    // ⚠️ 여기 paddingBottom 은 keyboardLift 가 덮어쓴다(스타일 배열 뒤쪽).
+    //    실제로 적용되는 값은 WEB_INPUT_BOTTOM_GAP / keyboard.height 다.
     paddingBottom: spacing[3],
     // No marginBottom — tab bar's own paddingBottom (insets.bottom) already
     // clears the home indicator. User feedback Build 44 (real device):

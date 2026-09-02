@@ -846,6 +846,11 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="event/[id]" options={{ presentation: 'modal' }} />
           <Stack.Screen name="event/create" options={{ presentation: 'modal' }} />
+          {/* 2026-09-02 — 등록 종류별 전용 화면. 넷 다 events 한 테이블에 저장되고
+              캘린더에서 함께 보인다. 다른 건 입력 방식뿐이다. */}
+          <Stack.Screen name="event/create-workout" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="event/create-dday" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="event/create-relative" options={{ presentation: 'modal' }} />
           <Stack.Screen name="event/edit/[id]" options={{ presentation: 'modal' }} />
           <Stack.Screen name="space/[id]" options={{ presentation: 'modal' }} />
           <Stack.Screen name="space/create" options={{ presentation: 'modal' }} />

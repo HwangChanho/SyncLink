@@ -31,6 +31,7 @@ import { useFocusEffect } from 'expo-router';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { Ionicons } from '@expo/vector-icons';
 import { NLInputBar } from '@/components/nl/NLInputBar';
+import { CreateTypeSheet } from '@/components/event/CreateTypeSheet';
 import { CalendarHeader, type ViewMode } from '@/components/calendar/CalendarHeader';
 import { WheelDatePicker } from '@/components/calendar/WheelDatePicker';
 import { MonthView } from '@/components/calendar/MonthView';
@@ -90,6 +91,8 @@ export default function CalendarScreen() {
    * Opened when the user taps the period title in CalendarHeader.
    */
   const [pickerVisible, setPickerVisible] = useState(false);
+  /** + 버튼이 여는 "무엇을 등록할까요" 시트 (2026-09-02). */
+  const [typeSheetOpen, setTypeSheetOpen] = useState(false);
 
   // ── Category filter (TASK-1416) — 분리된 hook ──────────────────────────────
   const {
@@ -592,10 +595,9 @@ export default function CalendarScreen() {
               monthDeleteRef.current();
               return;
             }
-            router.push({
-              pathname: '/event/create',
-              params: { date: toDateKey(selectedDate) },
-            });
+            // 2026-09-02 — 곧장 일정 폼으로 가지 않고 종류를 먼저 고르게 한다.
+            // 종류별 전용 화면이 자기 입력만 물어보므로 등록 단계가 짧아진다.
+            setTypeSheetOpen(true);
           }}
           accessibilityLabel={
             (isChildDragging || monthTargetEvent)
@@ -666,6 +668,26 @@ export default function CalendarScreen() {
         </Modal>
 
         {/* Build-81 — Free time space picker modal 제거 (캘린더에서 free time 빼기). */}
+
+        {/* + 버튼 → 등록 종류 선택. 고른 종류의 전용 화면으로 보낸다. */}
+        <CreateTypeSheet
+          visible={typeSheetOpen}
+          onClose={() => setTypeSheetOpen(false)}
+          onSelect={(type) => {
+            setTypeSheetOpen(false);
+            // 일반 일정만 선택 날짜를 넘긴다. D-Day·상대일은 목표일/기준일이
+            // 별도 개념이고, 운동은 "지금"이 기본이라 캘린더 날짜와 무관하다.
+            if (type === 'event') {
+              router.push({ pathname: '/event/create', params: { date: toDateKey(selectedDate) } });
+            } else if (type === 'workout') {
+              router.push('/event/create-workout');
+            } else if (type === 'dday') {
+              router.push('/event/create-dday');
+            } else {
+              router.push('/event/create-relative');
+            }
+          }}
+        />
       </View>
     </SafeAreaView>
   );
