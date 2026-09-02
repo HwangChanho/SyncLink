@@ -1,21 +1,25 @@
 /**
  * Event creation screen.
  *
- * Form fields (2026-08-28 UX 단순화 이후 — 순서가 곧 화면 순서다):
+ * 🔴 이 화면은 **일반 일정 전용**이다 (2026-09-02).
+ *    운동은 `event/create-workout`, D-Day 는 `event/create-dday`,
+ *    상대일은 `event/create-relative` 로 갈라졌다. + 버튼이 종류를 먼저 묻는다
+ *    (components/event/CreateTypeSheet). 편집 화면(event/edit)에는 네 종류의
+ *    입력이 모두 남아 있다 — 이미 만든 일정을 고쳐야 하기 때문이다.
+ *
+ * Form fields (순서가 곧 화면 순서다):
  *  기본 노출
- *   - Title (required)          ← 이전엔 종류 토글·사진 첨부 아래에 있었다
+ *   - Title (required)
  *   - All-day toggle
  *   - Start date + time (pre-filled from ?date= query param)
  *   - End date + time (defaults to start + 1 hour)
  *   - Category / Color / Description
  *  "더보기" 접이식 안 (MoreOptionsSection)
- *   - 종류 토글(일반·헬스·러닝) + 헬스 부위 + 러닝 거리/페이스
  *   - 사진 첨부 · Repeat · Location · Reminders
+ *     (실측상 거의 안 쓰인다: 장소 0.4% · 반복 1.3%)
  *  항상
  *   - Space sharing toggles (one per space the user belongs to)
  *
- * 🔴 필드는 하나도 제거되지 않았다. 실측상 거의 안 쓰이는 것들(장소 0.4%,
- *    반복 1.3%, 운동/러닝 사용자 1명)을 접었을 뿐이다.
  *    → docs/plans/2026-08-28-ux-simplification.md
  *
  * On save: calls createEvent → upsertEvent in store → back to calendar.
@@ -37,7 +41,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import * as Location from 'expo-location';
-import type { RepeatType, WorkoutPartDb } from '@/types';
+import type { RepeatType } from '@/types';
 import {
   createEvent,
   findConflictingEvents,
@@ -57,7 +61,6 @@ import { ReminderPicker } from '@/components/reminders/ReminderPicker';
 import { DateTimeModal } from '@/components/common/DateTimeModal';
 import { CategoryPickerSheet } from '@/components/planner/CategoryPickerSheet';
 import { ColorPicker } from '@/components/event/ColorPicker';
-import { BodyParts } from '@/components/event/BodyParts';
 import { EventImagePicker } from '@/components/event/EventImagePicker';
 import { MoreOptionsSection } from '@/components/event/MoreOptionsSection';
 import { uploadEventImage } from '@/services/eventImageService';
@@ -68,7 +71,6 @@ import { showAlert } from '@/lib/webAlert';
 import { SimpleToast, useSimpleToast } from '@/components/common/SimpleToast';
 import { FreeTimeRecommendSheet } from '@/components/calendar/FreeTimeRecommendSheet';
 import type { FreeSlot } from '@/types/freeTime';
-import { RelativeDateSection } from '@/components/event/RelativeDateSection';
 import { addDays } from '@/lib/relativeDate';
 import { trackFunnel } from '@/services/funnelService';
 
@@ -303,8 +305,10 @@ export default function EventCreateScreen() {
     setTitle, setAllDay, setStartAt, setEndAt, setRepeatType, setRepeatWeekdays,
     setLocation, setDescription, setShareSpaceIds, setReminderMinutes,
     setEventColor, setCategoryId, setEditableByMembers,
-    setRelativeEnabled, setBaseDate, setOffsetDays, setOffsetLabel,
     // v1.2.8 — useEventForm 의 set 들. NL prefill useEffect 에서 사용.
+    // 🔴 상대일 setter(setRelativeEnabled/setBaseDate/…)는 2026-09-02 에 뺐다.
+    //    상대일 입력이 create-relative 전용 화면으로 옮겨가 이 화면에는 없다.
+    //    값 자체(relativeEnabled 등)는 저장 로직이 계속 읽으므로 useEventForm 에 남아 있다.
   } = setters;
 
   // v1.2.8 — NL prefill. NLInputBar 에서 buildPrefillParams 로 query string
@@ -400,24 +404,16 @@ export default function EventCreateScreen() {
    * picker closes so inline creation is reflected immediately. */
   const [categoryMap, setCategoryMap]     = useState<Map<string, Category>>(new Map());
 
-  // v1.1 — 운동 일정 등록 mode. 'general' 이 기본. 'workout' 으로 바뀌면
-  // 시트 안에 BodyParts picker 가 inline 으로 노출되고 저장 시 부위 기록도
-  // 함께 persist 된다. 다른 필드(시간/카테고리/색상/메모)는 두 모드 동일하게
-  // 그대로 사용한다.
-  const [eventKind, setEventKind] = useState<'general' | 'workout' | 'running'>('general');
-  const [workoutParts, setWorkoutParts] = useState<WorkoutPartDb[]>([]);
+  /*
+   * 2026-09-02 — 운동·상대일 입력은 전용 화면(create-workout / create-relative)으로
+   * 옮겼다. 이 화면은 **일반 일정 전용**이라 관련 state 를 전부 걷어냈다.
+   * 저장 시에는 eventKind: 'general' 을 그대로 넘긴다.
+   * 편집 화면(event/edit)에는 실제 입력이 그대로 남아 있다 — 이미 만든 운동·상대일
+   * 일정을 고칠 수 있어야 하기 때문이다.
+   */
+
   // v1.1.2 — 첨부 이미지 로컬 URI 5장. 저장 시 createEvent 후 업로드.
   const [imageUris, setImageUris] = useState<string[]>([]);
-  // v1.1.2 — running 일 때 거리/페이스. distance 는 km 단위 float, pace 는
-  // "분:초/km" UI 입력값을 초 단위로 변환해 보관.
-  const [distanceKm,     setDistanceKm]     = useState<string>('');
-  const [paceMinutes,    setPaceMinutes]    = useState<string>('');
-  const [paceSeconds,    setPaceSeconds]    = useState<string>('');
-  const toggleWorkoutPart = useCallback((part: typeof workoutParts[number]) => {
-    setWorkoutParts((prev) =>
-      prev.includes(part) ? prev.filter((p) => p !== part) : [...prev, part],
-    );
-  }, []);
 
   // Load categories once on mount + whenever the picker closes.
   useEffect(() => {
@@ -613,22 +609,11 @@ export default function EventCreateScreen() {
         ...(eventColor          ? { color: eventColor }                : {}),
         shareToSpaceIds: shareSpaceIds,
         editableByMembers,
-        eventKind,
-        ...(eventKind === 'workout' ? { workoutParts } : {}),
-        ...(eventKind === 'running' ? {
-          // 빈 문자열 → null, 그 외 정상 파싱. 페이스 = 분*60 + 초.
-          distanceKm: distanceKm.trim() ? Number(distanceKm) : null,
-          avgPaceSeconds: paceMinutes.trim() || paceSeconds.trim()
-            ? (Number(paceMinutes || '0') * 60 + Number(paceSeconds || '0'))
-            : null,
-        } : {}),
-        // v1.3 — 상대일 일정 메타. relative ON 일 때만 전달 (startAt 은 위 effect 가
-        // 이미 기준일+N일 all-day 로 동기화). baseDate 는 토글 ON 시 today 로 보정됨.
-        ...(relativeEnabled && baseDate ? {
-          baseDate,
-          offsetDays,
-          ...(offsetLabel.trim() ? { offsetLabel: offsetLabel.trim() } : {}),
-        } : {}),
+        // 2026-09-02 — 이 화면은 **일반 일정 전용**이다.
+        // 운동(workoutParts/거리/페이스)과 상대일(baseDate/offsetDays)은 각각
+        // create-workout / create-relative 로 옮겼다. 여기 남겨두면 절대 실행되지
+        // 않는 분기가 된다.
+        eventKind: 'general',
       });
 
       // Persist reminders for the newly created event (fire-and-forget; see
@@ -920,9 +905,6 @@ export default function EventCreateScreen() {
         </View>
 
         <View style={styles.form}>
-          {/* v1.3 — 상대일 일정 ON 이면 시작/종료/종일 행은 숨김 (기준일+N일 이
-              all-day 일정으로 자동 계산되므로). RelativeDateSection 의 토글로 복귀. */}
-          {!relativeEnabled && (<>
           {/* All-day toggle */}
           <FormRow label={t('time.all_day')} rowStyle={rowStyle}>
 
@@ -976,19 +958,6 @@ export default function EventCreateScreen() {
               )}
             </FormRow>
           )}
-          </>)}
-
-          {/* v1.3 — 상대일 일정 (기준일 + N일 → D-day). 토글은 항상 노출. */}
-          <RelativeDateSection
-            enabled={relativeEnabled}
-            onToggle={setRelativeEnabled}
-            baseDate={baseDate}
-            onChangeBaseDate={setBaseDate}
-            offsetDays={offsetDays}
-            onChangeOffsetDays={setOffsetDays}
-            offsetLabel={offsetLabel}
-            onChangeOffsetLabel={setOffsetLabel}
-          />
 
           {/*
            * DateTimeModal — unified date + time editor (Bug 2 fix).
@@ -1066,89 +1035,12 @@ export default function EventCreateScreen() {
             />
           </FormRow>
 
-          {/* ── 2026-08-28 UX 단순화 — 거의 쓰이지 않는 필드는 접어 둔다 ──
-              실측(전체 223건): 장소 1건(0.4%) · 반복 3건(1.3%) · 운동/러닝은 1명.
-              지운 게 아니라 접은 것이다. 펼치면 이전과 똑같이 전부 있다. */}
+          {/* ── 거의 쓰이지 않는 필드는 접어 둔다 (2026-08-28) ──
+              실측(전체 223건): 장소 1건(0.4%) · 반복 3건(1.3%).
+              지운 게 아니라 접은 것이다. 펼치면 전부 있다.
+              🔴 운동·상대일은 2026-09-02 에 전용 화면으로 옮겨 여기서 뺐다
+                 (create-workout / create-relative). 편집 화면에는 그대로 있다. */}
           <MoreOptionsSection label={t('common.more_options')}>
-        {/* v1.1.2 — 일반 / 헬스 / 러닝 3단 토글. 같은 시트 안에서 mode 만
-            바뀌고 다른 필드는 공통 사용. 헬스→BodyParts, 러닝→거리/페이스. */}
-        <View style={styles.kindToggle}>
-          {(['general', 'workout', 'running'] as const).map((kind) => {
-            const active = eventKind === kind;
-            const label = kind === 'general' ? '일반' : kind === 'workout' ? '헬스' : '러닝';
-            return (
-              <Pressable
-                key={kind}
-                onPress={() => setEventKind(kind)}
-                style={[
-                  styles.kindToggleBtn,
-                  active && { backgroundColor: colors.primary },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.kindToggleText,
-                    { color: active ? colors.textInverse : colors.textSecondary },
-                  ]}
-                >
-                  {label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {/* 헬스 모드일 때만 BodyParts picker 노출. */}
-        {eventKind === 'workout' && (
-          <View style={styles.bodyPartsWrap}>
-            <BodyParts
-              selected={workoutParts}
-              onToggle={toggleWorkoutPart}
-            />
-          </View>
-        )}
-
-        {/* 러닝 모드일 때 거리(km) + 평균 페이스(분/km) 입력. */}
-        {eventKind === 'running' && (
-          <View style={styles.runningWrap}>
-            <View style={styles.runningRow}>
-              <Text style={styles.runningLabel}>거리</Text>
-              <TextInput
-                value={distanceKm}
-                onChangeText={setDistanceKm}
-                keyboardType="decimal-pad"
-                placeholder="0.0"
-                placeholderTextColor={colors.textTertiary}
-                style={styles.runningInput}
-              />
-              <Text style={styles.runningUnit}>km</Text>
-            </View>
-            <View style={styles.runningRow}>
-              <Text style={styles.runningLabel}>평균 페이스</Text>
-              <TextInput
-                value={paceMinutes}
-                onChangeText={setPaceMinutes}
-                keyboardType="number-pad"
-                placeholder="5"
-                placeholderTextColor={colors.textTertiary}
-                style={styles.runningInputSm}
-                maxLength={2}
-              />
-              <Text style={styles.runningUnit}>분</Text>
-              <TextInput
-                value={paceSeconds}
-                onChangeText={setPaceSeconds}
-                keyboardType="number-pad"
-                placeholder="30"
-                placeholderTextColor={colors.textTertiary}
-                style={styles.runningInputSm}
-                maxLength={2}
-              />
-              <Text style={styles.runningUnit}>초 / km</Text>
-            </View>
-          </View>
-        )}
-
         {/* v1.1.2 — 일정 이미지 첨부 (모든 kind 공통, max 5장). 저장 시 압축 + 업로드. */}
         <View style={styles.imagePickerWrap}>
           <Text style={styles.imagePickerLabel}>사진 첨부</Text>
@@ -1434,83 +1326,8 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
 
   // v1.1 — 일반 / 운동 segmented toggle. 시트 가장 상단에 위치해 mode 가
   // 일정 등록 흐름의 첫 결정임을 시각적으로 알린다.
-  kindToggle: {
-    flexDirection: 'row',
-    marginHorizontal: spacing[5],
-    marginTop: spacing[3],
-    backgroundColor: colors.surface,
-    borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
-  },
-  kindToggleBtn: {
-    flex: 1,
-    paddingVertical: spacing[2],
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  kindToggleText: {
-    ...textStyles.label,
-  },
-  bodyPartsWrap: {
-    marginHorizontal: spacing[5],
-    marginTop: spacing[3],
-    paddingVertical: spacing[3],
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
 
   // v1.1.2 — running 모드 입력 폼
-  runningWrap: {
-    marginHorizontal: spacing[5],
-    marginTop: spacing[3],
-    padding: spacing[4],
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: spacing[3],
-  },
-  runningRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-  },
-  runningLabel: {
-    ...textStyles.body,
-    color: colors.textPrimary,
-    minWidth: 90,
-  },
-  runningInput: {
-    flex: 1,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    color: colors.textPrimary,
-    backgroundColor: colors.backgroundAlt,
-    fontSize: 16,
-  },
-  runningInputSm: {
-    width: 48,
-    paddingHorizontal: spacing[2],
-    paddingVertical: spacing[2],
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    color: colors.textPrimary,
-    backgroundColor: colors.backgroundAlt,
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  runningUnit: {
-    ...textStyles.body,
-    color: colors.textSecondary,
-  },
 
   // v1.1.2 이미지 첨부
   imagePickerWrap: {
