@@ -21,7 +21,7 @@
       "appleTeamId": "QUVU2PY6PG",
       "appStoreUrl": "https://apps.apple.com/kr/app/id6763083903",
       "newArchEnabled": true,
-      "buildNumber": "178",
+      "buildNumber": "179",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.io.synclink.app.widget"
