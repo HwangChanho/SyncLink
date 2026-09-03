@@ -211,7 +211,12 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     container: { flex: 1, backgroundColor: colors.backgroundAlt },
     header: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-      paddingHorizontal: spacing[4], paddingVertical: spacing[3],
+      paddingHorizontal: spacing[4],
+      // 모달로 뜨는 화면이라 상태바 바로 아래에 붙는다. iOS 네비게이션 바 표준이
+      // 44pt 인데 그보다 얇아 눌려 보였다(2026-09-03 LEAD 지적) → 표준에 맞춘다.
+      paddingTop: spacing[4],
+      paddingBottom: spacing[4],
+      minHeight: 56,
       borderBottomWidth: 1, borderBottomColor: colors.border,
       backgroundColor: colors.surface,
     },

@@ -56,6 +56,16 @@ import { textStyles } from '@/constants/typography';
  */
 const WEB_INPUT_BOTTOM_GAP = 24;
 
+/**
+ * 네이티브에서 **키보드가 닫혀 있을 때** 입력바를 탭바 위로 띄우는 여백(px).
+ *
+ * 종전에는 이 값이 없어(paddingBottom = keyboard.height, 키보드 없으면 0)
+ * 입력창이 탭바에 딱 붙었다(2026-09-03 LEAD 스크린샷).
+ * 🔴 키보드가 올라온 동안에는 이 여백을 더하지 않는다 — Build-76 의
+ *    "추가 여백 없이"가 그 상황을 말한 것이고, 더하면 키보드에서 떠 보인다.
+ */
+const NATIVE_INPUT_BOTTOM_GAP = 12;
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type InputState = 'idle' | 'loading' | 'preview' | 'error';
@@ -183,16 +193,24 @@ export function NLInputBar({ onEventCreated }: Props) {
     isNavigationBarTranslucentAndroid: true,
   });
   /**
-   * 키보드 높이만큼만 정확히 들어올린다 (Build-76 LEAD: 추가 여백 없이).
+   * 입력바를 키보드 위로 올리고, 키보드가 없을 때는 바닥에서 조금 띄운다.
    *
    * 🔴 이 스타일은 `styles.container` **뒤에** 배열로 합쳐지므로 여기의
    *    paddingBottom 이 container 의 값을 덮어쓴다. 2026-09-02 에 웹 여백을
-   *    container 에서 올렸다가 화면이 그대로여서 한참 헤맸다 — 웹 값을 여기서
-   *    함께 올려야 실제로 반영된다.
+   *    container 에서 올렸다가 화면이 그대로여서 한참 헤맸다 — 여백은 여기서
+   *    정해야 실제로 반영된다.
+   *
+   * 🔴 네이티브에서 종전 값이 `keyboard.height.value` 였다. 키보드가 없으면
+   *    그게 0 이라 **여백이 통째로 사라져 입력창이 탭바에 딱 붙었다**
+   *    (2026-09-03 LEAD 스크린샷). 키보드가 올라와 있을 때는 예전대로
+   *    높이만큼만 올린다 — Build-76 의 "추가 여백 없이"가 그 상황을 말한 것이라,
+   *    거기에 여백을 더하면 입력창이 키보드에서 떠 보인다.
    */
-  const keyboardLift = useAnimatedStyle(() => ({
-    paddingBottom: Platform.OS === 'web' ? WEB_INPUT_BOTTOM_GAP : keyboard.height.value,
-  }));
+  const keyboardLift = useAnimatedStyle(() => {
+    if (Platform.OS === 'web') return { paddingBottom: WEB_INPUT_BOTTOM_GAP };
+    const h = keyboard.height.value;
+    return { paddingBottom: h > 0 ? h : NATIVE_INPUT_BOTTOM_GAP };
+  });
   const inputRef = useRef<TextInput>(null);
 
   // 2026-08-05 — StartGuideCard "첫 일정 등록" 단계가 nlFocusStore 로 포커스를
