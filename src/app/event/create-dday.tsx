@@ -15,6 +15,11 @@
  *
  * 알림: 기존 `event_reminders` 를 그대로 쓴다. 분 단위 컬럼이라 일수를 분으로
  * 환산해 넣는다(하루 전 = 1440). DB 에 체크 제약이 없어 그대로 들어간다.
+ *
+ * 🔴 트리거 시각은 목표일 자정에서 빼면 안 된다. 종일 일정이라 start_at 이 자정
+ *    이어서, "하루 전"(1440분)이 곧 **전날 0시**가 된다 — 자는 시간에 울린다.
+ *    그래서 트리거 계산만 `NOTIFY_HOUR` 를 기준으로 한다. 저장되는
+ *    `minutes_before` 는 1440 그대로라 알림 문구("1일 전 알림")도 어긋나지 않는다.
  */
 
 import { useState, useCallback } from 'react';
@@ -42,10 +47,10 @@ import { textStyles } from '@/constants/typography';
 /**
  * D-Day 알림 선택지. 분으로 환산해 `event_reminders.minutes_before` 에 넣는다.
  *
- * 🔴 "당일"은 넣지 않았다. D-Day 는 종일 일정이라 시작 시각이 자정이고,
- *    minutes_before=0 이면 **자정에 알림이 울린다**. 그건 도움이 아니라 방해다.
- *    당일 아침 알림을 하려면 음수 오프셋이 필요한데 스케줄러가 그걸 다루는지
- *    확인되지 않았다 — 검증 없이 넣지 않는다.
+ * 🔴 "당일"은 넣지 않았다. 스케줄러가 음수 오프셋을 다루는지 확인되지 않았다 —
+ *    검증 없이 넣지 않는다.
+ *    (처음엔 "당일 = 자정에 울려서 방해"라고만 적었는데, 기준이 자정인 이상
+ *     1440·4320·10080 도 똑같이 자정이었다. 그래서 `NOTIFY_HOUR` 를 도입했다.)
  */
 const DDAY_REMINDERS: { days: number; minutes: number; label: string }[] = [
   { days: 1, minutes: 1440,  label: '하루 전' },
@@ -53,10 +58,34 @@ const DDAY_REMINDERS: { days: number; minutes: number; label: string }[] = [
   { days: 7, minutes: 10080, label: '일주일 전' },
 ];
 
+/**
+ * 알림이 울릴 로컬 시각(24시간제). 목표일의 이 시각을 기준으로 `minutes_before`
+ * 를 빼기 때문에, "하루 전"은 전날 09:00 · "일주일 전"은 7일 전 09:00 이 된다.
+ *
+ * 🔑 이 값은 **트리거 계산에만** 쓴다. 일정 자체(`start_at`)는 종일이라 자정에
+ *    그대로 저장되고, D-Day 배지 계산도 날짜 단위라 영향을 받지 않는다.
+ */
+const NOTIFY_HOUR = 9;
+
 /** 자정으로 정규화 — D-Day 계산은 시각이 아니라 날짜 단위다. */
 function atMidnight(d: Date): Date {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+/**
+ * 알림 트리거 계산의 기준이 되는 시각 — 해당 날짜의 `NOTIFY_HOUR` 시 정각.
+ *
+ * @param d - 목표일(시각은 무시하고 날짜만 쓴다)
+ * @returns 같은 날 오전 9시의 Date
+ *
+ * 주의: 반환값을 일정 저장에 쓰면 안 된다. `start_at` 은 종일 일정이라
+ * 자정이어야 하고, 이 값은 `updateReminders` 에만 넘긴다.
+ */
+function atNotifyHour(d: Date): Date {
+  const x = atMidnight(d);
+  x.setHours(NOTIFY_HOUR, 0, 0, 0);
   return x;
 }
 
@@ -127,7 +156,8 @@ export default function CreateDDayScreen() {
       // 여기서 throw 하지 않고 알린다.
       if (reminders.length > 0) {
         try {
-          await updateReminders(created.id, reminders, trimmed, targetDay);
+          // 🔴 targetDay(자정)를 넘기면 "하루 전"이 전날 0시가 된다 → 오전 9시 기준.
+          await updateReminders(created.id, reminders, trimmed, atNotifyHour(targetDay));
         } catch (err) {
           void logError({ context: 'event.dday.reminders', error: err });
           showToast('일정은 저장됐지만 알림 설정에 실패했어요');
