@@ -326,21 +326,62 @@ export function makeSpaceDetailStyles(colors: ReturnType<typeof useColors>) {
   dangerZone: {
     marginTop: spacing[4],
   },
-  leaveButton: {
-    // v1.1.4 — 버튼/폰트 크기 축소 (LEAD 피드백: dangerZone 버튼이 너무 큼).
-    paddingVertical: spacing[2],
-    paddingHorizontal: spacing[4],
+  /**
+   * dangerZone 안의 액션 버튼들을 감싸는 컨테이너.
+   * gap 으로 버튼 간격을 주므로 각 버튼은 marginTop 을 갖지 않는다.
+   */
+  dangerZoneActions: {
+    // 파괴적 버튼(탈퇴)을 중립 버튼과 붙여 두면 오조작이 난다.
+    // account.tsx 는 24 를 쓰지만 여기는 카드가 촘촘한 화면이라 16 으로 절제.
+    gap: spacing[4],
+  },
+  /**
+   * dangerZone 공통 버튼 골격 (v1.4.10 — LEAD 지시로 앱 표준에 맞춤).
+   *
+   * 기준 = `src/app/settings/account.tsx` 의 로그아웃/회원탈퇴 버튼:
+   * 전폭 · 아이콘+라벨 가로 배치 · radius.md · borderWidth 1.
+   * 이전에는 둘 다 "빨간 테두리 알약"이라 파괴적이지 않은 소유권 양도까지
+   * 위험 동작처럼 보였고, 폭이 내용에 따라 달라져 좌우 정렬도 흔들렸다.
+   *
+   * ⚠️ 세로 패딩은 account.tsx(spacing[4]=16)보다 한 단계 낮은 spacing[3]=12 다.
+   *    v1.1.4 에 "dangerZone 버튼이 너무 큼" 피드백을 받은 적이 있어,
+   *    형태만 표준에 맞추고 크기는 절제했다.
+   */
+  zoneButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'center',
-    borderRadius: radius.lg,
+    justifyContent: 'center',
+    gap: spacing[2],
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[4],
+    borderRadius: radius.md,
     borderWidth: 1,
+  },
+  /** 누름 피드백 — account.tsx 의 actionPressed 와 동일. */
+  zoneButtonPressed: {
+    opacity: 0.6,
+  },
+  /**
+   * 소유권 양도 = 중립 액션. 되돌릴 수 있고 데이터가 사라지지 않으므로
+   * 빨강이 아니라 기본 표면색 + 일반 테두리를 쓴다(로그아웃 버튼과 같은 급).
+   */
+  transferButton: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+  },
+  transferButtonText: {
+    ...textStyles.label,
+    color: colors.textPrimary,
+  },
+  /** 탈퇴 = 파괴적 액션. 투명 배경 + error 테두리/글씨 (회원탈퇴 버튼과 동일). */
+  leaveButton: {
+    backgroundColor: 'transparent',
     borderColor: colors.error,
-    marginTop: spacing[3],
   },
   leaveButtonText: {
-    // labelLg → labelSm 로 축소.
-    ...textStyles.labelSm,
+    ...textStyles.label,
     color: colors.error,
+    fontWeight: '600',
   },
   // Error state
   errorText: {

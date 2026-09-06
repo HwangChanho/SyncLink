@@ -972,27 +972,33 @@ function SpaceDetailScreenContent() {
         </View>
 
         {/* Danger zone */}
-        <View style={styles.dangerZone}>
+        <View style={[styles.dangerZone, styles.dangerZoneActions]}>
           {/*
            * ── 소유권 양도 버튼 (owner only, IDEA-011 Phase B) ──────────────
            * 양도 가능한 다른 멤버가 1명 이상 있을 때만 표시한다.
            * 커플/그룹 관계없이 멤버 수 ≥ 2 이면 노출.
+           *
+           * v1.4.10 — 파괴적이지 않은 액션이므로 탈퇴와 시각적으로 분리했다.
+           * (중립 = 표면색+기본 테두리 / 파괴 = error 테두리)
            */}
           {isOwner && space.members.length >= 2 && (
             <TouchableOpacity
               testID="space-button-transfer"
-              style={styles.leaveButton}
+              style={[styles.zoneButton, styles.transferButton]}
               onPress={() => setIsTransferModalVisible(true)}
               activeOpacity={0.7}
             >
-              <Text style={styles.leaveButtonText}>{t('space.transfer_ownership')}</Text>
+              <Ionicons name="swap-horizontal-outline" size={18} color={colors.textPrimary} />
+              <Text style={styles.transferButtonText}>{t('space.transfer_ownership')}</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity
-            style={styles.leaveButton}
+            testID="space-button-leave"
+            style={[styles.zoneButton, styles.leaveButton]}
             onPress={handleLeaveSpace}
             activeOpacity={0.7}
           >
+            <Ionicons name="exit-outline" size={18} color={colors.error} />
             <Text style={styles.leaveButtonText}>{t('space.leave')}</Text>
           </TouchableOpacity>
         </View>
