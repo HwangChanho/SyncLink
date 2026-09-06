@@ -92,18 +92,57 @@ if (version) {
     console.log(`  releaseType → ${releaseType}`);
   }
 } else {
-  const created = await api('/v1/appStoreVersions', {
-    method: 'POST',
-    body: {
-      data: {
-        type: 'appStoreVersions',
-        attributes: { platform: 'IOS', versionString, releaseType },
-        relationships: { app: { data: { type: 'apps', id: APP_ID } } },
+  /**
+   * 🔴 앱에 **편집 가능한 버전은 하나뿐**이다. 이미 하나가 열려 있으면
+   * POST /appStoreVersions 가 409 로 거부된다:
+   *   "You cannot create a new version of the App in the current state."
+   * 이 상황은 흔하다 — 직전 버전을 심사에 올렸다가 취소하면
+   * DEVELOPER_REJECTED 로 **열린 채 남기** 때문이다(2026-09-06 실제로 겪음).
+   *
+   * 그때는 새로 만들 게 아니라 **그 열린 버전의 번호를 바꿔 재사용**한다.
+   * 스크린샷·설명 등 메타데이터가 그대로 따라와 오히려 이득이다.
+   */
+  const EDITABLE = new Set([
+    'PREPARE_FOR_SUBMISSION', 'DEVELOPER_REJECTED', 'REJECTED',
+    'METADATA_REJECTED', 'INVALID_BINARY',
+  ]);
+  const reusable = versions.data.find(
+    (v) => EDITABLE.has(v.attributes.appStoreState)
+      // 아주 오래된 잔재 버전(1.0 등)까지 끌어다 쓰지 않도록 현재 라이브보다 뒤인 것만.
+      && v.attributes.versionString !== '1.0',
+  );
+
+  if (reusable) {
+    console.log(
+      `\n열린 버전 재사용: ${reusable.attributes.versionString} ` +
+      `(${reusable.attributes.appStoreState}) → ${versionString}`,
+    );
+    await api(`/v1/appStoreVersions/${reusable.id}`, {
+      method: 'PATCH',
+      body: {
+        data: {
+          type: 'appStoreVersions',
+          id: reusable.id,
+          attributes: { versionString, releaseType },
+        },
       },
-    },
-  });
-  version = created.data;
-  console.log(`\n버전 생성: ${version.id}`);
+    });
+    version = reusable;
+    console.log(`  버전 번호 변경 완료: ${version.id}`);
+  } else {
+    const created = await api('/v1/appStoreVersions', {
+      method: 'POST',
+      body: {
+        data: {
+          type: 'appStoreVersions',
+          attributes: { platform: 'IOS', versionString, releaseType },
+          relationships: { app: { data: { type: 'apps', id: APP_ID } } },
+        },
+      },
+    });
+    version = created.data;
+    console.log(`\n버전 생성: ${version.id}`);
+  }
 }
 
 await api(`/v1/appStoreVersions/${version.id}/relationships/build`, {
