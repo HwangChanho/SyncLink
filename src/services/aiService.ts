@@ -72,8 +72,26 @@ async function writeUsageRecord(record: AiUsageRecord): Promise<void> {
 /** Internal return type that bundles NLParseResult with token accounting. */
 interface EdgeFunctionResult {
   nlResult: NLParseResult;
+  /**
+   * v1.4.11 — 사진 여러 장에서 일정이 2건 이상 나온 경우 전부.
+   * 1건이면 undefined (그때는 `nlResult` 하나만 쓰면 된다).
+   */
+  nlResults?: NLParseResult[];
   tokensUsed: number;
 }
+
+/** 비서에게 보낼 사진 한 장. */
+export interface AiImageAttachment {
+  base64: string;
+  mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
+}
+
+/**
+ * 한 요청에 붙일 수 있는 사진 수 (v1.4.11 — LEAD 요청으로 1 → 10).
+ * parse-event Edge Fn 의 MAX_IMAGES 와 같은 값을 유지할 것.
+ * 서버가 진짜 관문이고 이 상수는 UI 가 미리 막아 주기 위한 것이다.
+ */
+export const MAX_NL_IMAGES = 10;
 
 // ─── Edge Function caller ─────────────────────────────────────────────────────
 
@@ -90,8 +108,7 @@ interface EdgeFunctionResult {
  */
 async function callEdgeFunction(
   text: string,
-  imageBase64?: string,
-  imageMediaType?: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
+  images?: AiImageAttachment[],
 ): Promise<EdgeFunctionResult> {
   // Build-51 — pull live i18n locale so the Edge Function picks the right
   // system prompt instead of always using Korean. Fallback to 'ko' for
@@ -116,9 +133,9 @@ async function callEdgeFunction(
           text,
           contextDatetime: new Date().toISOString(),
           locale,
-          ...(imageBase64
-            ? { imageBase64, imageMediaType: imageMediaType ?? 'image/jpeg' }
-            : {}),
+          // v1.4.11 — 사진은 배열로 보낸다. 서버는 구버전 단수 필드도 계속 받지만
+          // 신버전 클라이언트는 배열만 채운다(둘 다 보내면 중복될 수 있다).
+          ...(images?.length ? { images } : {}),
         },
       },
     );
@@ -141,27 +158,43 @@ async function callEdgeFunction(
     }
 
     const { result, tokensUsed: tokens } = data;
+    // v1.4.11 — 사진 여러 장이면 서버가 results 배열을 함께 준다.
+    // 구버전 서버(배포 전)는 이 필드가 없으므로 result 하나로 되돌아간다.
+    const rawItems = Array.isArray(data.results) && data.results.length > 0
+      ? data.results
+      : [result];
 
-    // Convert ISO-8601 date strings (from Deno/JSON serialization) to Date objects.
-    // The AI returns dates as strings; ParsedField<Date> expects actual Date instances.
-    const parsed = { ...result.parsed };
-    if (parsed.startAt) {
-      const rawStart = parsed.startAt.value as unknown as string;
-      parsed.startAt = { value: new Date(rawStart), confidence: parsed.startAt.confidence };
-    }
-    if (parsed.endAt) {
-      const rawEnd = parsed.endAt.value as unknown as string;
-      parsed.endAt = { value: new Date(rawEnd), confidence: parsed.endAt.confidence };
-    }
-
-    return {
-      nlResult: {
+    /**
+     * ISO-8601 문자열(Deno/JSON 직렬화)을 Date 객체로 되돌린다.
+     * AI 는 날짜를 문자열로 주지만 ParsedField<Date> 는 실제 Date 를 기대한다.
+     */
+    const toNlResult = (item: typeof result): NLParseResult => {
+      const parsed = { ...item.parsed };
+      if (parsed.startAt) {
+        const rawStart = parsed.startAt.value as unknown as string;
+        parsed.startAt = { value: new Date(rawStart), confidence: parsed.startAt.confidence };
+      }
+      if (parsed.endAt) {
+        const rawEnd = parsed.endAt.value as unknown as string;
+        parsed.endAt = { value: new Date(rawEnd), confidence: parsed.endAt.confidence };
+      }
+      return {
         parsed,
-        confidence: result.confidence,
+        confidence: item.confidence,
         source: 'ai',
         rawInput: text,
         processingMs: null,
-      },
+      };
+    };
+
+    const nlResults = rawItems.map(toNlResult);
+    // rawItems 는 최소 1개지만(results 가 비면 [result] 로 떨어진다) tsconfig 의
+    // noUncheckedIndexedAccess 가 그걸 모른다 — result 로 한 번 더 받쳐 준다.
+    const firstResult = nlResults[0] ?? toNlResult(result);
+
+    return {
+      nlResult: firstResult,
+      ...(nlResults.length > 1 && { nlResults }),
       tokensUsed: tokens,
     };
   } catch (err) {
@@ -229,11 +262,42 @@ export async function parseNaturalLanguageMulti(text: string): Promise<NLParseRe
 export async function parseNaturalLanguage(
   text: string,
   options?: {
-    imageBase64?: string;
-    imageMediaType?: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
+    /**
+     * 첨부 사진. v1.4.11 부터 최대 {@link MAX_NL_IMAGES} 장.
+     * 여러 장에서 일정이 여럿 나오면 **첫 건만** 돌아온다 —
+     * 전부 받으려면 {@link parseNaturalLanguageWithImages} 를 쓸 것.
+     */
+    images?: AiImageAttachment[];
   },
 ): Promise<NLParseResult> {
-  const hasImage = !!options?.imageBase64;
+  const results = await parseNaturalLanguageWithImages(text, options?.images);
+  // 항상 1건 이상을 주지만(실패도 error 1건) 타입상 빈 배열이 가능해 방어한다.
+  return results[0] ?? {
+    parsed: {},
+    confidence: 'low',
+    source: 'ai',
+    rawInput: text,
+    processingMs: null,
+    error: 'AI parsing failed',
+  };
+}
+
+/**
+ * 사진 첨부 파싱의 다중 결과 버전.
+ *
+ * 사진을 여러 장 보내면 일정도 여러 건 나올 수 있어(예: 시간표 스크린샷)
+ * 서버가 `results` 배열을 준다. 이 함수는 그 배열을 그대로 돌려준다.
+ * 결과가 1건이면 원소 1개짜리 배열이다 — 호출부는 항상 배열로 다루면 된다.
+ *
+ * @param text   함께 보낼 지시문(비어 있어도 됨 — 사진만으로도 파싱한다)
+ * @param images 첨부 사진 (없으면 텍스트 전용 경로와 동일하게 동작)
+ * @returns 최소 1건. 실패 시 confidence='low' + error 가 담긴 1건.
+ */
+export async function parseNaturalLanguageWithImages(
+  text: string,
+  images?: AiImageAttachment[],
+): Promise<NLParseResult[]> {
+  const hasImage = !!images?.length;
 
   // v1.2.9 — LEAD 결정: 로컬 정규식 파서를 제거하고 모든 입력을 AI 로
   // 통일. 이유: regex 가 "6~9시" 같은 경계 패턴을 자주 놓치고 (시 첫 숫자
@@ -248,25 +312,21 @@ export async function parseNaturalLanguage(
     const usage = await readUsageRecord();
     if (usage.callCount >= FREE_AI_DAILY_LIMIT) {
       const localFallback = parseLocally(text);
-      if (localFallback.confidence !== 'low') return localFallback;
-      return {
+      if (localFallback.confidence !== 'low') return [localFallback];
+      return [{
         parsed: {},
         confidence: 'low',
         source: 'local',
         rawInput: text,
         processingMs: null,
         error: `오늘 AI 파싱 한도(${FREE_AI_DAILY_LIMIT}회)에 도달했어요. 직접 입력해주세요.`,
-      };
+      }];
     }
   }
 
   // Step 4: call Edge Function — image 가 있으면 함께 전달 (서버에서 vision
   // 모델 + vision quota 사용).
-  const { nlResult, tokensUsed } = await callEdgeFunction(
-    text,
-    options?.imageBase64,
-    options?.imageMediaType,
-  );
+  const { nlResult, nlResults, tokensUsed } = await callEdgeFunction(text, images);
 
   // Step 5: record usage — text 흐름만 클라 카운트 (image 는 server-only).
   if (!hasImage) {
@@ -278,7 +338,8 @@ export async function parseNaturalLanguage(
     });
   }
 
-  return nlResult;
+  // 서버가 여러 건을 줬으면 전부, 아니면 한 건짜리 배열.
+  return nlResults ?? [nlResult];
 }
 
 /**

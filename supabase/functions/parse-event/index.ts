@@ -32,13 +32,42 @@ interface AiParseRequest {
   contextDatetime: string;
   /** User locale hint (e.g. "ko-KR"). */
   locale: string;
-  /** Optional: 사진 첨부 자연어 등록 (예: 미용실 예약 카톡 캡쳐). 있으면
-   *  Vision 지원 모델 (Sonnet) 로 multimodal 호출 + 비용 분리 quota.
-   *  data URL prefix 없이 raw base64 (jpeg/png). */
+  /**
+   * @deprecated v1.4.11 부터 `images` 를 쓴다. 스토어 배포 지연으로 구버전 앱이
+   * 한동안 계속 이 필드로 보내므로 **제거하면 안 된다**. 아래에서 images 로 합친다.
+   */
   imageBase64?: string;
-  /** Optional: imageBase64 의 media type. 기본 'image/jpeg'. */
-  imageMediaType?: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
+  /** @deprecated `imageBase64` 와 짝. 기본 'image/jpeg'. */
+  imageMediaType?: ParseEventImageMediaType;
+  /**
+   * 사진 첨부 자연어 등록 (예: 시간표·예약 카톡 캡쳐) 최대 {@link MAX_IMAGES} 장.
+   * 있으면 Vision 지원 모델(Sonnet)로 multimodal 호출 + 비용 분리 quota.
+   * data URL prefix 없이 raw base64 (jpeg/png/webp/gif).
+   * 배열 순서 = 사용자가 고른 순서 = 모델이 보는 순서.
+   */
+  images?: { base64: string; mediaType: ParseEventImageMediaType }[];
 }
+
+/** Anthropic vision 이 받는 이미지 MIME. */
+type ParseEventImageMediaType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
+
+/** 이 외 형식은 모델에 보내기 전에 400 으로 거른다. */
+const ALLOWED_IMAGE_TYPES = new Set<string>([
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+]);
+
+/**
+ * 한 요청에 붙일 수 있는 사진 수 (v1.4.11 — LEAD 요청으로 1 → 10).
+ * 클라이언트(NLInputBar)도 같은 값으로 선택을 제한하지만 서버가 진짜 관문이다.
+ */
+const MAX_IMAGES = 10;
+
+/**
+ * 한 요청 전체 base64 합계 상한.
+ * Vision 은 장당 원본 5MB 가 상한이고 base64 는 약 4/3 로 부푼다.
+ * 10장을 실제로 보낼 수 있게 넉넉히 두되 폭주는 막는 값.
+ */
+const MAX_IMAGES_TOTAL_BASE64_CHARS = 22_000_000;
 
 interface ParsedEventFromAI {
   title: string;
@@ -55,25 +84,37 @@ interface ParsedEventFromAI {
   offsetLabel?: string | null;
 }
 
+/** 클라이언트가 받는 필드별 파싱 결과. 일정 1건 분량. */
+interface AiParsedFields {
+  title?:       { value: string;    confidence: 'high' | 'medium' | 'low' };
+  startAt?:     { value: string;    confidence: 'high' | 'medium' | 'low' };
+  endAt?:       { value: string;    confidence: 'high' | 'medium' | 'low' };
+  location?:    { value: string;    confidence: 'high' | 'medium' | 'low' };
+  allDay?:      { value: boolean;   confidence: 'high' | 'medium' | 'low' };
+  repeatType?:  { value: string;    confidence: 'high' | 'medium' | 'low' };
+  weeklyDays?:  { value: number[];  confidence: 'high' | 'medium' | 'low' };
+  offsetDays?:  { value: number;    confidence: 'high' | 'medium' | 'low' };
+  offsetLabel?: { value: string;    confidence: 'high' | 'medium' | 'low' };
+}
+
+/** 일정 1건의 파싱 결과 봉투. */
+interface AiParseResultItem {
+  parsed: AiParsedFields;
+  confidence: 'high' | 'medium' | 'low';
+  source: 'ai';
+  rawInput: string;
+  processingMs: null;
+}
+
 interface AiParseResponse {
-  result: {
-    parsed: {
-      title?:       { value: string;    confidence: 'high' | 'medium' | 'low' };
-      startAt?:     { value: string;    confidence: 'high' | 'medium' | 'low' };
-      endAt?:       { value: string;    confidence: 'high' | 'medium' | 'low' };
-      location?:    { value: string;    confidence: 'high' | 'medium' | 'low' };
-      allDay?:      { value: boolean;   confidence: 'high' | 'medium' | 'low' };
-      repeatType?:  { value: string;    confidence: 'high' | 'medium' | 'low' };
-      weeklyDays?:  { value: number[];  confidence: 'high' | 'medium' | 'low' };
-      offsetDays?:  { value: number;    confidence: 'high' | 'medium' | 'low' };
-      offsetLabel?: { value: string;    confidence: 'high' | 'medium' | 'low' };
-    };
-    confidence: 'high' | 'medium' | 'low';
-    source: 'ai';
-    rawInput: string;
-    processingMs: null;
-    tokensUsed: number;
-  };
+  /** 항상 채워진다. 구버전 클라이언트는 이것만 읽으므로 **첫 일정**이 들어간다. */
+  result: AiParseResultItem;
+  /**
+   * v1.4.11 — 사진 여러 장에서 뽑은 일정이 2건 이상일 때만 채워진다.
+   * 신버전 클라이언트는 이게 있으면 이걸 쓴다(없으면 `result` 하나).
+   */
+  results?: AiParseResultItem[];
+  tokensUsed: number;
 }
 
 // ─── Claude Haiku system prompt ───────────────────────────────────────────────
@@ -84,7 +125,78 @@ interface AiParseResponse {
  * prompt with mixed-language input. We default to Korean (the main
  * audience) and fall through to English for any unknown locale code.
  */
-const buildSystemPrompt = (contextDatetime: string, locale: string): string => {
+/**
+ * 시스템 프롬프트 조립.
+ *
+ * @param contextDatetime 상대 날짜("내일") 해석 기준 시각
+ * @param locale          ko/en/ja/zh
+ * @param imageCount      첨부된 사진 수. **2장 이상일 때만** 응답 형식을
+ *                        배열(`{"events":[...]}`)로 바꾸는 지시를 덧붙인다.
+ *                        1장 이하면 기존 단일 형식 그대로 — 텍스트 경로와
+ *                        기존 단일 사진 경로에 회귀를 만들지 않기 위해서다.
+ */
+const buildSystemPrompt = (
+  contextDatetime: string,
+  locale: string,
+  imageCount = 0,
+): string => {
+  const base = buildBaseSystemPrompt(contextDatetime, locale);
+  if (imageCount < 2) return base;
+  return `${base}\n\n${buildMultiImageSuffix(locale, imageCount)}`;
+};
+
+/**
+ * 사진 여러 장일 때만 붙는 지시.
+ * 단일 형식을 그대로 두고 "배열로 감싸라"만 덧붙이므로, 위 본문의 title/시각/
+ * 반복 규칙은 그대로 적용된다.
+ */
+const buildMultiImageSuffix = (locale: string, imageCount: number): string => {
+  const lang = (locale ?? '').slice(0, 2).toLowerCase();
+  if (lang === 'en') {
+    return `
+⚠ ${imageCount} images are attached. Instead of the single-object format above, return:
+{"events":[{ ...same object as above... }, ...]}
+- Include EVERY event you find, across ALL images. One object per event.
+- If one image holds several events (e.g. a timetable), emit one object per event.
+- Skip images with no event; do not emit placeholders.
+- If NO image contains any event, return {"noEventFound":true,"reason":"..."} instead.
+- Cap at 30 objects.
+Return ONLY valid JSON.`.trim();
+  }
+  if (lang === 'ja') {
+    return `
+⚠ 画像が ${imageCount} 枚添付されています。上の単一形式ではなく次の形式で返してください:
+{"events":[{ ...上と同じオブジェクト... }, ...]}
+- すべての画像から見つかった予定を **すべて** 含める。予定 1 件につき 1 オブジェクト。
+- 1 枚に複数の予定（時間割など）があれば、それぞれ別オブジェクトにする。
+- 予定が無い画像は飛ばす。
+- どの画像にも予定が無ければ {"noEventFound":true,"reason":"..."} を返す。
+- 最大 30 件。
+必ず JSON のみ。`.trim();
+  }
+  if (lang === 'zh') {
+    return `
+⚠ 已附上 ${imageCount} 张图片。请不要用上面的单个对象格式，改用:
+{"events":[{ ...与上面相同的对象... }, ...]}
+- 包含 **所有** 图片中找到的每一个日程，每个日程一个对象。
+- 若一张图含多个日程（如课程表），每个日程单独一个对象。
+- 没有日程的图片跳过。
+- 若所有图片都没有日程，返回 {"noEventFound":true,"reason":"..."}。
+- 最多 30 个。
+只返回有效 JSON。`.trim();
+  }
+  return `
+⚠ 사진이 ${imageCount}장 첨부됐다. 위의 단일 객체 형식 대신 **다음 형식**으로 반환하라:
+{"events":[{ ...위와 동일한 객체... }, ...]}
+- **모든 사진**에서 찾은 일정을 **전부** 넣는다. 일정 1건당 객체 1개.
+- 한 장에 일정이 여러 개면(예: 시간표) 각각 별도 객체로 만든다.
+- 일정이 없는 사진은 그냥 건너뛴다. 빈 객체를 넣지 말 것.
+- 어느 사진에도 일정이 없으면 {"noEventFound":true,"reason":"..."} 를 반환한다.
+- 최대 30개까지.
+반드시 valid JSON만 반환하세요.`.trim();
+};
+
+const buildBaseSystemPrompt = (contextDatetime: string, locale: string): string => {
   const lang = (locale ?? '').slice(0, 2).toLowerCase();
 
   // v1.2.8 — repeatType 에 'custom_weekly' 추가 + weeklyDays 필드.
@@ -251,11 +363,47 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const body: AiParseRequest = await req.json();
     const { text, contextDatetime, locale, imageBase64, imageMediaType } = body;
 
-    const hasImage = typeof imageBase64 === 'string' && imageBase64.length > 0;
+    /**
+     * 신·구 클라이언트를 하나의 배열로 합친다.
+     * 구버전 앱은 `imageBase64`(단수), v1.4.11+ 는 `images`(배열)를 보낸다.
+     * 둘 다 오면 배열을 정답으로 삼아 사진이 중복되지 않게 한다.
+     */
+    const images: { base64: string; mediaType: ParseEventImageMediaType }[] =
+      Array.isArray(body.images) ? body.images
+      : (typeof imageBase64 === 'string' && imageBase64.length > 0)
+        ? [{ base64: imageBase64, mediaType: imageMediaType ?? 'image/jpeg' }]
+        : [];
+
+    const hasImage = images.length > 0;
     if (!hasImage && !text?.trim()) {
-      return new Response(JSON.stringify({ error: 'text or imageBase64 is required' }), {
+      return new Response(JSON.stringify({ error: 'text or images is required' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (images.length > MAX_IMAGES) {
+      return new Response(JSON.stringify({ error: 'too_many_images', max: MAX_IMAGES }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    for (const img of images) {
+      if (typeof img?.base64 !== 'string' || img.base64.length === 0) {
+        return new Response(JSON.stringify({ error: 'invalid_image' }), {
+          status: 400, headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (!ALLOWED_IMAGE_TYPES.has(img.mediaType)) {
+        return new Response(JSON.stringify({ error: 'unsupported_image_type' }), {
+          status: 400, headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    }
+    // 장당 상한만 두면 10장이 합쳐져 Edge 메모리와 요청 크기를 터뜨린다.
+    const totalBase64 = images.reduce((sum, i) => sum + i.base64.length, 0);
+    if (totalBase64 > MAX_IMAGES_TOTAL_BASE64_CHARS) {
+      return new Response(JSON.stringify({ error: 'images_too_large' }), {
+        status: 400, headers: { 'Content-Type': 'application/json' },
       });
     }
 
@@ -286,26 +434,40 @@ Deno.serve(async (req: Request): Promise<Response> => {
     //    Sonnet 만 multimodal 지원 + Haiku 보다 비싸므로 image 있을 때만.
     const client = new Anthropic();
     const model = hasImage ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001';
+    // 블록 순서는 image… → text. 모델이 지시를 읽기 전에 그림을 보게 하는 쪽이 낫다.
+    // 클라이언트가 data URI 째로 보내는 경우가 있어 접두사를 벗겨 낸다.
     const userContent = hasImage
       ? [
-          {
+          ...images.map((img) => ({
             type:   'image',
             source: {
               type:       'base64',
-              media_type: imageMediaType ?? 'image/jpeg',
-              data:       imageBase64!,
+              media_type: img.mediaType,
+              data:       img.base64.replace(/^data:[^;]+;base64,/, ''),
             },
-          },
+          })),
           // text 가 비어있어도 모델에게 "이미지에서 일정 추출" 가이드 줌.
-          { type: 'text', text: text?.trim() || '이 이미지에서 일정 정보를 추출해줘.' },
+          // 여러 장이면 사진별로 나눠 읽으라고 명시한다 — 안 그러면 첫 장만 보고 끝낸다.
+          {
+            type: 'text',
+            text: text?.trim()
+              || (images.length > 1
+                ? `첨부한 사진 ${images.length}장 전부에서 일정 정보를 추출해줘.`
+                : '이 이미지에서 일정 정보를 추출해줘.'),
+          },
         ]
       : text;
     const message = await client.messages.create({
       model,
-      max_tokens: hasImage ? 400 : 150,
+      // 사진이 여러 장이면 일정도 여러 개 나온다 — 한 건당 약 200토큰으로 잡고
+      // 장수에 비례해 늘린다(상한 4000). 부족하면 JSON 이 잘려 파싱이 통째로 실패한다.
+      max_tokens: hasImage
+        ? Math.min(4000, Math.max(400, images.length * 400))
+        : 150,
       system: buildSystemPrompt(
         contextDatetime ?? new Date().toISOString(),
         locale ?? 'ko',
+        images.length,
       ),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any — Anthropic SDK union
       messages: [{ role: 'user', content: userContent as any }],
@@ -321,8 +483,22 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const jsonMatch = rawContent.text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('Claude returned no valid JSON');
 
-    const aiParsed: ParsedEventFromAI & { noEventFound?: boolean; reason?: string }
+    const rawParsed: (ParsedEventFromAI & { noEventFound?: boolean; reason?: string })
+      & { events?: ParsedEventFromAI[] }
       = JSON.parse(jsonMatch[0]);
+
+    /**
+     * 사진이 2장 이상이면 모델이 `{"events":[...]}` 로 답한다(위 프롬프트 접미사).
+     * 그 외에는 단일 객체 그대로다. 아래 로직이 둘 다 다루도록 **항상 배열로** 만든다.
+     * ⚠️ noEventFound 응답에는 events 가 없으므로 그 분기가 먼저다.
+     */
+    const aiEvents: ParsedEventFromAI[] =
+      Array.isArray(rawParsed.events) && rawParsed.events.length > 0
+        ? rawParsed.events.slice(0, 30)
+        : [rawParsed];
+
+    // 기존 코드가 참조하는 이름 유지 — 단건 경로의 동작을 그대로 두기 위해서다.
+    const aiParsed = rawParsed;
 
     // Build-101 — AI 가 이미지에서 일정 정보 못 찾으면 noEventFound=true 반환.
     // 클라가 사용자에게 "다시 시도 또는 직접 입력" prompt 띄움.
@@ -392,71 +568,97 @@ Deno.serve(async (req: Request): Promise<Response> => {
       if (/(Z|[+-]\d{2}:?\d{2})$/.test(iso)) return iso;
       return iso + (tzOffset === 'Z' ? 'Z' : tzOffset);
     };
-    const titleNormalized = typeof aiParsed.title === 'string'
-      ? (aiParsed.title.trim().length > 25 ? aiParsed.title.trim().slice(0, 25) + '…' : aiParsed.title.trim())
-      : aiParsed.title;
 
-    // v1.2.9 — 모델이 단순 "매주" 를 custom_weekly + 빈 배열 weeklyDays 로
-    // 반환하던 회귀 (캘린더 렌더링 시 occurrence 0 → 미노출).
-    // weeklyDays 가 비어 있거나 invalid 면 repeat_type 를 'weekly' 로 강등.
-    const weeklyDaysValid = Array.isArray(aiParsed.weeklyDays)
-      ? aiParsed.weeklyDays.filter((n: unknown) => typeof n === 'number' && n >= 0 && n <= 6)
-      : [];
-    if (aiParsed.repeatType === 'custom_weekly' && weeklyDaysValid.length === 0) {
-      aiParsed.repeatType = 'weekly';
-      aiParsed.weeklyDays = null;
-    }
-    const startNormalized = ensureOffset(aiParsed.startAt);
-    let endNormalized = ensureOffset(aiParsed.endAt);
-    if (startNormalized && endNormalized) {
-      const s = new Date(startNormalized).getTime();
-      const e = new Date(endNormalized).getTime();
-      if (Number.isFinite(s) && Number.isFinite(e) && e <= s) {
-        endNormalized = new Date(e + 12 * 60 * 60 * 1000).toISOString();
+    /**
+     * 모델이 준 일정 객체 하나를 클라이언트 스키마(`parsed`)로 정규화한다.
+     * v1.4.11 에 사진 다중 첨부를 넣으면서 함수로 뺐다 — 같은 가드를 일정마다
+     * 똑같이 적용해야 하기 때문이다(예전엔 인라인이라 1건에만 적용됐다).
+     */
+    const buildParsed = (ev: ParsedEventFromAI): AiParseResponse['result']['parsed'] => {
+      const titleNormalized = typeof ev.title === 'string'
+        ? (ev.title.trim().length > 25 ? ev.title.trim().slice(0, 25) + '…' : ev.title.trim())
+        : ev.title;
+
+      // v1.2.9 — 모델이 단순 "매주" 를 custom_weekly + 빈 weeklyDays 로 반환하던 회귀
+      // (캘린더 occurrence 0 → 미노출). 비어 있으면 'weekly' 로 강등한다.
+      const weeklyDaysValid = Array.isArray(ev.weeklyDays)
+        ? ev.weeklyDays.filter((n: unknown) => typeof n === 'number' && n >= 0 && n <= 6)
+        : [];
+      let repeatType = ev.repeatType;
+      let weeklyDays = ev.weeklyDays;
+      if (repeatType === 'custom_weekly' && weeklyDaysValid.length === 0) {
+        repeatType = 'weekly';
+        // 타입이 number[] | undefined 라 null 대신 undefined — 의미는 같다(필드 없음).
+        weeklyDays = undefined;
       }
-    }
+
+      const startNormalized = ensureOffset(ev.startAt);
+      let endNormalized = ensureOffset(ev.endAt);
+      if (startNormalized && endNormalized) {
+        const s = new Date(startNormalized).getTime();
+        const e = new Date(endNormalized).getTime();
+        if (Number.isFinite(s) && Number.isFinite(e) && e <= s) {
+          endNormalized = new Date(e + 12 * 60 * 60 * 1000).toISOString();
+        }
+      }
+
+      return {
+        ...(titleNormalized && {
+          title: { value: titleNormalized, confidence: 'high' as const },
+        }),
+        ...(startNormalized && {
+          startAt: { value: startNormalized, confidence: 'high' as const },
+        }),
+        ...(endNormalized && {
+          endAt: { value: endNormalized, confidence: 'high' as const },
+        }),
+        ...(ev.location && {
+          location: { value: ev.location, confidence: 'high' as const },
+        }),
+        allDay: { value: ev.allDay ?? false, confidence: 'high' as const },
+        ...(repeatType && repeatType !== 'none' && {
+          repeatType: { value: repeatType, confidence: 'high' as const },
+        }),
+        // v1.2.8 — custom_weekly 일 때만 weeklyDays 전달. 0~6 정수 배열.
+        ...(repeatType === 'custom_weekly' && Array.isArray(weeklyDays) && weeklyDays.length > 0 && {
+          weeklyDays: {
+            value: weeklyDays
+              .filter((n: unknown) => typeof n === 'number' && n >= 0 && n <= 6)
+              .map((n: number) => Math.floor(n)),
+            confidence: 'high' as const,
+          },
+        }),
+        // v1.3 — 상대일 일정 메타 (도착예상/수령/만료 류). 0 이상 정수 + 라벨일 때만.
+        ...(typeof ev.offsetDays === 'number' && ev.offsetDays >= 0 && {
+          offsetDays: { value: Math.floor(ev.offsetDays), confidence: 'high' as const },
+        }),
+        ...(typeof ev.offsetLabel === 'string' && ev.offsetLabel.trim().length > 0 && {
+          offsetLabel: { value: ev.offsetLabel.trim(), confidence: 'high' as const },
+        }),
+      };
+    };
+
+    const parsedList = aiEvents.map(buildParsed);
 
     const response: AiParseResponse = {
       result: {
-        parsed: {
-          ...(titleNormalized && {
-            title: { value: titleNormalized, confidence: 'high' },
-          }),
-          ...(startNormalized && {
-            startAt: { value: startNormalized, confidence: 'high' },
-          }),
-          ...(endNormalized && {
-            endAt: { value: endNormalized, confidence: 'high' },
-          }),
-          ...(aiParsed.location && {
-            location: { value: aiParsed.location, confidence: 'high' },
-          }),
-          allDay: { value: aiParsed.allDay ?? false, confidence: 'high' },
-          ...(aiParsed.repeatType && aiParsed.repeatType !== 'none' && {
-            repeatType: { value: aiParsed.repeatType, confidence: 'high' },
-          }),
-          // v1.2.8 — custom_weekly 일 때만 weeklyDays 전달. 0~6 정수 배열.
-          ...(aiParsed.repeatType === 'custom_weekly' && Array.isArray(aiParsed.weeklyDays) && aiParsed.weeklyDays.length > 0 && {
-            weeklyDays: {
-              value: aiParsed.weeklyDays
-                .filter((n: unknown) => typeof n === 'number' && n >= 0 && n <= 6)
-                .map((n: number) => Math.floor(n)),
-              confidence: 'high',
-            },
-          }),
-          // v1.3 — 상대일 일정 메타 (도착예상/수령/만료 류). 0 이상 정수 + 라벨일 때만.
-          ...(typeof aiParsed.offsetDays === 'number' && aiParsed.offsetDays >= 0 && {
-            offsetDays: { value: Math.floor(aiParsed.offsetDays), confidence: 'high' },
-          }),
-          ...(typeof aiParsed.offsetLabel === 'string' && aiParsed.offsetLabel.trim().length > 0 && {
-            offsetLabel: { value: aiParsed.offsetLabel.trim(), confidence: 'high' },
-          }),
-        },
+        // 구버전 클라이언트는 `result` 만 읽는다 — 첫 일정을 그대로 넣어 호환을 지킨다.
+        parsed: parsedList[0] ?? {},
         confidence: 'high',   // AI result is always treated as high (or medium by caller)
         source: 'ai',
         rawInput: text,
         processingMs: null,
       },
+      // v1.4.11 — 사진 여러 장에서 뽑은 일정 전부. 신버전 클라이언트가 이걸 쓴다.
+      ...(parsedList.length > 1 && {
+        results: parsedList.map((parsed) => ({
+          parsed,
+          confidence: 'high' as const,
+          source: 'ai' as const,
+          rawInput: text,
+          processingMs: null,
+        })),
+      }),
       tokensUsed,
     };
 

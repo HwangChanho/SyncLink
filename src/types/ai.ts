@@ -116,7 +116,13 @@ export interface AiParseRequest {
 
 /** Response from the parse-event Edge Function. */
 export interface AiParseResponse {
+  /** 항상 채워진다. 사진이 여러 장이어도 **첫 일정**이 여기 들어간다(구버전 호환). */
   result: NLParseResult;
+  /**
+   * v1.4.11 — 사진 여러 장에서 뽑은 일정이 2건 이상일 때만 채워진다.
+   * Edge Fn 이 배포되기 전 구버전 서버는 이 필드를 주지 않으므로 optional 이다.
+   */
+  results?: NLParseResult[];
   /** Number of tokens consumed by this request. */
   tokensUsed: number;
 }

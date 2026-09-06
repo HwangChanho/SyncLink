@@ -17,7 +17,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, TextInput, Pressable, Text, ActivityIndicator, Image,
-  StyleSheet, Keyboard, Alert, Platform, ScrollView,
+  StyleSheet, Keyboard, Alert, Platform, ScrollView, AppState,
 } from 'react-native';
 import Animated, { useAnimatedKeyboard, useAnimatedStyle } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
@@ -31,7 +31,12 @@ import * as ImagePicker from 'expo-image-picker';
 import { ConfirmModal } from './ConfirmModal';
 import { QuotaExceededSheet } from '@/components/ai/QuotaExceededSheet';
 import { FreeBannerAd } from '@/components/ads/FreeBannerAd';
-import { parseNaturalLanguage, parseNaturalLanguageMulti } from '@/services/aiService';
+import {
+  parseNaturalLanguageWithImages,
+  parseNaturalLanguageMulti,
+  MAX_NL_IMAGES,
+  type AiImageAttachment,
+} from '@/services/aiService';
 import { useVoicePostProcess } from '@/hooks/useVoicePostProcess';
 import { createEvent } from '@/services/eventService';
 import { getMySpaces } from '@/services/spaceService';
@@ -164,15 +169,40 @@ export function NLInputBar({ onEventCreated }: Props) {
    */
   const [quotaSheetVisible, setQuotaSheetVisible] = useState(false);
   /**
-   * 첨부된 사진 (Vision NL — 카톡 예약 캡쳐 등). null 이면 text-only 흐름.
+   * 첨부된 사진 (Vision NL — 시간표·카톡 예약 캡쳐 등). 비어 있으면 text-only 흐름.
    * uri 는 thumbnail 표시용, base64 + mediaType 는 Edge Function 전송용.
    * 사용자가 send 하면 server quota (parse-event-vision: free 1일 2회) 적용.
+   *
+   * v1.4.11 — 한 장 → 최대 {@link MAX_NL_IMAGES} 장(LEAD 요청).
+   * 배열 순서 = 사용자가 고른 순서 = 모델이 보는 순서.
    */
-  const [attachedImage, setAttachedImage] = useState<{
+  const [attachedImages, setAttachedImages] = useState<{
     uri:       string;
     base64:    string;
-    mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
-  } | null>(null);
+    mediaType: AiImageAttachment['mediaType'];
+  }[]>([]);
+  /**
+   * 요청이 도는 동안 앱이 백그라운드로 갔는지.
+   *
+   * iOS 는 백그라운드에서 진행 중인 fetch 를 곧 중단시킨다. 특히 사진 첨부
+   * 요청은 Vision 모델이라 오래 걸려 잘 끊긴다(2026-09-06 LEAD 보고
+   * "ai 요청중에 백그라운드로 나가면 실패"). RN 에서 그 요청을 살려 둘
+   * 표준 수단은 없으므로, **왜 실패했는지 정확히 알려 주는 것**까지 한다.
+   * 입력 텍스트와 첨부 사진은 실패 시 지우지 않으므로 그대로 다시 보내면 된다.
+   */
+  const backgroundedDuringRequest = useRef(false);
+  /** AppState 리스너에서 최신 inputState 를 읽기 위한 미러. */
+  const inputStateRef = useRef<InputState>('idle');
+  useEffect(() => { inputStateRef.current = inputState; }, [inputState]);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      // 요청이 도는 중에 앱을 벗어난 경우만 표시해 둔다.
+      if (next !== 'active' && inputStateRef.current === 'loading') {
+        backgroundedDuringRequest.current = true;
+      }
+    });
+    return () => sub.remove();
+  }, []);
   /**
    * Live keyboard height, read straight from the platform IME insets.
    *
@@ -297,29 +327,53 @@ export function NLInputBar({ onEventCreated }: Props) {
       Alert.alert(t('common.error'), t('nl.attach_image_permission'));
       return;
     }
+    // 이미 담은 장수를 빼고 남은 만큼만 고르게 한다. 0 이면 피커를 열지 않는다 —
+    // 열어 놓고 고른 뒤에 거절하면 사용자가 한 일이 통째로 버려진다.
+    const remaining = MAX_NL_IMAGES - attachedImages.length;
+    if (remaining <= 0) {
+      Alert.alert(
+        t('nl.attach_image', { defaultValue: '사진 첨부' }),
+        `사진은 한 번에 ${MAX_NL_IMAGES}장까지 보낼 수 있어요.`,
+      );
+      return;
+    }
+
     // 1024px max + JPEG quality 0.6 → ~150KB. 더 크면 base64 가 커져
     // Edge Function 요청 한도 (~6MB) 와 비용에 영향.
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes:   ImagePicker.MediaTypeOptions.Images,
-      base64:       true,
-      quality:      0.6,
-      allowsEditing: false,
+      mediaTypes:              ImagePicker.MediaTypeOptions.Images,
+      base64:                  true,
+      quality:                 0.6,
+      allowsEditing:           false,
+      allowsMultipleSelection: true,
+      // selectionLimit 은 OS 피커가 직접 강제한다(iOS 14+ / Android 13+).
+      // 그 아래 버전은 무시될 수 있어 아래 slice 로 한 번 더 자른다.
+      selectionLimit:          remaining,
     });
     if (result.canceled) return;
-    const asset = result.assets[0];
-    if (!asset?.base64) return;
-    // Resolve mediaType from URI extension. iOS picker 가 mimeType 직접 안 줌.
-    const ext = asset.uri.split('.').pop()?.toLowerCase();
-    const mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' =
-      ext === 'png'  ? 'image/png'  :
-      ext === 'gif'  ? 'image/gif'  :
-      ext === 'webp' ? 'image/webp' :
-                       'image/jpeg';
-    setAttachedImage({ uri: asset.uri, base64: asset.base64, mediaType });
-  }, [inputState, t]);
 
-  const handleRemoveImage = useCallback(() => {
-    setAttachedImage(null);
+    // base64 가 없는 자산은 조용히 버린다. mediaType 은 확장자로 판정한다 —
+    // 🔴 하드코딩 금지: iOS 스크린샷은 PNG 라 jpeg 로 선언하면 Vision 이 거부한다.
+    const picked = result.assets
+      .filter((a) => !!a.base64)
+      .slice(0, remaining)
+      .map((a) => {
+        const ext = a.uri.split('.').pop()?.toLowerCase();
+        const mediaType: AiImageAttachment['mediaType'] =
+          ext === 'png'  ? 'image/png'  :
+          ext === 'gif'  ? 'image/gif'  :
+          ext === 'webp' ? 'image/webp' :
+                           'image/jpeg';
+        return { uri: a.uri, base64: a.base64 as string, mediaType };
+      });
+    if (picked.length === 0) return;
+
+    setAttachedImages((prev) => [...prev, ...picked]);
+  }, [inputState, t, attachedImages.length]);
+
+  /** 미리보기에서 사진 한 장 제거 (인덱스 기준 — 같은 사진을 두 번 골랐을 수 있다). */
+  const handleRemoveImage = useCallback((index: number) => {
+    setAttachedImages((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
   // ── Parse submission ────────────────────────────────────────────────────────
@@ -327,7 +381,8 @@ export function NLInputBar({ onEventCreated }: Props) {
   const handleSubmit = useCallback(async () => {
     const trimmed = text.trim();
     // image 첨부 시엔 text 가 비어도 허용. text-only 면 빈 입력 차단.
-    if (!attachedImage && !trimmed) return;
+    const hasImages = attachedImages.length > 0;
+    if (!hasImages && !trimmed) return;
     if (inputState === 'loading') return;
 
     // 게스트: AI 입력은 계정 필요 — 로그인 유도 시트로 안내하고 처리 중단.
@@ -342,7 +397,7 @@ export function NLInputBar({ onEventCreated }: Props) {
     // AI 비서가 후보 탐색 → 한 번 더 확인 → deleteEvent/updateEvent 호출.
     // (createEvent 와 달리 단일 미리보기 흐름으로 처리하면 위험.)
     const intentRe = /(삭제|취소|지워|없애|제거|delete|cancel|remove)|(?:바꿔|수정|변경|옮겨|미뤄)/;
-    if (!attachedImage && intentRe.test(trimmed)) {
+    if (!hasImages && intentRe.test(trimmed)) {
       setInputState('idle');
       setText('');
       router.push({
@@ -368,18 +423,21 @@ export function NLInputBar({ onEventCreated }: Props) {
 
     setInputState('loading');
     setErrorMsg('');
+    backgroundedDuringRequest.current = false;
 
     // image 첨부 흐름: multi-splitter 우회 (single 결과). server vision quota
     // 적용 + 비용 모니터링은 server-side. text-only 흐름은 기존 multi 그대로.
-    const results = attachedImage
-      ? [await parseNaturalLanguage(trimmed, {
-          imageBase64:    attachedImage.base64,
-          imageMediaType: attachedImage.mediaType,
-        })]
+    // v1.4.11 — 사진은 여러 장을 한 번에 보내고 결과도 여러 건 받는다
+    // (시간표 스크린샷 한 장에서 일정이 여러 개 나오는 경우 포함).
+    const results = hasImages
+      ? await parseNaturalLanguageWithImages(
+          trimmed,
+          attachedImages.map(({ base64, mediaType }) => ({ base64, mediaType })),
+        )
       : await parseNaturalLanguageMulti(trimmed);
 
     // text-only AI 호출 시 클라 카운트 차감. image 흐름은 server quota 라 skip.
-    if (!attachedImage && results.some((r) => r.source === 'ai' && !r.error)) {
+    if (!hasImages && results.some((r) => r.source === 'ai' && !r.error)) {
       void consumeAI();
     }
 
@@ -404,7 +462,13 @@ export function NLInputBar({ onEventCreated }: Props) {
     // are low+errored; partial-success multi still proceeds).
     const firstError = results.find((r) => r.error && r.confidence === 'low');
     if (firstError && results.length === 1) {
-      setErrorMsg(firstError.error ?? '');
+      // 앱을 벗어나 있는 동안 OS 가 요청을 끊은 경우 — 원인을 그대로 알려 준다.
+      // 입력 텍스트와 첨부 사진은 지우지 않으므로 바로 다시 보내면 된다.
+      setErrorMsg(
+        backgroundedDuringRequest.current
+          ? '앱을 벗어나 있는 동안 AI 요청이 중단됐어요. 화면을 켜 둔 채 다시 시도해 주세요.'
+          : (firstError.error ?? ''),
+      );
       setInputState('error');
       setTimeout(() => setInputState('idle'), 4000);
       return;
@@ -418,7 +482,7 @@ export function NLInputBar({ onEventCreated }: Props) {
     if (results.length === 1 && head && shouldHandoffToAssistant(head)) {
       setInputState('idle');
       setText('');
-      if (attachedImage) setAttachedImage(null);
+      if (hasImages) setAttachedImages([]);
       router.push({
         pathname: '/chat',
         params: { prefill: trimmed },
@@ -431,8 +495,8 @@ export function NLInputBar({ onEventCreated }: Props) {
     setParseResult(first ?? null);
     setPendingResults(tail);
     setInputState('preview');
-    if (attachedImage) setAttachedImage(null);
-  }, [text, inputState, canUseAI, consumeAI, attachedImage, t, router, handleAttachImage]);
+    if (hasImages) setAttachedImages([]);
+  }, [text, inputState, canUseAI, consumeAI, attachedImages, t, router, handleAttachImage]);
 
   /**
    * Returns true when [startAt, endAt) overlaps any existing event on
@@ -671,21 +735,39 @@ export function NLInputBar({ onEventCreated }: Props) {
           있어 Pro 면 null 반환. SDK 미설치/web 도 null 이라 안전. */}
       <FreeBannerAd style={styles.adWrap} />
 
-      {/* 첨부된 사진 thumbnail (Vision NL). attachedImage 가 있을 때만. */}
-      {attachedImage && (
+      {/*
+        첨부된 사진 미리보기 (Vision NL).
+        v1.4.11 — 최대 10장이라 가로 스크롤 스트립으로 바꿨다. 줄바꿈으로 쌓으면
+        입력바가 화면 절반까지 밀려 올라온다.
+        키는 uri 가 아니라 index 를 섞는다 — 같은 사진을 두 번 고를 수 있어
+        uri 만으로는 유일하지 않다.
+      */}
+      {attachedImages.length > 0 && (
         <View style={styles.attachmentRow}>
-          <Image source={{ uri: attachedImage.uri }} style={styles.attachmentThumb} />
-          <Text style={styles.attachmentLabel} numberOfLines={1}>
-            {t('nl.attached_image')}
-          </Text>
-          <Pressable
-            onPress={handleRemoveImage}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={t('nl.remove_image')}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.attachmentScroll}
+            keyboardShouldPersistTaps="handled"
           >
-            <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
-          </Pressable>
+            {attachedImages.map((img, i) => (
+              <View key={`${img.uri}-${i}`} style={styles.attachmentItem}>
+                <Image source={{ uri: img.uri }} style={styles.attachmentThumb} />
+                <Pressable
+                  onPress={() => handleRemoveImage(i)}
+                  hitSlop={8}
+                  style={styles.attachmentRemove}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${t('nl.remove_image')} ${i + 1}`}
+                >
+                  <Ionicons name="close-circle" size={18} color={colors.textPrimary} />
+                </Pressable>
+              </View>
+            ))}
+          </ScrollView>
+          <Text style={styles.attachmentLabel} numberOfLines={1}>
+            {attachedImages.length}/{MAX_NL_IMAGES}
+          </Text>
         </View>
       )}
 
@@ -729,10 +811,17 @@ export function NLInputBar({ onEventCreated }: Props) {
           onChangeText={setText}
           placeholder={isListening ? '듣는 중…' : t('nl.placeholder')}
           placeholderTextColor={isListening ? colors.error : colors.textTertiary}
-          returnKeyType="send"
-          onSubmitEditing={handleSubmit}
           editable={inputState !== 'loading'}
-          multiline={false}
+          /*
+           * v1.4.11 — 한 줄 고정이라 긴 문장이 옆으로 흘러 앞부분이 안 보였다
+           * (LEAD 스크린샷: "줄바꿈될때 짤려 칸이 커져야지").
+           * multiline 으로 바꿔 내용만큼 칸이 커지고, maxHeight 까지만 자란 뒤
+           * 그 안에서 스크롤한다 — 안 그러면 긴 입력이 화면을 절반까지 밀어 올린다.
+           *
+           * ⚠️ multiline 이면 엔터가 **전송이 아니라 줄바꿈**이 되므로
+           *    returnKeyType="send" / onSubmitEditing 은 뺐다. 전송은 보내기 버튼.
+           */
+          multiline
           maxLength={200}
         />
 
@@ -758,10 +847,10 @@ export function NLInputBar({ onEventCreated }: Props) {
         <Pressable
           style={[
             styles.sendButton,
-            ((!text.trim() && !attachedImage) || inputState === 'loading') && styles.sendButtonDisabled,
+            ((!text.trim() && attachedImages.length === 0) || inputState === 'loading') && styles.sendButtonDisabled,
           ]}
           onPress={handleSubmit}
-          disabled={(!text.trim() && !attachedImage) || inputState === 'loading'}
+          disabled={(!text.trim() && attachedImages.length === 0) || inputState === 'loading'}
           accessibilityRole="button"
           accessibilityLabel={t('common.a11y_parse_event')}
         >
@@ -833,6 +922,7 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   // 않는다. 입력바와 분리되도록 작은 위쪽 마진만 둔다.
   attachmentRow: {
     flexDirection:    'row',
+    // 스트립이 폭을 다 먹지 않도록 — 오른쪽 장수 라벨 자리를 남긴다.
     alignItems:       'center',
     gap:              spacing[2],
     paddingVertical:  spacing[2],
@@ -841,15 +931,31 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     borderRadius:     radius.lg,
     marginBottom:     spacing[2],
   },
+  /** 썸네일 가로 스트립. 최대 10장이라 wrap 대신 스크롤한다. */
+  attachmentScroll: {
+    gap:           spacing[2],
+    paddingRight:  spacing[1],
+    // 삭제 버튼이 썸네일 위로 튀어나오므로 잘리지 않게 위쪽 여백을 준다.
+    paddingTop:    4,
+  },
+  attachmentItem: {
+    position: 'relative',
+  },
   attachmentThumb: {
     width:        40,
     height:       40,
     borderRadius: 6,
   },
+  attachmentRemove: {
+    position: 'absolute',
+    top:      -4,
+    right:    -4,
+    borderRadius: 9,
+    backgroundColor: colors.surface,
+  },
   attachmentLabel: {
     ...textStyles.caption,
     color: colors.textSecondary,
-    flex:  1,
   },
   adWrap: {
     alignItems: 'center',
@@ -857,7 +963,9 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   },
   inputRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    // v1.4.11 — 입력이 여러 줄로 늘어나면 좌우 아이콘/버튼이 가운데에 떠
+    // 보인다. flex-end 로 두면 항상 마지막 줄에 나란히 붙는다.
+    alignItems: 'flex-end',
     gap: spacing[2],
     backgroundColor: colors.surface,
     borderRadius: radius.full,
@@ -875,10 +983,20 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     // 이 lineHeight 보다 작아서 텍스트가 하단 정렬됨. padding 제거 +
     // textAlignVertical='center' 로 수직 가운데 정렬 (Android 영향).
     paddingVertical: 0,
-    textAlignVertical: 'center',
+    // v1.4.11 — multiline 이 되면서 'center' 는 두 줄째가 위로 뜨게 만든다.
+    // 여러 줄에서는 위에서부터 채워야 자연스럽다(Android 영향).
+    textAlignVertical: 'top',
     minHeight: 36,
+    /**
+     * 최대 4줄까지만 자라고 그 뒤로는 안에서 스크롤한다.
+     * 4 × lineHeight(20) + 위아래 여유(10). 제한이 없으면 긴 입력이
+     * 입력바를 화면 절반까지 밀어 올린다.
+     */
+    maxHeight: 90,
     lineHeight: 20,
     includeFontPadding: false,
+    // multiline 은 iOS 에서 기본 안쪽 여백이 있어 좌우가 어긋난다 — 0 으로 맞춘다.
+    ...(Platform.OS === 'ios' ? { paddingTop: 8, paddingBottom: 8 } : {}),
   },
   micButton: {
     width: 36,
