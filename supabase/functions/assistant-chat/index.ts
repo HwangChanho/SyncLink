@@ -35,10 +35,22 @@ interface ChatRequest {
   /** 클라이언트의 "지금 시각" — UTC offset 으로 시간 의도 해석에 사용. */
   clientNowIso?: string;
   /**
-   * 사진 첨부 1장. 마지막 user 메시지에 image 블록으로 붙는다.
-   * base64 는 data URI 접두사 없이 순수 페이로드. 접두사가 와도 아래에서 벗겨 낸다.
+   * @deprecated v1.4.10 부터 `images` 를 쓴다. 스토어 배포 지연으로 구버전 앱이
+   * 한동안 계속 이 필드로 보내므로 **제거하면 안 된다**. 아래에서 images 로 합친다.
    */
-  image?: { base64: string; mediaType: string };
+  image?: ChatImage;
+  /**
+   * 사진 첨부 최대 {@link MAX_IMAGES} 장. 마지막 user 메시지에 image 블록으로 붙는다.
+   * base64 는 data URI 접두사 없이 순수 페이로드. 접두사가 와도 아래에서 벗겨 낸다.
+   * 배열 순서 = 사용자가 고른 순서 = 모델이 보는 순서.
+   */
+  images?: ChatImage[];
+}
+
+/** 첨부 사진 한 장. */
+interface ChatImage {
+  base64: string;
+  mediaType: string;
 }
 
 interface ChatResponse {
@@ -428,6 +440,19 @@ const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'i
  */
 const MAX_IMAGE_BASE64_CHARS = 6_800_000;
 
+/**
+ * 한 턴에 붙일 수 있는 사진 수 (v1.4.10 — LEAD 요청으로 1 → 10).
+ * 클라이언트(ChatComposer)도 같은 값으로 선택을 제한하지만, 서버가 진짜 관문이다.
+ */
+const MAX_IMAGES = 10;
+
+/**
+ * 한 턴 전체 base64 합계 상한. 장당 상한만 두면 6.8MB × 10 = 68MB 요청이
+ * 통과해 Edge 메모리와 Anthropic 요청 크기를 모두 터뜨린다.
+ * 10장을 실제로 보낼 수 있게 넉넉히 잡되(장당 평균 ~2MB), 폭주는 막는 값.
+ */
+const MAX_IMAGES_TOTAL_BASE64_CHARS = 22_000_000;
+
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -458,15 +483,32 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  // 사진이 오면 모델 호출 전에 형식·크기를 확인한다.
-  if (body.image !== undefined) {
-    const raw = body.image?.base64;
+  /**
+   * 신·구 클라이언트를 하나의 배열로 합친다.
+   * 구버전 앱은 `image`(단수), v1.4.10+ 는 `images`(배열)를 보낸다.
+   * 둘 다 온 경우 배열을 정답으로 삼는다 — 새 클라이언트가 호환용으로 단수 필드를
+   * 함께 채워 보내더라도 사진이 중복되지 않게 한다.
+   */
+  const inputImages: ChatImage[] =
+    Array.isArray(body.images) ? body.images
+    : body.image ? [body.image]
+    : [];
+
+  // 사진이 오면 모델 호출 전에 개수·형식·크기를 확인한다.
+  if (inputImages.length > MAX_IMAGES) {
+    return new Response(JSON.stringify({ error: 'too_many_images', max: MAX_IMAGES }), {
+      status: 400, headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  let totalBase64Chars = 0;
+  for (const img of inputImages) {
+    const raw = img?.base64;
     if (typeof raw !== 'string' || raw.length === 0) {
       return new Response(JSON.stringify({ error: 'invalid_image' }), {
         status: 400, headers: { 'Content-Type': 'application/json' },
       });
     }
-    if (!ALLOWED_IMAGE_TYPES.has(body.image.mediaType)) {
+    if (!ALLOWED_IMAGE_TYPES.has(img.mediaType)) {
       return new Response(JSON.stringify({ error: 'unsupported_image_type' }), {
         status: 400, headers: { 'Content-Type': 'application/json' },
       });
@@ -476,6 +518,12 @@ Deno.serve(async (req: Request) => {
         status: 400, headers: { 'Content-Type': 'application/json' },
       });
     }
+    totalBase64Chars += raw.length;
+  }
+  if (totalBase64Chars > MAX_IMAGES_TOTAL_BASE64_CHARS) {
+    return new Response(JSON.stringify({ error: 'images_too_large' }), {
+      status: 400, headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   const authHeader = req.headers.get('Authorization') ?? '';
@@ -555,20 +603,19 @@ Deno.serve(async (req: Request) => {
   // 사진이 있으면 **마지막 user 메시지**에만 붙인다. 히스토리의 옛 user 메시지에
   // 붙이면 매 턴 같은 이미지를 다시 태워 토큰이 낭비된다.
   // 블록 순서는 image → text. 모델이 지시를 읽기 전에 그림을 보게 하는 쪽이 낫다.
-  const attach = body.image
-    ? {
-        // 클라이언트가 data URI 째로 보내는 경우가 있어 접두사를 벗겨 낸다.
-        data: body.image.base64.replace(/^data:[^;]+;base64,/, ''),
-        mediaType: body.image.mediaType,
-      }
-    : null;
+  const attachments = inputImages.map((img) => ({
+    // 클라이언트가 data URI 째로 보내는 경우가 있어 접두사를 벗겨 낸다.
+    data: img.base64.replace(/^data:[^;]+;base64,/, ''),
+    mediaType: img.mediaType,
+  }));
   const lastUserIdx = body.messages.reduce((acc, m, i) => (m.role === 'user' ? i : acc), -1);
 
   const messages = body.messages.map((m, i) => {
-    if (!attach || i !== lastUserIdx) return { role: m.role, content: m.content };
-    const blocks: unknown[] = [
-      { type: 'image', source: { type: 'base64', media_type: attach.mediaType, data: attach.data } },
-    ];
+    if (attachments.length === 0 || i !== lastUserIdx) return { role: m.role, content: m.content };
+    const blocks: unknown[] = attachments.map((a) => ({
+      type: 'image',
+      source: { type: 'base64', media_type: a.mediaType, data: a.data },
+    }));
     // 빈 text 블록은 API 가 거부한다. 내용이 있을 때만 넣는다.
     if (m.content.trim().length > 0) blocks.push({ type: 'text', text: m.content });
     // system / tools 와 같은 관례로 캐스팅한다 — SDK 의 ContentBlockParam 타입을
@@ -691,7 +738,7 @@ Deno.serve(async (req: Request) => {
     }
     // 사진이 붙은 요청에서 모델이 400 을 주면 원인은 거의 이미지다
     // (형식 불일치·손상·크기). 500 으로 흘려보내면 클라이언트에 단서가 없다.
-    if (attach) {
+    if (attachments.length > 0) {
       const status = (err as { status?: number })?.status;
       const msg = err instanceof Error ? err.message : String(err);
       if (status === 400 || /image|media_type|media type/i.test(msg)) {

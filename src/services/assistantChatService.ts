@@ -35,14 +35,35 @@ export interface AssistantTurnError {
   message: string;
 }
 
+/** Anthropic vision 이 받는 이미지 MIME. 이 외에는 Edge Fn 이 400 으로 거른다. */
+export type AssistantImageMediaType =
+  | 'image/jpeg'
+  | 'image/png'
+  | 'image/webp'
+  | 'image/gif';
+
+/** 비서에게 함께 보낼 사진 한 장. */
+export interface AssistantImage {
+  base64: string;
+  mediaType: AssistantImageMediaType;
+}
+
+/**
+ * 한 턴에 붙일 수 있는 사진 수 (v1.4.10 — LEAD 요청으로 1 → 10).
+ * Edge Fn 의 MAX_IMAGES 와 반드시 같은 값을 유지할 것. 서버가 진짜 관문이고
+ * 이 상수는 UI 가 미리 막아 주기 위한 것이다.
+ */
+export const MAX_ASSISTANT_IMAGES = 10;
+
 export interface SendTurnPayload {
   messages: { role: 'user' | 'assistant'; content: string }[];
   locale?: string;
-  /** v1.2 마무리 — Pro 전용 사진 첨부. 마지막 user 메시지에 attach. */
-  image?: {
-    base64: string;
-    mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
-  };
+  /**
+   * v1.2 마무리 — Pro 전용 사진 첨부. 마지막 user 메시지에 attach.
+   * v1.4.10 부터 최대 {@link MAX_ASSISTANT_IMAGES} 장까지 배열로 보낸다.
+   * 순서 = 사용자가 고른 순서 = 모델이 보는 순서.
+   */
+  images?: AssistantImage[];
 }
 
 /**
@@ -59,7 +80,9 @@ export async function sendAssistantTurn(
           messages:     payload.messages,
           locale:       payload.locale ?? 'ko',
           clientNowIso: new Date().toISOString(),
-          ...(payload.image ? { image: payload.image } : {}),
+          // 사진이 없으면 필드를 아예 넣지 않는다 — 빈 배열도 서버에선 "사진 없음"
+          // 으로 동작하지만, 요청 본문을 깨끗하게 유지한다.
+          ...(payload.images?.length ? { images: payload.images } : {}),
         },
       },
     );

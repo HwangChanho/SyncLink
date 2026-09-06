@@ -13,14 +13,18 @@
  */
 
 import React, { useCallback, useState } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet, Alert, Image } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet, Alert, Image, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { useChatStore } from '@/stores/chatStore';
-import { sendAssistantTurn } from '@/services/assistantChatService';
+import {
+  sendAssistantTurn,
+  MAX_ASSISTANT_IMAGES,
+  type AssistantImageMediaType,
+} from '@/services/assistantChatService';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { router } from 'expo-router';
@@ -31,12 +35,17 @@ export function ChatComposer() {
   const colors = useColors();
   const styles = makeStyles(colors);
   const [text, setText] = useState('');
-  // v1.2 마무리 — Pro 전용 사진 첨부. base64 + mediaType 페어로 보관.
-  const [attachedImage, setAttachedImage] = useState<{
+  /**
+   * v1.2 마무리 — Pro 전용 사진 첨부. base64 + mediaType 페어로 보관.
+   * v1.4.10 — 한 장 → 최대 {@link MAX_ASSISTANT_IMAGES} 장. 배열 순서가 곧
+   * 모델이 사진을 보는 순서라, 사용자가 고른 순서를 그대로 유지한다.
+   * `uri` 는 미리보기 전용이며 서버로는 보내지 않는다.
+   */
+  const [attachedImages, setAttachedImages] = useState<{
     uri: string;
     base64: string;
-    mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
-  } | null>(null);
+    mediaType: AssistantImageMediaType;
+  }[]>([]);
   const pushUser = useChatStore((s) => s.pushUser);
   const pushAssistant = useChatStore((s) => s.pushAssistant);
   const setLoading = useChatStore((s) => s.setLoading);
@@ -64,23 +73,52 @@ export function ChatComposer() {
       return;
     }
     if (isLoading) return;
+
+    // 이미 담은 장수를 빼고 남은 만큼만 고르게 한다. 0 이면 피커를 열지 않는다 —
+    // 열어 놓고 고른 뒤에 거절하면 사용자가 한 일이 통째로 버려진다.
+    const remaining = MAX_ASSISTANT_IMAGES - attachedImages.length;
+    if (remaining <= 0) {
+      Alert.alert('사진은 최대 10장', `한 번에 ${MAX_ASSISTANT_IMAGES}장까지 보낼 수 있어요.`);
+      return;
+    }
+
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes:    ImagePicker.MediaTypeOptions.Images,
-      base64:        true,
-      quality:       0.6,
-      allowsEditing: false,
+      mediaTypes:              ImagePicker.MediaTypeOptions.Images,
+      base64:                  true,
+      quality:                 0.6,
+      allowsEditing:           false,
+      allowsMultipleSelection: true,
+      // selectionLimit 은 OS 피커가 직접 강제한다(iOS 14+ / Android 13+).
+      // 그 아래 버전은 무시될 수 있어 아래 slice 로 한 번 더 자른다.
+      selectionLimit:          remaining,
     });
     if (result.canceled) return;
-    const asset = result.assets[0];
-    if (!asset?.base64) return;
-    const ext = asset.uri.split('.').pop()?.toLowerCase();
-    const mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' =
-      ext === 'png' ? 'image/png' :
-      ext === 'webp' ? 'image/webp' :
-      ext === 'gif' ? 'image/gif' :
-      'image/jpeg';
-    setAttachedImage({ uri: asset.uri, base64: asset.base64, mediaType });
-  }, [isPro, isLoading]);
+
+    /**
+     * base64 가 없는 자산은 조용히 버린다. 형식 판정은 확장자로 하되,
+     * 🔴 하드코딩 금지 — iOS 스크린샷은 PNG 라 jpeg 로 선언하면 Anthropic 이 거부한다.
+     */
+    const picked = result.assets
+      .filter((a) => !!a.base64)
+      .slice(0, remaining)
+      .map((a) => {
+        const ext = a.uri.split('.').pop()?.toLowerCase();
+        const mediaType: AssistantImageMediaType =
+          ext === 'png' ? 'image/png' :
+          ext === 'webp' ? 'image/webp' :
+          ext === 'gif' ? 'image/gif' :
+          'image/jpeg';
+        return { uri: a.uri, base64: a.base64 as string, mediaType };
+      });
+    if (picked.length === 0) return;
+
+    setAttachedImages((prev) => [...prev, ...picked]);
+  }, [isPro, isLoading, attachedImages.length]);
+
+  /** 미리보기에서 사진 한 장 제거 (인덱스 기준 — 같은 사진을 두 번 골랐을 수 있다). */
+  const handleRemoveImage = useCallback((index: number) => {
+    setAttachedImages((prev) => prev.filter((_, i) => i !== index));
+  }, []);
 
   const handleSend = useCallback(async () => {
     const trimmed = text.trim();
@@ -90,14 +128,18 @@ export function ChatComposer() {
       return;
     }
     setText('');
-    const image = attachedImage;
-    setAttachedImage(null);
-    pushUser(trimmed + (image ? ' [사진 첨부]' : ''));
+    const images = attachedImages;
+    setAttachedImages([]);
+    // 히스토리에는 사진 자체가 아니라 몇 장 붙였는지만 남긴다 — base64 를 스토어에
+    // 넣으면 다음 턴에 같은 이미지를 또 태우게 된다.
+    pushUser(trimmed + (images.length ? ` [사진 ${images.length}장]` : ''));
     setLoading(true);
     const outgoing = getOutgoing();
     const { result, error } = await sendAssistantTurn({
       messages: outgoing,
-      ...(image ? { image: { base64: image.base64, mediaType: image.mediaType } } : {}),
+      ...(images.length
+        ? { images: images.map(({ base64, mediaType }) => ({ base64, mediaType })) }
+        : {}),
     });
     setLoading(false);
 
@@ -114,7 +156,7 @@ export function ChatComposer() {
     if (result) {
       pushAssistant(result.text, result.executed);
     }
-  }, [text, isLoading, pushUser, pushAssistant, setLoading, getOutgoing, isPro, attachedImage]);
+  }, [text, isLoading, pushUser, pushAssistant, setLoading, getOutgoing, isPro, attachedImages]);
 
   const handleUpgrade = useCallback(() => {
     router.push('/subscription/paywall');
@@ -136,16 +178,37 @@ export function ChatComposer() {
 
   return (
     <View>
-      {attachedImage ? (
-        <View style={styles.imagePreviewWrap}>
-          <Image source={{ uri: attachedImage.uri }} style={styles.imagePreview} />
-          <Pressable
-            onPress={() => setAttachedImage(null)}
-            style={styles.imageRemove}
-            accessibilityLabel="첨부 사진 제거"
+      {/*
+        첨부 미리보기 — 최대 10장이라 가로 스크롤로 둔다. 줄바꿈(wrap)으로 쌓으면
+        입력창이 화면 절반까지 밀려 올라온다.
+        키는 uri 가 아니라 index 를 섞어 쓴다 — 같은 사진을 두 번 고를 수 있어
+        uri 만으로는 유일하지 않다.
+      */}
+      {attachedImages.length > 0 ? (
+        <View style={styles.previewBar}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.previewScroll}
+            keyboardShouldPersistTaps="handled"
           >
-            <Ionicons name="close-circle" size={20} color={colors.textInverse} />
-          </Pressable>
+            {attachedImages.map((img, i) => (
+              <View key={`${img.uri}-${i}`} style={styles.imagePreviewWrap}>
+                <Image source={{ uri: img.uri }} style={styles.imagePreview} />
+                <Pressable
+                  onPress={() => handleRemoveImage(i)}
+                  style={styles.imageRemove}
+                  hitSlop={8}
+                  accessibilityLabel={`첨부 사진 ${i + 1} 제거`}
+                >
+                  <Ionicons name="close-circle" size={20} color={colors.textInverse} />
+                </Pressable>
+              </View>
+            ))}
+          </ScrollView>
+          <Text style={styles.previewCount}>
+            {attachedImages.length}/{MAX_ASSISTANT_IMAGES}
+          </Text>
         </View>
       ) : null}
       <View style={styles.row}>
@@ -264,10 +327,25 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     iconBtnLocked: {
       opacity: 0.5,
     },
+    /** 썸네일 가로 스트립 + 오른쪽 장수 표시를 한 줄에 놓는 바. */
+    previewBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing[2],
+      paddingRight: spacing[3],
+    },
+    previewScroll: {
+      // 썸네일의 삭제 버튼이 위로 6px 튀어나오므로 잘리지 않게 위쪽 여백을 준다.
+      paddingTop: spacing[2],
+      paddingLeft: spacing[3],
+      paddingRight: spacing[1],
+      gap: spacing[2],
+    },
+    previewCount: {
+      ...(textStyles.caption as object),
+      color: colors.textSecondary,
+    },
     imagePreviewWrap: {
-      alignSelf: 'flex-start',
-      marginLeft: spacing[3],
-      marginTop: spacing[2],
       position: 'relative',
     },
     imagePreview: {

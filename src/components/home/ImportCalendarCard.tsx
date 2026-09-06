@@ -88,12 +88,14 @@ export function ImportCalendarCard() {
             '각 일정의 날짜/시간/제목을 정확히 추출해서 createEvent 도구로 순서대로 호출. ' +
             '시간이 명시되지 않은 일정은 allDay 로 처리.',
         }],
-        image: {
+        // v1.4.10 — 페이로드가 image(단수) → images(배열)로 바뀌었다.
+        // 이 카드는 스크린샷 1장만 다루므로 원소 하나짜리 배열로 보낸다.
+        images: [{
           base64,
           // 🔴 하드코딩하면 안 된다 — iOS 스크린샷은 기본이 PNG 라,
           //    jpeg 로 선언하면 Anthropic 이 형식 불일치로 거부한다.
           mediaType,
-        },
+        }],
       });
 
       if (error) {
