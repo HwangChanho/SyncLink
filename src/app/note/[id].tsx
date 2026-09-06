@@ -194,10 +194,13 @@ export default function NoteDetailScreen() {
       >
         {isEditing ? (
           // ── Edit mode ──────────────────────────────────────────────────
+          // v1.4.10 — note/new.tsx 와 같은 이유로 키보드 inset 자동 조정.
+          // 없으면 본문이 길어질 때 커서 줄이 키보드 뒤로 들어간다.
           <ScrollView
             style={styles.flex}
             contentContainerStyle={styles.editorContent}
             keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets
           >
             <TextInput
               style={styles.titleInput}

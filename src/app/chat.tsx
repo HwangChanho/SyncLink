@@ -11,7 +11,7 @@
  */
 
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
@@ -19,10 +19,13 @@ import { useChatStore } from '@/stores/chatStore';
 import { ChatMessageList } from '@/components/chat/ChatMessageList';
 import { ChatComposer } from '@/components/chat/ChatComposer';
 import { sendAssistantTurn } from '@/services/assistantChatService';
+import { useKeyboardInset } from '@/hooks/useKeyboardInset';
 
 export default function ChatScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  // SafeAreaView 가 이미 bottom inset 을 패딩으로 먹었으므로 그만큼 뺀다.
+  const keyboardInset = useKeyboardInset();
   const messages = useChatStore((s) => s.messages);
   const isLoading = useChatStore((s) => s.isLoading);
   const pushUser = useChatStore((s) => s.pushUser);
@@ -71,15 +74,27 @@ export default function ChatScreen() {
         }}
       />
 
-      <KeyboardAvoidingView
-        style={styles.content}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 16 : 0}
+      {/*
+        🔴 v1.4.10 — KeyboardAvoidingView 를 걷어냈다.
+        이 화면은 `presentation: 'modal'` 이라 KAV 의 measure 좌표가 실제
+        화면 좌표와 어긋나, 계산된 패딩이 모자라 입력창이 키보드 뒤로 숨었다.
+        `keyboardVerticalOffset={insets.top + 16}` 은 그 부족분을 메우려던
+        경험적 보정이었지만 여전히 모자랐고(한 줄이면 입력창이 통째로 숨고,
+        줄이 늘면 윗줄만 삐져나와 "줄바꿈하면 아래 글이 잘린다"로 보였다),
+        노치 높이가 다른 기기에서 다시 어긋날 값이었다.
+        지금은 키보드 프레임만 보고 패딩을 준다 → src/hooks/useKeyboardInset.ts
+        (2026-09-06 LEAD 보고 → 시뮬 재현/수정 확인)
+      */}
+      <View
+        style={[
+          styles.content,
+          { paddingBottom: Math.max(0, keyboardInset - insets.bottom) },
+        ]}
       >
         <View style={styles.topSpacer} />
         <ChatMessageList messages={messages} isLoading={isLoading} />
         <ChatComposer />
-      </KeyboardAvoidingView>
+      </View>
     </SafeAreaView>
   );
 }

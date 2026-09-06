@@ -177,10 +177,20 @@ export default function NoteNewScreen() {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
+        {/*
+          🔴 v1.4.10 — 본문이 길어지면 커서가 있는 줄이 키보드 뒤로 들어갔다
+          (LEAD 보고 "줄바꿈이 되면 아래 글이 짤려", 2026-09-06 시뮬 재현).
+          KeyboardAvoidingView 는 *바깥 컨테이너*를 밀어 올릴 뿐이고,
+          ScrollView 안에서 커서를 따라가는 건 별개다.
+          `automaticallyAdjustKeyboardInsets` 가 키보드 높이만큼 contentInset 을
+          잡아 줘서, 마지막 줄까지 스크롤이 닿는다(iOS 전용 — Android 는
+          windowSoftInputMode=adjustResize 로 이미 같은 효과가 난다).
+        */}
         <ScrollView
           style={styles.flex}
           contentContainerStyle={styles.editorContent}
           keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
         >
           {/* Title input */}
           <TextInput
