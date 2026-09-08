@@ -70,6 +70,11 @@ const WEB_INPUT_BOTTOM_GAP = 24;
  */
 const NATIVE_INPUT_BOTTOM_GAP = 12;
 
+/** 입력창 최소/최대 높이. 스타일과 웹 높이 계산이 **같은 값**을 봐야 어긋나지 않는다. */
+const INPUT_MIN_HEIGHT = 36;
+/** 4줄(lineHeight 20 × 4) + 위아래 여유. 넘으면 안에서 스크롤한다. */
+const INPUT_MAX_HEIGHT = 90;
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type InputState = 'idle' | 'loading' | 'preview' | 'error';
@@ -168,6 +173,7 @@ export function NLInputBar({ onEventCreated }: Props) {
   const text = useNLRequestStore((s) => s.text);
   const attachedImages = useNLRequestStore((s) => s.images);
   const [inputState, setInputState] = useState<InputState>('idle');
+
   const [parseResult, setParseResult] = useState<NLParseResult | null>(null);
   // Build-51 — when the user enumerates multiple events ("내일 9시 회의,
   // 12시 점심") parseNaturalLanguageMulti returns >1 result. We hold the
@@ -344,6 +350,29 @@ export function NLInputBar({ onEventCreated }: Props) {
   }, [isListening, t]);
 
   // ── 사진 첨부 (Vision NL) ────────────────────────────────────────────────────
+
+  /**
+   * 입력 변경. 웹에서는 여기서 **입력창 높이도 다시 맞춘다.**
+   *
+   * RN Web 은 multiline TextInput 을 textarea 로 렌더하는데, textarea 는 내용이
+   * 늘어도 높이가 그대로다(2026-09-08 웹 점검에서 40px 고정 실측).
+   *
+   * 🔴 높이를 React state 로 주면 안 된다 — 매 렌더 React 가 그 값을 덮어써
+   *    우리가 잰 값과 싸운다(style.height 는 80px 인데 실제는 40px 로 남았다).
+   *    그래서 style 에는 height 를 두지 않고 **DOM 인라인만** 조정한다.
+   * 🔑 auto 로 잠깐 풀어야 줄어들 때도 정확히 측정된다(웹 표준 패턴).
+   * ⚠️ 네이티브는 손대지 않는다 — 이미 스스로 잘 자란다.
+   */
+  const handleChangeText = useCallback((t: string) => {
+    setDraftText(t);
+    if (Platform.OS !== 'web') return;
+    const node = inputRef.current as unknown as HTMLTextAreaElement | null;
+    if (!node || typeof node.scrollHeight !== 'number') return;
+    node.style.height = 'auto';
+    const next = Math.min(INPUT_MAX_HEIGHT, Math.max(INPUT_MIN_HEIGHT, node.scrollHeight));
+    node.style.height = next + 'px';
+    node.style.overflowY = node.scrollHeight > INPUT_MAX_HEIGHT ? 'auto' : 'hidden';
+  }, []);
 
   const handleAttachImage = useCallback(async () => {
     if (inputState === 'loading') return;
@@ -891,8 +920,9 @@ export function NLInputBar({ onEventCreated }: Props) {
         <TextInput
           ref={inputRef}
           style={styles.input}
+
           value={text}
-          onChangeText={setDraftText}
+          onChangeText={handleChangeText}
           placeholder={isListening ? '듣는 중…' : t('nl.placeholder')}
           placeholderTextColor={isListening ? colors.error : colors.textTertiary}
           editable={inputState !== 'loading'}
@@ -1084,13 +1114,12 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     // v1.4.11 — multiline 이 되면서 'center' 는 두 줄째가 위로 뜨게 만든다.
     // 여러 줄에서는 위에서부터 채워야 자연스럽다(Android 영향).
     textAlignVertical: 'top',
-    minHeight: 36,
+    minHeight: INPUT_MIN_HEIGHT,
     /**
      * 최대 4줄까지만 자라고 그 뒤로는 안에서 스크롤한다.
-     * 4 × lineHeight(20) + 위아래 여유(10). 제한이 없으면 긴 입력이
-     * 입력바를 화면 절반까지 밀어 올린다.
+     * 제한이 없으면 긴 입력이 입력바를 화면 절반까지 밀어 올린다.
      */
-    maxHeight: 90,
+    maxHeight: INPUT_MAX_HEIGHT,
     lineHeight: 20,
     includeFontPadding: false,
     // multiline 은 iOS 에서 기본 안쪽 여백이 있어 좌우가 어긋난다 — 0 으로 맞춘다.
