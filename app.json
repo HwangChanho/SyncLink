@@ -2,13 +2,13 @@
   "expo": {
     "name": "SyncLink",
     "slug": "synclink",
-    "version": "1.4.12",
+    "version": "1.4.13",
     "orientation": "portrait",
     "icon": "./images/TwotwoLogo.png",
     "scheme": "synclink",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./images/TwotwoLogo.png",
+      "image": "./images/SplashScreen.png",
       "resizeMode": "contain",
       "backgroundColor": "#0E0D16"
     },
@@ -52,7 +52,7 @@
       "package": "io.synclink.app",
       "playStoreUrl": "https://play.google.com/store/apps/details?id=io.synclink.app",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 31,
+      "versionCode": 32,
       "softwareKeyboardLayoutMode": "resize",
       "intentFilters": [
         {
