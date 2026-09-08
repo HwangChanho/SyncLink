@@ -41,8 +41,9 @@ import { buildPalette } from '@/lib/themePalette';
  * 6개 프리셋 목록. label 은 i18n key 로 보관해 컴포넌트에서 t() 로 해석한다.
  */
 const ACCENT_OPTIONS: { key: AccentPresetKey; labelKey: string }[] = [
+  // v1.4.12 — 기본이 indigo 가 되면서 'primary'(=같은 244)가 중복이라 뺐다.
+  // 키 자체는 역호환성 때문에 ACCENT_PRESETS 에 남아 있다.
   { key: 'default',  labelKey: 'settings.accent_default' },
-  { key: 'primary',  labelKey: 'settings.accent_indigo' },
   { key: 'rose',     labelKey: 'settings.accent_rose' },
   { key: 'emerald',  labelKey: 'settings.accent_emerald' },
   { key: 'amber',    labelKey: 'settings.accent_amber' },

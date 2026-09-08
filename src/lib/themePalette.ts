@@ -79,7 +79,13 @@ function hsl(h: number, s: number, l: number): string {
  * default(=violet)를 포함한 7개. 새로운 accentHue 시스템과 역호환성 유지.
  */
 export const ACCENT_PRESETS = {
-  default:  258, // violet (기존 기본값 유지)
+  // v1.4.12 — LEAD 지시로 기본 액센트를 violet(258) → **indigo(244)** 로 변경.
+  // 보라를 쓰던 사용자는 아래 'violet'(264) 프리셋을 고르면 된다.
+  default:  244, // indigo (기본)
+  /**
+   * @deprecated default 와 같은 값이 됐다. 설정 목록에서는 뺐지만
+   * **키는 지우지 말 것** — 예전에 이 값을 고른 사용자의 저장값이 남아 있다.
+   */
   primary:  244, // indigo
   rose:     342, // rose
   emerald:  160, // emerald

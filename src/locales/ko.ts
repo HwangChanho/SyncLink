@@ -579,7 +579,7 @@ const ko = {
   },
 
   nl: {
-    placeholder: '일정을 자연어로 입력하세요…',
+    placeholder: '말하듯 입력하세요…',
     quickAdd: {
       frequent_title: '자주 쓰는 일정',
       category_title: '빠른 등록',

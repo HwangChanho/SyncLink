@@ -568,7 +568,7 @@ const en = {
   },
 
   nl: {
-    placeholder: 'Add an event in plain language…',
+    placeholder: 'Add an event…',
     quickAdd: {
       frequent_title: 'Frequent events',
       category_title: 'Quick add',

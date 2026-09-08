@@ -29,6 +29,8 @@ import { useTranslation } from 'react-i18next';
 import Voice, { type SpeechResultsEvent, type SpeechErrorEvent } from '@/lib/voiceCompat';
 import * as ImagePicker from 'expo-image-picker';
 import { ConfirmModal } from './ConfirmModal';
+import { MultiEventConfirmSheet } from './MultiEventConfirmSheet';
+import { buildCreateInput } from '@/lib/nlCreateInput';
 import { QuotaExceededSheet } from '@/components/ai/QuotaExceededSheet';
 import { FreeBannerAd } from '@/components/ads/FreeBannerAd';
 import {
@@ -154,6 +156,12 @@ export function NLInputBar({ onEventCreated }: Props) {
   // pending tail here while the user steps through them one by one via
   // ConfirmModal so each event still gets a per-event confirm/edit UX.
   const [pendingResults, setPendingResults] = useState<NLParseResult[]>([]);
+  /**
+   * v1.4.12 — 결과가 2건 이상이면 한 건씩 확인시키지 않고 **리스트로 모아** 보여 준다
+   * (LEAD: "하나씩 떠서 확인 누르는게 아니라"). 시간표 한 장에서 30건이 나오는
+   * 지금은 순차 확인이 사실상 못 쓰는 흐름이다.
+   */
+  const [multiResults, setMultiResults] = useState<NLParseResult[]>([]);
   // v1.2.9 — 사용자 스페이스 목록 (마운트 시 1회 load). EventPreviewCard 에서
   // 칩으로 노출. 비어있으면 picker 자체 숨김.
   const [mySpaces, setMySpaces] = useState<SpaceSummary[]>([]);
@@ -488,7 +496,15 @@ export function NLInputBar({ onEventCreated }: Props) {
       return;
     }
 
-    // 그 외: 미리보기 카드 → 사용자 확인.
+    // 그 외: 미리보기 → 사용자 확인.
+    if (results.length > 1) {
+      // 여러 건이면 리스트에서 한 번에. (1건은 색·공유·반복종료일을 고를 수 있는
+      // 기존 ConfirmModal 이 더 낫다.)
+      setMultiResults(results);
+      setInputState('preview');
+      if (hasImages) setAttachedImages([]);
+      return;
+    }
     const [first, ...tail] = results;
     setParseResult(first ?? null);
     setPendingResults(tail);
@@ -515,6 +531,51 @@ export function NLInputBar({ onEventCreated }: Props) {
     }
     return null;
   }, [eventsByDate]);
+
+  /**
+   * v1.4.12 — 리스트에서 체크한 일정들을 **한 번에** 등록한다.
+   *
+   * 🔑 순차로 만들고 **성공/실패를 각각 센다.** 하나가 실패해도 멈추지 않는다 —
+   *    30건 중 1건이 깨졌다고 나머지 29건을 버리면 사용자가 다시 다 해야 한다.
+   * 🔑 낙관적 반영(upsertEvent)도 건건이 해서 캘린더가 바로 채워진다.
+   */
+  const handleConfirmOne = useCallback(async (r: NLParseResult): Promise<boolean> => {
+    try {
+      const created = await createEvent(buildCreateInput(r, {
+        fallbackTitle: text.trim(),
+        untitledLabel: t('event.untitled'),
+      }));
+      if (!created) return false;
+      // 낙관적 반영 — 시트가 닫히기 전에 캘린더/홈이 이미 채워져 있게.
+      upsertEvent({
+        id: created.id,
+        title: created.title,
+        startAt: created.startAt,
+        endAt: created.endAt,
+        allDay: created.allDay,
+        color: created.color ?? colors.primary,
+        isOwn: true,
+      });
+      return true;
+    } catch (err) {
+      void logError({ context: 'nl.confirm-multi', error: err });
+      return false;
+    }
+  }, [text, t, upsertEvent, colors.primary]);
+
+  /** 일괄 등록이 끝난 뒤 정리 + 결과 요약. */
+  const handleMultiFinished = useCallback(({ ok, failed }: { ok: number; failed: number }) => {
+    setMultiResults([]);
+    setText('');
+    setInputState('idle');
+    onEventCreated?.();
+
+    // 실패가 섞였으면 숨기지 않는다 — 몇 건이 안 들어갔는지 그대로 알린다.
+    if (failed > 0) {
+      setErrorMsg(`${ok}개 등록, ${failed}개 실패했어요.`);
+      setTimeout(() => setErrorMsg(''), 4000);
+    }
+  }, [onEventCreated]);
 
   // ── Confirm: create event and close (or advance queue) ────────────────────
 
@@ -860,6 +921,20 @@ export function NLInputBar({ onEventCreated }: Props) {
         </Pressable>
       </View>
 
+      {/*
+        v1.4.12 — 결과가 여러 건이면 리스트에서 한 번에 등록한다.
+        (1건이면 아래 ConfirmModal — 색·공유·반복종료일을 고를 수 있다.)
+      */}
+      {multiResults.length > 1 && (
+        <MultiEventConfirmSheet
+          visible={inputState === 'preview'}
+          results={multiResults}
+          onConfirmOne={handleConfirmOne}
+          onFinished={handleMultiFinished}
+          onCancel={() => { setMultiResults([]); setInputState('idle'); }}
+        />
+      )}
+
       {/* Confirm modal — shown when parse result is ready */}
       {parseResult && (
         <ConfirmModal
@@ -961,9 +1036,9 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
   },
   inputRow: {
     flexDirection: 'row',
-    // v1.4.11 — 입력이 여러 줄로 늘어나면 좌우 아이콘/버튼이 가운데에 떠
-    // 보인다. flex-end 로 두면 항상 마지막 줄에 나란히 붙는다.
-    alignItems: 'flex-end',
+    // v1.4.12 — LEAD: 여러 줄이어도 좌우 아이콘은 **입력창 세로 가운데**에.
+    // (v1.4.11 에 flex-end 로 뒀더니 아이콘이 바닥에 처져 보였다.)
+    alignItems: 'center',
     gap: spacing[2],
     backgroundColor: colors.surface,
     borderRadius: radius.full,

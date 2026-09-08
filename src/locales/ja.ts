@@ -565,7 +565,7 @@ const ja = {
   },
 
   nl: {
-    placeholder: '自然語でイベントを追加…',
+    placeholder: '予定を入力…',
     quickAdd: {
       frequent_title: 'よく使う予定',
       category_title: 'クイック登録',

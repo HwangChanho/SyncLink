@@ -568,7 +568,7 @@ const zh = {
   },
 
   nl: {
-    placeholder: '用自然语言添加日程…',
+    placeholder: '添加日程…',
     quickAdd: {
       frequent_title: '常用日程',
       category_title: '快速添加',
