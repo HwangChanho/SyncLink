@@ -156,7 +156,11 @@ const buildMultiImageSuffix = (locale: string, imageCount: number): string => {
     return `
 ⚠ ${imageCount} images are attached. Instead of the single-object format above, return:
 {"events":[{ ...same object as above... }, ...]}
-- Include EVERY event you find, across ALL images. One object per event.
+- 🔴 **The user's own constraint wins.** If the user message says "only …",
+  names a person, or names a type, include ONLY the matching events and DROP
+  the rest. If only 3 match, return 3.
+- ONLY when there is no such constraint, include every event across all images.
+  One object per event.
 - If one image holds several events (e.g. a timetable), emit one object per event.
 - Skip images with no event; do not emit placeholders.
 - If NO image contains any event, return {"noEventFound":true,"reason":"..."} instead.
@@ -167,7 +171,9 @@ Return ONLY valid JSON.`.trim();
     return `
 ⚠ 画像が ${imageCount} 枚添付されています。上の単一形式ではなく次の形式で返してください:
 {"events":[{ ...上と同じオブジェクト... }, ...]}
-- すべての画像から見つかった予定を **すべて** 含める。予定 1 件につき 1 オブジェクト。
+- 🔴 **ユーザーの指定が最優先。**「〜だけ」「特定の名前・人・種類」が書かれていれば、
+  **該当するものだけ** を含め、残りは **捨てる**。該当が 3 件なら 3 件だけ返す。
+- 指定が **無い場合のみ** すべての画像の予定をすべて含める。予定 1 件につき 1 オブジェクト。
 - 1 枚に複数の予定（時間割など）があれば、それぞれ別オブジェクトにする。
 - 予定が無い画像は飛ばす。
 - どの画像にも予定が無ければ {"noEventFound":true,"reason":"..."} を返す。
@@ -178,7 +184,9 @@ Return ONLY valid JSON.`.trim();
     return `
 ⚠ 已附上 ${imageCount} 张图片。请不要用上面的单个对象格式，改用:
 {"events":[{ ...与上面相同的对象... }, ...]}
-- 包含 **所有** 图片中找到的每一个日程，每个日程一个对象。
+- 🔴 **用户的限定条件优先。** 若用户消息中有"只要…""某个名字/人/类型"，
+  则**只包含符合条件的**，其余**全部丢弃**。符合的只有 3 条就只返回 3 条。
+- **仅当没有该条件时**，才包含所有图片中的每一个日程，每个日程一个对象。
 - 若一张图含多个日程（如课程表），每个日程单独一个对象。
 - 没有日程的图片跳过。
 - 若所有图片都没有日程，返回 {"noEventFound":true,"reason":"..."}。
@@ -188,7 +196,12 @@ Return ONLY valid JSON.`.trim();
   return `
 ⚠ 사진이 ${imageCount}장 첨부됐다. 위의 단일 객체 형식 대신 **다음 형식**으로 반환하라:
 {"events":[{ ...위와 동일한 객체... }, ...]}
-- **모든 사진**에서 찾은 일정을 **전부** 넣는다. 일정 1건당 객체 1개.
+- 🔴 **사용자가 조건을 달았으면 그 조건이 최우선이다.** 사용자 메시지에
+  "…만", "…인 것만", 특정 이름·사람·유형이 적혀 있으면 **그 조건에 맞는 것만**
+  넣고 나머지는 **버린다**. 조건에 맞는 게 3건뿐이면 3건만 반환한다.
+  예: "신비 이름으로된 일정만 등록해줘" → 표에서 **신비** 칸만 골라 넣는다.
+      다른 사람(지연·재민·한비 등)의 칸은 절대 넣지 않는다.
+- 조건이 **없을 때만** 모든 사진에서 찾은 일정을 전부 넣는다. 일정 1건당 객체 1개.
 - 한 장에 일정이 여러 개면(예: 시간표) 각각 별도 객체로 만든다.
 - 일정이 없는 사진은 그냥 건너뛴다. 빈 객체를 넣지 말 것.
 - 어느 사진에도 일정이 없으면 {"noEventFound":true,"reason":"..."} 를 반환한다.
@@ -518,8 +531,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
           // 여러 장이면 사진별로 나눠 읽으라고 명시한다 — 안 그러면 첫 장만 보고 끝낸다.
           {
             type: 'text',
+            // 🔴 사용자 지시는 그대로 넘기되 **조건으로 읽히도록** 감싼다.
+            //    그냥 넘기면 시스템 프롬프트의 "전부 넣는다"에 묻혀
+            //    "신비 이름만" 같은 필터가 무시된다(2026-09-08 실제 사고).
             text: text?.trim()
-              || (images.length > 1
+              ? `사용자 요청: "${text.trim()}"\n위 요청에 조건이 있으면 그 조건에 맞는 일정만 넣어라.`
+              : (images.length > 1
                 ? `첨부한 사진 ${images.length}장 전부에서 일정 정보를 추출해줘.`
                 : '이 이미지에서 일정 정보를 추출해줘.'),
           },

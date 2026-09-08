@@ -182,7 +182,11 @@ function makeStyles(colors: ColorTokens) {
       alignItems:     'center',
       paddingRight:   spacing[2],
       marginHorizontal: spacing[4],
-      marginVertical: spacing[1],
+      marginTop:      spacing[1],
+      // v1.4.13 — 이 카드가 '오늘의 제안' 섹션의 **마지막** 자식이라, 아래 여백이
+      // 좁으면 다음 섹션과 붙어 보인다(LEAD 지적). 카드 자체에 두면 카드가
+      // 닫혔을 때(dismissed → null) 빈 여백도 함께 사라진다.
+      marginBottom:   spacing[5],
       borderRadius:   radius.lg,
       borderWidth:    1,
       borderColor:    colors.border,

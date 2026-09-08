@@ -57,7 +57,7 @@ import { useColors } from '@/hooks/useColors';
 import { APP_BRAND } from '@/constants/config';
 import { logError } from '@/lib/errorLogger';
 import { useOnboardingStore } from '@/stores/onboardingStore';
-import { useAppearanceStore } from '@/stores/appearanceStore';
+import { useAppearanceStore, initAppearanceStore } from '@/stores/appearanceStore';
 import { useNoteSettingsStore } from '@/stores/noteSettingsStore';
 import { trackFunnel } from '@/services/funnelService';
 import { useFonts } from 'expo-font';
@@ -130,6 +130,11 @@ function useAuthGuard(): { routingReady: boolean } {
     void useOnboardingStore.getState().hydrate();
     // Restore note settings (YouTube thumbnail toggle) from AsyncStorage.
     void useNoteSettingsStore.getState().hydrate();
+    // 🔴 v1.4.13 — 이 줄이 **없어서 테마 설정이 앱을 껐다 켜면 사라졌다**
+    //    (LEAD 보고 2026-09-08). 저장은 되고 있었지만 복원하는 쪽이 아무 데서도
+    //    호출되지 않았다. 액센트 색뿐 아니라 **라이트/다크 설정도 같은 함수**가
+    //    복원하므로 그것도 함께 날아가고 있었다.
+    void initAppearanceStore();
     // 퍼널의 분모. 이 줄이 있어야 "앱은 켰는데 어느 화면에도 도달하지 못한" 경우까지
     // 셀 수 있다. 실패해도 조용히 삼키므로 부팅 경로에 영향을 주지 않는다.
     void trackFunnel('app_open');
