@@ -27,6 +27,7 @@ import {
 } from '@/services/assistantChatService';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
+import { resolveImageMediaType } from '@/lib/imageMediaType';
 import { router } from 'expo-router';
 
 const MAX_LEN = 500;
@@ -102,12 +103,8 @@ export function ChatComposer() {
       .filter((a) => !!a.base64)
       .slice(0, remaining)
       .map((a) => {
-        const ext = a.uri.split('.').pop()?.toLowerCase();
-        const mediaType: AssistantImageMediaType =
-          ext === 'png' ? 'image/png' :
-          ext === 'webp' ? 'image/webp' :
-          ext === 'gif' ? 'image/gif' :
-          'image/jpeg';
+        // 🔴 확장자가 아니라 실제 바이트로 판정한다(ImagePicker 재인코딩 대응).
+        const mediaType = resolveImageMediaType(a.base64 as string, a.uri);
         return { uri: a.uri, base64: a.base64 as string, mediaType };
       });
     if (picked.length === 0) return;

@@ -257,6 +257,25 @@ build_android() {
   export ANDROID_SDK_ROOT="$ANDROID_HOME"
   export PATH="$JAVA_HOME/bin:$PATH"
 
+  # 🔴 SyncLink 전용 GRADLE_USER_HOME (2026-09-08 분리).
+  #    기본값 ~/.gradle 은 이 기계의 **모든** Gradle 빌드가 공유한다. 형제
+  #    프로젝트(헤어핀)가 자기 R8 OOM 을 잡으려 힙을 재배분하면 우리 빌드가
+  #    조용히 영향을 받는다 — 09-08 에 실제로 kotlin.daemon 힙이 절반(1536m→768m)
+  #    으로 줄었다. 전용 홈을 쓰면 서로 안 부딪힌다.
+  #
+  #    ⚠️ 이 디렉터리의 gradle.properties 가 **반드시 있어야 한다.** 비어 있으면
+  #       프로젝트 기본값(-Xmx2048m -XX:MaxMetaspaceSize=512m)으로 떨어져
+  #       KSP+lint 가 Metaspace 를 고갈시킨다(그 튜닝이 생긴 애초의 이유).
+  #       그래서 없으면 빌드를 시작하지 않고 여기서 멈춘다.
+  export GRADLE_USER_HOME="${GRADLE_USER_HOME:-$HOME/.gradle-synclink}"
+  if [[ ! -f "$GRADLE_USER_HOME/gradle.properties" ]]; then
+    echo "✗ $GRADLE_USER_HOME/gradle.properties 가 없습니다."
+    echo "  빈 GRADLE_USER_HOME 으로 빌드하면 Metaspace 고갈로 실패합니다."
+    echo "  복구: ~/.gradle/gradle.properties 를 복사한 뒤 힙을"
+    echo "        -Xmx3072m / kotlin.daemon -Xmx1536m 으로 되돌리세요."
+    exit 1
+  fi
+
   local vc out
   vc=$(node -p "require('./app.json').expo.android.versionCode")
   out="build/synclink-android-${VERSION}-vc${vc}.aab"

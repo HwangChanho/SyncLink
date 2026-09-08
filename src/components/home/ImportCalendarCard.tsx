@@ -28,6 +28,7 @@ import { APP_BRAND } from '@/constants/config';
 import { textStyles } from '@/constants/typography';
 import { sendAssistantTurn } from '@/services/assistantChatService';
 import { useEventStore } from '@/stores/eventStore';
+import { resolveImageMediaType } from '@/lib/imageMediaType';
 
 // v1.2.9 — LEAD: "다른 캘린더 사진으로 가져오기" 카드에 X 닫기 기능 추가.
 // 닫으면 영구 hidden (AsyncStorage key). 다시 보려면 설정 같은 데서 reset 필요.
@@ -72,12 +73,8 @@ export function ImportCalendarCard() {
         encoding: FileSystem.EncodingType.Base64,
       });
       // 선언 형식과 실제 바이트가 어긋나면 API 가 거부한다. ChatComposer 와 같은 방식.
-      const ext = asset.uri.split('.').pop()?.toLowerCase();
-      const mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' =
-        ext === 'png'  ? 'image/png'  :
-        ext === 'webp' ? 'image/webp' :
-        ext === 'gif'  ? 'image/gif'  :
-        'image/jpeg';
+      // 🔴 확장자가 아니라 실제 바이트로 판정한다(ImagePicker 재인코딩 대응).
+      const mediaType = resolveImageMediaType(base64, asset.uri);
 
       // Edge Fn 은 messages 배열을 요구한다(비면 400 no_messages).
       const { result: turn, error } = await sendAssistantTurn({

@@ -494,6 +494,19 @@ Deno.serve(async (req: Request) => {
     : body.image ? [body.image]
     : [];
 
+  /**
+   * 🔴 선언된 mediaType 을 **실제 바이트로 교정**한다 — parse-event 와 같은 이유.
+   * iOS ImagePicker 가 JPEG 재인코딩하면서 확장자는 .png 를 남기면 Anthropic 이
+   * 400 으로 거부한다. 서버 교정이라 구버전 앱까지 즉시 고쳐진다.
+   */
+  // @ts-ignore — Deno import map resolves '../_shared/imageType.ts' at deploy time.
+  const { resolveImageMediaType } = await import('../_shared/imageType.ts');
+  for (const img of inputImages) {
+    if (typeof img?.base64 === 'string') {
+      img.mediaType = resolveImageMediaType(img.base64, img.mediaType);
+    }
+  }
+
   // 사진이 오면 모델 호출 전에 개수·형식·크기를 확인한다.
   if (inputImages.length > MAX_IMAGES) {
     return new Response(JSON.stringify({ error: 'too_many_images', max: MAX_IMAGES }), {

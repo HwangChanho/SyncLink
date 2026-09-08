@@ -374,6 +374,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
         ? [{ base64: imageBase64, mediaType: imageMediaType ?? 'image/jpeg' }]
         : [];
 
+    /**
+     * 🔴 선언된 mediaType 을 **실제 바이트로 교정**한다.
+     * iOS ImagePicker 가 quality 옵션으로 JPEG 재인코딩하면서 uri 확장자는
+     * .png 를 남기는 경우가 있어, 그대로 보내면 Anthropic 이 400 으로 거부한다
+     * (2026-09-08 LEAD 보고의 실제 원인 — 앱엔 non-2xx 로만 보였다).
+     * 서버가 바로잡으면 **이미 나간 구버전 앱까지 즉시 살아난다.**
+     */
+    // @ts-ignore — Deno import map resolves '../_shared/imageType.ts' at deploy time.
+    const { resolveImageMediaType } = await import('../_shared/imageType.ts');
+    for (const img of images) {
+      if (typeof img?.base64 === 'string') {
+        img.mediaType = resolveImageMediaType(img.base64, img.mediaType) as ParseEventImageMediaType;
+      }
+    }
+
     const hasImage = images.length > 0;
     if (!hasImage && !text?.trim()) {
       return new Response(JSON.stringify({ error: 'text or images is required' }), {

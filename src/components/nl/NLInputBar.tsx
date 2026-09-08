@@ -44,6 +44,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useLoginPromptStore } from '@/stores/loginPromptStore';
 import { useNLFocusStore } from '@/stores/nlFocusStore';
 import { logError } from '@/lib/errorLogger';
+import { resolveImageMediaType } from '@/lib/imageMediaType';
 import { useEventStore } from '@/stores/eventStore';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import type { NLParseResult, EventSummary, SpaceSummary } from '@/types';
@@ -358,12 +359,9 @@ export function NLInputBar({ onEventCreated }: Props) {
       .filter((a) => !!a.base64)
       .slice(0, remaining)
       .map((a) => {
-        const ext = a.uri.split('.').pop()?.toLowerCase();
-        const mediaType: AiImageAttachment['mediaType'] =
-          ext === 'png'  ? 'image/png'  :
-          ext === 'gif'  ? 'image/gif'  :
-          ext === 'webp' ? 'image/webp' :
-                           'image/jpeg';
+        // 🔴 확장자로 정하면 안 된다 — ImagePicker 가 quality 로 JPEG 재인코딩해도
+        //    uri 는 .png 를 남길 수 있어 Anthropic 이 형식 불일치로 거부한다.
+        const mediaType = resolveImageMediaType(a.base64 as string, a.uri);
         return { uri: a.uri, base64: a.base64 as string, mediaType };
       });
     if (picked.length === 0) return;
