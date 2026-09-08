@@ -196,6 +196,59 @@ Return ONLY valid JSON.`.trim();
 반드시 valid JSON만 반환하세요.`.trim();
 };
 
+/**
+ * 잘린 JSON 에서 **완성된 일정 객체만** 건져 낸다.
+ *
+ * 모델이 `{"events":[{...},{...},{...` 처럼 중간에서 끊기면 `JSON.parse` 는
+ * 통째로 실패한다. 하지만 앞쪽 객체들은 멀쩡하므로 그것만이라도 살린다 —
+ * 30건 중 25건이 등록되는 편이 0건보다 낫다(2026-09-08 사고).
+ *
+ * 중괄호 균형을 세면서 최상위 배열 원소를 하나씩 떼어 파싱한다.
+ * 문자열 안의 중괄호와 이스케이프를 건너뛰므로 제목에 `{` 가 있어도 안전하다.
+ *
+ * @param text 모델 원문(잘렸을 수 있다)
+ * @returns 파싱에 성공한 일정 객체들. 하나도 없으면 빈 배열.
+ */
+function salvageEvents(text: string): ParsedEventFromAI[] {
+  const arrStart = text.indexOf('"events"');
+  if (arrStart === -1) return [];
+  const bracket = text.indexOf('[', arrStart);
+  if (bracket === -1) return [];
+
+  const out: ParsedEventFromAI[] = [];
+  let depth = 0;
+  let objStart = -1;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = bracket + 1; i < text.length; i++) {
+    const ch = text[i];
+
+    if (escaped) { escaped = false; continue; }
+    if (ch === '\\') { escaped = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+
+    if (ch === '{') {
+      if (depth === 0) objStart = i;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0 && objStart !== -1) {
+        try {
+          out.push(JSON.parse(text.slice(objStart, i + 1)));
+        } catch {
+          // 이 객체는 포기하고 다음으로 — 여기서 멈추면 뒤 것도 다 잃는다.
+        }
+        objStart = -1;
+      }
+    } else if (ch === ']' && depth === 0) {
+      break; // 배열이 정상 종료됐다
+    }
+  }
+  return out;
+}
+
 const buildBaseSystemPrompt = (contextDatetime: string, locale: string): string => {
   const lang = (locale ?? '').slice(0, 2).toLowerCase();
 
@@ -474,10 +527,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
       : text;
     const message = await client.messages.create({
       model,
-      // 사진이 여러 장이면 일정도 여러 개 나온다 — 한 건당 약 200토큰으로 잡고
-      // 장수에 비례해 늘린다(상한 4000). 부족하면 JSON 이 잘려 파싱이 통째로 실패한다.
+      /**
+       * 🔴 부족하면 JSON 이 중간에 잘려 **파싱이 통째로 실패**한다.
+       * 2026-09-08 실제 사고: 시간표 3장 → 일정이 많이 나왔는데 장당 400 으로
+       * 잡아 두어 응답이 끊겼고, 사용자에겐 non-2xx 로만 보였다.
+       *
+       * 일정 1건이 JSON 으로 약 200~250 토큰이고 시간표 한 장에 20건이 넘게
+       * 들어 있을 수 있다. **출력 토큰은 실제 생성분만 과금**되므로 상한을
+       * 크게 잡아도 평소 비용은 늘지 않는다 — 넉넉히 준다.
+       */
       max_tokens: hasImage
-        ? Math.min(4000, Math.max(400, images.length * 400))
+        ? Math.min(16000, Math.max(4000, images.length * 2000))
         : 150,
       system: buildSystemPrompt(
         contextDatetime ?? new Date().toISOString(),
@@ -494,13 +554,31 @@ Deno.serve(async (req: Request): Promise<Response> => {
       throw new Error('Unexpected response type from Claude');
     }
 
+    // 응답이 max_tokens 에서 끊겼는지 먼저 본다 — 아래 부분 복구의 근거가 된다.
+    const truncated = message.stop_reason === 'max_tokens';
+    if (truncated) {
+      console.warn(`[parse-event] 응답이 max_tokens 에서 끊겼다 (images=${images.length})`);
+    }
+
     // Parse AI JSON — extract only the first {...} block in case of extra text
     const jsonMatch = rawContent.text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('Claude returned no valid JSON');
 
-    const rawParsed: (ParsedEventFromAI & { noEventFound?: boolean; reason?: string })
-      & { events?: ParsedEventFromAI[] }
-      = JSON.parse(jsonMatch[0]);
+    let rawParsed: (ParsedEventFromAI & { noEventFound?: boolean; reason?: string })
+      & { events?: ParsedEventFromAI[] };
+    try {
+      rawParsed = JSON.parse(jsonMatch[0]);
+    } catch (parseErr) {
+      /**
+       * 🔑 잘린 JSON 이라도 **완성된 일정 객체는 건진다.**
+       * 30건 중 25건이라도 등록되는 편이, 전부 실패해 사용자가 아무것도 못
+       * 얻는 것보다 낫다(2026-09-08 사고의 실제 피해가 후자였다).
+       */
+      const salvaged = salvageEvents(rawContent.text);
+      if (salvaged.length === 0) throw parseErr;
+      console.warn(`[parse-event] JSON 이 잘려 부분 복구: ${salvaged.length}건`);
+      rawParsed = { events: salvaged } as typeof rawParsed;
+    }
 
     /**
      * 사진이 2장 이상이면 모델이 `{"events":[...]}` 로 답한다(위 프롬프트 접미사).
