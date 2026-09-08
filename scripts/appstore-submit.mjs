@@ -159,6 +159,54 @@ await api(`/v1/appStoreVersionLocalizations/${ko.id}`, {
 });
 console.log(`  출시노트 설정 (${ko.attributes.locale})`);
 
+/**
+ * 🔴 promotionalText 자동 승계 — ASC 는 새 버전에 이 필드를 복사하지 않는다.
+ *
+ * 2026-09-08 까지 **일곱 번** 같은 일을 당했다. 매번 사람이 알아채고 손으로
+ * 넣었는데, 알아채지 못하면 그대로 출시돼 스토어 상단 문구가 비어 버린다.
+ * 그래서 제출 흐름 안에서 자동으로 채운다.
+ *
+ * 값은 **하드코딩하지 않고 현재 라이브 버전에서 읽어 온다** — LEAD 가 라이브
+ * 버전의 문구를 고치면(그 필드는 심사 없이 즉시 반영된다) 다음 버전이
+ * 자동으로 그 최신값을 물려받는다.
+ *
+ * ⚠️ 새 버전에 이미 값이 있으면 건드리지 않는다 — 사람이 의도적으로 다르게
+ *    써 넣었을 수 있다.
+ */
+try {
+  const current = (ko.attributes.promotionalText ?? "").trim();
+  if (current.length > 0) {
+    console.log(`  promotionalText: 이미 있음(${[...current].length}자) — 건드리지 않음`);
+  } else {
+    // 라이브(READY_FOR_SALE) 버전의 ko 로컬라이제이션에서 값을 가져온다.
+    const live = versions.data.find((v) => v.attributes.appStoreState === "READY_FOR_SALE");
+    if (!live) {
+      console.log("  promotionalText: 비어 있으나 라이브 버전이 없어 승계 불가 — 수동 확인 필요");
+    } else {
+      const liveLocs = await api(`/v1/appStoreVersions/${live.id}/appStoreVersionLocalizations`);
+      const liveKo = liveLocs.data.find((l) => l.attributes.locale.startsWith("ko")) ?? liveLocs.data[0];
+      const inherited = (liveKo?.attributes?.promotionalText ?? "").trim();
+      if (inherited.length === 0) {
+        console.log("  promotionalText: 라이브 버전에도 비어 있음 — 승계할 값 없음");
+      } else {
+        await api(`/v1/appStoreVersionLocalizations/${ko.id}`, {
+          method: "PATCH",
+          body: { data: { type: "appStoreVersionLocalizations", id: ko.id, attributes: { promotionalText: inherited } } },
+        });
+        // 되읽어 검증 — "요청했다"가 아니라 "실제로 들어갔다"를 확인한다.
+        const after = await api(`/v1/appStoreVersionLocalizations/${ko.id}`);
+        const saved = (after?.data?.attributes?.promotionalText ?? "").trim();
+        console.log(saved === inherited
+          ? `  promotionalText: ${live.attributes.versionString} 에서 승계 ✅ (${[...saved].length}자)`
+          : "  🔴 promotionalText 승계 실패 — 손으로 확인할 것");
+      }
+    }
+  }
+} catch (e) {
+  // 승계 실패가 제출 자체를 막지는 않게 한다. 다만 조용히 넘어가지도 않는다.
+  console.log(`  🔴 promotionalText 처리 중 오류(제출은 계속): ${e instanceof Error ? e.message : e}`);
+}
+
 // 심사 제출 — reviewSubmission 을 열고 이 버전을 항목으로 붙인 뒤 제출한다.
 const sub = await api('/v1/reviewSubmissions', {
   method: 'POST',
