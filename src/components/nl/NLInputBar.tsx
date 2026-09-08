@@ -31,14 +31,10 @@ import * as ImagePicker from 'expo-image-picker';
 import { ConfirmModal } from './ConfirmModal';
 import { MultiEventConfirmSheet } from './MultiEventConfirmSheet';
 import { buildCreateInput } from '@/lib/nlCreateInput';
+import { useNLRequestStore, type NLAttachedImage } from '@/stores/nlRequestStore';
 import { QuotaExceededSheet } from '@/components/ai/QuotaExceededSheet';
 import { FreeBannerAd } from '@/components/ads/FreeBannerAd';
-import {
-  parseNaturalLanguageWithImages,
-  parseNaturalLanguageMulti,
-  MAX_NL_IMAGES,
-  type AiImageAttachment,
-} from '@/services/aiService';
+import { MAX_NL_IMAGES } from '@/services/aiService';
 import { useVoicePostProcess } from '@/hooks/useVoicePostProcess';
 import { createEvent } from '@/services/eventService';
 import { getMySpaces } from '@/services/spaceService';
@@ -135,6 +131,21 @@ function buildPrefillParams(result: NLParseResult): Record<string, string> {
   return params;
 }
 
+/**
+ * store 액션 래퍼들 — **일부러 컴포넌트 밖에 둔다.**
+ *
+ * zustand 액션은 참조가 안정적이라 selector 로 받아도 되지만, 그러면
+ * react-hooks/exhaustive-deps 가 모든 useCallback/useEffect 에 그 이름을
+ * deps 로 요구해 경고가 10개 넘게 늘어난다(실제로 그랬다).
+ * 모듈 스코프 함수는 렌더마다 바뀌지 않으므로 deps 대상이 아니다.
+ */
+const setDraftText = (t: string) => useNLRequestStore.getState().setText(t);
+const setDraftImages = (u: (prev: NLAttachedImage[]) => NLAttachedImage[]) =>
+  useNLRequestStore.getState().setImages(u);
+const submitDraft = () => useNLRequestStore.getState().submit();
+const markDraftBackgrounded = () => useNLRequestStore.getState().markBackgrounded();
+const hydrateDraft = () => useNLRequestStore.getState().hydrate();
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function NLInputBar({ onEventCreated }: Props) {
@@ -148,7 +159,14 @@ export function NLInputBar({ onEventCreated }: Props) {
   const { canUseAI, consumeAI } = useSubscriptionStore();
 
   const eventsByDate = useEventStore(s => s.eventsByDate);
-  const [text, setText] = useState('');
+  /**
+   * v1.4.12 — 입력 텍스트와 첨부 사진을 **store 로 올렸다**(LEAD 지시).
+   * 컴포넌트 로컬이면 탭 이동·백그라운드·강제종료에 그대로 날아간다.
+   * store 는 홈/캘린더의 두 NLInputBar 가 공유하므로 "쓰던 것"이 하나로 유지되고,
+   * 초안은 AsyncStorage 에 남아 앱을 강제종료해도 복구된다.
+   */
+  const text = useNLRequestStore((s) => s.text);
+  const attachedImages = useNLRequestStore((s) => s.images);
   const [inputState, setInputState] = useState<InputState>('idle');
   const [parseResult, setParseResult] = useState<NLParseResult | null>(null);
   // Build-51 — when the user enumerates multiple events ("내일 9시 회의,
@@ -185,11 +203,6 @@ export function NLInputBar({ onEventCreated }: Props) {
    * v1.4.11 — 한 장 → 최대 {@link MAX_NL_IMAGES} 장(LEAD 요청).
    * 배열 순서 = 사용자가 고른 순서 = 모델이 보는 순서.
    */
-  const [attachedImages, setAttachedImages] = useState<{
-    uri:       string;
-    base64:    string;
-    mediaType: AiImageAttachment['mediaType'];
-  }[]>([]);
   /**
    * 요청이 도는 동안 앱이 백그라운드로 갔는지.
    *
@@ -203,11 +216,14 @@ export function NLInputBar({ onEventCreated }: Props) {
   /** AppState 리스너에서 최신 inputState 를 읽기 위한 미러. */
   const inputStateRef = useRef<InputState>('idle');
   useEffect(() => { inputStateRef.current = inputState; }, [inputState]);
+  // 앱 시작 시 1회 — 강제종료로 잃었던 초안(텍스트 + 사진)을 되살린다.
+  useEffect(() => { void hydrateDraft(); }, []);
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
       // 요청이 도는 중에 앱을 벗어난 경우만 표시해 둔다.
       if (next !== 'active' && inputStateRef.current === 'loading') {
         backgroundedDuringRequest.current = true;
+        markDraftBackgrounded();
       }
     });
     return () => sub.remove();
@@ -290,11 +306,11 @@ export function NLInputBar({ onEventCreated }: Props) {
       // 'low' 일 때만 비동기로 AI 후보정을 돌린다. 응답이 도착하면 더 자연
       // 스러운 문장으로 swap, 대안이 있으면 chip 영역에 노출. 응답 실패는
       // silent — 사용자는 원본 transcript 그대로 send 할 수 있다.
-      setText(recognized);
+      setDraftText(recognized);
       setVoiceAlternatives([]);
       refineVoice(recognized).then((res) => {
         if (!res || !res.aiUsed) return;
-        if (res.best && res.best !== recognized) setText(res.best);
+        if (res.best && res.best !== recognized) setDraftText(res.best);
         if (res.alternatives.length > 0) setVoiceAlternatives(res.alternatives);
       });
     };
@@ -319,7 +335,7 @@ export function NLInputBar({ onEventCreated }: Props) {
       return;
     }
     try {
-      setText('');
+      setDraftText('');
       await Voice.start('ko-KR');
       setIsListening(true);
     } catch {
@@ -374,12 +390,12 @@ export function NLInputBar({ onEventCreated }: Props) {
       });
     if (picked.length === 0) return;
 
-    setAttachedImages((prev) => [...prev, ...picked]);
+    setDraftImages((prev) => [...prev, ...picked]);
   }, [inputState, t, attachedImages.length]);
 
   /** 미리보기에서 사진 한 장 제거 (인덱스 기준 — 같은 사진을 두 번 골랐을 수 있다). */
   const handleRemoveImage = useCallback((index: number) => {
-    setAttachedImages((prev) => prev.filter((_, i) => i !== index));
+    setDraftImages((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
   // ── Parse submission ────────────────────────────────────────────────────────
@@ -405,7 +421,7 @@ export function NLInputBar({ onEventCreated }: Props) {
     const intentRe = /(삭제|취소|지워|없애|제거|delete|cancel|remove)|(?:바꿔|수정|변경|옮겨|미뤄)/;
     if (!hasImages && intentRe.test(trimmed)) {
       setInputState('idle');
-      setText('');
+      setDraftText('');
       router.push({
         pathname: '/chat',
         params: { prefill: trimmed },
@@ -435,12 +451,21 @@ export function NLInputBar({ onEventCreated }: Props) {
     // 적용 + 비용 모니터링은 server-side. text-only 흐름은 기존 multi 그대로.
     // v1.4.11 — 사진은 여러 장을 한 번에 보내고 결과도 여러 건 받는다
     // (시간표 스크린샷 한 장에서 일정이 여러 개 나오는 경우 포함).
-    const results = hasImages
-      ? await parseNaturalLanguageWithImages(
-          trimmed,
-          attachedImages.map(({ base64, mediaType }) => ({ base64, mediaType })),
-        )
-      : await parseNaturalLanguageMulti(trimmed);
+    /**
+     * 🔑 요청 실행을 store 에 맡긴다. 이 컴포넌트가 언마운트돼도(탭 이동 등)
+     *    요청은 끝까지 진행되고 결과가 store 에 남는다.
+     *    실패하면 store 가 초안(텍스트·사진)을 지우지 않으므로 그대로 재시도할 수 있다.
+     */
+    const results = (await submitDraft()) ?? [];
+    if (results.length === 0) {
+      // store 가 에러 메시지를 갖고 있다 — 사유를 그대로 보여 준다.
+      const storeError = useNLRequestStore.getState().errorMessage;
+      setErrorMsg(storeError || '잠시 후 다시 시도해 주세요.');
+      setInputState('error');
+      setTimeout(() => setInputState('idle'), 4000);
+      useNLRequestStore.getState().clearError();
+      return;
+    }
 
     // text-only AI 호출 시 클라 카운트 차감. image 흐름은 server quota 라 skip.
     if (!hasImages && results.some((r) => r.source === 'ai' && !r.error)) {
@@ -487,8 +512,8 @@ export function NLInputBar({ onEventCreated }: Props) {
     const head = results[0];
     if (results.length === 1 && head && shouldHandoffToAssistant(head)) {
       setInputState('idle');
-      setText('');
-      if (hasImages) setAttachedImages([]);
+      setDraftText('');
+      if (hasImages) setDraftImages(() => []);
       router.push({
         pathname: '/chat',
         params: { prefill: trimmed },
@@ -502,14 +527,14 @@ export function NLInputBar({ onEventCreated }: Props) {
       // 기존 ConfirmModal 이 더 낫다.)
       setMultiResults(results);
       setInputState('preview');
-      if (hasImages) setAttachedImages([]);
+      if (hasImages) setDraftImages(() => []);
       return;
     }
     const [first, ...tail] = results;
     setParseResult(first ?? null);
     setPendingResults(tail);
     setInputState('preview');
-    if (hasImages) setAttachedImages([]);
+    if (hasImages) setDraftImages(() => []);
   }, [text, inputState, canUseAI, consumeAI, attachedImages, t, router, handleAttachImage]);
 
   /**
@@ -566,7 +591,7 @@ export function NLInputBar({ onEventCreated }: Props) {
   /** 일괄 등록이 끝난 뒤 정리 + 결과 요약. */
   const handleMultiFinished = useCallback(({ ok, failed }: { ok: number; failed: number }) => {
     setMultiResults([]);
-    setText('');
+    setDraftText('');
     setInputState('idle');
     onEventCreated?.();
 
@@ -694,7 +719,7 @@ export function NLInputBar({ onEventCreated }: Props) {
       }
 
       // No more queued events — fully reset.
-      setText('');
+      setDraftText('');
       setParseResult(null);
       setPendingResults([]);
       setInputState('idle');
@@ -717,7 +742,7 @@ export function NLInputBar({ onEventCreated }: Props) {
     setParseResult(null);
     setPendingResults([]);   // navigating to /event/create cancels the rest of the queue
     setInputState('idle');
-    setText('');
+    setDraftText('');
 
     router.push({
       pathname: '/event/create',
@@ -741,7 +766,7 @@ export function NLInputBar({ onEventCreated }: Props) {
     setInputState('idle');
     // v1.2.9 — LEAD: "미리보기에서 나가도 텍스트 클리어".
     // (이전엔 재제출 편의를 위해 유지했으나 사용자 피드백상 클리어가 더 자연스러움.)
-    setText('');
+    setDraftText('');
   }, [pendingResults]);
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -778,7 +803,7 @@ export function NLInputBar({ onEventCreated }: Props) {
               key={`alt-${i}`}
               style={styles.chip}
               onPress={() => {
-                setText(alt);
+                setDraftText(alt);
                 setVoiceAlternatives([]);
                 inputRef.current?.focus();
               }}
@@ -867,7 +892,7 @@ export function NLInputBar({ onEventCreated }: Props) {
           ref={inputRef}
           style={styles.input}
           value={text}
-          onChangeText={setText}
+          onChangeText={setDraftText}
           placeholder={isListening ? '듣는 중…' : t('nl.placeholder')}
           placeholderTextColor={isListening ? colors.error : colors.textTertiary}
           editable={inputState !== 'loading'}
@@ -890,7 +915,7 @@ export function NLInputBar({ onEventCreated }: Props) {
           style={styles.assistantButton}
           onPress={() => {
             const trimmed = text.trim();
-            setText('');
+            setDraftText('');
             setInputState('idle');
             router.push({
               pathname: '/chat',
