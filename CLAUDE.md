@@ -21,7 +21,7 @@
 
 ### 코드 스타일
 - TypeScript strict, any 지양 | 함수형 컴포넌트 + Hooks
-- 커밋: conventional commits | 코드/주석: 영어, 이슈/태스크: 한국어
+- 커밋: conventional commits | **코드 주석·이슈·태스크 전부 한국어** (2026-08-27 LEAD 정정)
 
 ### 📦 스토어 빌드 = 로컬이 기본 (2026-07-29 LEAD 결정)
 EAS Free 크레딧을 아끼기 위해 **양 플랫폼 모두 `eas build --local`** 을 기본 경로로 쓴다.
@@ -50,17 +50,10 @@ npm run build:both      # 순차 (동시 실행 금지)
 
 ## 폴더 구조
 
+`src/` 하위 구조는 `ls src/` 로 확인한다(여기 옮겨 적으면 실제와 어긋난다).
+문서 폴더만 **용도가 파일 목록으로 드러나지 않으므로** 남긴다.
+
 ```
-src/
-  app/          # Expo Router 화면 ((tabs)/, event/, space/, auth/, settings/)
-  components/   # UI 컴포넌트 (calendar/, common/, home/, space/, event/, nl/)
-  services/     # 비즈니스 로직 (Supabase 호출은 여기만)
-  lib/          # nlParser, themePalette, supabase, dateUtils 등
-  stores/       # Zustand 스토어
-  types/        # TypeScript 타입 정의
-  constants/    # 디자인 토큰, 설정값
-  hooks/        # useColors, useSpeechRecognition 등
-  locales/      # ko/en/zh/ja i18n 키
 docs/
   tasks/        ← LEAD 생성, DEV 구현
   issues/       ← QA 생성(Open), fix 후 closed/로 이동
@@ -73,16 +66,19 @@ docs/
 
 ## 에이전트 역할
 
+**LEAD = 사용자**(스프린트 결정·아키텍처 승인·Level 4 승인).
+**DEV/QA 는 별도 에이전트가 아니라 메인 세션의 역할**이다 — `src/` 구현과
+`__tests__/`·`docs/issues/` 는 메인 세션이 직접 맡는다(아래 비용 가드레일 참고).
+
+실제로 spawn 가능한 sub-agent 는 `.claude/agents/` 에 정의된 것뿐이다:
+
 | 에이전트 | 담당 |
 |---------|------|
-| **LEAD (사용자)** | 스프린트 결정, 아키텍처 승인, Level 4 승인 |
-| DEV | `src/` 기능 구현, 큰 변경 직전에 plan 파일 작성 |
-| QA | `__tests__/`, `docs/issues/`, e2e |
 | qa-{ios-sim, web} | 시뮬 회귀 (**순차**) — `/qa ios-sim` → `/qa web` |
 | qa-{android-sim, ios-device, android-device} | 개별 실행 (뮤텍스 주의) |
-| DEVOPS | 빌드/배포, CI/CD, 인증서 관리 |
+| devops | 빌드/배포, CI/CD, 인증서 관리 |
 
-Sub-agent 정의: `.claude/agents/` | QA 디스패처: `.claude/commands/qa.md`
+QA 디스패처: `.claude/commands/qa.md`
 
 **비용 가드레일 (Max $100 플랜)**: 에이전트 spawn은 cold start 비용이 큼 — PM/TRIAGE/ARCHITECT류 별도 에이전트 금지, 그 책임은 LEAD/메인 세션이 직접. 병렬 탐색이 정말 필요할 때만 Explore/일반 에이전트.
 
@@ -137,9 +133,6 @@ TestFlight 업로드 전 `docs/QA_CHECKLIST.md` 5개 게이트 통과 필수.
 
 ## 참고 문서
 
-- `docs/SESSION_BOOT.md` — **세션 재시작용 role + 부트 체크리스트 (필독)**
-- `docs/PRD.md` — 제품 요구사항
-- `docs/SPRINT_PLAN.md` — 스프린트 계획
-- `docs/architecture/DECISIONS.md` — ADR 목록
-- `docs/architecture/BUDGET_GUARDRAILS.md` — AI/인프라 비용 가드레일
-- `docs/launch/V1_LAUNCH_CHECKLIST.md` — v1.0 출시 체크리스트
+나머지는 `ls docs/` 로 찾는다. 파일명만으로 용도를 못 알아볼 것만 적는다.
+
+- `docs/architecture/BUDGET_GUARDRAILS.md` — AI/인프라 **비용** 가드레일(이름이 예산처럼 보이지만 호출 상한 규칙)
