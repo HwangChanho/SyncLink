@@ -33,6 +33,17 @@ verify_jwt = false
 # Sprint 18.
 verify_jwt = false
 
+[functions.dispatch-notifications]
+# space-activity-dispatch cron(매분)이 `Authorization: Bearer <DISPATCH_SECRET>`
+# 으로 호출한다 — service_role 키를 Vault 에 넣지 않으려고 v1.1.4 에서 고정
+# 시크릿으로 바꿨는데, 그건 **JWT 가 아니라서** 게이트웨이가 핸들러 앞에서
+# 401(UNAUTHORIZED_INVALID_JWT_FORMAT)을 낸다. 이 항목이 빠져 있어 그때부터
+# 알림 발송이 통째로 멈춰 있었다(2026-09-09 실측: 6시간에 401 이 360건,
+# notifications_queue 2건이 08-09 부터 retry_count=0 인 채 방치 — 즉 실패가
+# 아니라 핸들러가 그 행을 한 번도 본 적이 없다).
+# 핸들러 자체는 DISPATCH_SECRET 을 제대로 검사한다 — 고칠 곳은 여기였다.
+verify_jwt = false
+
 [functions.weekly-review-batch]
 # Invoked only by pg_cron (migrations 035/038) with
 # `Authorization: Bearer <weekly_review_secret>` — a random hex from Vault,
