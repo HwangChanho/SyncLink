@@ -52,11 +52,25 @@ preflight() {
 
   # 1) 형제 프로젝트 빌드와 동시 실행 = OOM. 유휴 Gradle/Kotlin 데몬은 무해하므로
   #    "활성 빌드 툴"만 본다.
-  local busy
-  busy=$(pgrep -fl "xcodebuild|eas-cli-local-build" 2>/dev/null | grep -v "$$" || true)
-  if [[ -n "$busy" ]]; then
+  #
+  # 🔴 **명령줄 전체를 절대 출력하지 말 것** (2026-09-10 에 데임).
+  #    `eas-cli-local-build-plugin` 은 job 명세를 base64 **인자 하나로** 받는데,
+  #    그 안에 형제 프로젝트의 **Android keystore(base64) · keystorePassword ·
+  #    keyPassword · EAS 환경변수**(Supabase anon key, RevenueCat 키, NAVER secret)가
+  #    전부 들어 있다. 종전 `pgrep -fl` 은 그걸 그대로 찍어서, 사전점검을 한 번
+  #    돌릴 때마다 형제 앱의 **서명키와 비밀번호가 터미널·대화 로그에 남았다.**
+  #    탐지에는 `-f`(전체 명령줄 매칭)가 필요하지만 **출력은 PID·경과·툴 이름만** 한다.
+  local busy_pids
+  busy_pids=$(pgrep -f "xcodebuild|eas-cli-local-build" 2>/dev/null | grep -v "^$$\$" || true)
+  if [[ -n "$busy_pids" ]]; then
     echo "[WARN] 다른 빌드가 실행 중입니다 (형제 프로젝트일 수 있음):"
-    echo "$busy" | head -3
+    local pid tool etime
+    for pid in $busy_pids; do
+      # 명령줄은 **여기서만** 읽고 매칭된 툴 이름만 꺼낸다 — 밖으로 새지 않는다.
+      tool=$(ps -p "$pid" -o command= 2>/dev/null | grep -oE "xcodebuild|eas-cli-local-build" | head -1)
+      etime=$(ps -p "$pid" -o etime= 2>/dev/null | tr -d ' ')
+      echo "       PID ${pid} · 경과 ${etime:-?} · ${tool:-unknown}"
+    done | head -5
     echo "       동시 실행하면 양쪽 다 OOM 으로 죽습니다. 끝난 뒤 다시 실행하세요."
     exit 1
   fi
