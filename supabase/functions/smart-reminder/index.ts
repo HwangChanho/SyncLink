@@ -25,7 +25,7 @@
 import Anthropic from 'npm:@anthropic-ai/sdk';
 import { createClient } from 'npm:@supabase/supabase-js';
 // @ts-ignore — Deno 는 배포 시점에 상대 경로를 해석한다.
-import { requireServiceRole } from '../_shared/serviceAuth.ts';
+import { requireSharedSecret } from '../_shared/serviceAuth.ts';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -182,7 +182,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
   //    있었다. 부르면 Claude 호출로 크레딧이 나가고, 오늘 일정이 있는 **모든
   //    사용자에게 푸시가 발송된다**. pg_cron 은 service_role 로 호출하므로
   //    이 가드에 걸리지 않는다(reactivation-push 와 동일한 방식).
-  const denied = requireServiceRole(req);
+  // ⚠️ service_role 이 아니라 **공유 시크릿**이다. pg_cron 은 service_role 키를
+  //    Vault 에 넣지 않는 게 이 프로젝트 방침이라(dispatch-notifications 주석),
+  //    cron 이 부르는 함수는 전부 <FEATURE>_SECRET 방식을 쓴다.
+  const denied = requireSharedSecret(req, 'SMART_REMINDER_SECRET');
   if (denied) return denied;
 
   try {

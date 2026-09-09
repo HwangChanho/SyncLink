@@ -23,6 +23,8 @@
  */
 
 import { createClient } from 'npm:@supabase/supabase-js';
+// @ts-ignore — Deno 는 배포 시점에 상대 경로를 해석한다.
+import { requireSharedSecret } from '../_shared/serviceAuth.ts';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const INACTIVE_DAYS = 7;
@@ -44,21 +46,20 @@ Deno.serve(async (req: Request) => {
     return new Response('Method Not Allowed', { status: 405 });
   }
 
-  // service_role 인증 확인 — pg_cron 도 service_role 토큰으로 호출.
-  const authHeader = req.headers.get('Authorization') ?? '';
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-  if (!authHeader.includes(serviceKey)) {
-    return new Response(JSON.stringify({ error: 'service_role_required' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  // 🔴 2026-09-09: 여기는 service_role 을 기대했지만 **cron 은 그걸 보낸 적이
+  //    없다.** cron 이 `current_setting('app.settings.service_role_key', true)`
+  //    를 쓰는데 그 파라미터가 존재하지 않아 NULL → 헤더가 빈 값이었다.
+  //    missing_ok=true 라 SQL 은 "succeeded" 로 찍혀서 여태 안 드러났다.
+  //    → dispatch-notifications 와 같은 공유 시크릿 방식으로 통일한다.
+  const denied = requireSharedSecret(req, 'REACTIVATION_SECRET');
+  if (denied) return denied;
 
   const dryRun = Deno.env.get('DRY_RUN') === 'true';
 
+  // DB 접근용 service_role — 위 호출자 인증과는 별개다(인증은 공유 시크릿).
   const sb = createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
-    serviceKey,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
   );
 
   const now = Date.now();

@@ -51,6 +51,30 @@ verify_jwt = false
 # cron call before our handler runs, so verification must be disabled here;
 # the handler itself checks WEEKLY_REVIEW_SECRET. This entry was previously
 # missing, so a redeploy with the CLI default would have silently broken the
-# weekly-review cron. (smart-reminder needs no entry — its cron sends the
-# service_role key, which IS a valid JWT and passes default verification.)
+# weekly-review cron.
+# ⚠️ 2026-09-09 정정: 여기 괄호로 "smart-reminder 는 항목이 필요 없다 — 그 cron 은
+#    service_role 키를 보내므로 정상 JWT 라 기본 검증을 통과한다"고 적혀 있었는데
+#    **사실이 아니었다.** 그 cron 은 존재하지 않는 설정 파라미터를 읽고 있어서
+#    아무 키도 보내지 못했다. 아래 [functions.smart-reminder] 참고.
+verify_jwt = false
+
+[functions.reactivation-push]
+# 2026-09-09 — 이 함수는 대시보드에서 verify_jwt=false 로 배포돼 있었는데
+# config.toml 에 항목이 없어서, CLI 로 재배포하자 기본값(true)으로 **되돌아갔다.**
+# 바로 위 weekly-review-batch 주석이 경고하던 그 함정을 그대로 밟았다 —
+# 배포 뒤에는 Management API 로 verify_jwt 를 **되읽어 확인**할 것.
+# cron 은 Vault 의 `reactivation_secret` 을 Bearer 로 보내고 핸들러가
+# REACTIVATION_SECRET 으로 대조한다. 고정 시크릿은 JWT 가 아니므로 여기서
+# 게이트웨이 검증을 꺼야 핸들러까지 닿는다.
+verify_jwt = false
+
+[functions.smart-reminder]
+# 2026-09-09 — 원래 cron 이 `current_setting('app.service_role_key')` 를 읽었는데
+# 그 파라미터가 **존재하지 않아** SQL 단계에서 14/14 실패하고 있었다
+# (`unrecognized configuration parameter`). AI 일일 알림이 그동안 한 번도
+# 나가지 않았다.
+# 고치면서 dispatch-notifications·weekly-review-batch 와 같은 방식으로 통일했다:
+# Vault 의 `smart_reminder_secret` 를 Bearer 로 보내고 핸들러가
+# SMART_REMINDER_SECRET 으로 대조한다. 고정 시크릿은 JWT 가 아니므로 여기서
+# 게이트웨이 검증을 꺼야 핸들러까지 닿는다.
 verify_jwt = false

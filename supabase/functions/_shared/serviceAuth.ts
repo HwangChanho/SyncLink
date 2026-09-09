@@ -70,6 +70,40 @@ function timingSafeEqual(a: string, b: string): boolean {
  * ⚠️ 반환값을 무시하면 검증이 없는 것과 같다. `if (denied) return denied;`
  *    한 줄을 빠뜨리는 게 이 함수의 유일한 오용 경로다.
  */
+export function requireSharedSecret(req: Request, envName: string): Response | null {
+  const expected = Deno.env.get(envName) ?? '';
+
+  // 🔴 fail-closed. 기존 dispatch-notifications 는 `if (secret) { ...검사... }`
+  //    형태여서 **환경변수가 비면 검사를 통째로 건너뛰었다**(fail-open).
+  //    시크릿 설정을 깜빡한 순간 함수가 공개되는 구조라, 여기서는 반대로
+  //    설정이 없으면 아무도 못 들어오게 막는다.
+  if (expected.length === 0) {
+    return new Response(
+      JSON.stringify({ error: 'secret_not_configured' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
+
+  const authHeader = req.headers.get('Authorization') ?? '';
+  const presented = authHeader.replace(/^Bearer\s+/i, '').trim();
+
+  if (!timingSafeEqual(presented, expected)) {
+    return new Response(
+      JSON.stringify({ error: 'unauthorized' }),
+      { status: 401, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
+
+  return null;
+}
+
+/**
+ * 요청이 service_role 키를 들고 왔는지 검증한다.
+ *
+ * ⚠️ pg_cron 은 service_role 키를 **Vault 에 넣지 않는다**는 게 이 프로젝트의
+ *    방침이라, cron 이 부르는 함수는 이게 아니라 `requireSharedSecret()` 을 쓴다.
+ *    이 함수는 **cron 이 아닌 서버 간 호출**(예: send-web-push)용이다.
+ */
 export function requireServiceRole(req: Request): Response | null {
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
