@@ -6,8 +6,9 @@
  * cron pipeline (and ad-hoc by other Edge Functions when something needs
  * to nudge an open browser tab).
  *
- * Security: requires the caller to authenticate with the service-role key
- * (the same JWT pattern pg_cron uses). Never exposed to the client.
+ * Security: requireServiceRole() 로 service_role 키를 강제한다.
+ * ⚠️ verify_jwt 설정만으로는 부족하다 — anon 키가 그 게이트를 통과한다.
+ *    상세와 실측 근거는 _shared/serviceAuth.ts 헤더 참고.
  *
  * Request body:
  *   { user_id: uuid, title: string, body: string, url?: string }
@@ -27,6 +28,8 @@
 
 import webPush from 'npm:web-push@3.6.7';
 import { createClient } from 'npm:@supabase/supabase-js';
+// @ts-ignore — Deno 는 배포 시점에 상대 경로를 해석한다.
+import { requireServiceRole } from '../_shared/serviceAuth.ts';
 
 interface SubscriptionRow {
   id:       string;
@@ -58,6 +61,11 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') {
     return new Response('method not allowed', { status: 405 });
   }
+  // 🔴 2026-09-09: 위 주석은 "service-role 키가 필요하다"고 적고 있었지만
+  //    **코드엔 그 검증이 없었다.** anon 키만으로 임의의 user_id 에 웹 푸시를
+  //    보낼 수 있는 상태였다(실측: anon 키로 405 = 함수 본문 도달).
+  const denied = requireServiceRole(req);
+  if (denied) return denied;
   if (!VAPID_PUBLIC || !VAPID_PRIVATE) {
     return new Response(JSON.stringify({ error: 'vapid_not_configured' }), {
       status: 500,
