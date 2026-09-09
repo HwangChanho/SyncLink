@@ -52,6 +52,12 @@ jest.mock('@/services/eventService', () => ({
   createEvent: jest.fn(),
 }));
 
+// funnelService: 화면 진입 계측(1.4.14)의 관측 지점.
+// mock 하지 않으면 진짜 구현이 Supabase·AsyncStorage 를 건드린다(조용히 실패하지만 느리다).
+jest.mock('@/services/funnelService', () => ({
+  trackFunnel: jest.fn(),
+}));
+
 // reminderService: 이 테스트의 핵심 관측 지점 — 어떤 인자로 불렸는지만 본다
 jest.mock('@/services/reminderService', () => ({
   updateReminders: jest.fn(),
@@ -94,6 +100,7 @@ import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import CreateDDayScreen from '@/app/event/create-dday';
 import { createEvent } from '@/services/eventService';
+import { trackFunnel } from '@/services/funnelService';
 import { updateReminders } from '@/services/reminderService';
 import { useEventStore } from '@/stores/eventStore';
 import type { Event } from '@/types';
@@ -354,6 +361,19 @@ describe('CreateDDayScreen', () => {
   });
 
   // ── 목표일 기본값 ─────────────────────────────────────────────────────────
+  /**
+   * 퍼널 진입 계측 (1.4.14).
+   *
+   * 왜 지키나 — 이 화면은 `event_created` 를 남기지 않는다(저장은 createEvent 가 센다).
+   * 진입 계측까지 사라지면 이 등록 경로가 퍼널에서 **통째로 안 보이게** 된다.
+   * 1.4.13 까지가 정확히 그 상태였다.
+   */
+  it('화면에 들어오면 event_form_view:dday 를 남긴다', () => {
+    render(<CreateDDayScreen />);
+
+    expect(trackFunnel).toHaveBeenCalledWith('event_form_view:dday');
+  });
+
   it('목표일 기본값은 일주일 뒤다', () => {
     const utils = render(<CreateDDayScreen />);
     // 화면 표기는 "2026. 9. 17." 형식

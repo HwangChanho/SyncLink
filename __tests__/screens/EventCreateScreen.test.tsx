@@ -48,6 +48,11 @@ jest.mock('expo-router', () => ({
 }));
 
 // eventService: createEvent mock — 실제 Supabase 호출 차단
+// funnelService: 화면 진입 계측(1.4.14)의 관측 지점.
+jest.mock('@/services/funnelService', () => ({
+  trackFunnel: jest.fn(),
+}));
+
 jest.mock('@/services/eventService', () => ({
   createEvent: jest.fn(),
 }));
@@ -70,6 +75,7 @@ import { Alert, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import EventCreateScreen from '@/app/event/create';
 import { createEvent } from '@/services/eventService';
+import { trackFunnel } from '@/services/funnelService';
 import { useEventStore } from '@/stores/eventStore';
 import { useSpaceStore } from '@/stores/spaceStore';
 import type { Event, SpaceSummary } from '@/types';
@@ -147,6 +153,32 @@ describe('EventCreateScreen', () => {
   // ══════════════════════════════════════════════════════════════════════════
   // 렌더링
   // ══════════════════════════════════════════════════════════════════════════
+
+  describe('퍼널 진입 계측 (1.4.14)', () => {
+    /**
+     * 이 화면은 저장 성공을 직접 세지 않는다(`event_created` 는 createEvent 가 센다).
+     * 진입 계측이 사라지면 "폼까지 왔다 포기" 를 다시 못 가린다.
+     */
+    it('화면에 들어오면 event_form_view:general 을 남긴다', () => {
+      render(<EventCreateScreen />);
+
+      expect(trackFunnel).toHaveBeenCalledWith('event_form_view:general');
+    });
+
+    it('저장 성공해도 화면이 event_created 를 직접 남기지는 않는다', async () => {
+      (createEvent as jest.Mock).mockResolvedValue(mockCreatedEvent);
+
+      const { getByPlaceholderText, getByText } = render(<EventCreateScreen />);
+      fireEvent.changeText(getByPlaceholderText('제목을 입력해 주세요.'), '팀 미팅');
+
+      await act(async () => {
+        fireEvent.press(getByText('저장'));
+      });
+      await waitFor(() => expect(createEvent).toHaveBeenCalled());
+      // 화면과 서비스 양쪽에서 세면 일정 하나가 두 번 잡힌다.
+      expect(trackFunnel).not.toHaveBeenCalledWith('event_created', expect.anything());
+    });
+  });
 
   describe('렌더링', () => {
     it('헤더 텍스트가 렌더링됨', () => {
