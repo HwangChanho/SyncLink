@@ -99,7 +99,7 @@ export function TodayEventList() {
       {sortedEvents.length === 0 ? (
         <Pressable
           style={styles.emptyContainer}
-          onPress={() => requireAuth(() => router.push('/event/create'))}
+          onPress={() => requireAuth(() => router.push('/event/create'), 'event_create')}
           accessibilityRole="button"
           accessibilityLabel={t('event.add')}
         >
@@ -120,7 +120,7 @@ export function TodayEventList() {
             <EventRow
               key={event.id}
               event={event}
-              onPress={() => requireAuth(() => router.push(`/event/${event.id}`))}
+              onPress={() => requireAuth(() => router.push(`/event/${event.id}`), 'event_detail')}
               colors={colors}
               styles={styles}
             />

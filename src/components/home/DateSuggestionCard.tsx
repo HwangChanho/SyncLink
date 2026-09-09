@@ -117,7 +117,7 @@ export function DateSuggestionCard() {
     } else {
       router.push('/event/create');
     }
-  });
+  }, 'suggestion');
 
   return (
     <View style={styles.container}>

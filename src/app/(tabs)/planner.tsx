@@ -145,7 +145,7 @@ function PlannerScreenInner() {
         setCreateSheetOpen(false);
         setEditingTodo(null);
         setCategoryChangeTodo(null);
-        setTimeout(() => useLoginPromptStore.getState().open(), 300);
+        setTimeout(() => useLoginPromptStore.getState().open('planner'), 300);
         return;
       }
       alertActiveRef.current = true;

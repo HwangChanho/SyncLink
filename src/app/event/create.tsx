@@ -169,6 +169,9 @@ function makeRowStyles(colors: ReturnType<typeof useColors>) {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function EventCreateScreen() {
+  // 퍼널(1.4.14) — 폼 진입. 나머지 3종(운동·D-Day·상대일)과 같은 자리에 둔다.
+  useEffect(() => { void trackFunnel('event_form_view:general'); }, []);
+
   // Resolve active theme colors for dark mode support (TASK-700)
   const { t } = useTranslation();
   const colors = useColors();
@@ -646,10 +649,8 @@ export default function EventCreateScreen() {
         isOwn: true,
       });
 
-      // 퍼널: 이 앱의 핵심 행동. 홈까지 왔지만 여기까지 못 온 사람이
-      // "써봤지만 쓸모를 못 찾은" 구간이다. 여러 번 만드는 것도 의미가 있어
-      // 세션당 1회 제한을 풀고 매번 남긴다.
-      void trackFunnel('event_created', { always: true });
+      // 퍼널 `event_created` 는 1.4.14 부터 eventService.createEvent 안에서 남긴다 —
+      // 여기서만 남기던 탓에 운동·D-Day·상대일·AI 입력바 4개 경로가 통째로 빠져 있었다.
 
       // IDEA-019: Show a brief success toast before navigating back.
       // We show first, then navigate so the toast is briefly visible on the

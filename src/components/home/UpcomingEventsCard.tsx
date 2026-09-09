@@ -130,7 +130,7 @@ export function UpcomingEventsCard() {
             key={event.id}
             event={event}
             dateLabel={dateLabel(event.dateKey)}
-            onPress={() => requireAuth(() => router.push(`/event/${event.id}`))}
+            onPress={() => requireAuth(() => router.push(`/event/${event.id}`), 'event_detail')}
             colors={colors}
             styles={styles}
           />

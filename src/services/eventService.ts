@@ -26,6 +26,7 @@ import { shareEventToSpace, unshareEventFromSpace } from '@/services/eventShareS
 import { saveParts as saveWorkoutParts, listParts as listWorkoutParts } from '@/services/workoutPartService';
 import { WORKOUT_RESERVED_COLOR, RUNNING_RESERVED_COLOR } from '@/components/event/ColorPicker';
 import { cancelEventReminders } from '@/services/notificationService';
+import { trackFunnel } from '@/services/funnelService';
 import type {
   Event, EventSummary, CreateEventInput, UpdateEventInput,
   EventRow, DateRange,
@@ -545,6 +546,19 @@ export async function createEvent(input: CreateEventInput): Promise<Event> {
     // 알림을 본 뒤 캘린더에는 일정이 떠 있는 모순이 생긴다. share + 재조회
     // 는 모두 best-effort 로 격리하고, 둘 다 fail 해도 INSERT row 로 합성한
     // Event 를 반환한다.
+
+    // 퍼널(1.4.14) — 이 앱의 핵심 행동. **INSERT 성공 직후, 후속 처리보다 먼저** 남긴다.
+    // 공유·부위저장·재조회는 실패해도 "일정은 만들어졌다"가 사실이기 때문이다.
+    //
+    // 🔴 화면이 아니라 여기서 남기는 이유: 1.4.13 까지 일반 일정 폼 한 곳에서만
+    //    남기고 있었고, 운동·D-Day·상대일·AI 입력바(2곳)·투표전환은 통째로
+    //    빠져 있었다. 그래서 "일정생성 0건"이 실제 0 인지 계측 누락인지 알 수 없었다.
+    //    생성 지점이 한 곳이므로 여기 두면 **어떤 경로로 만들어도 반드시 세어진다.**
+    //
+    // ⚠️ 이 함수는 "사용자가 앱에서 일정을 만든다"의 단일 통로라는 전제 위에 있다.
+    //    캘린더 동기화·일괄 가져오기 같은 **배치 경로는 이 함수를 쓰지 말 것**
+    //    (쓰면 사람이 안 한 행동이 퍼널에 섞인다). 현재 호출부 7곳은 모두 사용자 행동이다.
+    void trackFunnel('event_created', { always: true });
 
     if (input.shareToSpaceIds && input.shareToSpaceIds.length > 0) {
       try {

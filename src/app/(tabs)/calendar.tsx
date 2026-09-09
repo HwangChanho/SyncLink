@@ -241,7 +241,7 @@ export default function CalendarScreen() {
       const m = String(date.getMonth() + 1).padStart(2, '0');
       const d = String(date.getDate()).padStart(2, '0');
       router.push(`/event/create?date=${y}-${m}-${d}`);
-    });
+    }, 'event_create');
   }, [router, requireAuth]);
 
   /**
@@ -255,7 +255,7 @@ export default function CalendarScreen() {
       const m = String(date.getMonth() + 1).padStart(2, '0');
       const d = String(date.getDate()).padStart(2, '0');
       router.push(`/event/create?date=${y}-${m}-${d}`);
-    });
+    }, 'event_create');
   }, [router, requireAuth]);
 
   // Build-55 의 handleEmptySlotPress / WeekView+DayView 의 onEmptySlotPress
@@ -266,7 +266,7 @@ export default function CalendarScreen() {
 
   /** Tapping an event opens the event detail screen. */
   const handleEventPress = useCallback((event: EventSummary) => {
-    requireAuth(() => router.push(`/event/${event.id}`));
+    requireAuth(() => router.push(`/event/${event.id}`), 'event_detail');
   }, [router, requireAuth]);
 
   // ─── Event fetching ──────────────────────────────────────────────────────────
@@ -597,7 +597,14 @@ export default function CalendarScreen() {
             }
             // 2026-09-02 — 곧장 일정 폼으로 가지 않고 종류를 먼저 고르게 한다.
             // 종류별 전용 화면이 자기 입력만 물어보므로 등록 단계가 짧아진다.
-            setTypeSheetOpen(true);
+            //
+            // 🔴 1.4.14 — 게스트 가드 추가. 그전까지 이 FAB 만 가드가 없어서
+            //    게스트가 종류 선택 → 폼 작성 → 저장까지 간 뒤에야
+            //    "로그인이 필요합니다." **맨 오류 알럿**을 만났다(로그인 버튼도 없다).
+            //    같은 화면의 빈 날짜 탭·롱프레스는 이미 requireAuth 를 쓰고 있었으니
+            //    가장 눈에 띄는 진입만 어긋나 있던 셈이다. 폼에 들어가기 전에
+            //    막아야 작성한 내용을 잃지도 않는다.
+            requireAuth(() => setTypeSheetOpen(true), 'event_create');
           }}
           accessibilityLabel={
             (isChildDragging || monthTargetEvent)

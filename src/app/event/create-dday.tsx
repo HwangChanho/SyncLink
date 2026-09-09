@@ -22,13 +22,14 @@
  *    `minutes_before` 는 1440 그대로라 알림 문구("1일 전 알림")도 어긋나지 않는다.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, TextInput, Pressable, ScrollView,
   StyleSheet, Platform, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { trackFunnel } from '@/services/funnelService';
 import { Ionicons } from '@expo/vector-icons';
 import { createEvent } from '@/services/eventService';
 import { updateReminders } from '@/services/reminderService';
@@ -93,6 +94,10 @@ function atNotifyHour(d: Date): Date {
 
 export default function CreateDDayScreen() {
   const router = useRouter();
+
+  // 퍼널(1.4.14) — 폼 "진입"을 센다. 저장 성공(event_created)만 세면
+  // "폼까지 왔다가 포기" 와 "폼에 오지도 않음" 이 똑같이 0 으로 보인다.
+  useEffect(() => { void trackFunnel('event_form_view:dday'); }, []);
   const colors = useColors();
   const styles = makeStyles(colors);
   const { upsertEvent } = useEventStore();

@@ -438,7 +438,7 @@ export function NLInputBar({ onEventCreated }: Props) {
 
     // 게스트: AI 입력은 계정 필요 — 로그인 유도 시트로 안내하고 처리 중단.
     if (!useAuthStore.getState().isAuthenticated) {
-      useLoginPromptStore.getState().open();
+      useLoginPromptStore.getState().open('nl_input');
       return;
     }
 

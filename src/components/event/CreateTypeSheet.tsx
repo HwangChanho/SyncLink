@@ -9,11 +9,13 @@
  * 넷 다 결국 events 한 테이블에 저장되고, 캘린더에서 함께 보인다.
  */
 
+import { useEffect } from 'react';
 import { Modal, Pressable, View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { trackFunnel } from '@/services/funnelService';
 
 /** 시트에서 고를 수 있는 등록 방식. */
 export type CreateType = 'event' | 'workout' | 'dday' | 'relative';
@@ -46,6 +48,14 @@ type Props = {
 export function CreateTypeSheet({ visible, onClose, onSelect }: Props) {
   const colors = useColors();
   const styles = makeStyles(colors);
+
+  // 퍼널(1.4.14) — "등록을 시작하려 했다"를 세는 지점.
+  // 부모(+ 버튼)가 아니라 여기서 남기는 이유: 시트를 여는 곳이 늘어도
+  // 계측이 자동으로 따라온다. 마운트가 아니라 visible 전이에 반응해야 한다 —
+  // 이 컴포넌트는 캘린더 화면에 **항상 마운트된 채** visible 만 토글되기 때문이다.
+  useEffect(() => {
+    if (visible) void trackFunnel('create_sheet_view');
+  }, [visible]);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>

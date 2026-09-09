@@ -33,6 +33,13 @@ jest.mock('@/lib/supabase', () => ({
   getCurrentUserId: jest.fn(),
 }));
 
+// 퍼널 계측은 createEvent 의 관심사가 아니다. 진짜 구현을 두면 같은
+// `supabase.from` mock 을 비동기로 한 번 더 불러 호출 횟수 단언이 흔들린다.
+// (계측 자체는 __tests__/services/eventService.funnel.test.ts 가 따로 지킨다.)
+jest.mock('@/services/funnelService', () => ({
+  trackFunnel: jest.fn(),
+}));
+
 // ─── Imports ──────────────────────────────────────────────────────────────────
 
 import { supabase, getCurrentUserId } from '@/lib/supabase';
