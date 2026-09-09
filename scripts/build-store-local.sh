@@ -113,11 +113,25 @@ preflight() {
   #    800MB 였다(macOS 는 스왑을 지연 회수한다) — 즉 **스왑 잔여는 후행 지표**이고
   #    그날의 실제 원인은 시뮬레이터 경쟁이었다. 1GB 로 막으면 멀쩡한 빌드까지 세운다.
   #    그래서 진짜 고갈(512MB)에서만 중단하고, 그 위는 참고용으로 출력만 한다.
-  local swap_free
-  swap_free=$(sysctl -n vm.swapusage 2>/dev/null | sed -n 's/.*free = \([0-9.]*\)M.*/\1/p')
-  if [[ -n "$swap_free" ]]; then
-    echo "  스왑 여유: ${swap_free} MB"
-    if (( $(echo "$swap_free < 512" | bc -l) )); then
+  #
+  # 🔴 **`free` 만 보면 오탐이 난다** (2026-09-10 에 1.4.14 Android 빌드가 이걸로 막혔다).
+  #    macOS 는 스왑파일을 **필요할 때 만들고 압력이 풀리면 지운다.** 그래서
+  #    스왑을 한 번도 안 쓴(=건강한) 상태의 출력이 이렇게 나온다:
+  #        total = 0.00M  used = 0.00M  free = 0.00M
+  #    진짜 고갈은 `total` 이 크면서 `free` 가 바닥인 경우다:
+  #        total = 4096.00M  used = 4000.00M  free = 96.00M
+  #    둘 다 `free = 0` 근처라 **`total` 을 같이 봐야 구분된다.**
+  #    09-10 실측: iOS 아카이브가 끝나며 macOS 가 스왑파일을 전부 회수해 total=0 이
+  #    됐고, 멀쩡한 상태인데 Android 빌드가 0초 만에 거부됐다.
+  local swap_total swap_free swap_line
+  swap_line=$(sysctl -n vm.swapusage 2>/dev/null || true)
+  swap_total=$(echo "$swap_line" | sed -n 's/.*total = \([0-9.]*\)M.*/\1/p')
+  swap_free=$(echo "$swap_line" | sed -n 's/.*free = \([0-9.]*\)M.*/\1/p')
+  if [[ -n "$swap_total" && -n "$swap_free" ]]; then
+    echo "  스왑: 전체 ${swap_total} MB · 여유 ${swap_free} MB"
+    if (( $(echo "$swap_total == 0" | bc -l) )); then
+      echo "       (스왑파일 없음 = 아직 스왑이 필요 없었다는 뜻 — 압력 없음)"
+    elif (( $(echo "$swap_free < 512" | bc -l) )); then
       echo "[WARN] 스왑이 고갈됐습니다. 메모리 수치가 좋아 보여도 NDK 컴파일에서 죽습니다."
       echo "       무거운 앱(시뮬레이터·Chrome·타 프로젝트 dev 서버)을 닫고 다시 실행하세요."
       exit 1
