@@ -2,12 +2,19 @@
 /**
  * appstore-submit — App Store 버전 생성 → 빌드 연결 → 출시노트 → 심사 제출.
  *
- *   node scripts/appstore-submit.mjs <version> <buildNumber> <notesFile> [--auto-release] [--submit]
+ *   node scripts/appstore-submit.mjs <version> <buildNumber> <notesFile> [--manual-release] [--submit]
  *
  * 인자 없이(=--submit 없이) 실행하면 **dry-run** — 무엇을 할지 보여주기만 한다.
  *
- * `--auto-release`  releaseType=AFTER_APPROVAL (심사 통과 시 자동 출시)
- * 생략하면         releaseType=MANUAL         (통과 후 appstore-release.mjs 로 수동 출시)
+ * 기본값            releaseType=AFTER_APPROVAL (심사 통과 시 자동 출시)
+ * `--manual-release` releaseType=MANUAL        (통과 후 appstore-release.mjs 로 수동 출시)
+ *
+ * 🔑 **기본값이 AFTER_APPROVAL 인 이유**(2026-09-10 LEAD 지시): 이 앱은 1.4.4~1.4.13
+ *    열 개 버전이 **전부 AFTER_APPROVAL** 이었다. 즉 자동 출시가 관례인데 종전 기본값은
+ *    MANUAL 이라 `--auto-release` 를 빠뜨리면 관례에서 벗어났다. 실제로 1.4.14 를
+ *    그렇게 제출했다가 되돌렸다. **기본값은 관례와 같아야 한다** — 자주 쓰는 쪽을
+ *    기본으로 두고, 드문 쪽에 플래그를 붙인다.
+ *    (`--auto-release` 는 이제 기본값과 같으므로 붙여도 무해하다. 손에 익은 사람을 위해 받아준다.)
  *
  * 이 흐름을 스크래치패드에 두었다가 한 세션에서 두 번 잃었다(asc.mjs 등) → 리포에 둔다.
  *
@@ -48,20 +55,22 @@ const api = async (p, opts = {}) => {
 };
 
 const [versionString, buildNumber, notesFile] = process.argv.slice(2);
-const autoRelease = process.argv.includes('--auto-release');
+// 기본은 자동 출시. 수동 출시는 드문 경우라 플래그를 붙인다.
+// (`--auto-release` 는 기본값과 동일 — 종전 습관대로 붙여도 동작이 같다.)
+const manualRelease = process.argv.includes('--manual-release');
 const doSubmit = process.argv.includes('--submit');
 
 if (!versionString || !buildNumber || !notesFile) {
-  console.log('usage: appstore-submit.mjs <version> <buildNumber> <notesFile> [--auto-release] [--submit]');
+  console.log('usage: appstore-submit.mjs <version> <buildNumber> <notesFile> [--manual-release] [--submit]');
   process.exit(1);
 }
 const notes = readFileSync(notesFile, 'utf8').trimEnd();
-const releaseType = autoRelease ? 'AFTER_APPROVAL' : 'MANUAL';
+const releaseType = manualRelease ? 'MANUAL' : 'AFTER_APPROVAL';
 
 console.log('제출 계획');
 console.log(`  버전     : ${versionString}`);
 console.log(`  빌드     : ${buildNumber}`);
-console.log(`  출시방식 : ${releaseType}${autoRelease ? ' (심사 통과 시 자동 출시)' : ' (통과 후 수동 출시 필요)'}`);
+console.log(`  출시방식 : ${releaseType}${manualRelease ? ' (통과 후 수동 출시 필요)' : ' (심사 통과 시 자동 출시 — 기본값)'}`);
 console.log(`  노트     : ${notes.length}자`);
 
 if (!doSubmit) {
