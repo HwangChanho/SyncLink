@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { trackFunnel } from '@/services/funnelService';
 import { Ionicons } from '@expo/vector-icons';
 import { createEvent } from '@/services/eventService';
@@ -41,6 +42,7 @@ type Kind = 'workout' | 'running';
 const DEFAULT_DURATION_MIN = 60;
 
 export default function CreateWorkoutScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
 
   // 퍼널(1.4.14) — 폼 "진입"을 센다. 저장 성공(event_created)만 세면
@@ -70,9 +72,11 @@ export default function CreateWorkoutScreen() {
   const autoTitle = (): string => {
     if (kind === 'running') {
       const d = parseFloat(distanceKm);
-      return Number.isFinite(d) && d > 0 ? `러닝 ${d}km` : '러닝';
+      return Number.isFinite(d) && d > 0
+        ? t('event.create.workout_auto_title_running', { distance: d })
+        : t('event.create.workout_kind_running');
     }
-    return '헬스';
+    return t('event.create.workout_kind_gym');
   };
 
   const handleSave = useCallback(async () => {
@@ -109,28 +113,28 @@ export default function CreateWorkoutScreen() {
         isOwn: true,
       });
 
-      showToast('운동 기록을 저장했어요');
+      showToast(t('event.create.workout_saved'));
       router.back();
     } catch (err) {
       void logError({ context: 'event.workout.create', error: err });
-      showAlert('저장 실패', err instanceof Error ? err.message : '다시 시도해 주세요.');
+      showAlert(t('event.create.save_failed_title'), err instanceof Error ? err.message : t('event.create.save_failed_body'));
       setIsSaving(false);
     }
     // autoTitle 은 아래 상태들만 읽으므로 의존성에 개별로 넣는다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title, startAt, kind, parts, distanceKm, paceMin, paceSec, isSaving, upsertEvent, colors.primary, router, showToast]);
+  }, [title, startAt, kind, parts, distanceKm, paceMin, paceSec, isSaving, upsertEvent, colors.primary, router, showToast, t]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Pressable style={styles.headerButton} onPress={() => router.back()}>
-          <Text style={styles.headerCancel}>취소</Text>
+          <Text style={styles.headerCancel}>{t('common.cancel')}</Text>
         </Pressable>
-        <Text style={styles.headerTitle}>운동 기록</Text>
+        <Text style={styles.headerTitle}>{t('event.create.workout_header')}</Text>
         <Pressable style={styles.headerButton} onPress={() => void handleSave()} disabled={isSaving}>
           {isSaving
             ? <ActivityIndicator size="small" color={colors.primary} />
-            : <Text style={styles.headerSave}>저장</Text>}
+            : <Text style={styles.headerSave}>{t('common.save')}</Text>}
         </Pressable>
       </View>
 
@@ -150,7 +154,7 @@ export default function CreateWorkoutScreen() {
                 color={kind === k ? colors.textInverse : colors.textSecondary}
               />
               <Text style={[styles.segmentText, kind === k && styles.segmentTextOn]}>
-                {k === 'workout' ? '헬스' : '러닝'}
+                {k === 'workout' ? t('event.create.workout_kind_gym') : t('event.create.workout_kind_running')}
               </Text>
             </Pressable>
           ))}
@@ -169,7 +173,7 @@ export default function CreateWorkoutScreen() {
 
         {/* 시각 */}
         <View style={styles.card}>
-          <Text style={styles.label}>시각</Text>
+          <Text style={styles.label}>{t('event.create.workout_time')}</Text>
           {Platform.OS === 'web' ? (
             <input
               type="datetime-local"
@@ -201,14 +205,14 @@ export default function CreateWorkoutScreen() {
         {/* 종류별 입력 */}
         {kind === 'workout' ? (
           <View style={styles.card}>
-            <Text style={styles.label}>부위</Text>
+            <Text style={styles.label}>{t('event.create.workout_parts')}</Text>
             <BodyParts selected={parts} onToggle={togglePart} />
           </View>
         ) : (
           <View style={styles.card}>
-            <Text style={styles.label}>기록 (선택)</Text>
+            <Text style={styles.label}>{t('event.create.workout_record')}</Text>
             <View style={styles.row}>
-              <Text style={styles.rowLabel}>거리</Text>
+              <Text style={styles.rowLabel}>{t('event.create.workout_distance')}</Text>
               <TextInput
                 testID="workout-distance-input"
                 style={styles.numInput}
@@ -221,7 +225,7 @@ export default function CreateWorkoutScreen() {
               <Text style={styles.unit}>km</Text>
             </View>
             <View style={styles.row}>
-              <Text style={styles.rowLabel}>평균 페이스</Text>
+              <Text style={styles.rowLabel}>{t('event.create.workout_pace')}</Text>
               <TextInput
                 style={styles.numInputSm}
                 value={paceMin}
@@ -231,7 +235,7 @@ export default function CreateWorkoutScreen() {
                 placeholderTextColor={colors.textTertiary}
                 maxLength={2}
               />
-              <Text style={styles.unit}>분</Text>
+              <Text style={styles.unit}>{t('event.create.workout_minutes')}</Text>
               <TextInput
                 style={styles.numInputSm}
                 value={paceSec}
@@ -241,7 +245,7 @@ export default function CreateWorkoutScreen() {
                 placeholderTextColor={colors.textTertiary}
                 maxLength={2}
               />
-              <Text style={styles.unit}>초 / km</Text>
+              <Text style={styles.unit}>{t('event.create.workout_sec_per_km')}</Text>
             </View>
           </View>
         )}

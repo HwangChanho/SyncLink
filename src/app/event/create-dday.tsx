@@ -29,6 +29,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { trackFunnel } from '@/services/funnelService';
 import { Ionicons } from '@expo/vector-icons';
 import { createEvent } from '@/services/eventService';
@@ -53,10 +54,10 @@ import { textStyles } from '@/constants/typography';
  *    (처음엔 "당일 = 자정에 울려서 방해"라고만 적었는데, 기준이 자정인 이상
  *     1440·4320·10080 도 똑같이 자정이었다. 그래서 `NOTIFY_HOUR` 를 도입했다.)
  */
-const DDAY_REMINDERS: { days: number; minutes: number; label: string }[] = [
-  { days: 1, minutes: 1440,  label: '하루 전' },
-  { days: 3, minutes: 4320,  label: '3일 전' },
-  { days: 7, minutes: 10080, label: '일주일 전' },
+const DDAY_REMINDERS: { days: number; minutes: number; labelKey: string }[] = [
+  { days: 1, minutes: 1440,  labelKey: 'event.create.dday_remind_1' },
+  { days: 3, minutes: 4320,  labelKey: 'event.create.dday_remind_3' },
+  { days: 7, minutes: 10080, labelKey: 'event.create.dday_remind_7' },
 ];
 
 /**
@@ -93,6 +94,7 @@ function atNotifyHour(d: Date): Date {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function CreateDDayScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
 
   // 퍼널(1.4.14) — 폼 "진입"을 센다. 저장 성공(event_created)만 세면
@@ -123,7 +125,7 @@ export default function CreateDDayScreen() {
   const handleSave = useCallback(async () => {
     const trimmed = title.trim();
     if (!trimmed) {
-      showAlert('제목을 입력해 주세요', 'D-Day 이름이 있어야 저장할 수 있어요.');
+      showAlert(t('event.create.title_required_title'), t('event.create.dday_title_required_body'));
       return;
     }
     if (isSaving) return;
@@ -165,18 +167,18 @@ export default function CreateDDayScreen() {
           await updateReminders(created.id, reminders, trimmed, atNotifyHour(targetDay));
         } catch (err) {
           void logError({ context: 'event.dday.reminders', error: err });
-          showToast('일정은 저장됐지만 알림 설정에 실패했어요');
+          showToast(t('event.create.dday_reminder_failed'));
         }
       }
 
-      showToast('D-Day를 등록했어요');
+      showToast(t('event.create.dday_saved'));
       router.back();
     } catch (err) {
       void logError({ context: 'event.dday.create', error: err });
-      showAlert('저장 실패', err instanceof Error ? err.message : '다시 시도해 주세요.');
+      showAlert(t('event.create.save_failed_title'), err instanceof Error ? err.message : t('event.create.save_failed_body'));
       setIsSaving(false);
     }
-  }, [title, target, reminders, isSaving, upsertEvent, colors.primary, router, showToast]);
+  }, [title, target, reminders, isSaving, upsertEvent, colors.primary, router, showToast, t]);
 
   const dday = dDayBadge(target);
 
@@ -185,13 +187,13 @@ export default function CreateDDayScreen() {
       {/* 헤더 */}
       <View style={styles.header}>
         <Pressable style={styles.headerButton} onPress={() => router.back()}>
-          <Text style={styles.headerCancel}>취소</Text>
+          <Text style={styles.headerCancel}>{t('common.cancel')}</Text>
         </Pressable>
-        <Text style={styles.headerTitle}>D-Day</Text>
+        <Text style={styles.headerTitle}>{t('event.create.dday_header')}</Text>
         <Pressable style={styles.headerButton} onPress={() => void handleSave()} disabled={isSaving}>
           {isSaving
             ? <ActivityIndicator size="small" color={colors.primary} />
-            : <Text style={styles.headerSave}>저장</Text>}
+            : <Text style={styles.headerSave}>{t('common.save')}</Text>}
         </Pressable>
       </View>
 
@@ -200,7 +202,7 @@ export default function CreateDDayScreen() {
         <TextInput
           testID="dday-title-input"
           style={styles.titleInput}
-          placeholder="무엇을 기다리나요?"
+          placeholder={t('event.create.dday_placeholder')}
           placeholderTextColor={colors.textSecondary}
           value={title}
           onChangeText={setTitle}
@@ -210,7 +212,7 @@ export default function CreateDDayScreen() {
 
         {/* 목표 날짜 + D-Day 미리보기 */}
         <View style={styles.card}>
-          <Text style={styles.label}>목표 날짜</Text>
+          <Text style={styles.label}>{t('event.create.dday_target_date')}</Text>
           {Platform.OS === 'web' ? (
             // 웹은 네이티브 피커가 없다 — 브라우저 date input 을 쓴다.
             <input
@@ -243,8 +245,8 @@ export default function CreateDDayScreen() {
 
         {/* 알림 */}
         <View style={styles.card}>
-          <Text style={styles.label}>알림</Text>
-          <Text style={styles.hint}>선택한 시점에 푸시 알림을 보내드려요.</Text>
+          <Text style={styles.label}>{t('event.create.dday_reminder')}</Text>
+          <Text style={styles.hint}>{t('event.create.dday_reminder_hint')}</Text>
           <View style={styles.chipRow}>
             {DDAY_REMINDERS.map((r) => {
               const on = reminders.includes(r.minutes);
@@ -255,7 +257,7 @@ export default function CreateDDayScreen() {
                   style={[styles.chip, on && styles.chipOn]}
                   onPress={() => toggleReminder(r.minutes)}
                 >
-                  <Text style={[styles.chipText, on && styles.chipTextOn]}>{r.label}</Text>
+                  <Text style={[styles.chipText, on && styles.chipTextOn]}>{t(r.labelKey)}</Text>
                 </Pressable>
               );
             })}

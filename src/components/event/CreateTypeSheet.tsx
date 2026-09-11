@@ -10,6 +10,7 @@
  */
 
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Modal, Pressable, View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
@@ -23,8 +24,9 @@ export type CreateType = 'event' | 'workout' | 'dday' | 'relative';
 type Item = {
   type: CreateType;
   icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  desc: string;
+  /** i18n 키. 문구를 직접 담지 않는 이유 = 모듈 최상단 상수라 언어 변경을 못 따라간다. */
+  titleKey: string;
+  descKey: string;
 };
 
 /**
@@ -32,10 +34,10 @@ type Item = {
  * 나머지는 목적이 뚜렷할 때만 고른다.
  */
 const ITEMS: Item[] = [
-  { type: 'event',    icon: 'calendar-outline', title: '일정',      desc: '약속·회의처럼 시간이 정해진 일' },
-  { type: 'workout',  icon: 'barbell-outline',  title: '운동 기록', desc: '헬스 부위, 러닝 거리·페이스' },
-  { type: 'dday',     icon: 'flag-outline',     title: 'D-Day',     desc: '목표 날짜까지 남은 날 + 알림' },
-  { type: 'relative', icon: 'git-compare-outline', title: '상대일 일정', desc: '기준일에서 N일 뒤' },
+  { type: 'event',    icon: 'calendar-outline',    titleKey: 'event.create.type_event_title',    descKey: 'event.create.type_event_desc' },
+  { type: 'workout',  icon: 'barbell-outline',     titleKey: 'event.create.type_workout_title',  descKey: 'event.create.type_workout_desc' },
+  { type: 'dday',     icon: 'flag-outline',        titleKey: 'event.create.type_dday_title',     descKey: 'event.create.type_dday_desc' },
+  { type: 'relative', icon: 'git-compare-outline', titleKey: 'event.create.type_relative_title', descKey: 'event.create.type_relative_desc' },
 ];
 
 type Props = {
@@ -46,6 +48,7 @@ type Props = {
 };
 
 export function CreateTypeSheet({ visible, onClose, onSelect }: Props) {
+  const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
 
@@ -64,7 +67,7 @@ export function CreateTypeSheet({ visible, onClose, onSelect }: Props) {
         {/* 시트 본체에서의 탭이 backdrop 으로 새지 않게 빈 onPress 로 막는다 */}
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.grabber} />
-          <Text style={styles.heading}>무엇을 등록할까요?</Text>
+          <Text style={styles.heading}>{t('event.create.sheet_heading')}</Text>
 
           {ITEMS.map((item) => (
             <Pressable
@@ -73,14 +76,14 @@ export function CreateTypeSheet({ visible, onClose, onSelect }: Props) {
               style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
               onPress={() => onSelect(item.type)}
               accessibilityRole="button"
-              accessibilityLabel={item.title}
+              accessibilityLabel={t(item.titleKey)}
             >
               <View style={styles.iconWrap}>
                 <Ionicons name={item.icon} size={20} color={colors.primary} />
               </View>
               <View style={styles.texts}>
-                <Text style={styles.title}>{item.title}</Text>
-                <Text style={styles.desc}>{item.desc}</Text>
+                <Text style={styles.title}>{t(item.titleKey)}</Text>
+                <Text style={styles.desc}>{t(item.descKey)}</Text>
               </View>
               <Text style={styles.chevron}>›</Text>
             </Pressable>

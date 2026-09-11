@@ -265,6 +265,57 @@ const ko = {
     added_toast: '일정이 추가되었어요',
     // IDEA-019 — 일정 생성 화면 빈 시간 찾기 인라인 버튼
     find_free_time: '빈 시간 찾기',
+    // 1.4.15 — 등록 종류별 화면 i18n (1.4.9 에서 분리할 때 한국어가 하드코딩돼 나갔다)
+    create: {
+      // 등록 종류 선택 시트
+      sheet_heading: '무엇을 등록할까요?',
+      type_event_title: '일정',
+      type_event_desc: '약속·회의처럼 시간이 정해진 일',
+      type_workout_title: '운동 기록',
+      type_workout_desc: '헬스 부위, 러닝 거리·페이스',
+      type_dday_title: 'D-Day',
+      type_dday_desc: '목표 날짜까지 남은 날 + 알림',
+      type_relative_title: '상대일 일정',
+      type_relative_desc: '기준일에서 N일 뒤',
+      // 세 화면 공통
+      save_failed_title: '저장 실패',
+      save_failed_body: '다시 시도해 주세요.',
+      title_required_title: '제목을 입력해 주세요',
+      // 운동 기록
+      workout_header: '운동 기록',
+      workout_kind_gym: '헬스',
+      workout_kind_running: '러닝',
+      workout_time: '시각',
+      workout_parts: '부위',
+      workout_record: '기록 (선택)',
+      workout_distance: '거리',
+      workout_pace: '평균 페이스',
+      workout_minutes: '분',
+      workout_sec_per_km: '초 / km',
+      workout_auto_title_running: '러닝 {{distance}}km',
+      workout_saved: '운동 기록을 저장했어요',
+      // D-Day
+      dday_header: 'D-Day',
+      dday_placeholder: '무엇을 기다리나요?',
+      dday_target_date: '목표 날짜',
+      dday_reminder: '알림',
+      dday_reminder_hint: '선택한 시점에 푸시 알림을 보내드려요.',
+      dday_remind_1: '하루 전',
+      dday_remind_3: '3일 전',
+      dday_remind_7: '일주일 전',
+      dday_title_required_body: 'D-Day 이름이 있어야 저장할 수 있어요.',
+      dday_saved: 'D-Day를 등록했어요',
+      dday_reminder_failed: '일정은 저장됐지만 알림 설정에 실패했어요',
+      // 상대일 일정
+      relative_header: '상대일 일정',
+      relative_placeholder: '무슨 일정인가요? (예: 택배 도착)',
+      relative_base_hint: '발주일·발급일처럼 세기 시작하는 날이에요.',
+      relative_offset_label: '며칠 뒤인가요?',
+      relative_days_after: '일 뒤',
+      relative_label_optional: '라벨 (선택)',
+      relative_title_required_body: '무슨 일정인지 있어야 저장할 수 있어요.',
+      relative_saved: '상대일 일정을 등록했어요',
+    },
   },
 
   todo: {

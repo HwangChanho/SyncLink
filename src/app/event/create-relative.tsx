@@ -23,6 +23,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { trackFunnel } from '@/services/funnelService';
 import { Ionicons } from '@expo/vector-icons';
 import { createEvent } from '@/services/eventService';
@@ -45,6 +46,7 @@ function atMidnight(d: Date): Date {
 const fmt = (d: Date) => `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}.`;
 
 export default function CreateRelativeScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
 
   // 퍼널(1.4.14) — 폼 "진입"을 센다. 저장 성공(event_created)만 세면
@@ -72,7 +74,7 @@ export default function CreateRelativeScreen() {
   const handleSave = useCallback(async () => {
     const trimmed = title.trim();
     if (!trimmed) {
-      showAlert('제목을 입력해 주세요', '무슨 일정인지 있어야 저장할 수 있어요.');
+      showAlert(t('event.create.title_required_title'), t('event.create.relative_title_required_body'));
       return;
     }
     if (isSaving) return;
@@ -100,26 +102,26 @@ export default function CreateRelativeScreen() {
         isOwn: true,
       });
 
-      showToast('상대일 일정을 등록했어요');
+      showToast(t('event.create.relative_saved'));
       router.back();
     } catch (err) {
       void logError({ context: 'event.relative.create', error: err });
-      showAlert('저장 실패', err instanceof Error ? err.message : '다시 시도해 주세요.');
+      showAlert(t('event.create.save_failed_title'), err instanceof Error ? err.message : t('event.create.save_failed_body'));
       setIsSaving(false);
     }
-  }, [title, baseDate, offsetDays, label, isSaving, upsertEvent, colors.primary, router, showToast]);
+  }, [title, baseDate, offsetDays, label, isSaving, upsertEvent, colors.primary, router, showToast, t]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Pressable style={styles.headerButton} onPress={() => router.back()}>
-          <Text style={styles.headerCancel}>취소</Text>
+          <Text style={styles.headerCancel}>{t('common.cancel')}</Text>
         </Pressable>
-        <Text style={styles.headerTitle}>상대일 일정</Text>
+        <Text style={styles.headerTitle}>{t('event.create.relative_header')}</Text>
         <Pressable style={styles.headerButton} onPress={() => void handleSave()} disabled={isSaving}>
           {isSaving
             ? <ActivityIndicator size="small" color={colors.primary} />
-            : <Text style={styles.headerSave}>저장</Text>}
+            : <Text style={styles.headerSave}>{t('common.save')}</Text>}
         </Pressable>
       </View>
 
@@ -127,7 +129,7 @@ export default function CreateRelativeScreen() {
         <TextInput
           testID="relative-title-input"
           style={styles.titleInput}
-          placeholder="무슨 일정인가요? (예: 택배 도착)"
+          placeholder={t('event.create.relative_placeholder')}
           placeholderTextColor={colors.textSecondary}
           value={title}
           onChangeText={setTitle}
@@ -137,8 +139,8 @@ export default function CreateRelativeScreen() {
 
         {/* 기준일 */}
         <View style={styles.card}>
-          <Text style={styles.label}>기준일</Text>
-          <Text style={styles.hint}>발주일·발급일처럼 세기 시작하는 날이에요.</Text>
+          <Text style={styles.label}>{t('event.relative.base_date')}</Text>
+          <Text style={styles.hint}>{t('event.create.relative_base_hint')}</Text>
           {Platform.OS === 'web' ? (
             <input
               type="date"
@@ -163,7 +165,7 @@ export default function CreateRelativeScreen() {
 
         {/* 간격 + 라벨 */}
         <View style={styles.card}>
-          <Text style={styles.label}>며칠 뒤인가요?</Text>
+          <Text style={styles.label}>{t('event.create.relative_offset_label')}</Text>
           <View style={styles.row}>
             <TextInput
               testID="relative-offset-input"
@@ -175,15 +177,15 @@ export default function CreateRelativeScreen() {
               placeholderTextColor={colors.textTertiary}
               maxLength={3}
             />
-            <Text style={styles.unit}>일 뒤</Text>
+            <Text style={styles.unit}>{t('event.create.relative_days_after')}</Text>
           </View>
 
-          <Text style={[styles.label, { marginTop: spacing[3] }]}>라벨 (선택)</Text>
+          <Text style={[styles.label, { marginTop: spacing[3] }]}>{t('event.create.relative_label_optional')}</Text>
           <TextInput
             style={styles.textInput}
             value={label}
             onChangeText={setLabel}
-            placeholder="예: 도착예상"
+            placeholder={t('event.relative.label_placeholder')}
             placeholderTextColor={colors.textTertiary}
             maxLength={20}
           />
