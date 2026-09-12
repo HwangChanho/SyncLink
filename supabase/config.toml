@@ -78,3 +78,19 @@ verify_jwt = false
 # SMART_REMINDER_SECRET 으로 대조한다. 고정 시크릿은 JWT 가 아니므로 여기서
 # 게이트웨이 검증을 꺼야 핸들러까지 닿는다.
 verify_jwt = false
+
+[functions.sync-google-calendar]
+# 2026-09-12 — `sync-google-calendar-15min` cron 이 **15분마다 401** 로 실패하고
+# 있었다(6시간에 25건, 본문 `UNAUTHORIZED_NO_AUTH_HEADER`). 원인은 함수가 아니라
+# 마이그레이션 045 였다: cron 이 Vault 의 `service_role_jwt` 를 읽는데 그 시크릿이
+# **등록된 적이 없어** 서브쿼리가 NULL 을 반환했고, `'Bearer ' || NULL` = NULL 이라
+# Authorization 헤더가 통째로 사라진 채 나갔다. SQL 은 성공으로 찍혀 조용했다.
+# → 074 에서 다른 cron 과 같은 방식(Vault `gcal_sync_secret`)으로 통일했고,
+#   그 시크릿이 없으면 마이그레이션이 **큰 소리로 실패**하도록 가드를 넣었다.
+#
+# 고정 시크릿은 JWT 가 아니므로 게이트웨이 검증을 꺼야 핸들러까지 닿는다.
+# manual mode(사용자 호출)는 핸들러 안에서 auth.getUser() 로 직접 검증하고,
+# cron mode 는 requireSharedSecret(req, 'GCAL_SYNC_SECRET') 이 막는다.
+# 🔴 예전엔 cron mode 에 검증이 **아예 없었다** — verify_jwt=true 를 방어선으로
+#    믿었지만 그 게이트는 anon 키를 통과시킨다. 끄기 전에 가드를 먼저 넣었다.
+verify_jwt = false

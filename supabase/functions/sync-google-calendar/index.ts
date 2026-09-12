@@ -4,9 +4,17 @@
 //
 // 두 가지 호출 mode:
 //   - manual: user JWT (Bearer) + POST → 본인 일정만 sync
-//   - cron:   service_role JWT + POST { mode: 'cron' } → 모든 active
-//             connection 순회 (pg_cron 에서 별도 등록 필요. 본 commit 은
-//             manual mode 위주, cron 활성화는 dev 검증 후)
+//             (게이트웨이 verify_jwt 가 아니라 핸들러의 auth.getUser() 로 검증한다)
+//   - cron:   POST { mode: 'cron' } + Bearer <GCAL_SYNC_SECRET> → 모든 active
+//             connection 순회. pg_cron(마이그레이션 074)이 15분마다 호출한다.
+//
+// 🔴 2026-09-12 — cron mode 에 호출자 검증이 **한 줄도 없었다.** 주석만
+//    "service_role JWT" 라고 적혀 있었고 코드는 아무것도 확인하지 않았다.
+//    게이트웨이 verify_jwt=true 가 앞을 막아 주는 줄 알았지만, 그 게이트는
+//    anon 키를 통과시킨다(anon 키는 앱 번들·웹 번들에 박혀 있어 누구나 꺼낸다).
+//    즉 누구나 전체 사용자 동기화를 트리거하고, 응답에 실려 나가던
+//    user_id 목록까지 받아갈 수 있는 상태였다. 아래 두 곳에서 막는다.
+//    상세 배경 → _shared/serviceAuth.ts
 //
 // Pro 게이트 (manual):
 //   - Free: 마지막 7일 + 다음 30일 window, day 당 cap 50 events
@@ -17,6 +25,7 @@
 
 // @ts-ignore
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
+import { requireSharedSecret } from '../_shared/serviceAuth.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare const Deno: any;
@@ -240,16 +249,47 @@ Deno.serve(async (req: Request) => {
   );
 
   if (mode === 'cron') {
-    // cron mode — service_role 만. (Authorization 검증은 Supabase Edge Function
-    // 의 verify_jwt 옵션 X — pg_cron 이 호출 시 service_role JWT 사용.)
+    // 🔴 cron mode 는 **모든 사용자**의 연결을 건드리므로 호출자를 반드시 검증한다.
+    //    mode 는 body 에서 오니까 아무나 { "mode": "cron" } 을 보낼 수 있다 —
+    //    이 가드가 유일한 방어선이다. requireSharedSecret 은 fail-closed 라
+    //    GCAL_SYNC_SECRET 이 주입되지 않았으면 통과가 아니라 500 을 낸다.
+    //    (dispatch-notifications·smart-reminder·reactivation-push 와 같은 방식)
+    const denied = requireSharedSecret(req, 'GCAL_SYNC_SECRET');
+    if (denied) return denied;
+
     const { data: connections } = await adminClient
       .from('google_oauth_tokens').select('user_id');
-    const results: Array<{ user_id: string } & Awaited<ReturnType<typeof syncOneUser>>> = [];
+
+    // 🔴 응답에는 **집계만** 싣는다. 예전엔 user_id 배열을 그대로 반환했는데,
+    //    그건 호출자에게 전체 연결 사용자의 UUID 를 넘겨주는 것과 같다.
+    //    이 본문은 pg_net 의 net._http_response 에도 남으므로 더더욱 그렇다.
+    //    운영에 필요한 건 "몇 건이 되고 몇 건이 왜 실패했나"이지 누구인지가 아니다.
+    let synced = 0, failed = 0, imported = 0, updated = 0, deleted = 0;
+    const errors: Record<string, number> = {};
     for (const c of (connections ?? [])) {
       const r = await syncOneUser(adminClient, c.user_id, 'cron');
-      results.push({ user_id: c.user_id, ...r });
+      if (r.ok) {
+        synced++;
+        imported += r.imported;
+        updated  += r.updated;
+        deleted  += r.deleted;
+      } else {
+        failed++;
+        // 사유별 건수 — 'not_connected' 와 'refresh_failed' 는 고칠 곳이 다르다.
+        const key = r.error ?? 'unknown';
+        errors[key] = (errors[key] ?? 0) + 1;
+      }
     }
-    return new Response(JSON.stringify({ count: results.length, results }), {
+
+    // ⚠️ 순차 루프다. pg_net 기본 타임아웃은 5초라, 연결 사용자가 늘면 cron 쪽
+    //    HTTP 기록이 timed_out 으로 남는다(함수는 끝까지 돈다 —
+    //    reference_edge_function_auth_cron 참고). 판정은 external_sync_log 로 할 것.
+    return new Response(JSON.stringify({
+      ok: true,
+      connections: connections?.length ?? 0,
+      synced, failed, imported, updated, deleted,
+      ...(failed > 0 ? { errors } : {}),
+    }), {
       status: 200, headers: { 'Content-Type': 'application/json' },
     });
   }
