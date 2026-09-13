@@ -13,8 +13,9 @@
  *
  * | 값          | 조건 |
  * |-------------|------|
- * | `web`       | 웹이고 hostname 이 운영 도메인 |
- * | `web_local` | 그 밖의 웹 — localhost·프리뷰 배포·hostname 을 못 읽음 |
+ * | `web_local` | 운영 도메인이 아닌 웹 — localhost·프리뷰 배포·hostname 을 못 읽음 |
+ * | `bot`       | 운영 도메인 웹인데 UA 가 알려진 크롤러(스토어 심사 봇 등) — 3단계 |
+ * | `web`       | 그 밖의 운영 도메인 웹 |
  * | `dev`       | 네이티브 `__DEV__` (Metro 개발 번들 — `expo run:ios` 시뮬 검증 포함) |
  * | `emulator`  | Android 에뮬레이터 |
  * | `preview`   | EXPO_PUBLIC_APP_ENV 가 값이 있고 production 이 아님 (EAS preview 프로파일 APK) |
@@ -39,6 +40,16 @@
  * 🔑 **모듈이 없으면 1단계와 똑같이 동작한다**(`requireOptionalNativeModule` → null → release).
  *    그래서 이 JS 가 OTA 로 옛 바이너리(1.4.15)에 가도 안전하다.
  * ⚠️ DB 컬럼 코멘트(075)는 1단계 값만 적혀 있다 — 값 목록은 이 파일이 기준이다.
+ *
+ * ## 3단계 — 웹 크롤러 표식 `bot` (2026-09-13 밤, 엣지 로그 실측)
+ *
+ * 로그 보존 7일 안의 퍼널 기기 33대를 Supabase 엣지 로그(국가·UA)와 1:1 매칭했더니
+ * **웹 14대가 Google 봇**이었다(UA `…PlayStore-Google` 9 · UA 가 딱 `Google` 5, 전부 미국,
+ * Play 제출 직후에 몰림). 엣지 로그는 7일이면 사라져 그 뒤엔 사람과 못 가른다 → 기록 시점에 표식을 남긴다.
+ * 🔑 **운영 도메인일 때만 본다** — 로컬·프리뷰는 이미 `web_local` 이라 분석에서 빠지고,
+ *    로컬 스모크(헤드리스 Playwright)가 `bot` 으로 바뀌면 `web_local` 의 뜻이 흐려진다.
+ * ⚠️ **iOS 의 Apple 심사 기기는 여기서 못 거른다** — 앱 UA 는 사람과 같고 설치 출처도 `app_store` 다.
+ *    그쪽은 "심사 제출 후 ~20분 안에 처음 나타난 게스트 기기" 규칙으로 분석 때 거른다.
  */
 
 import { Platform } from 'react-native';
@@ -55,6 +66,8 @@ export type BuildChannel =
   | 'web' | 'web_local' | 'dev' | 'emulator' | 'preview'
   // 2단계 — 네이티브 설치 출처
   | 'simulator' | 'testflight' | 'sideload' | 'app_store' | 'play' | 'other_store'
+  // 3단계 — 운영 웹의 알려진 크롤러
+  | 'bot'
   | 'release';
 
 /**
@@ -86,6 +99,11 @@ export type BuildChannelInput = {
   /** 웹일 때 `location.hostname`. 네이티브이거나 못 읽으면 null */
   webHostname: string | null;
   /**
+   * 웹일 때 `navigator.userAgent`. 네이티브이거나 못 읽으면 null/undefined.
+   * 선택 필드인 이유: 1·2단계 호출부·테스트는 이 값 없이도 그대로 동작해야 한다(없으면 봇 판정 안 함).
+   */
+  webUserAgent?: string | null | undefined;
+  /**
    * Android 일 때 `Platform.constants`. 그 밖엔 undefined.
    * (`| undefined` 명시 — tsconfig 의 exactOptionalPropertyTypes 가 켜져 있어,
    *  없으면 "키는 있는데 값이 undefined" 를 넘길 수 없다)
@@ -113,7 +131,45 @@ const NATIVE_CHANNELS: Readonly<Record<string, Readonly<Record<string, BuildChan
  */
 export const PRODUCTION_WEB_HOSTS: readonly string[] = ['synclink.pages.dev'];
 
+/**
+ * UA **전체**가 이 값과 정확히 같으면 봇이다(앞뒤 공백만 무시).
+ *
+ * 실측(09-06~13 엣지 로그): UA 가 딱 `Google` 한 단어인 요청 10건 — 전부 미국, Play 제출 직후.
+ * 🔑 부분일치로 넓히지 않는다 — 실측된 봇 신호는 "UA 전체가 Google" 뿐이고, "Google 이 들어 있음"은
+ *    근거 없는 확장이다(참고: Google 앱 인앱 브라우저 UA 는 `GSA/…` 형식이라 이 단어로 사람을 가를 수도 없다).
+ */
+const BOT_UA_EXACT: readonly string[] = ['Google'];
+
+/**
+ * UA 에 이 토큰이 **들어 있으면** 봇이다. 사람 브라우저에는 나오지 않는, 크롤러가 스스로 밝히는 표식만 둔다.
+ *
+ * - `PlayStore-Google` : 실측 18건 — Google Play 크롤러(Linux Chrome UA 끝에 붙는다)
+ * - `Googlebot` · `AdsBot-Google` · `Mediapartners-Google` · `Google-InspectionTool` : Google 공식 크롤러
+ * - `bingbot` · `Applebot` : Bing·Apple 공식 크롤러
+ * - `HeadlessChrome` : 사람이 쓰는 브라우저가 아니다(자동화 도구). 로컬 스모크는 hostname 에서 이미 web_local 로 끝난다.
+ *
+ * 🔴 `bot`·`crawler`·`spider` 같은 **넓은 단어는 넣지 말 것** — "애매하면 사람 쪽" 원칙에 어긋나고,
+ *    오분류된 실사용자는 분석에서 소리 없이 사라진다(표본이 원래 하루 0.2설치다).
+ */
+const BOT_UA_TOKENS = /PlayStore-Google|Googlebot|AdsBot-Google|Mediapartners-Google|Google-InspectionTool|bingbot|Applebot|HeadlessChrome/i;
+
 // ─── 판별 ─────────────────────────────────────────────────────────────────────
+
+/**
+ * 웹 UA 가 알려진 크롤러인지 — **사람 브라우저를 절대 걸지 않는** 좁은 신호만 쓴다.
+ *
+ * @param ua `navigator.userAgent`. null·undefined·빈 문자열이면 판단 근거가 없으므로 false
+ * @returns 봇 신호(정확 일치 또는 크롤러 토큰)가 있으면 true
+ */
+export function isKnownBotUserAgent(ua: string | null | undefined): boolean {
+  if (!ua) return false;
+  const trimmed = ua.trim();
+  if (trimmed === '') return false;
+  // ① UA 전체가 봇 이름 그대로인 경우(실측 `Google`)
+  if (BOT_UA_EXACT.includes(trimmed)) return true;
+  // ② 크롤러가 스스로 붙이는 토큰
+  return BOT_UA_TOKENS.test(trimmed);
+}
 
 /**
  * Android 에뮬레이터인지 — **실기기를 절대 걸지 않는** 좁은 신호만 쓴다.
@@ -151,9 +207,10 @@ export function isAndroidEmulator(c: AndroidBuildConstants | undefined): boolean
 export function resolveBuildChannel(input: BuildChannelInput): BuildChannel {
   // 1) 웹은 hostname 이 가장 정확하다. 못 읽으면 운영이라고 단정할 근거가 없으므로 web_local.
   if (input.platformOS === 'web') {
-    return input.webHostname !== null && PRODUCTION_WEB_HOSTS.includes(input.webHostname)
-      ? 'web'
-      : 'web_local';
+    const isProductionHost = input.webHostname !== null && PRODUCTION_WEB_HOSTS.includes(input.webHostname);
+    if (!isProductionHost) return 'web_local';
+    // 운영 도메인에 온 알려진 크롤러(스토어 심사 봇 등). UA 를 못 읽으면 사람 쪽(web)으로 둔다.
+    return isKnownBotUserAgent(input.webUserAgent) ? 'bot' : 'web';
   }
   // 2) Metro 개발 번들. 스토어·TestFlight 의 release 번들에서는 항상 false 다.
   if (input.isDev) return 'dev';
@@ -188,6 +245,9 @@ export function getBuildChannel(): BuildChannel | null {
     // 웹에서만 location 이 의미 있다. RN 네이티브에는 location 이 없다.
     const loc = (globalThis as { location?: { hostname?: string } }).location;
     const webHostname = platformOS === 'web' ? (loc?.hostname ?? null) : null;
+    // UA 도 웹에서만 읽는다. RN 네이티브의 navigator 에는 userAgent 가 없거나 의미가 다르다.
+    const nav = (globalThis as { navigator?: { userAgent?: string } }).navigator;
+    const webUserAgent = platformOS === 'web' ? (nav?.userAgent ?? null) : null;
 
     cachedChannel = resolveBuildChannel({
       platformOS,
@@ -198,6 +258,7 @@ export function getBuildChannel(): BuildChannel | null {
         ? null
         : (requireOptionalNativeModule<{ installSource?: string }>('InstallSource')?.installSource ?? null),
       webHostname,
+      webUserAgent,
       android: platformOS === 'android'
         ? (Platform.constants as AndroidBuildConstants)
         : undefined,

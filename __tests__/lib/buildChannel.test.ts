@@ -9,6 +9,7 @@
  *  ② 🔑 애매하면 release — 실사용자를 내부로 오분류해 분석에서 빼면 안 된다
  *  ③ 실기기 지문을 에뮬레이터로 잡지 않는다
  *  ④ 075 마이그레이션에 값 목록 check 가 없다 — 있으면 1.4.16 의 새 값이 조용히 버려진다
+ *  ⑤ (3단계) 운영 웹의 크롤러만 bot — 사람 브라우저 UA 를 봇으로 잡지 않는다
  */
 
 import { readFileSync } from 'fs';
@@ -17,6 +18,7 @@ import path from 'path';
 import {
   resolveBuildChannel,
   isAndroidEmulator,
+  isKnownBotUserAgent,
   PRODUCTION_WEB_HOSTS,
   type BuildChannelInput,
 } from '@/lib/buildChannel';
@@ -279,5 +281,139 @@ describe('getBuildChannel — 네이티브 모듈 연결(런타임)', () => {
 
   it('모듈은 있는데 값이 없으면 release', () => {
     expect(loadWithNative({}).getBuildChannel()).toBe('release');
+  });
+});
+
+// ─── 3단계 — 운영 웹의 크롤러 표식 bot (2026-09-13 밤) ────────────────────────
+
+// 실측 UA(09-06~13 Supabase 엣지 로그, 퍼널 insert 요청 헤더 원문)
+const PLAY_CRAWLER_UA =
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.64 Safari/537.36 PlayStore-Google';
+const GOOGLE_BARE_UA = 'Google';
+// 실측 사람(내부 Mac Chrome) — 같은 표에서 봇과 나란히 찍혔다
+const MAC_CHROME_UA =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36';
+
+describe('isKnownBotUserAgent', () => {
+  it.each([
+    ['실측 Play 크롤러(PlayStore-Google)', PLAY_CRAWLER_UA],
+    ['실측 UA 가 딱 Google', GOOGLE_BARE_UA],
+    ['앞뒤 공백이 붙은 Google', '  Google  '],
+    ['Googlebot', 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'],
+    ['Googlebot 스마트폰(렌더링 Chrome)', 'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'],
+    ['AdsBot-Google', 'AdsBot-Google (+http://www.google.com/adsbot.html)'],
+    ['Mediapartners-Google', 'Mediapartners-Google'],
+    ['Google-InspectionTool', 'Mozilla/5.0 (compatible; Google-InspectionTool/1.0;)'],
+    ['bingbot', 'Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)'],
+    ['Applebot', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15 (Applebot/0.1; +http://www.apple.com/go/applebot)'],
+    ['HeadlessChrome', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/130.0.0.0 Safari/537.36'],
+  ])('%s → true', (_label, ua) => {
+    expect(isKnownBotUserAgent(ua)).toBe(true);
+  });
+
+  it.each([
+    ['실측 Mac Chrome', MAC_CHROME_UA],
+    ['iPhone Safari', 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1'],
+    ['Google 앱 인앱 브라우저(GSA)', 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) GSA/380.0.782563498 Mobile/15E148 Safari/604.1'],
+    // 🔑 합성 반례 — `Google` 정확 일치를 부분일치로 넓히면 여기서 걸린다(변이 검증에서 이것만 잡았다)
+    ['UA 에 Google 이 들어 있을 뿐인 문자열(합성)', 'Google Chrome'],
+    ['Android Chrome(갤럭시)', 'Mozilla/5.0 (Linux; Android 14; SM-S908N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36'],
+    ['Samsung Internet', 'Mozilla/5.0 (Linux; Android 14; SM-S908N) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/27.0 Chrome/125.0.0.0 Mobile Safari/537.36'],
+    ['카카오톡 인앱', 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 KAKAOTALK 25.7.1'],
+    ['네이버 인앱', 'Mozilla/5.0 (Linux; Android 14; SM-S908N wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/139.0.0.0 Mobile Safari/537.36 NAVER(inapp; search; 2000; 12.10.3)'],
+    ['빈 문자열', ''],
+    ['공백뿐', '   '],
+    ['null', null],
+    ['undefined', undefined],
+  ])('사람·정보 없음 %s → false', (_label, ua) => {
+    expect(isKnownBotUserAgent(ua)).toBe(false);
+  });
+});
+
+describe('resolveBuildChannel — 운영 웹의 크롤러는 bot', () => {
+  const web = { ...base, platformOS: 'web', webHostname: 'synclink.pages.dev' };
+
+  it.each([
+    ['Play 크롤러', PLAY_CRAWLER_UA],
+    ['UA 가 딱 Google', GOOGLE_BARE_UA],
+  ])('운영 도메인 + %s → bot', (_label, webUserAgent) => {
+    expect(resolveBuildChannel({ ...web, webUserAgent })).toBe('bot');
+  });
+
+  it('운영 도메인 + 사람 브라우저 → web', () => {
+    expect(resolveBuildChannel({ ...web, webUserAgent: MAC_CHROME_UA })).toBe('web');
+  });
+
+  it('🔑 UA 를 못 읽으면 봇이라 단정하지 않고 web (사람 쪽)', () => {
+    expect(resolveBuildChannel({ ...web, webUserAgent: null })).toBe('web');
+    expect(resolveBuildChannel({ ...web, webUserAgent: undefined })).toBe('web');
+  });
+
+  it('로컬·프리뷰는 봇 UA 여도 web_local 로 남는다 (헤드리스 스모크의 뜻을 바꾸지 않는다)', () => {
+    expect(resolveBuildChannel({
+      ...base, platformOS: 'web', webHostname: 'localhost', webUserAgent: 'Mozilla/5.0 HeadlessChrome/130.0.0.0',
+    })).toBe('web_local');
+    expect(resolveBuildChannel({
+      ...base, platformOS: 'web', webHostname: 'abc123.synclink.pages.dev', webUserAgent: PLAY_CRAWLER_UA,
+    })).toBe('web_local');
+  });
+
+  it('네이티브는 웹 UA 를 보지 않는다 (Apple 심사 기기는 이 방법으로 못 거른다)', () => {
+    expect(resolveBuildChannel({ ...base, platformOS: 'ios', webUserAgent: PLAY_CRAWLER_UA, installSource: 'app_store' }))
+      .toBe('app_store');
+    expect(resolveBuildChannel({ ...base, platformOS: 'android', webUserAgent: GOOGLE_BARE_UA })).toBe('release');
+  });
+});
+
+describe('getBuildChannel — 웹 UA 연결(런타임)', () => {
+  const g = globalThis as Record<string, unknown>;
+  let savedLocation: PropertyDescriptor | undefined;
+  let savedNavigator: PropertyDescriptor | undefined;
+
+  beforeEach(() => {
+    savedLocation = Object.getOwnPropertyDescriptor(g, 'location');
+    savedNavigator = Object.getOwnPropertyDescriptor(g, 'navigator');
+  });
+
+  afterEach(() => {
+    // 전역을 원래 모양 그대로 되돌린다(없던 속성은 지운다) — 다른 테스트에 새지 않게.
+    for (const [key, saved] of [['location', savedLocation], ['navigator', savedNavigator]] as const) {
+      if (saved) Object.defineProperty(g, key, saved);
+      else delete g[key];
+    }
+  });
+
+  /**
+   * 웹 환경(Platform.OS·location·navigator)을 만든 뒤 buildChannel 을 새로 불러와 채널을 읽는다.
+   * @param hostname location.hostname
+   * @param userAgent navigator.userAgent — undefined 면 navigator 에 userAgent 가 없는 상태
+   * @returns 판별된 채널
+   */
+  const channelOnWeb = (hostname: string, userAgent: string | undefined) => {
+    jest.resetModules();
+    const { Platform } = require('react-native') as typeof import('react-native');
+    const originalOS = Platform.OS;
+    (Platform as { OS: string }).OS = 'web';
+    Object.defineProperty(g, 'location', { value: { hostname }, configurable: true, writable: true });
+    Object.defineProperty(g, 'navigator', {
+      value: userAgent === undefined ? {} : { userAgent }, configurable: true, writable: true,
+    });
+    try {
+      return (require('@/lib/buildChannel') as typeof import('@/lib/buildChannel')).getBuildChannel();
+    } finally {
+      (Platform as { OS: string }).OS = originalOS;
+    }
+  };
+
+  it('운영 도메인에서 navigator.userAgent 가 Play 크롤러면 bot 으로 기록된다', () => {
+    expect(channelOnWeb('synclink.pages.dev', PLAY_CRAWLER_UA)).toBe('bot');
+  });
+
+  it('운영 도메인의 사람 브라우저는 web', () => {
+    expect(channelOnWeb('synclink.pages.dev', MAC_CHROME_UA)).toBe('web');
+  });
+
+  it('navigator 에 userAgent 가 없어도 throw 하지 않고 web', () => {
+    expect(channelOnWeb('synclink.pages.dev', undefined)).toBe('web');
   });
 });
