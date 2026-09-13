@@ -374,6 +374,11 @@ export type FunnelEventRow = {
   step: string;
   platform: string | null;
   app_version: string | null;
+  /**
+   * 기록이 찍힌 빌드 채널 (BuildChannel union — src/lib/buildChannel.ts).
+   * null = 1.4.15 이하 옛 번들이거나 판별 실패("모름"). 075 에서 추가.
+   */
+  build_channel: string | null;
   created_at: string;
 };
 

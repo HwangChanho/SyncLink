@@ -21,6 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import * as Crypto from 'expo-crypto';
 import { supabase } from '@/lib/supabase';
+import { getBuildChannel } from '@/lib/buildChannel';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -167,6 +168,10 @@ export async function trackFunnel(
       step,
       platform: Platform.OS,
       app_version: Constants.expoConfig?.version ?? null,
+      // 2026-09-13 — 내부 테스트 기록을 나중에 거르기 위한 표식(기록 자체는 끄지 않는다).
+      // 🔴 DB 에 컬럼이 없으면 이 insert 가 통째로 거부되고 아래 catch 도 안 탄다
+      //    (supabase-js 는 throw 대신 { error } 를 돌려준다) → 075 를 **먼저** 적용할 것.
+      build_channel: getBuildChannel(),
     });
   } catch {
     // 의도적으로 조용하다. 퍼널 기록이 사용자 화면에 영향을 주면 안 된다.

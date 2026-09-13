@@ -37,6 +37,13 @@ jest.mock('expo-constants', () => ({
   expoConfig: { version: '9.9.9' },
 }));
 
+// 채널 판별 자체는 __tests__/lib/buildChannel.test.ts 가 검증한다.
+// 여기서는 "그 값이 insert 에 실린다"는 연결만 본다.
+const mockGetBuildChannel = jest.fn<string | null, []>(() => 'release');
+jest.mock('@/lib/buildChannel', () => ({
+  getBuildChannel: () => mockGetBuildChannel(),
+}));
+
 // ─── Imports ──────────────────────────────────────────────────────────────────
 
 import { trackFunnel, __resetFunnelSessionForTest } from '@/services/funnelService';
@@ -47,6 +54,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockInsert.mockResolvedValue({ error: null });
   mockGetSession.mockResolvedValue({ data: { session: { user: { id: 'user-1' } } } });
+  mockGetBuildChannel.mockReturnValue('release');
   __resetFunnelSessionForTest();
 });
 
@@ -64,6 +72,24 @@ describe('trackFunnel', () => {
           anon_id: 'anon-fixed-uuid-for-test',
           app_version: '9.9.9',
         }),
+      );
+    });
+
+    it('빌드 채널을 함께 남긴다 (내부 테스트 기록을 나중에 거르기 위해)', async () => {
+      mockGetBuildChannel.mockReturnValue('dev');
+      await trackFunnel('home_view');
+      expect(mockInsert).toHaveBeenCalledWith(
+        expect.objectContaining({ build_channel: 'dev' }),
+      );
+    });
+
+    it('채널 판별이 실패(null)해도 기록 자체는 남긴다', async () => {
+      // 채널을 모른다고 기록을 버리면 "모름"보다 나쁜 "없음"이 된다.
+      mockGetBuildChannel.mockReturnValue(null);
+      await trackFunnel('home_view');
+      expect(mockInsert).toHaveBeenCalledTimes(1);
+      expect(mockInsert).toHaveBeenCalledWith(
+        expect.objectContaining({ step: 'home_view', build_channel: null }),
       );
     });
 
