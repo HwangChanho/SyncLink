@@ -18,7 +18,9 @@
  * | `dev`       | 네이티브 `__DEV__` (Metro 개발 번들 — `expo run:ios` 시뮬 검증 포함) |
  * | `emulator`  | Android 에뮬레이터 |
  * | `preview`   | EXPO_PUBLIC_APP_ENV 가 값이 있고 production 이 아님 (EAS preview 프로파일 APK) |
- * | `release`   | 나머지 — App Store·TestFlight·Play·iOS 시뮬 Release 가 **아직 섞여 있다** |
+ * | `simulator` · `testflight` · `sideload` · `app_store` (iOS) | 네이티브 InstallSource 모듈 (1.4.16~) |
+ * | `play` · `sideload` · `other_store` (Android)                 | 네이티브 InstallSource 모듈 (1.4.16~) |
+ * | `release`   | 나머지 — 네이티브 모듈이 없는 옛 바이너리(1.4.15 이하·OTA)·판별 실패 |
  *
  * 웹을 `__DEV__` 보다 먼저 보는 이유: 웹은 hostname 이 더 정확한 신호다.
  * 로컬에서 production 모드로 export 해 띄운 웹도 운영이 아니므로 `web_local` 이어야 한다.
@@ -29,14 +31,18 @@
  * 훨씬 해롭다(표본이 원래 하루 0.2설치 수준이다). 그래서 모든 "내부" 판정은
  * 확실한 신호가 있을 때만 내리고, 판단이 안 서면 `release` 로 둔다.
  *
- * ## ⚠️ 1단계의 한계 — 1.4.16 에서 네이티브로 세분 예정
+ * ## 2단계 — 네이티브 설치 출처 (1.4.16, modules/install-source)
  *
- * iOS 는 TestFlight 와 App Store 가 **같은 바이너리**라 빌드 시점 값으로 못 가르고,
- * 영수증 경로(`sandboxReceipt`)를 읽으려면 네이티브 코드가 필요하다. iOS 시뮬레이터의
- * Release 빌드도 JS 에서는 식별 신호가 없다. 둘 다 지금은 `release` 에 들어간다.
+ * iOS 는 TestFlight 와 App Store 가 **같은 바이너리**라 빌드 시점 값으로 못 가른다 → 설치된 뒤
+ * 네이티브가 영수증 경로(`sandboxReceipt`)·프로비저닝 파일·시뮬레이터 여부로 판별한다.
+ * Android 는 설치 주체 패키지(com.android.vending = Play)로 가른다.
+ * 🔑 **모듈이 없으면 1단계와 똑같이 동작한다**(`requireOptionalNativeModule` → null → release).
+ *    그래서 이 JS 가 OTA 로 옛 바이너리(1.4.15)에 가도 안전하다.
+ * ⚠️ DB 컬럼 코멘트(075)는 1단계 값만 적혀 있다 — 값 목록은 이 파일이 기준이다.
  */
 
 import { Platform } from 'react-native';
+import { requireOptionalNativeModule } from 'expo-modules-core';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -45,7 +51,18 @@ import { Platform } from 'react-native';
  * 🔴 값을 추가할 때 DB 에 `in (...)` check 를 걸지 말 것 — trackFunnel 이 insert 오류를
  *    삼키므로, 옛 제약에 걸린 새 값은 기록째 조용히 사라진다(075 주석).
  */
-export type BuildChannel = 'web' | 'web_local' | 'dev' | 'emulator' | 'preview' | 'release';
+export type BuildChannel =
+  | 'web' | 'web_local' | 'dev' | 'emulator' | 'preview'
+  // 2단계 — 네이티브 설치 출처
+  | 'simulator' | 'testflight' | 'sideload' | 'app_store' | 'play' | 'other_store'
+  | 'release';
+
+/**
+ * 네이티브 모듈이 주는 설치 출처(modules/install-source).
+ * iOS: simulator | testflight | sideload | app_store — Android: play | sideload | other_store | unknown
+ */
+export type NativeInstallSource =
+  | 'simulator' | 'testflight' | 'sideload' | 'app_store' | 'play' | 'other_store' | 'unknown';
 
 /**
  * Android `Platform.constants` 중 에뮬레이터 판별에 쓰는 필드만.
@@ -74,6 +91,17 @@ export type BuildChannelInput = {
    *  없으면 "키는 있는데 값이 undefined" 를 넘길 수 없다)
    */
   android?: AndroidBuildConstants | undefined;
+  /**
+   * 네이티브 InstallSource 모듈의 값. 모듈이 없으면(옛 바이너리·웹·테스트) null/undefined.
+   * 타입을 string 으로 넓게 받는 이유: 네이티브가 모르는 값을 보내도 여기서 걸러 release 로 둔다.
+   */
+  installSource?: string | null | undefined;
+};
+
+/** 플랫폼별로 **받아들이는** 네이티브 값 → 채널. 목록에 없는 값(unknown·오타·플랫폼 불일치)은 release. */
+const NATIVE_CHANNELS: Readonly<Record<string, Readonly<Record<string, BuildChannel>>>> = {
+  ios: { simulator: 'simulator', testflight: 'testflight', sideload: 'sideload', app_store: 'app_store' },
+  android: { play: 'play', sideload: 'sideload', other_store: 'other_store' },
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -134,7 +162,11 @@ export function resolveBuildChannel(input: BuildChannelInput): BuildChannel {
   // 4) EAS preview 프로파일. 🔑 값이 **있을 때만** 본다 — 비어 있다고 preview 로 치면
   //    env 주입이 빠진 스토어 빌드의 실사용자 전체가 내부로 빠진다.
   if (input.appEnv && input.appEnv !== 'production') return 'preview';
-  // 5) 나머지는 실사용자 쪽으로 둔다.
+  // 5) 네이티브 설치 출처(1.4.16~). 🔑 플랫폼 표에 있는 값만 받는다 —
+  //    iOS 인데 'play' 같은 불일치나 'unknown' 은 확실한 신호가 아니므로 release.
+  const native = input.installSource ? NATIVE_CHANNELS[input.platformOS]?.[input.installSource] : undefined;
+  if (native) return native;
+  // 6) 나머지는 실사용자 쪽으로 둔다(모듈 없는 옛 바이너리 포함).
   return 'release';
 }
 
@@ -161,6 +193,10 @@ export function getBuildChannel(): BuildChannel | null {
       platformOS,
       isDev: typeof __DEV__ !== 'undefined' && __DEV__ === true,
       appEnv: process.env.EXPO_PUBLIC_APP_ENV,
+      // 모듈이 없으면 null — 옛 바이너리·웹·jest 에서도 예외 없이 1단계로 떨어진다.
+      installSource: platformOS === 'web'
+        ? null
+        : (requireOptionalNativeModule<{ installSource?: string }>('InstallSource')?.installSource ?? null),
       webHostname,
       android: platformOS === 'android'
         ? (Platform.constants as AndroidBuildConstants)

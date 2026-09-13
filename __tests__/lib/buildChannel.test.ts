@@ -201,3 +201,83 @@ describe('getBuildChannel — 런타임 조회', () => {
     }
   });
 });
+
+// ─── 2단계 — 네이티브 설치 출처 (1.4.16, modules/install-source) ─────────────
+
+describe('resolveBuildChannel — 네이티브 설치 출처', () => {
+  it.each([
+    ['ios', 'simulator', 'simulator'],
+    ['ios', 'testflight', 'testflight'],
+    ['ios', 'sideload', 'sideload'],
+    ['ios', 'app_store', 'app_store'],
+    ['android', 'play', 'play'],
+    ['android', 'sideload', 'sideload'],
+    ['android', 'other_store', 'other_store'],
+  ])('%s + %s → %s', (platformOS, installSource, expected) => {
+    expect(resolveBuildChannel({ ...base, platformOS, installSource })).toBe(expected);
+  });
+
+  it.each([
+    ['네이티브 모듈 없음(옛 바이너리·OTA)', 'ios', null],
+    ['값이 unknown', 'android', 'unknown'],
+    ['플랫폼 불일치 — iOS 인데 play', 'ios', 'play'],
+    ['플랫폼 불일치 — Android 인데 app_store', 'android', 'app_store'],
+    ['모르는 값(오타·새 값)', 'ios', 'testfligth'],
+  ])('🔑 %s → release (확실한 신호가 아니면 실사용자 쪽)', (_label, platformOS, installSource) => {
+    expect(resolveBuildChannel({ ...base, platformOS, installSource })).toBe('release');
+  });
+
+  it('dev 는 네이티브 값보다 우선한다 (개발 빌드도 시뮬레이터 표식을 갖는다)', () => {
+    expect(resolveBuildChannel({ ...base, isDev: true, installSource: 'simulator' })).toBe('dev');
+  });
+
+  it('Android 에뮬레이터 판별은 네이티브 play 보다 우선한다', () => {
+    expect(resolveBuildChannel({
+      ...base, platformOS: 'android', android: { Fingerprint: EMULATOR_FP }, installSource: 'play',
+    })).toBe('emulator');
+  });
+
+  it('preview 프로파일은 네이티브 sideload 보다 구체적이라 우선한다', () => {
+    expect(resolveBuildChannel({
+      ...base, platformOS: 'android', appEnv: 'preview', android: { Fingerprint: PIXEL_FP }, installSource: 'sideload',
+    })).toBe('preview');
+  });
+
+  it('웹은 네이티브 값을 보지 않는다', () => {
+    expect(resolveBuildChannel({
+      ...base, platformOS: 'web', webHostname: 'synclink.pages.dev', installSource: 'testflight',
+    })).toBe('web');
+  });
+});
+
+describe('getBuildChannel — 네이티브 모듈 연결(런타임)', () => {
+  // jest 는 __DEV__=true 라 그대로면 항상 dev 에서 끝난다 → 네이티브 경로를 보려고 잠시 끈다.
+  const g = globalThis as { __DEV__?: boolean };
+  let originalDev: boolean | undefined;
+  beforeEach(() => { originalDev = g.__DEV__; g.__DEV__ = false; });
+  afterEach(() => { g.__DEV__ = originalDev; jest.dontMock('expo-modules-core'); });
+
+  /**
+   * expo-modules-core 를 주어진 모듈 값으로 목킹한 뒤 buildChannel 을 새로 불러온다.
+   * 🔑 isolateModules 안의 doMock 은 **이 파일이 위에서 이미 buildChannel 을 import 해
+   *    expo-modules-core 가 로드된 상태**에서는 적용되지 않았다(진단 실측: mocked=null).
+   *    그래서 레지스트리를 비우고(resetModules) 목을 건 뒤 require 한다.
+   */
+  const loadWithNative = (native: unknown): typeof import('@/lib/buildChannel') => {
+    jest.resetModules();
+    jest.doMock('expo-modules-core', () => ({ requireOptionalNativeModule: () => native }));
+    return require('@/lib/buildChannel');
+  };
+
+  it('iOS 에서 모듈이 testflight 를 주면 testflight 로 기록된다', () => {
+    expect(loadWithNative({ installSource: 'testflight' }).getBuildChannel()).toBe('testflight');
+  });
+
+  it('🔴 모듈이 없으면(1.4.15 이하 바이너리에 OTA 로 간 경우) 1단계처럼 release', () => {
+    expect(loadWithNative(null).getBuildChannel()).toBe('release');
+  });
+
+  it('모듈은 있는데 값이 없으면 release', () => {
+    expect(loadWithNative({}).getBuildChannel()).toBe('release');
+  });
+});
