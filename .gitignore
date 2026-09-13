@@ -92,8 +92,14 @@ credentials/
 # Source of truth lives in app.json + plugins/. EAS Build also auto-runs
 # prebuild when these are absent, so committing them would just create
 # drift. Reuse cached prebuild via .expo/prebuild/ if EAS suggests it.
-ios/
-android/
+# 🔑 2026-09-13 — 루트 한정(/ios/, /android/). 앞의 슬래시가 없으면 **모든 하위 폴더**의 ios/·android/ 를
+#    무시해서, 로컬 Expo 모듈(modules/*/ios·android)의 네이티브 소스가 커밋에서 조용히 빠졌다.
+/ios/
+/android/
+# 로컬 Expo 모듈의 Gradle 빌드 산출물은 계속 무시한다(소스만 추적).
+modules/*/android/build/
+modules/*/android/.gradle/
+modules/*/android/.cxx/
 # Firebase config (민감 — Firebase Console 에서 재다운로드 가능)
 GoogleService-Info.plist
 google-services.json

@@ -1,0 +1,17 @@
+// InstallSource — 앱 설치 출처(Play / 사이드로드 / 기타 스토어) 판별 로컬 Expo 모듈.
+// 퍼널 기록 build_channel 2단계(1.4.16) → src/lib/buildChannel.ts
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.installsource'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.installsource"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+}
