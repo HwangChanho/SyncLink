@@ -4,8 +4,11 @@
  * 매주 일요일 21:00 KST 에 pg_cron 트리거 → 활성 사용자 전체 순회 → 각자의
  * 지난 1주 일정/할 일을 요약 + weekly_reviews 테이블에 저장 + Expo push.
  *
- * 인증: pg_cron 이 보낸 service_role secret (Authorization Bearer). 외부에서
- * 호출하면 401.
+ * 인증: pg_cron `auto-weekly-review` 가 보낸 `Authorization: Bearer <WEEKLY_REVIEW_SECRET>`.
+ *   Vault `weekly_review_secret` 과 같은 값의 고정 시크릿이다 — service_role 키가
+ *   아니고 **JWT 도 아니다**(그래서 config.toml 이 verify_jwt = false).
+ *   🔴 게이트웨이 방어선이 없으므로 핸들러의 `requireSharedSecret` 이 유일한 방어선이다.
+ *   시크릿이 틀리면 401, 시크릿 환경변수가 아예 없으면 500(fail-closed).
  *
  * 비용 안전망:
  *   - Free 사용자는 매주 1회만 (정상 cadence).
@@ -16,6 +19,8 @@
 
 import Anthropic from 'npm:@anthropic-ai/sdk';
 import { createClient } from 'npm:@supabase/supabase-js';
+// @ts-ignore — Deno 는 배포 시점에 상대 경로를 해석한다.
+import { requireSharedSecret } from '../_shared/serviceAuth.ts';
 
 interface WeeklyReviewRow {
   user_id: string;
@@ -29,11 +34,13 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });
 
   // 인증: pg_cron 시크릿 검증.
-  const authHeader = req.headers.get('Authorization') ?? '';
-  const expected = `Bearer ${Deno.env.get('WEEKLY_REVIEW_SECRET') ?? ''}`;
-  if (!authHeader || authHeader !== expected) {
-    return new Response(JSON.stringify({ error: 'auth' }), { status: 401 });
-  }
+  // 🔴 2026-09-13 — fail-open 제거. 예전 코드는
+  //    `expected = 'Bearer ' + (WEEKLY_REVIEW_SECRET ?? '')` 였어서, 환경변수가 비면
+  //    기대값이 `"Bearer "` 가 되고 **`Authorization: Bearer ` 한 줄만 보내도 통과**했다.
+  //    이 함수는 전 사용자 순회 + Anthropic 호출(비용) + 푸시 발송이라 뚫리면 피해가 크다.
+  //    requireSharedSecret 은 시크릿이 없으면 500 으로 막는다(fail-closed).
+  const denied = requireSharedSecret(req, 'WEEKLY_REVIEW_SECRET');
+  if (denied) return denied;
 
   const adminClient = createClient(
     Deno.env.get('SUPABASE_URL') ?? '',

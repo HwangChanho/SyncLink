@@ -53,15 +53,19 @@ function timingSafeEqual(a: string, b: string): boolean {
 }
 
 /**
- * 요청이 service_role 키를 들고 왔는지 검증한다.
+ * 요청이 **공유 시크릿**(`Authorization: Bearer <환경변수 값>`)을 들고 왔는지 검증한다.
+ * pg_cron 이 부르는 함수 전용 — cron 은 Vault 의 같은 값을 헤더에 실어 보낸다.
  *
- * @param req 들어온 요청
- * @returns 통과하면 `null`, 아니면 **그대로 반환해야 할** 401 Response
+ * @param req     들어온 요청
+ * @param envName 기대값이 담긴 Edge Function 환경변수 이름 (예: `'DISPATCH_SECRET'`)
+ * @returns 통과하면 `null`. 아니면 **그대로 반환해야 할** Response —
+ *          시크릿 불일치 401 `{"error":"unauthorized"}` /
+ *          환경변수 미설정 500 `{"error":"secret_not_configured"}`
  *
  * @example
  * ```ts
  * Deno.serve(async (req) => {
- *   const denied = requireServiceRole(req);
+ *   const denied = requireSharedSecret(req, 'DISPATCH_SECRET');
  *   if (denied) return denied;      // 🔴 반드시 조기 반환할 것
  *   // ... 여기부터 서버 전용 로직
  * });
@@ -69,6 +73,8 @@ function timingSafeEqual(a: string, b: string): boolean {
  *
  * ⚠️ 반환값을 무시하면 검증이 없는 것과 같다. `if (denied) return denied;`
  *    한 줄을 빠뜨리는 게 이 함수의 유일한 오용 경로다.
+ * ⚠️ 이 가드를 쓰는 함수는 config.toml 에 `verify_jwt = false` 가 **반드시** 있어야
+ *    한다. 고정 시크릿은 JWT 가 아니라서 게이트웨이가 핸들러 앞에서 401 을 낸다.
  */
 export function requireSharedSecret(req: Request, envName: string): Response | null {
   const expected = Deno.env.get(envName) ?? '';

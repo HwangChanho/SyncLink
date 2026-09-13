@@ -97,24 +97,39 @@ const CUSTOM_GUARD: Record<string, string> = {
   'kakao-auth':          'Kakao OAuth 콜백 — KAKAO_REST_API_KEY 로 키를 건 SHA-256 password derivation',
   'reward-credit':       'AdMob SSV — Google 공개키로 쿼리스트링 ECDSA 서명 검증',
   'revenuecat-webhook':  'RevenueCat 대시보드에 설정된 고정 시크릿 헤더 대조',
-  'dispatch-notifications': 'DISPATCH_SECRET 직접 대조 (⚠️ fail-open — 아래 KNOWN_FAIL_OPEN 참고)',
-  'weekly-review-batch':    'WEEKLY_REVIEW_SECRET 직접 대조 (⚠️ fail-open — 아래 KNOWN_FAIL_OPEN 참고)',
 };
 
 /**
- * 🔴 **이미 알고 있는 fail-open 결함** (2026-09-12 발견, LEAD 판단 대기).
+ * 호출자 인증용 시크릿을 **공용 헬퍼 없이 환경변수에서 직접 읽어도 되는** 함수.
+ * 값은 "fail-closed 임을 소스에서 확인할 수 있는 코드 조각"이다.
  *
- * 두 함수 모두 시크릿 환경변수가 **비어 있으면 통과**한다:
- *   - `dispatch-notifications`: `if (dispatchSecret) { ...검사... }` — 비면 검사 자체를 건너뛴다
- *   - `weekly-review-batch`:    `expected = 'Bearer ' + (secret ?? '')` — 비면
- *                               `Authorization: Bearer ` 로 통과한다
- * 둘 다 `verify_jwt = false` 라 게이트웨이 방어선도 없다.
+ * ## 왜 이 목록이 필요한가 (2026-09-13)
  *
- * `_shared/serviceAuth.ts` 의 `requireSharedSecret` 은 이 문제를 고치려고 만든
- * fail-closed 구현이다(시크릿이 없으면 500). 두 함수를 그리로 옮기면 이 목록을
- * 비울 수 있다 — 그때 아래 테스트가 "목록을 갱신하라"고 알려 준다.
+ * `dispatch-notifications`·`weekly-review-batch` 가 시크릿을 직접 읽다가 둘 다
+ * **fail-open** 이었다 — 환경변수가 비면 검사를 건너뛰거나(`if (secret) {...}`),
+ * 기대값이 `"Bearer "` 로 쪼그라들어 빈 토큰이 통과했다. 둘 다 verify_jwt=false 라
+ * 게이트웨이 방어선도 없었다. `requireSharedSecret`(fail-closed)으로 옮겨 고쳤다.
+ *
+ * 🔑 같은 모양이 **새 함수에서 다시 생기는 것**을 막으려고, 직접 읽기를 기본 금지로
+ *    뒤집었다. 여기에 올리려면 "비었을 때 막는 코드"를 증거로 같이 적어야 한다.
  */
-const KNOWN_FAIL_OPEN = ['dispatch-notifications', 'weekly-review-batch'];
+const DIRECT_SECRET_FAIL_CLOSED: Record<string, string> = {
+  // 미설정이면 logToDb 후 500 'server misconfigured'
+  'revenuecat-webhook': 'if (!expected)',
+};
+
+/**
+ * 이름에 SECRET 이 들어가지만 **호출자 인증에 쓰지 않는** 환경변수.
+ * (OAuth 클라이언트 자격증명처럼 우리가 외부에 내미는 값)
+ */
+const NON_CALLER_AUTH_SECRETS = new Set(['GOOGLE_OAUTH_CLIENT_SECRET']);
+
+/** 함수 소스에서 `Deno.env.get('..SECRET..')` 로 직접 읽는 환경변수 이름들. */
+function directSecretReads(name: string): string[] {
+  const names = [...source(name).matchAll(/Deno\.env\.get\(\s*'([A-Z0-9_]*SECRET[A-Z0-9_]*)'\s*\)/g)]
+    .map((m) => m[1]);
+  return names.filter((n) => !NON_CALLER_AUTH_SECRETS.has(n));
+}
 
 describe('Edge Function 호출자 인증', () => {
   const disabled = verifyJwtDisabled();
@@ -149,13 +164,60 @@ describe('Edge Function 호출자 인증', () => {
     expect(ghosts).toEqual([]);
   });
 
-  it('B-3. 알려진 fail-open 목록이 실제와 일치한다', () => {
-    // 고쳐서 requireSharedSecret 으로 옮겼는데 목록에 그대로 남아 있으면,
-    // 다음 사람이 "아직 결함"이라고 잘못 읽는다. 양방향으로 잠근다.
-    const stillFailOpen = KNOWN_FAIL_OPEN.filter(
-      (name) => !guardsOf(name).includes('requireSharedSecret'),
-    );
-    expect(stillFailOpen).toEqual(KNOWN_FAIL_OPEN);
+  it('B-3. 호출자 시크릿을 직접 읽는 함수는 fail-closed 가 확인된 것뿐이다', () => {
+    // 🔴 직접 읽으면 "비었을 때"를 각자 처리해야 하고, 실제로 두 번 빠뜨렸다
+    //    (dispatch-notifications·weekly-review-batch → 09-13 에 requireSharedSecret 으로 이전).
+    //    새 함수는 공용 가드를 쓰거나, 목록에 fail-closed 증거와 함께 올려야 한다.
+    const offenders = functionNames()
+      .filter((name) => directSecretReads(name).length > 0)
+      .filter((name) => !(name in DIRECT_SECRET_FAIL_CLOSED))
+      .map((name) => `${name}: ${directSecretReads(name).join(', ')}`);
+    expect(offenders).toEqual([]);
+  });
+
+  it('B-4. 직접 읽기 허용 목록의 fail-closed 증거가 소스에 실제로 있다', () => {
+    // 증거 코드가 지워졌는데 목록만 남으면 "안전하다"는 선언이 거짓이 된다.
+    // 목록에 올라 있는데 더 이상 직접 읽지 않는 함수도 잡는다(유령 항목).
+    for (const [name, evidence] of Object.entries(DIRECT_SECRET_FAIL_CLOSED)) {
+      expect({ name, readsDirectly: directSecretReads(name).length > 0 })
+        .toEqual({ name, readsDirectly: true });
+      expect({ name, hasEvidence: source(name).includes(evidence) })
+        .toEqual({ name, hasEvidence: true });
+    }
+  });
+
+  // ── B-5. 09-13 에 fail-open 을 고친 두 cron 함수 ─────────────────────────
+  describe.each([
+    // [함수, 환경변수, 가드보다 뒤에 와야 하는 부작용 코드 조각들]
+    ['dispatch-notifications', 'DISPATCH_SECRET',      ['createClient(', "from('notifications_queue')"]],
+    ['weekly-review-batch',    'WEEKLY_REVIEW_SECRET', ['createClient(', "Deno.env.get('ANTHROPIC_API_KEY')"]],
+  ] as const)('B-5. %s', (name, envName, sideEffects) => {
+    const src = source(name);
+    const guardCall = `requireSharedSecret(req, '${envName}')`;
+
+    it('fail-closed 공용 가드로 호출자를 검증하고 결과를 조기 반환한다', () => {
+      // 🔴 반환값을 버리면 검증이 없는 것과 같다 — serviceAuth.ts 의 유일한 오용 경로.
+      const pattern = new RegExp(
+        `const denied = requireSharedSecret\\(req, '${envName}'\\);\\s*\\n\\s*if \\(denied\\) return denied;`,
+      );
+      expect(src).toMatch(pattern);
+    });
+
+    it('공유 시크릿을 쓰므로 config.toml 에 verify_jwt = false 가 있다', () => {
+      // 없으면 게이트웨이가 비JWT 시크릿을 핸들러 앞에서 401 로 막아 cron 이 멈춘다.
+      expect(disabled.has(name)).toBe(true);
+    });
+
+    it('가드가 DB 접근·외부 호출보다 먼저 온다', () => {
+      const guardAt = src.indexOf(guardCall);
+      expect(guardAt).toBeGreaterThan(-1);
+      for (const marker of sideEffects) {
+        const at = src.indexOf(marker);
+        // 표식이 사라지면 이 검사가 조용히 무의미해지므로 존재부터 확인한다.
+        expect({ marker, found: at > -1 }).toEqual({ marker, found: true });
+        expect({ marker, guardFirst: guardAt < at }).toEqual({ marker, guardFirst: true });
+      }
+    });
   });
 
   // ── C. sync-google-calendar — 이번에 고친 것 ────────────────────────────

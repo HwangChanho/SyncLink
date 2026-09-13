@@ -14,8 +14,11 @@
  *      transient failure, NULL the user's push_token on DeviceNotRegistered
  *
  * Security:
- *   - Called by pg_cron with service_role JWT (bypasses RLS)
- *   - SUPABASE_SERVICE_ROLE_KEY is auto-injected by Supabase runtime
+ *   - 호출자 = pg_cron `space-activity-dispatch`. `Authorization: Bearer <DISPATCH_SECRET>`
+ *     (Vault `dispatch_secret` 과 같은 값의 고정 시크릿 — **JWT 가 아니다**)
+ *   - 🔴 config.toml 이 `verify_jwt = false` 라 게이트웨이 방어선이 없다 →
+ *     핸들러 첫 줄의 `requireSharedSecret` 이 **유일한** 방어선이다.
+ *   - DB 접근은 SUPABASE_SERVICE_ROLE_KEY(런타임 자동 주입)로 RLS 를 우회한다
  *
  * Cost:
  *   - Expo Push: free, unlimited
@@ -23,6 +26,8 @@
  */
 
 import { createClient } from 'npm:@supabase/supabase-js';
+// @ts-ignore — Deno 는 배포 시점에 상대 경로를 해석한다.
+import { requireSharedSecret } from '../_shared/serviceAuth.ts';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -160,20 +165,17 @@ async function sendExpoChunk(
 // ─── Main handler ────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request): Promise<Response> => {
-  // v1.1.4 — pg_cron 이 service_role JWT 대신 DISPATCH_SECRET 헤더로 호출.
-  // (vault 에 service_role_key 를 박지 않기 위함 — weekly-review-batch 와
-  // 동일 패턴.) Authorization: Bearer <DISPATCH_SECRET> 형식.
-  const dispatchSecret = Deno.env.get('DISPATCH_SECRET') ?? '';
-  if (dispatchSecret) {
-    const auth = req.headers.get('Authorization') ?? '';
-    const token = auth.replace(/^Bearer\s+/i, '');
-    if (token !== dispatchSecret) {
-      return new Response(
-        JSON.stringify({ error: 'unauthorized' }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } },
-      );
-    }
-  }
+  // v1.1.4 — pg_cron 이 service_role JWT 대신 DISPATCH_SECRET 헤더로 호출한다
+  // (Vault 에 service_role 키를 넣지 않기 위함). Authorization: Bearer <DISPATCH_SECRET>.
+  //
+  // 🔴 2026-09-13 — fail-open 제거. 예전 코드는 `if (dispatchSecret) { ...검사... }`
+  //    형태여서 **환경변수가 비면 검사를 통째로 건너뛰었다.** verify_jwt=false 라
+  //    게이트웨이도 안 막으니, 시크릿이 사라지는 순간 누구나 큐를 비우고
+  //    전 사용자에게 푸시를 쏘게 할 수 있는 구조였다.
+  //    requireSharedSecret 은 fail-closed 다 — 시크릿이 없으면 통과가 아니라 500.
+  //    (reactivation-push·smart-reminder·sync-google-calendar 와 같은 방식)
+  const denied = requireSharedSecret(req, 'DISPATCH_SECRET');
+  if (denied) return denied;
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
