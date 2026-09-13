@@ -614,6 +614,8 @@ const zh = {
 
   nl: {
     placeholder: '添加日程…',
+    /** 홈·캘린더 하단 입력바 전용(2026-09-13 LEAD 문구). 공용 placeholder 는 노트·할 일도 쓴다. */
+    inputBarPlaceholder: '添加日程…',
     quickAdd: {
       frequent_title: '常用日程',
       category_title: '快速添加',

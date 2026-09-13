@@ -631,6 +631,8 @@ const ko = {
 
   nl: {
     placeholder: '말하듯 입력하세요…',
+    /** 홈·캘린더 하단 입력바 전용(2026-09-13 LEAD 문구). 공용 placeholder 는 노트·할 일도 쓴다. */
+    inputBarPlaceholder: '일정을 등록하세요…',
     quickAdd: {
       frequent_title: '자주 쓰는 일정',
       category_title: '빠른 등록',

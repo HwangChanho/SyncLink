@@ -611,6 +611,8 @@ const ja = {
 
   nl: {
     placeholder: '予定を入力…',
+    /** 홈·캘린더 하단 입력바 전용(2026-09-13 LEAD 문구). 공용 placeholder 는 노트·할 일도 쓴다. */
+    inputBarPlaceholder: '予定を登録…',
     quickAdd: {
       frequent_title: 'よく使う予定',
       category_title: 'クイック登録',

@@ -614,6 +614,8 @@ const en = {
 
   nl: {
     placeholder: 'Add an event…',
+    /** 홈·캘린더 하단 입력바 전용(2026-09-13 LEAD 문구). 공용 placeholder 는 노트·할 일도 쓴다. */
+    inputBarPlaceholder: 'Add an event…',
     quickAdd: {
       frequent_title: 'Frequent events',
       category_title: 'Quick add',

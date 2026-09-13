@@ -14,7 +14,7 @@
  * On limit error: shows a toast-style snackbar.
  */
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react';
 import {
   View, TextInput, Pressable, Text, ActivityIndicator, Image,
   StyleSheet, Keyboard, Alert, Platform, ScrollView, AppState,
@@ -352,7 +352,7 @@ export function NLInputBar({ onEventCreated }: Props) {
   // ── 사진 첨부 (Vision NL) ────────────────────────────────────────────────────
 
   /**
-   * 입력 변경. 웹에서는 여기서 **입력창 높이도 다시 맞춘다.**
+   * 웹 입력창 높이를 내용에 맞춘다.
    *
    * RN Web 은 multiline TextInput 을 textarea 로 렌더하는데, textarea 는 내용이
    * 늘어도 높이가 그대로다(2026-09-08 웹 점검에서 40px 고정 실측).
@@ -363,8 +363,7 @@ export function NLInputBar({ onEventCreated }: Props) {
    * 🔑 auto 로 잠깐 풀어야 줄어들 때도 정확히 측정된다(웹 표준 패턴).
    * ⚠️ 네이티브는 손대지 않는다 — 이미 스스로 잘 자란다.
    */
-  const handleChangeText = useCallback((t: string) => {
-    setDraftText(t);
+  const resizeWebInput = useCallback(() => {
     if (Platform.OS !== 'web') return;
     const node = inputRef.current as unknown as HTMLTextAreaElement | null;
     if (!node || typeof node.scrollHeight !== 'number') return;
@@ -372,6 +371,26 @@ export function NLInputBar({ onEventCreated }: Props) {
     const next = Math.min(INPUT_MAX_HEIGHT, Math.max(INPUT_MIN_HEIGHT, node.scrollHeight));
     node.style.height = next + 'px';
     node.style.overflowY = node.scrollHeight > INPUT_MAX_HEIGHT ? 'auto' : 'hidden';
+  }, []);
+
+  /**
+   * 2026-09-13 — 높이 맞춤을 **입력 핸들러가 아니라 값 변화**에 건다.
+   *
+   * LEAD 스크린샷: "플레이스홀더가 가운데 있어야지 위에 붙어있잖아".
+   * 예전엔 사용자가 타이핑할 때(onChangeText)만 높이를 맞춰서,
+   *  - 처음 그릴 때 textarea 가 **기본 2줄 높이**(56px 실측 = 20×2 + 여백 16)로 남아
+   *    한 줄 placeholder 가 위에 붙었고,
+   *  - 전송 후 비우기·초안 복원·음성 입력처럼 **코드가 값을 바꾸는 8곳**에서도 높이가 안 따라왔다.
+   * 값이 바뀔 때마다(첫 렌더 포함) 맞추면 경로를 하나도 빠뜨리지 않는다.
+   * 🔑 useLayoutEffect — 그리기 **전에** 돌아서 2줄 높이가 한 프레임 비치는 깜빡임이 없다.
+   */
+  useLayoutEffect(() => {
+    resizeWebInput();
+  }, [text, resizeWebInput]);
+
+  /** 입력 변경 — 높이는 위 useLayoutEffect 가 값 변화에 맞춰 조정한다. */
+  const handleChangeText = useCallback((t: string) => {
+    setDraftText(t);
   }, []);
 
   const handleAttachImage = useCallback(async () => {
@@ -923,7 +942,10 @@ export function NLInputBar({ onEventCreated }: Props) {
 
           value={text}
           onChangeText={handleChangeText}
-          placeholder={isListening ? '듣는 중…' : t('nl.placeholder')}
+          // 2026-09-13 LEAD: "말하듯 입력하세요" → "일정을 등록하세요".
+          // 🔑 공용 nl.placeholder 는 노트 편집기·할 일 시트 등 5곳이 같이 쓴다 —
+          //    거기에 "일정을 등록하세요" 가 뜨면 틀린 안내가 되므로 입력바 전용 키를 쓴다.
+          placeholder={isListening ? '듣는 중…' : t('nl.inputBarPlaceholder')}
           placeholderTextColor={isListening ? colors.error : colors.textTertiary}
           editable={inputState !== 'loading'}
           /*
@@ -937,6 +959,13 @@ export function NLInputBar({ onEventCreated }: Props) {
            */
           multiline
           maxLength={200}
+          /*
+           * 2026-09-13 — 웹은 rows=1. RN Web 0.21 은 rows 를 안 주면 textarea 에 아무 값도
+           * 안 넣어 **브라우저 기본 2줄**이 되고, 비어 있어도 높이가 56px(20×2+여백)로 잡혀
+           * 한 줄 placeholder 가 위에 붙었다(실측). 1줄에서 시작해 내용만큼 자라게 한다.
+           * ⚠️ 네이티브에는 주지 않는다 — Android 의 rows 는 줄 수를 **고정**해 자라지 않게 만든다.
+           */
+          {...(Platform.OS === 'web' ? { rows: 1 } : {})}
         />
 
         {/* v1.2.9 — AI 비서 명시 호출 버튼. 텍스트 있으면 prefill 로 push,
@@ -1123,7 +1152,15 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     lineHeight: 20,
     includeFontPadding: false,
     // multiline 은 iOS 에서 기본 안쪽 여백이 있어 좌우가 어긋난다 — 0 으로 맞춘다.
-    ...(Platform.OS === 'ios' ? { paddingTop: 8, paddingBottom: 8 } : {}),
+    //
+    // 2026-09-13 — 웹도 같은 8px 을 준다. LEAD 스크린샷: "플레이스홀더가 가운데 있어야지 위에 붙어있잖아".
+    // 웹의 multiline 은 <textarea> 라 글자를 **항상 위에서부터** 채우고 textAlignVertical 을 무시한다.
+    // 여백 0 이면 minHeight 36 안에서 한 줄(lineHeight 20)이 위에 붙고 아래 16px 이 빈다.
+    // 8 + 20 + 8 = 36 이라 한 줄이 정확히 가운데 오고, 여러 줄로 자랄 때도 위아래 여백이 대칭이다.
+    // (웹 자동 높이 조정의 scrollHeight 는 padding 을 포함하므로 한 줄일 때 36 그대로다.)
+    // ⚠️ Android 는 일부러 제외했다 — v1.2.9 에 여백 때문에 글자가 아래로 치우친 이력이 있고
+    //    실기 확인 전이라, 증상이 확인되면 따로 맞춘다.
+    ...(Platform.OS === 'ios' || Platform.OS === 'web' ? { paddingTop: 8, paddingBottom: 8 } : {}),
   },
   micButton: {
     width: 36,
