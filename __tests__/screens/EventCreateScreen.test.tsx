@@ -55,6 +55,10 @@ jest.mock('@/services/funnelService', () => ({
 
 jest.mock('@/services/eventService', () => ({
   createEvent: jest.fn(),
+  // 제목 입력 후 디바운스 타이머가 자동완성 검색을 부른다(create.tsx).
+  // 목에 이 함수가 없으면 타이머가 테스트 도중 발동할 때만 `is not a function` 으로
+  // 터져서, **같은 코드가 실행마다 통과/실패를 오갔다**(2026-09-13, HEAD 에서 2회 중 1회 실패).
+  searchEventsByTitle: jest.fn().mockResolvedValue([]),
 }));
 
 // eventStore: useEventStore mock — upsertEvent 호출 여부만 검증
