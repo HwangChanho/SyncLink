@@ -58,6 +58,25 @@ platform :ios do
       sh("/usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString #{marketing}' '#{PROJECT_ROOT}/ios/SyncLink/Info.plist'")
       sh("/usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString #{marketing}' '#{PROJECT_ROOT}/targets/widget/Info.plist'")
 
+      # 2026-09-13 — OTA 런타임(Expo.plist EXUpdatesRuntimeVersion)도 동기화한다.
+      # 🔴 이 레인은 prebuild 를 안 해서, 그 값이 **마지막 prebuild(1.4.2) 그대로 굳어** 있었다
+      #    (출시 1.4.15 아카이브 실측: EXUpdatesRuntimeVersion = 1.4.2). 그 결과
+      #     - runtime 1.4.15 로 올린 OTA 는 iOS 에 닿지 않고,
+      #     - runtime 1.4.2 로 올리면 1.4.2~1.4.15 **모든** iOS 바이너리가 받아 옛 네이티브에서 깨질 수 있었다.
+      # 값은 marketing 을 그대로 쓰지 않고 app.json 의 runtimeVersion 정책에서 정한다 —
+      # 정책이 appVersion 이 아니게 바뀌면 "버전 = 런타임" 가정이 틀리므로 모르는 정책이면 멈춘다.
+      runtime = sh("node -e \"const rv=require('#{PROJECT_ROOT}/app.json').expo.runtimeVersion; " \
+                   "if (typeof rv==='string') console.log(rv); " \
+                   "else if (rv && rv.policy==='appVersion') console.log(require('#{PROJECT_ROOT}/app.json').expo.version); " \
+                   "else { console.error('unsupported runtimeVersion: '+JSON.stringify(rv)); process.exit(1); }\"").strip
+      expo_plist = "#{PROJECT_ROOT}/ios/SyncLink/Supporting/Expo.plist"
+      sh("/usr/libexec/PlistBuddy -c 'Set :EXUpdatesRuntimeVersion #{runtime}' '#{expo_plist}'")
+      runtime_v = sh("/usr/libexec/PlistBuddy -c 'Print :EXUpdatesRuntimeVersion' '#{expo_plist}'").strip
+      UI.message "OTA 런타임(Expo.plist): #{runtime_v} (app.json 정책 기준 #{runtime})"
+      unless runtime_v == runtime
+        UI.user_error!("❌ OTA 런타임 mismatch — fastlane 중단. expected=#{runtime} Expo.plist=#{runtime_v}")
+      end
+
       # Triple-check: 4개 소스 모두 같은 marketing version 인지 검증.
       app_v      = sh("node -e \"console.log(require('#{PROJECT_ROOT}/app.json').expo.version)\"").strip
       xcode_v    = sh("grep 'MARKETING_VERSION' '#{PROJECT_ROOT}/ios/SyncLink.xcodeproj/project.pbxproj' | head -1 | sed 's/.*= //;s/;//;s/[[:space:]]//g'").strip
