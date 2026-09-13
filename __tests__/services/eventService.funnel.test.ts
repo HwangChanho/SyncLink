@@ -23,6 +23,11 @@ jest.mock('@/services/funnelService', () => ({
   trackFunnel: jest.fn(),
 }));
 
+// 인앱 리뷰 정책 판단은 storeReviewService.test.ts 가 본다. 여기서는 "불리는가"만.
+jest.mock('@/services/storeReviewService', () => ({
+  recordPositiveMoment: jest.fn().mockResolvedValue({ shouldPrompt: false }),
+}));
+
 // 공유·부위저장·알림은 이 파일의 관심사가 아니다.
 jest.mock('@/services/eventShareService', () => ({
   shareEventToSpace: jest.fn().mockResolvedValue(undefined),
@@ -34,6 +39,7 @@ jest.mock('@/services/eventShareService', () => ({
 import { supabase, getCurrentUserId } from '@/lib/supabase';
 import { createEvent } from '@/services/eventService';
 import { trackFunnel } from '@/services/funnelService';
+import { recordPositiveMoment } from '@/services/storeReviewService';
 import type { EventRow } from '@/types';
 
 // ─── 헬퍼 ────────────────────────────────────────────────────────────────────
@@ -143,5 +149,44 @@ describe('createEvent 퍼널 계측', () => {
     ).rejects.toThrow();
 
     expect(trackFunnel).not.toHaveBeenCalled();
+  });
+});
+
+// ─── 인앱 리뷰 긍정 순간 (2026-09-13) ────────────────────────────────────────
+
+describe('createEvent — 인앱 리뷰 긍정 순간', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (getCurrentUserId as jest.Mock).mockResolvedValue('user-123');
+  });
+
+  it('일정이 만들어지면 긍정 순간으로 센다', async () => {
+    setupCreateMocks();
+    await createEvent({ title: '새 일정', startAt: NOW, endAt: NOW_END });
+    expect(recordPositiveMoment).toHaveBeenCalledTimes(1);
+  });
+
+  it('다른 등록 경로(러닝)도 똑같이 센다 — 단일 통로에 둔 이유', async () => {
+    setupCreateMocks();
+    await createEvent({ title: '한강 러닝', startAt: NOW, endAt: NOW_END, eventKind: 'running' });
+    expect(recordPositiveMoment).toHaveBeenCalledTimes(1);
+  });
+
+  it('INSERT 가 실패하면 세지 않는다 — 실패 직후 별점을 물으면 최악의 순간이다', async () => {
+    (supabase.from as jest.Mock).mockReturnValueOnce(
+      makeChain({ data: null, error: new Error('INSERT constraint') }),
+    );
+    await expect(
+      createEvent({ title: '실패 일정', startAt: NOW, endAt: NOW_END }),
+    ).rejects.toThrow('INSERT constraint');
+    expect(recordPositiveMoment).not.toHaveBeenCalled();
+  });
+
+  it('리뷰 기록이 실패해도 일정 생성은 성공한다', async () => {
+    (recordPositiveMoment as jest.Mock).mockRejectedValueOnce(new Error('storage down'));
+    setupCreateMocks();
+    await expect(
+      createEvent({ title: '새 일정', startAt: NOW, endAt: NOW_END }),
+    ).resolves.toBeDefined();
   });
 });

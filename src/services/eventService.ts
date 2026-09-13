@@ -27,6 +27,7 @@ import { saveParts as saveWorkoutParts, listParts as listWorkoutParts } from '@/
 import { WORKOUT_RESERVED_COLOR, RUNNING_RESERVED_COLOR } from '@/components/event/ColorPicker';
 import { cancelEventReminders } from '@/services/notificationService';
 import { trackFunnel } from '@/services/funnelService';
+import { recordPositiveMoment } from '@/services/storeReviewService';
 import type {
   Event, EventSummary, CreateEventInput, UpdateEventInput,
   EventRow, DateRange,
@@ -559,6 +560,13 @@ export async function createEvent(input: CreateEventInput): Promise<Event> {
     //    캘린더 동기화·일괄 가져오기 같은 **배치 경로는 이 함수를 쓰지 말 것**
     //    (쓰면 사람이 안 한 행동이 퍼널에 섞인다). 현재 호출부 7곳은 모두 사용자 행동이다.
     void trackFunnel('event_created', { always: true });
+
+    // 2026-09-13 — 일정 등록 성공도 인앱 리뷰의 "긍정 순간"으로 센다(LEAD 결정).
+    // 계측과 같은 이유로 여기(단일 통로)에 둔다: 화면마다 두면 새 등록 경로가 생길 때 빠진다.
+    // 조건이 차면 잠시 뒤 네이티브 시트가 뜬다(사전 질문 없음 — Google 정책).
+    // 실패는 storeReviewService 안에서 삼키지만, 호출부에서도 한 번 더 막는다 —
+    // `void` 는 거부된 Promise 를 잡지 않아 unhandled rejection 이 되고, 일정 생성 흐름에 소음을 남긴다.
+    void recordPositiveMoment().catch(() => { /* 리뷰 요청은 부가 기능 — 무시 */ });
 
     if (input.shareToSpaceIds && input.shareToSpaceIds.length > 0) {
       try {

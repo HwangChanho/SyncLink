@@ -229,3 +229,20 @@ describe('storeReviewService', () => {
     });
   });
 });
+
+// ─── 정책 값 잠금 (2026-09-13 LEAD 결정) ─────────────────────────────────────
+
+describe('REVIEW_POLICY — 완화 결정과 지켜야 할 하한', () => {
+  it('실행 3회 · 긍정 순간 3회로 완화했다', () => {
+    // 원래 5회·10회는 월간 활성 기기 한 자릿수에서 사실상 아무도 못 채웠다(스토어 평점 iOS 2 · Play 0).
+    expect(REVIEW_POLICY.minOpenCount).toBe(3);
+    expect(REVIEW_POLICY.minPositiveCount).toBe(3);
+  });
+
+  it('완화 대상이 아닌 값은 그대로다 — 경과일·재요청 간격·평생 한도', () => {
+    // 설치 직후 묻지 않는다(Google 권고) · OS 할당량(iOS 365일 3회)보다 촘촘하게 묻지 않는다.
+    expect(REVIEW_POLICY.minDaysSinceInstall).toBeGreaterThanOrEqual(3);
+    expect(REVIEW_POLICY.minDaysBetweenPrompts).toBeGreaterThanOrEqual(120);
+    expect(REVIEW_POLICY.maxPrompts).toBeLessThanOrEqual(3);
+  });
+});
