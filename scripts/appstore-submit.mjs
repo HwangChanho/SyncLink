@@ -2,9 +2,12 @@
 /**
  * appstore-submit — App Store 버전 생성 → 빌드 연결 → 출시노트 → 심사 제출.
  *
- *   node scripts/appstore-submit.mjs <version> <buildNumber> <notesFile> [--manual-release] [--submit]
+ *   node scripts/appstore-submit.mjs <version> <buildNumber> <notesFile> [--manual-release] [--prepare | --submit]
  *
  * 인자 없이(=--submit 없이) 실행하면 **dry-run** — 무엇을 할지 보여주기만 한다.
+ * `--prepare` 는 버전 생성·빌드 연결·출시노트·promotionalText 까지만 하고 **심사 제출은 하지 않는다.**
+ *   → 그 사이 ASC 웹에서만 되는 설정(예: "요약 평가 재설정" — API 에 없다, 09-13 실측)을 켠 뒤
+ *     같은 인자로 `--submit` 을 다시 부르면 열린 버전을 재사용해 이어서 제출한다.
  *
  * 기본값            releaseType=AFTER_APPROVAL (심사 통과 시 자동 출시)
  * `--manual-release` releaseType=MANUAL        (통과 후 appstore-release.mjs 로 수동 출시)
@@ -59,9 +62,11 @@ const [versionString, buildNumber, notesFile] = process.argv.slice(2);
 // (`--auto-release` 는 기본값과 동일 — 종전 습관대로 붙여도 동작이 같다.)
 const manualRelease = process.argv.includes('--manual-release');
 const doSubmit = process.argv.includes('--submit');
+/** 심사 제출 직전까지만 진행한다(웹 전용 설정을 켜기 위한 중간 정지). --submit 이 함께 오면 --submit 이 이긴다. */
+const doPrepare = process.argv.includes('--prepare') && !doSubmit;
 
 if (!versionString || !buildNumber || !notesFile) {
-  console.log('usage: appstore-submit.mjs <version> <buildNumber> <notesFile> [--manual-release] [--submit]');
+  console.log('usage: appstore-submit.mjs <version> <buildNumber> <notesFile> [--manual-release] [--prepare | --submit]');
   process.exit(1);
 }
 const notes = readFileSync(notesFile, 'utf8').trimEnd();
@@ -73,8 +78,8 @@ console.log(`  빌드     : ${buildNumber}`);
 console.log(`  출시방식 : ${releaseType}${manualRelease ? ' (통과 후 수동 출시 필요)' : ' (심사 통과 시 자동 출시 — 기본값)'}`);
 console.log(`  노트     : ${notes.length}자`);
 
-if (!doSubmit) {
-  console.log('\n(dry-run — 실제로 진행하려면 `--submit`)');
+if (!doSubmit && !doPrepare) {
+  console.log('\n(dry-run — 실제로 진행하려면 `--submit`, 제출 직전까지만은 `--prepare`)');
   process.exit(0);
 }
 
@@ -214,6 +219,13 @@ try {
 } catch (e) {
   // 승계 실패가 제출 자체를 막지는 않게 한다. 다만 조용히 넘어가지도 않는다.
   console.log(`  🔴 promotionalText 처리 중 오류(제출은 계속): ${e instanceof Error ? e.message : e}`);
+}
+
+if (doPrepare) {
+  const prepared = await api(`/v1/appStoreVersions/${version.id}`);
+  console.log(`\n준비 완료(심사 제출 안 함) → 상태: ${prepared.data.attributes.appStoreState}`);
+  console.log('  ASC 웹에서 필요한 설정을 마친 뒤 같은 인자로 --submit 을 다시 실행하세요.');
+  process.exit(0);
 }
 
 // 심사 제출 — reviewSubmission 을 열고 이 버전을 항목으로 붙인 뒤 제출한다.
