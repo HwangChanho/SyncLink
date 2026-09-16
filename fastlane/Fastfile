@@ -10,7 +10,16 @@ API_KEY_PATH = File.expand_path("../credentials/AuthKey_2GBSCKXQJ4.p8", __dir__)
 API_KEY_ID   = "2GBSCKXQJ4"
 API_ISSUER   = "5f89581a-d0c6-46c2-9461-78d5c08448fa"
 PROJECT_ROOT = File.expand_path("..", __dir__)
-IPA_PATH     = "#{PROJECT_ROOT}/build/SyncLink-ipa/SyncLink.ipa"
+
+# 🔴 빌드 산출물은 **~/Desktop 밖**에 둔다 (2026-09-16).
+#    이 프로젝트는 ~/Desktop 아래에 있고 macOS 는 그 경로를 TCC 로 보호한다. Xcode 27 로
+#    올라간 뒤 xcodebuild 가 기존 아카이브를 지우지 못해 archive 가 통째로 실패했다:
+#      xcodebuild: error: "SyncLink" couldn't be removed because you don't have permission
+#                         to access it.: Operation not permitted
+#    소스는 그대로 두고 **산출물 경로만** 보호 밖으로 옮겨 이 실패를 회피한다.
+#    (근본 해결은 시스템 설정 > 개인정보 보호 > 전체 디스크 접근에 Xcode 를 추가하는 것이다.)
+BUILD_OUT    = File.expand_path("~/Library/Developer/SyncLink-build")
+IPA_PATH     = "#{BUILD_OUT}/SyncLink-ipa/SyncLink.ipa"
 
 platform :ios do
 
@@ -88,7 +97,8 @@ platform :ios do
       end
 
       # 2. xcodebuild archive (기존에 검증된 방식)
-      sh("rm -rf '#{PROJECT_ROOT}/build/SyncLink.xcarchive' '#{PROJECT_ROOT}/build/SyncLink-ipa'")
+      sh("mkdir -p '#{BUILD_OUT}'")
+      sh("rm -rf '#{BUILD_OUT}/SyncLink.xcarchive' '#{BUILD_OUT}/SyncLink-ipa'")
       # OTHER_CODE_SIGN_FLAGS: codesign 을 login.keychain 으로 고정한다.
       # 형제 프로젝트의 EAS 빌드가 전역 keychain 검색목록을 리셋하면서
       # login.keychain 을 밀어내면, 우리 archive 의 CodeSign 이
@@ -99,7 +109,7 @@ platform :ios do
          "-workspace '#{PROJECT_ROOT}/ios/SyncLink.xcworkspace' " \
          "-scheme SyncLink " \
          "-configuration Release " \
-         "-archivePath '#{PROJECT_ROOT}/build/SyncLink.xcarchive' " \
+         "-archivePath '#{BUILD_OUT}/SyncLink.xcarchive' " \
          "-allowProvisioningUpdates " \
          "-authenticationKeyPath '#{API_KEY_PATH}' " \
          "-authenticationKeyID #{API_KEY_ID} " \
@@ -118,8 +128,8 @@ platform :ios do
       sh("security list-keychains -d user -s $(security list-keychains -d user | sed 's/[[:space:]]*\"//;s/\"$//' | tr '\\n' ' ') ~/Library/Keychains/login.keychain-db")
 
       sh("xcodebuild -exportArchive " \
-         "-archivePath '#{PROJECT_ROOT}/build/SyncLink.xcarchive' " \
-         "-exportPath '#{PROJECT_ROOT}/build/SyncLink-ipa' " \
+         "-archivePath '#{BUILD_OUT}/SyncLink.xcarchive' " \
+         "-exportPath '#{BUILD_OUT}/SyncLink-ipa' " \
          "-exportOptionsPlist '#{PROJECT_ROOT}/ios/ExportOptions.plist' " \
          "-allowProvisioningUpdates " \
          "-authenticationKeyPath '#{API_KEY_PATH}' " \
