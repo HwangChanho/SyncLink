@@ -22,12 +22,12 @@ import {
   ActivityIndicator,
   RefreshControl,
   TouchableOpacity,
-  Dimensions,
   TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BarChart } from 'react-native-chart-kit';
 import { useColors } from '@/hooks/useColors';
+import { useContentWidth } from '@/hooks/useResponsive';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import {
@@ -50,8 +50,6 @@ import {
 } from '@/services/adminService';
 
 type Days = 1 | 7 | 30;
-
-const chartWidth = Dimensions.get('window').width - 64;
 
 /**
  * Claude API 월 예산 (docs/architecture/BUDGET_GUARDRAILS.md 기준).
@@ -92,6 +90,12 @@ function projectMonthlyUsd(totalUsd: number, days: number): number {
 export default function AdminDashboard() {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  /**
+   * 차트 폭 = 화면 너비 - 카드 좌우 padding.
+   * 🔴 2026-09-16: 원래 모듈 최상단 상수였다 — 로드 시점에 굳어 폭이 바뀌는 기기
+   *    (iPhone Duo 펼침/접힘, iPad Split View, 웹 리사이즈)에서 차트가 어긋났다.
+   */
+  const chartWidth = useContentWidth();
 
   const [session, setSession] = useState<AdminSession | null>(null);
   const [sessionChecked, setSessionChecked] = useState(false);
@@ -985,6 +989,8 @@ function InsightCards({
   styles: ReturnType<typeof makeStyles>;
   colors: ReturnType<typeof useColors>;
 }) {
+  const chartWidth = useContentWidth(); // 폭 변화 대응 — AdminDashboard 쪽 주석 참고
+
   // ── 기간 합계 비용 → 월 run-rate 환산 (by_day 는 기존 키라 항상 존재) ──
   const periodCostUsd = stats.by_day.reduce((sum, d) => sum + Number(d.usd ?? 0), 0);
   const projectedMonthly = projectMonthlyUsd(periodCostUsd, days);

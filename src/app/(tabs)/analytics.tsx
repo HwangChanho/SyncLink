@@ -25,8 +25,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PieChart, BarChart } from 'react-native-chart-kit';
-import { Dimensions } from 'react-native';
-import { useResponsive } from '@/hooks/useResponsive';
+import { useContentWidth, useResponsive } from '@/hooks/useResponsive';
 import { desktopContentCentered } from '@/constants/webLayout';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -60,14 +59,6 @@ type Preset = 'week' | 'month' | 'quarter';
 function dowLabels(): readonly string[] {
   return i18n.t('analytics.dow', { returnObjects: true }) as readonly string[];
 }
-
-/**
- * 화면 너비 - 카드 좌우 padding. chart 가 카드 안 꽉 채우게.
- * 웹 데스크탑에서는 본문이 _layout 의 maxWidth(880)로 좁혀지므로 window 전체폭을
- * 그대로 쓰면 차트가 컨테이너를 넘친다 → 880 으로 클램프. 모바일은 window<880 이라
- * 기존(window-64)과 동일하게 동작(회귀 없음). (2026-06-08)
- */
-const chartWidth = Math.min(Dimensions.get('window').width, 880) - 64;
 
 /** chart-kit 공통 config — 테마 색 반영. */
 function chartConfig(colors: ReturnType<typeof useColors>) {
@@ -166,6 +157,13 @@ function AnalyticsScreenContent() {
   const isPro = useSubscriptionStore((s) => s.plan === 'pro');
   // 데스크탑 웹: 콘텐츠 적정폭(880) 중앙 정렬. (웹 반응형 S2)
   const { isDesktop } = useResponsive();
+  /**
+   * 차트 폭 = 화면 너비 - 카드 좌우 padding. 데스크탑 웹은 본문이 _layout 의 maxWidth(880)로
+   * 좁혀지므로 880 으로 클램프한다(모바일은 항상 880 미만이라 기존과 동일).
+   * 🔴 2026-09-16: 원래 **모듈 최상단 상수**였다 — 모듈 로드 시점에 굳어 iPhone Duo 를 펼치거나
+   *    iPad Split View 로 폭이 바뀌어도 첫 값을 그대로 썼다. 훅으로 옮겨 폭 변화를 따라간다.
+   */
+  const chartWidth = useContentWidth({ maxWidth: 880 });
 
   const [preset, setPreset] = useState<Preset>('month');
   const [stats, setStats] = useState<EventStats | null>(null);

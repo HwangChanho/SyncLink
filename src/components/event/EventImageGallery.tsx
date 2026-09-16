@@ -22,8 +22,8 @@ import {
   FlatList,
   Pressable,
   StyleSheet,
-  Dimensions,
   StatusBar,
+  useWindowDimensions,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   type ListRenderItem,
@@ -42,18 +42,14 @@ interface Props {
 }
 
 export function EventImageGallery({ uris, visible, initialIndex, onClose }: Props) {
-  // 화면 너비를 기준으로 페이지 단위 스크롤 — 매번 Dimensions 호출은 비싸지
-  // 않지만 회전을 고려해 useEffect 로 동기화.
-  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
+  /**
+   * 화면 너비 = 한 페이지의 폭(pagingEnabled).
+   * 🔴 2026-09-16: 직접 `Dimensions.addEventListener('change')` 를 구독하던 것을
+   *    RN 표준 훅으로 바꿨다. 하는 일은 같고(구독·해제를 RN 이 관리) 코드가 9줄 줄었다.
+   */
+  const { width: screenWidth } = useWindowDimensions();
   const [currentIdx, setCurrentIdx] = useState(initialIndex);
   const listRef = useRef<FlatList<string>>(null);
-
-  useEffect(() => {
-    const sub = Dimensions.addEventListener('change', ({ window }) => {
-      setScreenWidth(window.width);
-    });
-    return () => sub.remove();
-  }, []);
 
   // visible 이 true 로 바뀔 때 initialIndex 로 자동 scroll.
   useEffect(() => {
@@ -65,6 +61,21 @@ export function EventImageGallery({ uris, visible, initialIndex, onClose }: Prop
     }, 0);
     return () => clearTimeout(t);
   }, [visible, initialIndex]);
+
+  /**
+   * 폭이 바뀌면(iPhone Duo 펼침/접힘, iPad Split View, 회전) 보던 사진으로 다시 맞춘다.
+   * 🔴 없으면: getItemLayout·pagingEnabled 가 폭의 배수로 끊는데 기존 오프셋이 옛 폭 기준이라
+   *    **사진 두 장 사이에 걸친 채로 남는다.** 폭만 갱신해서는 부족하다.
+   * scrollToIndex 대신 scrollToOffset 을 쓴다 — getItemLayout 이 있어 위치가 정확하고,
+   * 인덱스 측정 실패(onScrollToIndexFailed)가 날 여지가 없다.
+   */
+  const lastWidthRef = useRef(screenWidth);
+  useEffect(() => {
+    if (lastWidthRef.current === screenWidth) return; // 폭과 무관한 리렌더는 건드리지 않는다
+    lastWidthRef.current = screenWidth;
+    if (!visible) return;                             // 닫혀 있으면 열릴 때 어차피 다시 맞춘다
+    listRef.current?.scrollToOffset({ offset: currentIdx * screenWidth, animated: false });
+  }, [screenWidth, visible, currentIdx]);
 
   const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const idx = Math.round(e.nativeEvent.contentOffset.x / screenWidth);

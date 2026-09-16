@@ -22,14 +22,14 @@
  * TASK-602 (Sprint 6)
  */
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Dimensions,
+  useWindowDimensions,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
@@ -50,8 +50,6 @@ import { trackFunnel } from '@/services/funnelService';
 // 온보딩 완료 플래그(키 + 상태)는 onboardingStore 가 단일 소스.
 // 하위호환(테스트 등 기존 import) 위해 동일 경로로 재노출한다.
 export { ONBOARDING_STORAGE_KEY } from '@/stores/onboardingStore';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ─── Page definitions ─────────────────────────────────────────────────────────
 
@@ -83,7 +81,14 @@ export default function OnboardingScreen() {
 
   const { t } = useTranslation();
   const colors = useColors();
-  const styles = makeStyles(colors);
+  /**
+   * 🔴 2026-09-16: 원래 모듈 최상단의 `Dimensions.get('window').width` 상수였다.
+   *    이 화면은 **폭이 곧 한 페이지**라(pagingEnabled), 값이 굳으면 iPhone Duo 를 펼쳤을 때
+   *    페이지 폭과 실제 화면 폭이 어긋나 스와이프가 두 페이지 사이에 걸린다.
+   */
+  const { width: screenWidth } = useWindowDimensions();
+  // 폭이 스타일에 들어가므로 폭이 바뀔 때만 다시 만든다(매 렌더 StyleSheet.create 방지).
+  const styles = useMemo(() => makeStyles(colors, screenWidth), [colors, screenWidth]);
 
   /** Translated page data (title + subtitle) from i18n. */
   const pages = t('onboarding.pages', { returnObjects: true }) as { title: string; subtitle: string }[];
@@ -122,9 +127,9 @@ export default function OnboardingScreen() {
       return;
     }
     const nextPage = currentPage + 1;
-    scrollRef.current?.scrollTo({ x: nextPage * SCREEN_WIDTH, animated: true });
+    scrollRef.current?.scrollTo({ x: nextPage * screenWidth, animated: true });
     setCurrentPage(nextPage);
-  }, [currentPage, handleFinish, pages.length]);
+  }, [currentPage, handleFinish, pages.length, screenWidth]);
 
   /**
    * Sync the current page indicator with the user's manual scroll position.
@@ -133,11 +138,25 @@ export default function OnboardingScreen() {
   const handleScrollEnd = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const offsetX = event.nativeEvent.contentOffset.x;
-      const page = Math.round(offsetX / SCREEN_WIDTH);
+      const page = Math.round(offsetX / screenWidth);
       setCurrentPage(page);
     },
-    [],
+    [screenWidth],
   );
+
+  /**
+   * 화면 폭이 바뀌면(iPhone Duo 펼침/접힘, iPad Split View, 웹 창 리사이즈) 스크롤 위치를
+   * 새 폭 기준으로 다시 맞춘다.
+   * 🔴 없으면: pagingEnabled 는 "폭의 배수"로 끊는데 폭이 바뀌는 순간 기존 오프셋이 그 배수에서
+   *    벗어나 **두 페이지 사이에 걸친 채로 남는다.**
+   */
+  const lastWidthRef = useRef(screenWidth);
+  useEffect(() => {
+    if (lastWidthRef.current === screenWidth) return; // 폭과 무관한 리렌더는 건드리지 않는다
+    lastWidthRef.current = screenWidth;
+    // 폭 변경 직후라 레이아웃이 막 잡힌 참이다 → 애니메이션 없이 즉시 붙인다.
+    scrollRef.current?.scrollTo({ x: currentPage * screenWidth, animated: false });
+  }, [screenWidth, currentPage]);
 
   const isLastPage = currentPage === pages.length - 1;
 
@@ -267,7 +286,12 @@ function OnboardingPage({ page, colors, styles, showTryIt = false }: OnboardingP
  *
  * @param colors - Active theme color tokens from useColors()
  */
-function makeStyles(colors: ColorTokens) {
+/**
+ * @param colors      테마 색 토큰
+ * @param screenWidth 현재 화면 폭(px) — 한 페이지의 폭. 폴더블에서 실행 중에 바뀔 수 있어
+ *                    상수가 아니라 인자로 받는다.
+ */
+function makeStyles(colors: ColorTokens, screenWidth: number) {
   return StyleSheet.create({
 
     // ── Outer container ─────────────────────────────────────────────────────
@@ -298,7 +322,7 @@ function makeStyles(colors: ColorTokens) {
 
     // ── Single page layout ───────────────────────────────────────────────────
     page: {
-      width: SCREEN_WIDTH,
+      width: screenWidth,
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',

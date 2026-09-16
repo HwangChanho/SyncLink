@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { showAlert } from '@/lib/webAlert';
+import { useGridColumns } from '@/hooks/useResponsive';
 import { firstYoutubeThumbnail } from '@/lib/youtube';
 import { useNoteSettingsStore } from '@/stores/noteSettingsStore';
 import type { ColorTokens } from '@/hooks/useColors';
@@ -119,6 +120,22 @@ export function NotesTab({
   styles,
 }: NotesTabProps) {
   const { t } = useTranslation();
+  /**
+   * 노트 그리드 열 수. 폰에서는 항상 2열(현행 유지), 넓어지면 최대 3열까지 늘어난다.
+   *
+   * 숫자 근거 — notesGrid 의 좌우 padding 합 24px 을 뺀 폭을 한 칸 최소 140px 으로 나눈다:
+   *   320px(가장 좁은 폰) → 296/140 = 2 열   ← 기존과 같다(회귀 없음)
+   *   430px(Pro Max)      → 406/140 = 2 열
+   *   768px 이상(듀오 펼침·태블릿·Split View 넓게) → 3 열(상한)
+   * 칸 자체는 noteCard 의 flex:1 이 나눠 가지므로 폭을 따로 계산할 필요가 없다.
+   *
+   * 🔴 훅은 아래 조기 return 들보다 **반드시 위**에 있어야 한다(훅 호출 순서 규칙).
+   */
+  const { cols, gridKey } = useGridColumns({
+    minColumnWidth: 140,
+    maxColumns: 3,
+    horizontalPadding: 24,
+  });
 
   if (isLoading && notes.length === 0) {
     return (
@@ -148,11 +165,16 @@ export function NotesTab({
 
   return (
     <FlatList
+      // 🔴 key 와 numColumns 는 **반드시 같이** 간다. numColumns 가 실행 중에 바뀌면 RN 이 앱을
+      //    죽이므로(Changing numColumns on the fly is not supported), 열 수가 바뀔 때 key 가
+      //    함께 바뀌어 목록이 재마운트되게 한다. useGridColumns 가 둘을 한 묶음으로 준다.
+      key={gridKey}
       data={notes}
       keyExtractor={(item) => item.id}
-      numColumns={2}
+      numColumns={cols}
       contentContainerStyle={styles.notesGrid}
-      columnWrapperStyle={styles.notesRow}
+      // ⚠️ 1열일 때 columnWrapperStyle 을 주면 RN 이 경고를 낸다.
+      columnWrapperStyle={cols > 1 ? styles.notesRow : undefined}
       showsVerticalScrollIndicator={false}
       removeClippedSubviews={true}
       maxToRenderPerBatch={10}
