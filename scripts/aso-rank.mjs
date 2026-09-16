@@ -136,11 +136,22 @@ async function main() {
     console.log(`${term.padEnd(16)} iOS ${ios.padEnd(18)} Play ${play}`);
   }
 
-  // ── 저장: 같은 날 여러 번 돌리면 덮어쓴다(하루 안의 재측정은 마지막 것이 맞다)
+  // ── 저장 ────────────────────────────────────────────────────────────────
+  // 같은 날 **전체 측정**을 여러 번 돌리면 덮어쓴다(하루 안의 재측정은 마지막 것이 맞다).
+  //
+  // 🔴 그러나 **부분 측정은 절대 전체 파일을 덮어쓰지 않는다.** 09-16 에 실제로 당했다 —
+  //    `--group brand --store play` 로 7개만 재보고는 25개×양 스토어 기준선을 날렸다.
+  //    비교(--compare)의 상대가 되는 파일이라, 부분 데이터로 덮이면 전후 비교가 불가능해진다.
+  //    ⇒ 부분 측정은 파일명에 조건을 붙여 따로 남긴다.
   const date = new Date().toISOString().slice(0, 10);
   const outDir = path.join(REPO, 'build');
   mkdirSync(outDir, { recursive: true });
-  const outPath = path.join(outDir, `aso-rank-${date}.json`);
+  const isPartial = opt.store !== 'both' || Boolean(opt.group) || Boolean(opt.terms);
+  const suffix = isPartial
+    ? '-' + [opt.group || (opt.terms ? 'custom' : null), opt.store !== 'both' ? opt.store : null]
+        .filter(Boolean).join('-')
+    : '';
+  const outPath = path.join(outDir, `aso-rank-${date}${suffix}.json`);
   writeFileSync(outPath, JSON.stringify({ measuredAt: new Date().toISOString(), rows }, null, 2));
   console.log(`\n저장: ${path.relative(REPO, outPath)}`);
 
