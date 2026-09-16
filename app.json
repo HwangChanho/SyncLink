@@ -21,7 +21,7 @@
       "appleTeamId": "QUVU2PY6PG",
       "appStoreUrl": "https://apps.apple.com/kr/app/id6763083903",
       "newArchEnabled": true,
-      "buildNumber": "187",
+      "buildNumber": "188",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.io.synclink.app.widget"
@@ -248,7 +248,8 @@
           ]
         }
       ],
-      "./plugins/withAndroidAppName"
+      "./plugins/withAndroidAppName",
+      "./plugins/withIosDeploymentTarget"
     ],
     "newArchEnabled": true,
     "experiments": {
