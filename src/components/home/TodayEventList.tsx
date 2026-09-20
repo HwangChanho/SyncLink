@@ -16,8 +16,9 @@ import { useEventStore } from '@/stores/eventStore';
 import type { EventSummary } from '@/types';
 import { useColors } from '@/hooks/useColors';
 import type { ColorTokens } from '@/hooks/useColors';
-import { palette } from '@/constants/colors';
-import { spacing, radius } from '@/constants/spacing';
+// palette 직접 import 를 걷어냈다 — 아래 sharedBadge 가 마지막 사용처였고,
+// 고정 violet 을 쓰는 바람에 사용자가 테마 색을 바꿔도 그 배지만 보라로 남았다.
+import { spacing, radius, elevation } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { DDayBadge } from '@/components/event/DDayBadge';
 
@@ -103,10 +104,10 @@ export function TodayEventList() {
           accessibilityRole="button"
           accessibilityLabel={t('event.add')}
         >
-          <Ionicons name="calendar-outline" size={28} color={colors.textTertiary} />
+          <Ionicons name="calendar-outline" size={32} color={colors.textTertiary} />
           <Text style={styles.emptyText}>{t('event.today_empty')}</Text>
           <View style={styles.emptyAddRow}>
-            <Ionicons name="add-circle-outline" size={16} color={colors.primary} />
+            <Ionicons name="add-circle-outline" size={18} color={colors.primary} />
             <Text style={styles.emptyAddText}>{t('event.add')}</Text>
           </View>
         </Pressable>
@@ -162,11 +163,12 @@ function makeStyles(colors: ColorTokens) {
       flexDirection:    'row',
       alignItems:       'center',
       backgroundColor:  colors.surface,
-      borderRadius:     radius.md,
+      borderRadius:     radius.lg,
       borderWidth:      1,
       borderColor:      colors.border,
       marginBottom:     spacing[2],
       overflow:         'hidden',
+      ...elevation[1],
     },
     colorBar: {
       width:  4,
@@ -188,7 +190,7 @@ function makeStyles(colors: ColorTokens) {
       marginTop: spacing[0.5],
     },
     sharedBadge: {
-      backgroundColor: palette.violet100,
+      backgroundColor: colors.primaryLight,
       borderRadius:    radius.sm,
       paddingVertical:   spacing[0.5],
       paddingHorizontal: spacing[1.5],
@@ -198,28 +200,44 @@ function makeStyles(colors: ColorTokens) {
       ...textStyles.labelSm,
       color: colors.primary,
     },
+    /**
+     * 빈 상태 — 2026-09-20 레이아웃 개편.
+     *
+     * 이전에는 **점선 테두리**였다. 점선은 "아직 안 만들어진 자리"로 읽혀서,
+     * 신규 사용자가 앱에서 처음 보는 화면이 미완성처럼 보였다.
+     * 실선 + 카드와 같은 깊이로 바꿔 "지금 누를 수 있는 것"으로 만든다.
+     */
     emptyContainer: {
-      paddingVertical:   spacing[5],
+      paddingVertical:   spacing[7],
+      paddingHorizontal: spacing[4],
       alignItems:        'center',
       gap:               spacing[2],
       backgroundColor:   colors.surface,
-      borderRadius:      radius.md,
+      borderRadius:      radius.lg,
       borderWidth:       1,
       borderColor:       colors.border,
-      borderStyle:       'dashed',
+      ...elevation[1],
     },
     emptyText: {
-      ...textStyles.bodySm,
-      color: colors.textTertiary,
+      ...textStyles.body,
+      color: colors.textSecondary,
     },
+    /**
+     * 다음 행동. 이전에는 작은 텍스트 링크라 눈에 걸리지 않았다 —
+     * 빈 화면에서 유일하게 할 수 있는 일이므로 버튼 모양을 준다.
+     */
     emptyAddRow: {
-      flexDirection:  'row',
-      alignItems:     'center',
-      gap:            spacing[1],
-      marginTop:      spacing[1],
+      flexDirection:     'row',
+      alignItems:        'center',
+      gap:               spacing[1],
+      marginTop:         spacing[2],
+      paddingVertical:   spacing[2],
+      paddingHorizontal: spacing[4],
+      borderRadius:      radius.full,
+      backgroundColor:   colors.primaryLight,
     },
     emptyAddText: {
-      ...textStyles.labelSm,
+      ...textStyles.label,
       color: colors.primary,
     },
   });

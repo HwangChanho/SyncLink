@@ -14,7 +14,7 @@ import { useTodoStore } from '@/stores/todoStore';
 import type { Todo } from '@/types';
 import { useColors } from '@/hooks/useColors';
 import type { ColorTokens } from '@/hooks/useColors';
-import { spacing, radius } from '@/constants/spacing';
+import { spacing, radius, elevation } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -201,10 +201,11 @@ function makeStyles(colors: ColorTokens) {
     },
     list: {
       backgroundColor: colors.surface,
-      borderRadius:    radius.md,
+      borderRadius:    radius.lg,
       borderWidth:     1,
       borderColor:     colors.border,
       overflow:        'hidden',
+      ...elevation[1],
     },
     row: {
       flexDirection:    'row',
@@ -249,13 +250,26 @@ function makeStyles(colors: ColorTokens) {
       borderRadius: 4,
       marginLeft:   spacing[2],
     },
+    /**
+     * 빈 상태 — 2026-09-20 레이아웃 개편.
+     *
+     * 이전에는 배경도 테두리도 없는 맨 텍스트라 허공에 떠 있었고,
+     * 바로 위 "오늘 일정" 카드와 좌우 끝이 맞지 않아 화면이 어긋나 보였다.
+     * 같은 면·같은 곡률을 주되 **깊이는 주지 않는다** — 여기는 부차적인
+     * 섹션이라, 일정 쪽 빈 카드와 똑같이 떠 버리면 둘 다 주인공이 된다.
+     */
     emptyContainer: {
-      paddingVertical: spacing[3],
-      alignItems:      'center',
+      paddingVertical:   spacing[5],
+      paddingHorizontal: spacing[4],
+      alignItems:        'center',
+      backgroundColor:   colors.surface,
+      borderRadius:      radius.lg,
+      borderWidth:       1,
+      borderColor:       colors.border,
     },
     emptyText: {
       ...textStyles.bodySm,
-      color: colors.textTertiary,
+      color: colors.textSecondary,
     },
   });
 }
