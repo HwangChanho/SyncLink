@@ -123,16 +123,22 @@ export function buildPalette(accentHue: number, isDark: boolean): ThemePalette {
     // WCAG AA 대비: textPrimary L=95 on background L=14 = 12:1 (안전)
     return {
       // ── Brand ─────────────────────────────────────────────────────────────
-      primary:      hsl(h, 70, 64),
-      primaryLight: hsl(h, 40, 34),
-      primaryDark:  hsl(h, 72, 52),
-      accent:       hsl(h, 75, 68),
+      // 2026-09-20 톤 개편: 채도 70 → 52. 명도는 64 → 66 으로 아주 조금만
+      // 올렸다 — 채도를 내리면 같은 L 이어도 탁해 보이기 때문이다.
+      primary:      hsl(h, 52, 66),
+      primaryLight: hsl(h, 32, 34),
+      primaryDark:  hsl(h, 54, 54),
+      accent:       hsl(h, 56, 70),
 
       // ── Background ────────────────────────────────────────────────────────
-      background:    hsl(h, 18, 14),
-      backgroundAlt: hsl(h, 18, 17),
-      surface:       hsl(h, 16, 19),
-      surfaceAlt:    hsl(h, 16, 26),
+      // 배경 채도도 같이 낮춘다(18 → 14). 배경이 accent 색으로 물들면
+      // 그 위의 색이 전부 같은 쪽으로 끌려가 화면이 한 덩어리로 보인다.
+      // 🔑 background L 14 → 13, surface L 19 → 20 으로 **명도 차를 5 → 7 로**
+      //    벌렸다. 카드가 배경에 묻히던 문제가 여기서 온다.
+      background:    hsl(h, 14, 13),
+      backgroundAlt: hsl(h, 14, 16),
+      surface:       hsl(h, 13, 20),
+      surfaceAlt:    hsl(h, 13, 26),
 
       // ── Text ──────────────────────────────────────────────────────────────
       textPrimary:     hsl(h, 10, 96),
@@ -142,32 +148,37 @@ export function buildPalette(accentHue: number, isDark: boolean): ThemePalette {
       textPlaceholder: hsl(h, 6, 42),
 
       // ── Border ────────────────────────────────────────────────────────────
-      border:       hsl(h, 18, 28),
-      borderStrong: hsl(h, 20, 36),
+      border:       hsl(h, 14, 29),
+      borderStrong: hsl(h, 15, 36),
 
       // ── Status (hue-independent — 의미색은 고정) ──────────────────────
-      success: 'hsl(142, 65%, 55%)',
-      warning: 'hsl(38, 90%, 55%)',
-      error:   'hsl(0, 72%, 60%)',
+      // 색상(hue)은 그대로. 채도만 브랜드와 같은 폭으로 낮춘다 —
+      // 의미색만 쨍하게 남으면 경고가 실제 심각도보다 크게 읽힌다.
+      success: 'hsl(142, 48%, 58%)',
+      warning: 'hsl(38, 68%, 58%)',
+      error:   'hsl(0, 58%, 62%)',
 
       // ── Tab bar ───────────────────────────────────────────────────────────
-      tabActive:   hsl(h, 70, 64),
+      tabActive:   hsl(h, 52, 66),
       tabInactive: hsl(h, 10, 50),
 
       // ── Input ─────────────────────────────────────────────────────────────
-      inputBackground: hsl(h, 16, 19),
-      inputBorder:     hsl(h, 18, 28),
-      inputFocus:      hsl(h, 70, 64),
+      inputBackground: hsl(h, 13, 20),
+      inputBorder:     hsl(h, 14, 29),
+      inputFocus:      hsl(h, 52, 66),
     };
   }
 
   // ── Light mode ──────────────────────────────────────────────────────────────
   return {
     // ── Brand ────────────────────────────────────────────────────────────────
-    primary:      hsl(h, 65, 48),
-    primaryLight: hsl(h, 50, 94),   // 매우 옅은 accent 배경 (chip, badge bg)
-    primaryDark:  hsl(h, 70, 38),
-    accent:       hsl(h, 72, 52),
+    // 2026-09-20 톤 개편: 채도 65 → 52.
+    // 🔴 명도 L=48 은 **그대로 둔다** — 이 색은 버튼 배경으로 쓰이고 그 위에
+    //    흰 글자가 올라간다. L 을 올리면 대비가 WCAG AA(4.5:1) 아래로 떨어진다.
+    primary:      hsl(h, 52, 48),
+    primaryLight: hsl(h, 38, 94),   // 매우 옅은 accent 배경 (chip, badge bg)
+    primaryDark:  hsl(h, 54, 40),
+    accent:       hsl(h, 54, 54),
 
     // ── Background ───────────────────────────────────────────────────────────
     // 메인 배경: S를 낮춰서 "살짝 tinted 흰색".
@@ -176,10 +187,12 @@ export function buildPalette(accentHue: number, isDark: boolean): ThemePalette {
     //   backgroundAlt L 96 → 94
     //   surface     L 100 → 99 (카드는 background 보다 조금 밝아야 떠 보임)
     //   surfaceAlt  L 96 → 93
-    background:    hsl(h, 30, 97),
-    backgroundAlt: hsl(h, 25, 94),
-    surface:       hsl(h, 20, 99),
-    surfaceAlt:    hsl(h, 20, 93),
+    // 2026-09-20: 배경 채도 30 → 20. 30% 는 흰 배경이 눈에 띄게 보랏빛으로
+    // 물드는 수준이라, 그 위에 놓인 색이 전부 같은 쪽으로 끌려갔다.
+    background:    hsl(h, 20, 97),
+    backgroundAlt: hsl(h, 16, 94),
+    surface:       hsl(h, 14, 99),
+    surfaceAlt:    hsl(h, 14, 93),
 
     // ── Text ─────────────────────────────────────────────────────────────────
     // 거의 검은색 + 살짝 hue tint
@@ -190,21 +203,22 @@ export function buildPalette(accentHue: number, isDark: boolean): ThemePalette {
     textPlaceholder: hsl(h, 5, 75),
 
     // ── Border ───────────────────────────────────────────────────────────────
-    border:       hsl(h, 18, 88),
-    borderStrong: hsl(h, 18, 78),
+    border:       hsl(h, 13, 88),
+    borderStrong: hsl(h, 13, 78),
 
     // ── Status (hue-independent) ─────────────────────────────────────────────
-    success: 'hsl(142, 60%, 38%)',
-    warning: 'hsl(38, 85%, 42%)',
-    error:   'hsl(0, 70%, 48%)',
+    // 라이트도 같은 이유로 채도만 낮춘다. 명도는 유지 — 흰 배경 위 대비를 지킨다.
+    success: 'hsl(142, 45%, 38%)',
+    warning: 'hsl(38, 64%, 42%)',
+    error:   'hsl(0, 55%, 48%)',
 
     // ── Tab bar ───────────────────────────────────────────────────────────────
-    tabActive:   hsl(h, 65, 48),
+    tabActive:   hsl(h, 52, 48),
     tabInactive: hsl(h, 5, 62),
 
     // ── Input ─────────────────────────────────────────────────────────────────
-    inputBackground: hsl(h, 25, 97),
-    inputBorder:     hsl(h, 18, 88),
-    inputFocus:      hsl(h, 65, 48),
+    inputBackground: hsl(h, 16, 97),
+    inputBorder:     hsl(h, 13, 88),
+    inputFocus:      hsl(h, 52, 48),
   };
 }

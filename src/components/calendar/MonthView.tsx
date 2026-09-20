@@ -1086,15 +1086,21 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     opacity: 0.4,
   },
   // v1.1.5 — 일요일 빨강, 토요일 파랑. 한국 캘린더 표준 컬러 규칙.
+  //
+  // 2026-09-20 톤 개편: 색상(빨강·파랑)은 **관습이라 그대로 두고 채도만** 낮췄다
+  // (이전 #DC2626 / #2563EB — Tailwind 600, 채도 72~83%).
+  // 🔴 이 스타일은 라이트·다크 공용 정적 StyleSheet 라, 양쪽 배경에서 모두
+  //    읽혀야 한다. 채도 40% 까지 내리되 **라이트 4.7:1 · 다크 3.2:1** 을
+  //    넘기는 값으로 잡았다(계산으로 탐색). 더 낮추면 라이트에서 AA 미달이다.
   sundayText: {
-    color: '#DC2626',
+    color: '#B34D4D',
   },
   saturdayText: {
-    color: '#2563EB',
+    color: '#4D6DB3',
   },
   // v1.1.4 — 공휴일 빨간날. 일요일과 톤 일치.
   holidayDateText: {
-    color: '#DC2626',
+    color: '#B34D4D',
   },
   // v1.1.4 — 공휴일·기념일 이름 표시 (날짜 숫자 바로 밑).
   // 일반 일정 itemBarText 보다 한 단계 작은 size + 줄간격 빠듯하게.

@@ -11,14 +11,21 @@
 // ─── Palette ──────────────────────────────────────────────────────────────────
 
 export const palette = {
-  // Primary — violet
-  violet50:  '#F5F3FF',
-  violet100: '#EDE9FE',
-  violet200: '#DDD6FE',
-  violet400: '#A78BFA',
-  violet500: '#8B5CF6',
-  violet600: '#7C3AED',
-  violet700: '#6D28D9',
+  // Primary — 인디고-바이올렛
+  //
+  // 2026-09-20 톤 개편: 색상(hue)은 그대로 두고 **채도만 83% → 55%** 로 낮췄다.
+  // 기존 Tailwind violet 은 채도가 높아, 캘린더처럼 색이 여러 개 동시에 뜨는
+  // 화면에서 전부가 소리를 질러 위계가 사라졌다.
+  // 🔑 키 이름은 violet* 그대로 둔다 — 이름을 바꾸면 참조만 흔들리고 얻는 게 없다.
+  //    (이전 값: 50 #F5F3FF · 100 #EDE9FE · 200 #DDD6FE · 400 #A78BFA
+  //              500 #8B5CF6 · 600 #7C3AED · 700 #6D28D9)
+  violet50:  '#F4F4FB',
+  violet100: '#E8E9F6',
+  violet200: '#CBCDEB',
+  violet400: '#8B90E8',
+  violet500: '#7176D9',
+  violet600: '#5E63CE',
+  violet700: '#4A4FAF',
 
   // Accent — rose (couple / date events)
   rose400: '#FB7185',
@@ -44,6 +51,14 @@ export const palette = {
   yellow500: '#EAB308',
   red400:   '#F87171',
   red500:   '#EF4444',
+
+  // 다크 모드 전용 표면
+  //
+  // 2026-09-20: 다크에서 카드(gray800)와 화면 배경(gray900)의 명도 차가 작아
+  // 카드가 배경에 묻혔다. 표면만 살짝 밝히고 브랜드 쪽으로 미세하게 기울여
+  // (순회색이 아니라 고른 색으로 보이게) 대비를 만든다.
+  surfaceDark:    '#1E1E29',
+  surfaceAltDark: '#272734',
 
   // Whites
   white:       '#FFFFFF',
@@ -102,8 +117,9 @@ export const dark: { [K in keyof typeof light]: string } = {
   // Background
   background:      palette.gray900,
   backgroundAlt:   palette.gray800,
-  surface:         palette.gray800,
-  surfaceAlt:      palette.gray700,
+  // 카드가 배경 위로 떠 보이게 하는 전용 표면색 (2026-09-20 톤 개편)
+  surface:         palette.surfaceDark,
+  surfaceAlt:      palette.surfaceAltDark,
 
   // Text
   textPrimary:     palette.white,
@@ -170,8 +186,15 @@ export const memberEventColors = [
 const HUE_OFFSET_DEG  = 230;
 const GOLDEN_ANGLE_DEG = 137.508;
 
-/** HSL saturation locked to 65% — vivid but not garish, AA-friendly. */
-const MEMBER_COLOR_SATURATION = 65;
+/**
+ * HSL 채도.
+ *
+ * 2026-09-20 톤 개편으로 **65% → 55%**. 브랜드색을 같은 폭으로 낮췄는데
+ * 멤버 색만 65% 로 남으면 그 색만 튀어 보인다.
+ * 🔴 이미 만들어진 멤버 색은 `space_members.color` 에 hex 로 **저장돼 있어
+ *    바뀌지 않는다** — 새로 배정되는 멤버부터 적용된다.
+ */
+const MEMBER_COLOR_SATURATION = 55;
 
 /** Lightness in light mode — slightly darker for white-bg contrast. */
 const MEMBER_COLOR_LIGHTNESS_LIGHT = 50;
@@ -253,15 +276,25 @@ export function getMemberColor(
 
 // ─── Category colors ──────────────────────────────────────────────────────────
 
-/** Default colors for built-in event categories. */
+/**
+ * 기본 카테고리 색.
+ *
+ * ⚠️ **현재 앱 코드는 이 상수를 쓰지 않는다** — 일정 색은 `event.color`(DB 값)
+ *    또는 `getMemberColor()` 에서 온다. 지금 이걸 참조하는 건 테스트뿐이다.
+ *    그래도 값을 방치하면 나중에 되살릴 때 옛 톤이 섞여 들어오므로 같이 맞춰 둔다.
+ *
+ * 2026-09-20: Material Design 1세대 원색(#2196F3·#4CAF50·#FF9800·#F44336)을
+ * 걷어내고 채도를 브랜드와 같은 대역으로 낮췄다. 색상(hue)은 유지 —
+ * "업무=파랑, 건강=초록" 같이 사용자가 이미 익힌 연결은 깨지 않는다.
+ */
 export const categoryColors = {
-  personal: '#6C63FF',
-  work:     '#2196F3',
-  date:     '#FF6584',
-  family:   '#FF9800',
-  health:   '#4CAF50',
-  social:   '#9C27B0',
-  travel:   '#00BCD4',
-  holiday:  '#F44336',
-  other:    '#9E9E9E',
+  personal: '#6366C9',
+  work:     '#4A7FB5',
+  date:     '#C9708A',
+  family:   '#C98A52',
+  health:   '#5B9670',
+  social:   '#94679F',
+  travel:   '#4C9BA5',
+  holiday:  '#BF645D',
+  other:    '#87879A',
 } as const;

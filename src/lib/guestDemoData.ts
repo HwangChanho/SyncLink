@@ -36,9 +36,13 @@ export function buildGuestDemoEventsByDate(): Record<string, EventSummary[]> {
   // Short helper to pull a localized demo string.
   const tr = (key: string): string => i18n.t(`auth.guest.${key}`);
 
-  // Distinct seed colors so the demo calendar reads as colorful/realistic.
-  // Hardcoded hex is acceptable here — this is illustrative seed data, not
-  // themed UI chrome.
+  // 데모 일정 색.
+  //
+  // 🔑 **앱을 처음 연 사람이 가장 먼저 보는 색**이라 첫인상을 여기서 거의 다 결정한다.
+  // 2026-09-20 톤 개편: Tailwind 500 계열 원색(#6366F1·#EC4899·#10B981·#8B5CF6·#F59E0B)
+  // 을 카테고리와 같은 채도 대역으로 낮췄다. 색상(hue)은 그대로라 여전히 서로
+  // 구분되지만, 다섯 개가 한 화면에 떠도 서로 싸우지 않는다.
+  // 하드코딩 hex 를 쓰는 건 여기선 괜찮다 — 예시 데이터이지 테마를 타는 UI 가 아니다.
   const events: EventSummary[] = [
     {
       id: 'guest-demo-meeting',
@@ -46,7 +50,7 @@ export function buildGuestDemoEventsByDate(): Record<string, EventSummary[]> {
       startAt: at(0, 9, 0),
       endAt: at(0, 10, 0),
       allDay: false,
-      color: '#6366F1', // indigo
+      color: '#6366C9', // 인디고
       isOwn: true,
       eventKind: 'general',
     },
@@ -56,7 +60,7 @@ export function buildGuestDemoEventsByDate(): Record<string, EventSummary[]> {
       startAt: at(0, 19, 30),
       endAt: at(0, 21, 0),
       allDay: false,
-      color: '#EC4899', // pink
+      color: '#C9708A', // 로즈
       isOwn: true,
       eventKind: 'general',
     },
@@ -66,7 +70,7 @@ export function buildGuestDemoEventsByDate(): Record<string, EventSummary[]> {
       startAt: at(1, 7, 0),
       endAt: at(1, 8, 0),
       allDay: false,
-      color: '#10B981', // green
+      color: '#5B9670', // 세이지
       isOwn: true,
       eventKind: 'workout',
     },
@@ -76,7 +80,7 @@ export function buildGuestDemoEventsByDate(): Record<string, EventSummary[]> {
       startAt: at(2, 0, 0),
       endAt: at(2, 23, 59),
       allDay: true,
-      color: '#8B5CF6', // violet
+      color: '#94679F', // 퍼플
       isOwn: true,
       eventKind: 'general',
     },
@@ -86,7 +90,7 @@ export function buildGuestDemoEventsByDate(): Record<string, EventSummary[]> {
       startAt: at(3, 14, 0),
       endAt: at(3, 15, 30),
       allDay: false,
-      color: '#F59E0B', // amber
+      color: '#C98A52', // 앰버
       isOwn: true,
       eventKind: 'general',
     },

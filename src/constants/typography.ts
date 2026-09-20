@@ -36,12 +36,18 @@ export const letterSpacing = {
   wide:   0.5,
 } as const;
 
-/** Pre-composed text styles for common use cases. */
+/**
+ * 자주 쓰는 텍스트 조합.
+ *
+ * 2026-09-20 톤 개편: 제목(h1~h3)에 **음수 자간**을 넣었다. 글자가 커질수록
+ * 글자 사이가 벌어져 보이는 착시가 있어, 큰 글자는 좁혀야 단단해 보인다.
+ * 본문·라벨은 건드리지 않는다 — 작은 글자에 음수 자간을 주면 읽기 어려워진다.
+ */
 export const textStyles = {
   // Headings
-  h1: { fontSize: fontSize['3xl'], fontWeight: fontWeight.bold,     lineHeight: fontSize['3xl'] * lineHeight.tight },
-  h2: { fontSize: fontSize['2xl'], fontWeight: fontWeight.bold,     lineHeight: fontSize['2xl'] * lineHeight.tight },
-  h3: { fontSize: fontSize.xl,     fontWeight: fontWeight.semibold, lineHeight: fontSize.xl    * lineHeight.tight },
+  h1: { fontSize: fontSize['3xl'], fontWeight: fontWeight.bold,     lineHeight: fontSize['3xl'] * lineHeight.tight, letterSpacing: -0.8 },
+  h2: { fontSize: fontSize['2xl'], fontWeight: fontWeight.bold,     lineHeight: fontSize['2xl'] * lineHeight.tight, letterSpacing: -0.5 },
+  h3: { fontSize: fontSize.xl,     fontWeight: fontWeight.semibold, lineHeight: fontSize.xl    * lineHeight.tight, letterSpacing: -0.3 },
   h4: { fontSize: fontSize.lg,     fontWeight: fontWeight.semibold, lineHeight: fontSize.lg    * lineHeight.normal },
 
   // Body
