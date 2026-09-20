@@ -1,8 +1,18 @@
 /**
  * Tab bar layout — defines the 5 main app tabs.
  *
- * Tab order: Home → Calendar → Planner → Spaces → My
- * (No AI tab — AI is embedded in Home and Calendar)
+ * 탭 순서: 캘린더 → 플래너 → 홈 → 스페이스 → 내정보
+ * (AI 전용 탭은 없다 — AI 는 홈과 캘린더 안에 들어가 있다)
+ *
+ * 2026-09-20 LEAD 지시로 **홈을 가운데로** 옮겼다(기존에는 홈이 맨 왼쪽이었다).
+ * 🔴 이때 **초기 탭이 첫 번째 탭(캘린더)으로 바뀌는 함정**이 있다 —
+ *    React Navigation 은 초기 라우트가 지정되지 않으면 **배열의 첫 번째**를 쓴다.
+ *    그래서 아래 `unstable_settings.anchor` 로 홈(index)을 명시적으로 고정했다.
+ *    **탭 순서를 또 바꾸더라도 그 설정은 지우지 말 것** — 지우면 앱이 캘린더로 열린다.
+ *
+ * 🔑 코드의 <Tabs.Screen> 순서가 곧 탭바 순서다(하단 탭바도, 데스크탑 사이드
+ *    네비도 state.routes 순서를 그대로 따른다). 그래서 "보이는 순서 = 코드 순서"가
+ *    유지되도록 숨긴 라우트(analytics)는 맨 아래로 내려 두었다.
  *
  * 2026-08-28 UX 단순화 (docs/plans/2026-08-28-ux-simplification.md):
  * 탭이 6개까지 늘어나 있었다(홈/캘린더/플래너/분석/스페이스/마이).
@@ -38,6 +48,20 @@ import {
   HEADER_TITLE_COLOR_HEX,
 } from '@/stores/appearanceStore';
 import { contrastingTextColor } from '@/lib/colorContrast';
+
+/**
+ * 앱을 열었을 때 처음 보이는 탭을 **홈(index)** 으로 고정한다.
+ *
+ * 홈이 가운데(3번째)로 가면서 필요해진 설정이다. 초기 라우트를 지정하지 않으면
+ * React Navigation 이 배열의 첫 번째(= 캘린더)를 초기 라우트로 잡기 때문이다.
+ * expo-router 6 은 `anchor` 를 먼저 읽고, 없으면 `initialRouteName` 을 쓴다
+ * (expo-router/build/getRoutesCore.js: anchor ?? initialRouteName ?? 기본값).
+ *
+ * 🔴 탭 배열을 다시 손대더라도 이 설정은 유지할 것.
+ */
+export const unstable_settings = {
+  anchor: 'index',
+};
 
 export default function TabLayout() {
   // Resolve active theme colors for dark mode support (TASK-700)
@@ -117,23 +141,6 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen
-        name="index"
-        options={{
-          title: t('tabs.home'),
-          // ADR-011 corrigendum (Sprint 29): React Navigation v7 정식 API
-          // tabBarButtonTestID 사용. 기존 tabBarButton+Pressable 우회는 Android에서
-          // ripple wrapper와 충돌해 testID 매핑 실패 (Maestro 01_login_dev FAIL).
-          tabBarButtonTestID: 'tab-button-home',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? 'home' : 'home-outline'}
-              size={22}
-              color={color}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="calendar"
         options={{
           title: t('tabs.calendar'),
@@ -161,19 +168,17 @@ export default function TabLayout() {
           ),
         }}
       />
-      {/* 분석 탭 — 2026-08-28 LEAD 결정으로 제거. 코드 주석이 스스로 "Phase 2 스켈레톤"
-          이라고 밝히던 미완성 화면이었다. 탭·바로가기 어디에도 진입점을 두지 않는다.
-          라우트 파일(`analytics.tsx`)은 되살릴 수 있게 남겨 둔다 — 되살리려면
-          아래 `href: null` 을 지우면 된다(2026-06-08 에 같은 방식으로 복구한 적 있다). */}
       <Tabs.Screen
-        name="analytics"
+        name="index"
         options={{
-          href: null,
-          title: t('tabs.analytics', { defaultValue: '분석' }),
-          tabBarButtonTestID: 'tab-button-analytics',
+          title: t('tabs.home'),
+          // ADR-011 corrigendum (Sprint 29): React Navigation v7 정식 API
+          // tabBarButtonTestID 사용. 기존 tabBarButton+Pressable 우회는 Android에서
+          // ripple wrapper와 충돌해 testID 매핑 실패 (Maestro 01_login_dev FAIL).
+          tabBarButtonTestID: 'tab-button-home',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
-              name={focused ? 'analytics' : 'analytics-outline'}
+              name={focused ? 'home' : 'home-outline'}
               size={22}
               color={color}
             />
@@ -203,6 +208,27 @@ export default function TabLayout() {
             <Ionicons
               name={focused ? 'person-circle' : 'person-circle-outline'}
               size={24}
+              color={color}
+            />
+          ),
+        }}
+      />
+      {/* 분석 탭 — 2026-08-28 LEAD 결정으로 제거. 코드 주석이 스스로 "Phase 2 스켈레톤"
+          이라고 밝히던 미완성 화면이었다. 탭·바로가기 어디에도 진입점을 두지 않는다.
+          라우트 파일(`analytics.tsx`)은 되살릴 수 있게 남겨 둔다 — 되살리려면
+          아래 `href: null` 을 지우면 된다(2026-06-08 에 같은 방식으로 복구한 적 있다).
+          🔑 2026-09-20 탭 재배치 때 이 블록을 **맨 아래로** 내렸다 — 숨긴 라우트라
+          위치가 탭바에 영향을 주지 않는다. 되살린다면 원하는 노출 위치로 옮길 것. */}
+      <Tabs.Screen
+        name="analytics"
+        options={{
+          href: null,
+          title: t('tabs.analytics', { defaultValue: '분석' }),
+          tabBarButtonTestID: 'tab-button-analytics',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? 'analytics' : 'analytics-outline'}
+              size={22}
               color={color}
             />
           ),
