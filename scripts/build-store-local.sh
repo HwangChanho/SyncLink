@@ -326,6 +326,19 @@ build_ios() {
   # --keychain 고정(93fff06) 확인. 상세는 메모리 reference_codesign_keychain_eas_race.
   npx -y eas-cli@latest build --local -p ios --profile production --non-interactive --output="$PROJECT_ROOT/$out"
   echo "✅ $out ($(du -h "$out" | cut -f1))"
+
+  # ── 산출물 검사 2종 (2026-09-20, 형제 헤어핀에게 받아 이식) ────────────────
+  #
+  # 🔴 빌드 **시작 전** check-eas-env.mjs 는 "이름이 EAS 환경에 선언됐나" 만 본다.
+  #    「선언」과 「번들에 실제로 박혔다」는 **다른 사건**이라 여기서 한 번 더 본다.
+  #    헤어핀은 이 구멍으로 네이버 자격증명이 통째로 빠진 걸 **5주 뒤에야** 찾았다
+  #    (웹 폴백이 잘 돼 있어 앱이 안 죽었고, 그래서 아무도 몰랐다).
+  #
+  # 제출은 사람이 다음 단계에서 하므로, 여기가 잘못된 산출물을 막는 마지막 관문이다.
+  # 실패하면 set -e 로 여기서 멈춘다.
+  echo
+  node "$PROJECT_ROOT/scripts/verify-bundle-env.mjs" "$PROJECT_ROOT/$out"
+  node "$PROJECT_ROOT/scripts/check-artifact-frameworks.mjs" "$PROJECT_ROOT/$out"
 }
 
 case "$PLATFORM" in
