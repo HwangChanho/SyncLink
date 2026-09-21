@@ -24,6 +24,8 @@
  *
  * 📝 Hermes 번들은 한글을 UTF-16 으로 저장해 바이트 검색에 안 잡힌다. 다만 여기서
  *    찾는 값은 전부 ASCII(키·URL·ID)라 그대로 검색된다.
+ *    ✅ **형제 헤어핀이 진짜 IPA(1.10.34, Hermes)로 실증했다** — env 6/6 과 대조군 4개가
+ *       모두 잡혔다. 우리도 Hermes 를 쓰므로(app.json jsEngine 기본) 같은 전제가 선다.
  *    🔴 그래서 **대조군을 같이 센다** — 늘 있어야 할 문자열까지 0 으로 나오면 값이
  *    빠진 게 아니라 **내 검사 방법이 틀린 것**이다. 2026-09-11 에 이 규칙으로 오판을 막았다.
  */
@@ -135,7 +137,12 @@ try {
   console.log(`\n▶ 산출물 번들 검사 — ${path.basename(ARTIFACT)} → ${path.basename(bundle)} (${buf.length.toLocaleString()} bytes)\n`);
 
   // 🔴 대조군 먼저. 이게 0 이면 아래 결과는 전부 믿을 수 없다.
-  const CONTROLS = ['supabase', 'https://'];
+  //
+  // 넷을 두고 **하나라도 걸리면 정상**으로 본다(2026-09-21, 형제 헤어핀 제안).
+  // 하나에 기대지 않는 이유: **Hermes 바이트코드냐 평문 JS 냐에 따라 번들에 남는
+  // 문자열이 다르다.** 한 개만 쓰면 그 하나가 안 남는 빌드에서 «검사 방법이 틀렸다»는
+  // 오탐이 난다.
+  const CONTROLS = ['supabase', 'https', 'expo', 'react'];
   const controlHits = CONTROLS.map((c) => [c, countOccurrences(buf, c)]);
   const controlsOk = controlHits.some(([, n]) => n > 0);
   console.log('   [대조군] ' + controlHits.map(([c, n]) => `${c}=${n}회`).join(' · '));
