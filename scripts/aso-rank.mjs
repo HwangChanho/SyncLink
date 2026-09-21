@@ -118,11 +118,70 @@ function fmtRank(rank, total, ok) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * 지금 시각을 **KST(Asia/Seoul)** 기준 날짜·시분으로 돌려준다.
+ *
+ * 🔴 파일명에 `toISOString()`(UTC)을 쓰면 안 된다 — 2026-09-22 에 실제로 당했다.
+ *    KST 00:00~08:59 는 UTC 로 **전날**이라, 새벽에 돌린 측정이 전날 파일명으로 저장돼
+ *    그날의 기준선(`aso-rank-<전날>.json`)을 덮어썼다. 우리 판단·기록은 전부 KST 기준이다.
+ *
+ * @returns {{ date: string, hhmm: string }} 예: { date: '2026-09-22', hhmm: '0436' }
+ */
+function kstStamp() {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    })
+      .formatToParts(new Date())
+      .map((p) => [p.type, p.value]),
+  );
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, hhmm: `${parts.hour}${parts.minute}` };
+}
+
+/**
+ * 결과를 저장할 경로를 정한다.
+ *
+ * · 같은 날 **전체 측정**을 여러 번 돌리면 덮어쓴다(하루 안의 재측정은 마지막 것이 맞다).
+ * · 🔴 **부분 측정은 절대 전체 파일을 덮어쓰지 않는다.** 09-16 에 실제로 당했다 —
+ *   `--group brand --store play` 로 7개만 재보고는 25개×양 스토어 기준선을 날렸다.
+ *   ⇒ 부분 측정은 파일명에 조건을 붙여 따로 남긴다.
+ * · 🔴 **비교 대상(--compare) 파일은 절대 덮어쓰지 않는다.** 09-22 에 실제로 당했다 —
+ *   오늘 파일과 비교하면 새 결과가 기준선을 지우고, 자기 자신과 비교해 "변화 없음"이 나온다.
+ *   ⇒ 저장 경로가 비교 대상과 같으면 시분(`-HHMM`)을 붙여 옆에 남긴다.
+ *
+ * @param {object} opt          parseArgs 결과
+ * @param {string|null} compareAbs  --compare 파일의 절대경로(없으면 null)
+ * @returns {string} 저장할 절대경로
+ */
+function resolveOutPath(opt, compareAbs) {
+  const { date, hhmm } = kstStamp();
+  const isPartial = opt.store !== 'both' || Boolean(opt.group) || Boolean(opt.terms);
+  const suffix = isPartial
+    ? '-' + [opt.group || (opt.terms ? 'custom' : null), opt.store !== 'both' ? opt.store : null]
+        .filter(Boolean).join('-')
+    : '';
+  const outDir = path.join(REPO, 'build');
+  const outPath = path.join(outDir, `aso-rank-${date}${suffix}.json`);
+  if (compareAbs && outPath === compareAbs) {
+    return path.join(outDir, `aso-rank-${date}${suffix}-${hhmm}.json`);
+  }
+  return outPath;
+}
+
 async function main() {
   const opt = parseArgs(process.argv.slice(2));
   const terms = resolveTerms(opt);
   const doIos = opt.store === 'both' || opt.store === 'ios';
   const doPlay = opt.store === 'both' || opt.store === 'play';
+
+  // 🔑 비교 대상은 **측정 전에** 읽는다. 두 가지 이유:
+  //    ① 파일이 없거나 깨졌으면 몇 분짜리 측정을 다 돌린 뒤가 아니라 지금 바로 실패해야 한다.
+  //    ② 측정 후에 읽으면, 저장이 그 파일을 덮어쓴 경우 **새 결과를 이전 결과로 착각**한다.
+  const compareAbs = opt.compare ? path.resolve(REPO, opt.compare) : null;
+  const prev = compareAbs ? JSON.parse(readFileSync(compareAbs, 'utf8')) : null;
+  const outPath = resolveOutPath(opt, compareAbs);
 
   console.log(
     `검색어 ${terms.length}개 · 스토어 ${opt.store} · 간격 ${opt.delay}ms ` +
@@ -152,21 +211,8 @@ async function main() {
   }
 
   // ── 저장 ────────────────────────────────────────────────────────────────
-  // 같은 날 **전체 측정**을 여러 번 돌리면 덮어쓴다(하루 안의 재측정은 마지막 것이 맞다).
-  //
-  // 🔴 그러나 **부분 측정은 절대 전체 파일을 덮어쓰지 않는다.** 09-16 에 실제로 당했다 —
-  //    `--group brand --store play` 로 7개만 재보고는 25개×양 스토어 기준선을 날렸다.
-  //    비교(--compare)의 상대가 되는 파일이라, 부분 데이터로 덮이면 전후 비교가 불가능해진다.
-  //    ⇒ 부분 측정은 파일명에 조건을 붙여 따로 남긴다.
-  const date = new Date().toISOString().slice(0, 10);
-  const outDir = path.join(REPO, 'build');
-  mkdirSync(outDir, { recursive: true });
-  const isPartial = opt.store !== 'both' || Boolean(opt.group) || Boolean(opt.terms);
-  const suffix = isPartial
-    ? '-' + [opt.group || (opt.terms ? 'custom' : null), opt.store !== 'both' ? opt.store : null]
-        .filter(Boolean).join('-')
-    : '';
-  const outPath = path.join(outDir, `aso-rank-${date}${suffix}.json`);
+  // 경로 규칙(부분 측정·비교 대상 보호)은 resolveOutPath 에 모여 있다.
+  mkdirSync(path.dirname(outPath), { recursive: true });
   writeFileSync(outPath, JSON.stringify({ measuredAt: new Date().toISOString(), rows }, null, 2));
   console.log(`\n저장: ${path.relative(REPO, outPath)}`);
 
@@ -196,8 +242,7 @@ async function main() {
   }
 
   // ── 비교 모드: 이전 측정 파일과 순위 변화를 보여 준다
-  if (opt.compare) {
-    const prev = JSON.parse(readFileSync(path.resolve(REPO, opt.compare), 'utf8'));
+  if (prev) {
     const prevMap = new Map(prev.rows.map((r) => [r.term, r]));
     console.log(`\n=== 변화 (${prev.measuredAt} 대비) ===`);
     for (const row of rows) {
