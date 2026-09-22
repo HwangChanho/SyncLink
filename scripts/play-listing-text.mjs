@@ -82,7 +82,9 @@ try {
     for (const [k, limit] of Object.entries(LIMITS)) {
       const v = listing[k] ?? '';
       console.log(`  ${k} (${[...v].length}/${limit}자)`);
-      console.log(`    ${v.slice(0, 120)}${v.length > 120 ? '…' : ''}`);
+      // --full: 자르지 않고 출력(문구 개정 초안을 쓸 때 원문이 필요하다)
+      const full = process.argv.includes('--full');
+      console.log(`    ${full ? v : v.slice(0, 120)}${!full && v.length > 120 ? '…' : ''}`);
     }
     console.log('\n(dry-run — 바꾸려면 `<field> "<값>" --write`)');
     await fetch(editUrl, { method: 'DELETE', headers: H });

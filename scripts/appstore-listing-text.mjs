@@ -174,8 +174,10 @@ if (!doWrite) {
     console.log(`\n버전 ${v.attributes.versionString} (${st})${tag}`);
     console.log(`  keywords (${cnt(t.keywords)}/100)         ${t.keywords ?? '(없음)'}`);
     console.log(`  promotionalText (${cnt(t.promotionalText)}/170)  ${t.promotionalText ?? '(없음)'}`);
-    console.log(`  description (${cnt(t.description)}/4000)`);
-    console.log(`  whatsNew (${cnt(t.whatsNew)}/4000)        ${(t.whatsNew ?? '').slice(0, 60)}`);
+    // --full: 설명·새 기능을 자르지 않고 출력(문구 개정 초안을 쓸 때 원문이 필요하다)
+    const full = argv.includes('--full');
+    console.log(`  description (${cnt(t.description)}/4000)${full ? `\n${t.description ?? ''}\n` : ''}`);
+    console.log(`  whatsNew (${cnt(t.whatsNew)}/4000)        ${full ? t.whatsNew ?? '' : (t.whatsNew ?? '').slice(0, 60)}`);
   }
   console.log('\n(dry-run — 바꾸려면 `<field> "<값>" --write`)');
   process.exit(0);
