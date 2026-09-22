@@ -17,6 +17,9 @@ import type { ColorTokens } from '@/hooks/useColors';
 import { spacing, radius, elevation } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { Text } from '@/components/common/AppText';
+import { PopOnActivate } from '@/components/motion/PopOnActivate';
+import { markJustActivated } from '@/components/motion/activationRegistry';
+import { hapticSuccessTap } from '@/lib/haptics';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -57,12 +60,25 @@ function TodoRow({ todo, onToggle, colors: _colors, styles }: TodoRowProps) {
           체크박스를 찾고 있었다. 헤더에 버튼이 하나 생기자 곧바로 깨졌다(2026-08-28).
           순서가 아니라 이름으로 찾게 해서 같은 함정을 다시 밟지 않게 한다. */}
       <TouchableOpacity
-        style={[styles.checkbox, todo.isCompleted && styles.checkboxChecked]}
-        onPress={onToggle}
+        onPress={() => {
+          // 완료로 바뀔 때만 톡 + "방금 완료" 표시(행이 완료 묶음으로 옮겨져 재마운트돼도 튀게)
+          if (!todo.isCompleted) {
+            hapticSuccessTap();
+            markJustActivated(`todo:${todo.id}`);
+          }
+          onToggle();
+        }}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         testID={`todo-checkbox-${todo.id}`}
       >
-        {todo.isCompleted && <Text style={styles.checkmark}>✓</Text>}
+        {/* 1.5.0: 완료되는 순간 체크박스가 통 튄다. 모양 스타일은 튀는 뷰가 갖는다 */}
+        <PopOnActivate
+          active={todo.isCompleted}
+          activationKey={`todo:${todo.id}`}
+          style={[styles.checkbox, todo.isCompleted && styles.checkboxChecked]}
+        >
+          {todo.isCompleted && <Text style={styles.checkmark}>✓</Text>}
+        </PopOnActivate>
       </TouchableOpacity>
 
       {/* Title */}

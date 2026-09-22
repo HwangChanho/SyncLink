@@ -21,7 +21,8 @@
  */
 
 import { useCallback, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
+import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 import { useColors } from '@/hooks/useColors';
 import { radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
@@ -107,7 +108,16 @@ export function SimpleToast({ toast }: { toast: SimpleToastState }) {
   const styles = makeStyles(colors);
 
   return (
-    <View style={styles.container} testID="simple-toast">
+    // 1.5.0: 아래에서 톡 올라오고, 사라질 때는 부드럽게 내려간다.
+    // 스프링 대신 시간 고정 애니메이션 — 레이아웃 스프링은 기본 질량 함정(PopOnActivate 참고)이
+    // 있어 짧은 토스트에는 길고 출렁일 수 있다.
+    // reanimated 레이아웃 애니메이션은 기본값이 시스템 "동작 줄이기" 설정을 따른다.
+    <Animated.View
+      style={styles.container}
+      testID="simple-toast"
+      entering={FadeInDown.duration(260)}
+      exiting={FadeOutDown.duration(180)}
+    >
       <Text
         style={styles.message}
         numberOfLines={2}
@@ -115,7 +125,7 @@ export function SimpleToast({ toast }: { toast: SimpleToastState }) {
       >
         {toast.message}
       </Text>
-    </View>
+    </Animated.View>
   );
 }
 

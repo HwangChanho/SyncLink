@@ -43,6 +43,9 @@ import { useResponsive } from '@/hooks/useResponsive';
 import { ResponsiveTabBar, SIDE_NAV_WIDTH } from '@/components/common/ResponsiveTabBar';
 import { componentHeight } from '@/constants/spacing';
 import { BRAND_FONT } from '@/constants/fonts';
+// 1.5.0: 탭을 고르는 순간 아이콘이 통 튄다(체크박스 완료와 같은 컴포넌트를 재사용)
+import { PopOnActivate } from '@/components/motion/PopOnActivate';
+import { markJustActivated } from '@/components/motion/activationRegistry';
 import { LanguageButton } from '@/components/common/LanguageButton';
 import {
   useAppearanceStore,
@@ -91,6 +94,11 @@ export default function TabLayout() {
   return (
     <Tabs
       tabBar={(props) => <ResponsiveTabBar {...props} />}
+      // 1.5.0: 탭을 누르는 순간 "방금 켜짐" 표시 → 이미 떠 있는 선택 아이콘이 통 튄다.
+      // 탭바는 아이콘을 focused true/false 두 벌 겹쳐 두어 값 변화로는 감지할 수 없다(activationRegistry 참고).
+      screenListeners={({ route }) => ({
+        tabPress: () => markJustActivated(`tab:${route.name}`),
+      })}
       screenOptions={{
         // 데스크탑 사이드 네비(absolute) 폭만큼 콘텐츠를 우측으로 밀어 가리지 않게.
         // 모바일/태블릿은 undefined → 기존 풀폭 콘텐츠 그대로(회귀 0).
@@ -151,11 +159,9 @@ export default function TabLayout() {
           title: t('tabs.calendar'),
           tabBarButtonTestID: 'tab-button-calendar',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? 'calendar' : 'calendar-outline'}
-              size={22}
-              color={color}
-            />
+            <PopOnActivate active={focused} activationKey="tab:calendar">
+              <Ionicons name={focused ? 'calendar' : 'calendar-outline'} size={22} color={color} />
+            </PopOnActivate>
           ),
         }}
       />
@@ -165,11 +171,9 @@ export default function TabLayout() {
           title: t('tabs.planner'),
           tabBarButtonTestID: 'tab-button-planner',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? 'list' : 'list-outline'}
-              size={22}
-              color={color}
-            />
+            <PopOnActivate active={focused} activationKey="tab:planner">
+              <Ionicons name={focused ? 'list' : 'list-outline'} size={22} color={color} />
+            </PopOnActivate>
           ),
         }}
       />
@@ -182,11 +186,9 @@ export default function TabLayout() {
           // ripple wrapper와 충돌해 testID 매핑 실패 (Maestro 01_login_dev FAIL).
           tabBarButtonTestID: 'tab-button-home',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? 'home' : 'home-outline'}
-              size={22}
-              color={color}
-            />
+            <PopOnActivate active={focused} activationKey="tab:index">
+              <Ionicons name={focused ? 'home' : 'home-outline'} size={22} color={color} />
+            </PopOnActivate>
           ),
         }}
       />
@@ -196,11 +198,9 @@ export default function TabLayout() {
           title: t('tabs.spaces', { defaultValue: 'Space' }),
           tabBarButtonTestID: 'tab-button-spaces',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? 'people' : 'people-outline'}
-              size={22}
-              color={color}
-            />
+            <PopOnActivate active={focused} activationKey="tab:spaces">
+              <Ionicons name={focused ? 'people' : 'people-outline'} size={22} color={color} />
+            </PopOnActivate>
           ),
         }}
       />
@@ -210,11 +210,9 @@ export default function TabLayout() {
           title: t('tabs.my'),
           tabBarButtonTestID: 'tab-button-my',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? 'person-circle' : 'person-circle-outline'}
-              size={24}
-              color={color}
-            />
+            <PopOnActivate active={focused} activationKey="tab:my">
+              <Ionicons name={focused ? 'person-circle' : 'person-circle-outline'} size={24} color={color} />
+            </PopOnActivate>
           ),
         }}
       />
@@ -231,11 +229,9 @@ export default function TabLayout() {
           title: t('tabs.analytics', { defaultValue: '분석' }),
           tabBarButtonTestID: 'tab-button-analytics',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? 'analytics' : 'analytics-outline'}
-              size={22}
-              color={color}
-            />
+            <PopOnActivate active={focused} activationKey="tab:analytics">
+              <Ionicons name={focused ? 'analytics' : 'analytics-outline'} size={22} color={color} />
+            </PopOnActivate>
           ),
         }}
       />

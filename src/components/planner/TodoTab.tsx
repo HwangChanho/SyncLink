@@ -25,6 +25,9 @@ import type { ColorTokens } from '@/hooks/useColors';
 import type { Todo, Category } from '@/types';
 import type { PlannerStyles } from './plannerStyles';
 import { Text } from '@/components/common/AppText';
+import { PopOnActivate } from '@/components/motion/PopOnActivate';
+import { markJustActivated } from '@/components/motion/activationRegistry';
+import { hapticSuccessTap } from '@/lib/haptics';
 
 // ─── TodoRow ──────────────────────────────────────────────────────────────────
 
@@ -132,14 +135,26 @@ const TodoRow = memo(function TodoRow({
           // testID="todo-checkbox-{id}" — e2e에서 체크박스 토글 검증 (08_planner_todo_crud)
           testID={`todo-checkbox-${todo.id}`}
           style={styles.checkboxContainer}
-          onPress={() => onToggle(todo.id)}
+          onPress={() => {
+            // 완료로 바뀔 때만 톡 + "방금 완료" 표시(행이 완료 묶음으로 옮겨져 재마운트돼도 튀게)
+            if (!todo.isCompleted) {
+              hapticSuccessTap();
+              markJustActivated(`todo:${todo.id}`);
+            }
+            onToggle(todo.id);
+          }}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <View style={[styles.checkbox, todo.isCompleted && styles.checkboxChecked]}>
+          {/* 1.5.0: 완료되는 순간 체크박스가 통 튄다(PopOnActivate) */}
+          <PopOnActivate
+            active={todo.isCompleted}
+            activationKey={`todo:${todo.id}`}
+            style={[styles.checkbox, todo.isCompleted && styles.checkboxChecked]}
+          >
             {todo.isCompleted && (
               <Ionicons name="checkmark" size={14} color={colors.textInverse} />
             )}
-          </View>
+          </PopOnActivate>
         </TouchableOpacity>
 
         <Text

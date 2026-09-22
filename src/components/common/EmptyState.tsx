@@ -16,6 +16,7 @@ import { useColors } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { Text } from '@/components/common/AppText';
+import { FloatGently } from '@/components/motion/FloatGently';
 
 interface EmptyStateProps {
   /** Ionicons glyph shown in the badge above the title. */
@@ -53,9 +54,12 @@ export function EmptyState({
 
   return (
     <View style={[styles.container, compact && styles.containerCompact]} testID={testID}>
-      <View style={styles.iconBadge}>
-        <Ionicons name={icon} size={compact ? 28 : 34} color={colors.primary} />
-      </View>
+      {/* 1.5.0: 아이콘 배지가 천천히 둥실거린다 — 빈 화면이 멈춰 보이지 않게(동작 줄이기 시 정지) */}
+      <FloatGently>
+        <View style={styles.iconBadge}>
+          <Ionicons name={icon} size={compact ? 28 : 34} color={colors.primary} />
+        </View>
+      </FloatGently>
       <Text style={styles.title}>{title}</Text>
       {description ? <Text style={styles.description}>{description}</Text> : null}
       {actionLabel && onAction ? (

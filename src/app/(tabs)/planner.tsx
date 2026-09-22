@@ -47,6 +47,7 @@ import { AppErrorBoundary } from '@/components/common/AppErrorBoundary';
 import { logError } from '@/lib/errorLogger';
 import { PrioritySuggestionCard } from '@/components/planner/PrioritySuggestionCard';
 import { Text } from '@/components/common/AppText';
+import { PressableScale } from '@/components/motion/PressableScale';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -318,7 +319,8 @@ function PlannerScreenInner() {
         composer on Notes tab. Same bottom-right anchor in both cases so
         the affordance is consistent.
       */}
-      <TouchableOpacity
+      {/* 1.5.0: 누르면 말랑하게 줄었다 돌아오는 FAB(PressableScale). testID 는 안쪽 Pressable 로 전달된다 */}
+      <PressableScale
         testID={activeTab === 'notes' ? 'planner-fab-notes' : 'planner-fab-todo'}
         style={styles.fab}
         onPress={() => {
@@ -328,11 +330,10 @@ function PlannerScreenInner() {
             setCreateSheetOpen(true);
           }
         }}
-        activeOpacity={0.8}
         accessibilityLabel={activeTab === 'notes' ? '새 노트' : '새 할일'}
       >
         <Ionicons name="add" size={28} color={colors.textInverse} />
-      </TouchableOpacity>
+      </PressableScale>
 
       {/*
        * Bottom-sheet todo editor (Sprint 14 TASK-1412).
