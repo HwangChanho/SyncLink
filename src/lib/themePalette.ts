@@ -181,6 +181,12 @@ export function buildPalette(accentHue: number, isDark: boolean): ThemePalette {
   const h = ((accentHue % 360) + 360) % 360;
 
   if (isDark) {
+    // 1.5.0 대비 보정(다크): 다크 버튼은 원래 어두운 글자(textInverse)를 올리도록 설계됐지만
+    // FAB 의 + 아이콘·오늘 날짜 숫자처럼 **흰색을 하드코딩한 곳**이 있다. 민트 L66 은 흰색과
+    // 1.74:1 이라 아이콘이 사라져 보였다 → 흰 아이콘 3:1 을 만족할 때까지 명도를 내린다.
+    // 민트 L43(흰 3.01 · 어두운 글자 5.34 · 배경 대비 5.16), amber L48, rose L65,
+    // indigo·violet 은 L66 그대로. 어두운 글자 4.5:1 은 테스트가 함께 잠근다.
+    const darkPrimaryL = fitLightnessForWhite(h, 52, 66, 3);
     // v1.2.8 — LEAD 피드백 "너무 어둡고 칙칙" → 톤 보정.
     // 핵심 변경:
     //   L (밝기): background 8→14, surface 14→19, surfaceAlt 20→26
@@ -195,9 +201,10 @@ export function buildPalette(accentHue: number, isDark: boolean): ThemePalette {
       // ── Brand ─────────────────────────────────────────────────────────────
       // 2026-09-20 톤 개편: 채도 70 → 52. 명도는 64 → 66 으로 아주 조금만
       // 올렸다 — 채도를 내리면 같은 L 이어도 탁해 보이기 때문이다.
-      primary:      hsl(h, 52, 66),
+      primary:      hsl(h, 52, darkPrimaryL),
       primaryLight: hsl(h, 32, 34),
-      primaryDark:  hsl(h, 54, 54),
+      // 눌림 등 한 단계 진한 색 — primary 보다 12 어둡게(원래 66 → 54 와 같은 간격)
+      primaryDark:  hsl(h, 54, darkPrimaryL - 12),
       accent:       hsl(h, 56, 70),
 
       // ── Background ────────────────────────────────────────────────────────

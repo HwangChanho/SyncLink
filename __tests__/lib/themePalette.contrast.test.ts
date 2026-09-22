@@ -43,6 +43,18 @@ describe('themePalette — 흰 글자 대비 보정', () => {
     },
   );
 
+  it.each(Object.entries(ACCENT_PRESETS))(
+    '다크 %s(hue %d): primary 위 흰 아이콘 ≥ 3 · 어두운 글자(textInverse) ≥ 4.5',
+    (_name, hue) => {
+      const p = buildPalette(hue, true);
+      expect(whiteContrast(p.primary)).toBeGreaterThanOrEqual(3);
+      // 어두운 글자 대비 = 두 색의 WCAG 휘도비. 휘도는 흰색 대비(1.05/(L+0.05))에서 역산한다
+      const lum = (c: string) => 1.05 / contrastWithWhite(...parseHsl(c)) - 0.05;
+      const [hi, lo] = [lum(p.primary), lum(p.textInverse)].sort((x, y) => y - x);
+      expect((hi + 0.05) / (lo + 0.05)).toBeGreaterThanOrEqual(4.5);
+    },
+  );
+
   it('0~359 모든 hue 에서 primary 가 기준을 지킨다(새 프리셋 추가 대비)', () => {
     for (let h = 0; h < 360; h += 1) {
       expect(whiteContrast(buildPalette(h, false).primary)).toBeGreaterThanOrEqual(4.5);
