@@ -28,7 +28,7 @@ const require = createRequire(`${REPO}/`);
 const { chromium } = require('playwright');
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const LOGO = `${REPO}/images/TwotwoLogo.png`;
+const LOGO = `${REPO}/images/UriharuLogo.png`;
 
 // --- Brand tokens ------------------------------------------------------------
 const ACCENT = '#6C63FF';

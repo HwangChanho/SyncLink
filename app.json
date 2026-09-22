@@ -4,13 +4,13 @@
     "slug": "synclink",
     "version": "1.4.17",
     "orientation": "portrait",
-    "icon": "./images/TwotwoLogo.png",
+    "icon": "./images/UriharuLogo.png",
     "scheme": "synclink",
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./images/SplashScreen.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0E0D16"
+      "backgroundColor": "#C4EEDD"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -46,8 +46,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./images/TwotwoLogo_adaptive.png",
-        "backgroundColor": "#000000"
+        "foregroundImage": "./images/UriharuLogo_adaptive.png",
+        "backgroundColor": "#C4EEDD"
       },
       "package": "io.synclink.app",
       "playStoreUrl": "https://play.google.com/store/apps/details?id=io.synclink.app",

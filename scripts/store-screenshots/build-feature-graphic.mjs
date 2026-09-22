@@ -27,7 +27,7 @@ const BRAND = {
   tagline: '할 일도 일정도\n말하듯 한 줄로',
   bullets: ['말하듯 한 줄 입력', '함께 쓰는 캘린더', '모임 날짜 투표'],
   accent: '#6C63FF',
-  logo: path.join(REPO, 'images/TwotwoLogo.png'),
+  logo: path.join(REPO, 'images/UriharuLogo.png'),
 };
 
 const OUT_DIR = path.join(REPO, 'images/store');
