@@ -338,7 +338,7 @@ private struct SmallView: View {
         // The 1.4.0 rebrand renamed the app but missed this label, so the widget
         // kept showing the old name on users' home screens. The kind string stays
         // "SyncLinkWidget" — that one must never change or placed widgets break.
-        Text("투투리스트")
+        Text("우리하루")
           .font(.system(size: 9, weight: .medium))
           .foregroundColor(.secondary)
       }

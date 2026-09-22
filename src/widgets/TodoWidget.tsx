@@ -66,7 +66,7 @@ export function TodoWidget({ snapshot, width, height }: Props) {
           `SyncLinkWidget` — renaming that would break every placed widget.
         */}
         <TextWidget
-          text="투투리스트"
+          text="우리하루"
           style={{ fontSize: 11, fontWeight: '700', color: C.textLo }}
         />
         <TextWidget text={formatToday()} style={{ fontSize: 11, color: C.textLo }} />

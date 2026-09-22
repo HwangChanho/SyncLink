@@ -8,7 +8,7 @@
  *   에 묶여 있다 — 한글로 바꾸면 prebuild 가 Xcode 프로젝트를 개명해 fastlane 경로와
  *   AppGroupBridge 가 깨진다(리브랜딩 때 확인된 제약). 그래서 웹만 1.4.0 리브랜딩에서
  *   빠진 채 옛 이름을 계속 내보내고 있었고, 설명·OG 태그는 아예 없었다.
- *   구글·네이버에서 "투투리스트" 로는 잡히지 않고, 카카오톡에 링크를 붙여도 카드가
+ *   구글·네이버에서 "우리하루" 로는 잡히지 않고, 카카오톡에 링크를 붙여도 카드가
  *   "SyncLink" 로 떴다.
  *
  *   Expo Router 의 `+html.tsx` 는 이 경우 답이 아니다 — **static 렌더링 전용**이라
@@ -27,7 +27,7 @@ const DIST = path.resolve(process.argv[2] ?? 'dist');
 const FILE = path.join(DIST, 'index.html');
 
 const SITE = 'https://synclink.pages.dev';
-const TITLE = '투투리스트 — 할 일도 일정도, 말하듯 한 줄로';
+const TITLE = '우리하루 — 할 일도 일정도, 말하듯 한 줄로';
 const DESCRIPTION =
   '할 일과 일정을 말하듯 한 줄로. 커플·가족·팀과 함께 쓰는 공유 캘린더로 모임 날짜까지 정해요. iOS·Android·웹 어디서나.';
 /** 랜딩(/get/)과 같은 카드를 써서 어디서 공유되든 같은 그림이 뜨게 한다. */
@@ -39,7 +39,7 @@ const attr = (s) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</
 const META = [
   `<meta name="description" content="${attr(DESCRIPTION)}" />`,
   `<meta property="og:type" content="website" />`,
-  `<meta property="og:site_name" content="투투리스트" />`,
+  `<meta property="og:site_name" content="우리하루" />`,
   `<meta property="og:title" content="${attr(TITLE)}" />`,
   `<meta property="og:description" content="${attr(DESCRIPTION)}" />`,
   `<meta property="og:image" content="${attr(OG_IMAGE)}" />`,

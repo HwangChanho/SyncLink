@@ -21,7 +21,7 @@
  * ⚠️ app.json 의 `expo.name` 은 별개다 — 한글로 바꾸면 prebuild 가 Xcode 프로젝트를
  *    개명해 fastlane 경로와 AppGroupBridge 가 깨진다. 그건 "SyncLink" 로 둔다.
  */
-export const APP_BRAND = '투투리스트';
+export const APP_BRAND = '우리하루';
 
 // ─── AI Usage Limits ──────────────────────────────────────────────────────────
 

@@ -30,7 +30,7 @@ const { chromium } = require('playwright');
 
 /** Brand tokens — single source for both assets. */
 const BRAND = {
-  name: '투투리스트',
+  name: '우리하루',
   tagline: '할 일도 일정도, 말하듯 한 줄로',
   /** Accent kept from the previous identity; only the mark and name changed. */
   accent: '#6C63FF',

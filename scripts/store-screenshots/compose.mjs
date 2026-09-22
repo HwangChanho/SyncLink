@@ -108,7 +108,7 @@ const PROFILES = {
  * Frame 0 is the logo hero LEAD asked to lead with, so it has no source capture.
  */
 const PHONE_FRAMES = [
-  { kind: 'hero', slug: 'hero', title: '투투리스트', sub: '할 일도 일정도, 말하듯 한 줄로' },
+  { kind: 'hero', slug: 'hero', title: '우리하루', sub: '할 일도 일정도, 말하듯 한 줄로' },
   {
     slug: 'nl-input',
     source: 'home',
@@ -164,7 +164,7 @@ const PHONE_FRAMES = [
 
 /** Tablet listings get a shorter, wider-format story. */
 const TABLET_FRAMES = [
-  { kind: 'hero', slug: 'hero', title: '투투리스트', sub: '할 일도 일정도, 말하듯 한 줄로' },
+  { kind: 'hero', slug: 'hero', title: '우리하루', sub: '할 일도 일정도, 말하듯 한 줄로' },
   {
     slug: 'home',
     source: 'home',

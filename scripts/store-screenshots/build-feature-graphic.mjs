@@ -23,7 +23,7 @@ const { chromium } = require('playwright');
 
 /** Same tokens as the screenshot frames so the listing reads as one set. */
 const BRAND = {
-  name: '투투리스트',
+  name: '우리하루',
   tagline: '할 일도 일정도\n말하듯 한 줄로',
   bullets: ['말하듯 한 줄 입력', '함께 쓰는 캘린더', '모임 날짜 투표'],
   accent: '#6C63FF',
