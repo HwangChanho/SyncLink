@@ -35,6 +35,39 @@ export const INTENTIONALLY_UNSET = {
 };
 
 /**
+ * **특정 플랫폼에서만 읽는** 변수 → 그 플랫폼 목록.
+ *
+ * 🔴 왜 필요한가(2026-09-23, 실제 IPA 첫 검사에서 발견): Metro 는 플랫폼별 번들을 만들 때
+ *    `Platform.OS === 'android'` 같은 분기를 **상수로 접어 죽은 코드를 지운다.** 그래서
+ *    Android 전용 값은 iOS 번들에 원래 없다. 이걸 모르면 정상 IPA 를 «값 누락»으로 막는다
+ *    (1.5.0 build 190 에서 4건 오탐 — 아래 4개).
+ *
+ * 🔴 추가 규칙은 INTENTIONALLY_UNSET 과 같다 — **코드에서 분기를 직접 확인한 것만** 넣는다.
+ *    이름 접미사(_ANDROID)로 추측해 일괄 제외하지 않는다. 공용 코드에서 읽는 값이 섞이면
+ *    진짜 누락을 놓친다.
+ *
+ * 값: platforms = 이 변수가 번들에 **있어야 하는** 플랫폼 · why = 코드 근거
+ */
+export const PLATFORM_SCOPED = {
+  EXPO_PUBLIC_ADMOB_APP_ID_ANDROID: {
+    platforms: ['android'],
+    why: "adService.ts — Platform.OS === 'android' 분기에서만 읽는다",
+  },
+  EXPO_PUBLIC_ADMOB_BANNER_ID_ANDROID: {
+    platforms: ['android'],
+    why: "FreeBannerAd.tsx — Platform.OS === 'android' 분기에서만 읽는다",
+  },
+  EXPO_PUBLIC_ADMOB_REWARDED_ID_ANDROID: {
+    platforms: ['android'],
+    why: "adService.ts — Platform.OS === 'android' 분기에서만 읽는다",
+  },
+  EXPO_PUBLIC_KAKAO_REST_API_KEY: {
+    platforms: ['web'],
+    why: "authService.ts buildKakaoAuthUrl — 웹 OAuth 전용. 네이티브는 Kakao SDK 분기(Platform.OS !== 'web')에서 먼저 반환한다",
+  },
+};
+
+/**
  * 소스를 재귀 순회하며 코드가 참조하는 EXPO_PUBLIC_* 이름을 모은다.
  *
  * 🔑 정적으로 읽을 수 있는 `process.env.EXPO_PUBLIC_X` 형태만 센다. 문자열을 조합해

@@ -35,7 +35,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { collectReferencedVars, INTENTIONALLY_UNSET } from './lib/expo-public-vars.mjs';
+import { collectReferencedVars, INTENTIONALLY_UNSET, PLATFORM_SCOPED } from './lib/expo-public-vars.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -113,10 +113,21 @@ if (!easValues) {
 }
 
 const referenced = collectReferencedVars('src');
+
+// 산출물 종류로 플랫폼을 정한다 — 다른 플랫폼 전용 값은 번들에서 원래 지워진다(PLATFORM_SCOPED 참고)
+const ARTIFACT_PLATFORM = /\.ipa$/i.test(ARTIFACT) ? 'ios' : /\.(aab|apk)$/i.test(ARTIFACT) ? 'android' : null;
+if (!ARTIFACT_PLATFORM) {
+  console.error(`🔴 산출물 종류를 모릅니다(ipa/aab/apk 만): ${path.basename(ARTIFACT)}`);
+  process.exit(2);
+}
+/** 이 산출물 플랫폼에서는 번들에 없는 게 정상인 변수들(출력에 «제외»로 남긴다) */
+const otherPlatform = [...referenced]
+  .filter((k) => easValues.has(k) && k in PLATFORM_SCOPED && !PLATFORM_SCOPED[k].platforms.includes(ARTIFACT_PLATFORM))
+  .sort();
 // 코드가 읽고 + EAS 에 값이 있고 + 의도적 미설정이 아닌 것만 본다.
 // 🔑 코드가 안 읽는 변수는 Expo 가 애초에 인라인하지 않으므로 대상이 아니다.
 const targets = [...referenced]
-  .filter((k) => easValues.has(k) && !(k in INTENTIONALLY_UNSET))
+  .filter((k) => easValues.has(k) && !(k in INTENTIONALLY_UNSET) && !otherPlatform.includes(k))
   .sort();
 
 if (targets.length === 0) {
@@ -135,6 +146,10 @@ try {
   }
   const buf = fs.readFileSync(bundle);
   console.log(`\n▶ 산출물 번들 검사 — ${path.basename(ARTIFACT)} → ${path.basename(bundle)} (${buf.length.toLocaleString()} bytes)\n`);
+  for (const k of otherPlatform) {
+    console.log(`   ${k.padEnd(36)} ⏭️  ${ARTIFACT_PLATFORM} 번들 대상 아님 — ${PLATFORM_SCOPED[k].why}`);
+  }
+  if (otherPlatform.length) console.log('');
 
   // 🔴 대조군 먼저. 이게 0 이면 아래 결과는 전부 믿을 수 없다.
   //
