@@ -45,7 +45,9 @@ const ACCENT_OPTIONS: { key: AccentPresetKey; labelKey: string }[] = [
   // 키 자체는 역호환성 때문에 ACCENT_PRESETS 에 남아 있다.
   { key: 'default',  labelKey: 'settings.accent_default' },
   { key: 'rose',     labelKey: 'settings.accent_rose' },
-  { key: 'emerald',  labelKey: 'settings.accent_emerald' },
+  // 1.5.0 — 기본이 민트(160)가 되면서 같은 hue 인 emerald 는 목록에서 빼고,
+  // 예전 기본이던 indigo 를 따로 고를 수 있게 넣었다(키는 둘 다 ACCENT_PRESETS 에 남아 있다).
+  { key: 'indigo',   labelKey: 'settings.accent_indigo' },
   { key: 'amber',    labelKey: 'settings.accent_amber' },
   { key: 'violet',   labelKey: 'settings.accent_violet' },
 ];

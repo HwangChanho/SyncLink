@@ -673,7 +673,7 @@ const ja = {
     color_mode_system: 'システム',
     accent_theme: 'アクセントテーマ',
     accent_theme_help: '選んだ色が背景・ボタン・タブバーなどアプリ全体に自然に適用されます。',
-    accent_default: 'デフォルト（バイオレット）',
+    accent_default: 'デフォルト（ミント）',
     accent_indigo: 'インディゴ',
     accent_rose: 'ローズ',
     accent_emerald: 'エメラルド',

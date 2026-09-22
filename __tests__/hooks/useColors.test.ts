@@ -81,7 +81,7 @@ import { useAppearanceStore } from '@/stores/appearanceStore';
 import { buildPalette, ACCENT_PRESETS } from '@/lib/themePalette';
 
 // Expected values based on buildPalette (v2 theme system)
-const DEFAULT_HUE = ACCENT_PRESETS.default; // 258 (violet)
+const DEFAULT_HUE = ACCENT_PRESETS.default; // 160 (민트, 1.5.0)
 const light = buildPalette(DEFAULT_HUE, false);
 const dark  = buildPalette(DEFAULT_HUE, true);
 

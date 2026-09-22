@@ -676,7 +676,7 @@ const zh = {
     color_mode_system: '跟随系统',
     accent_theme: '主题色',
     accent_theme_help: '所选颜色会应用到背景、按钮、标签栏等整个应用。',
-    accent_default: '默认（紫罗兰）',
+    accent_default: '默认（薄荷绿）',
     accent_indigo: '靛蓝',
     accent_rose: '玫瑰',
     accent_emerald: '翠绿',

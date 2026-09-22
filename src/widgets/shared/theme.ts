@@ -21,9 +21,13 @@ export const WIDGET_COLORS = {
   textDone: '#64748B',
   divider:  '#334155',
   warning:  '#F87171',
-  accent:   '#6C63FF',
-  /** Today's cell background in the calendar grid. */
-  today:    '#6C63FF',
+  /** 완료 체크 표시 색 — 어두운 위젯 배경 위라 밝은 브랜드 민트(아이콘 달력 띠와 같은 값). */
+  accent:   '#6CCFAE',
+  /**
+   * 캘린더 그리드의 오늘 칸 배경. 🔴 위에 흰 숫자가 올라가므로 밝은 민트를 쓰면 안 된다 —
+   * 앱 라이트 테마 primary 와 같은 짙은 민트(흰색 대비 ≥ 4.5, themePalette 대비 보정 값).
+   */
+  today:    '#2A8466',
 } as const;
 
 /**

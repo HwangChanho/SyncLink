@@ -35,6 +35,7 @@ const ACCENT_PRESET_KEY = 'synclink:appearance:accentPreset';
 export type HeaderTitleColor =
   | 'default' // fall back to theme textPrimary
   | 'primary'
+  | 'indigo' // 1.5.0 — 기본이 민트가 되면서 신설
   | 'rose'
   | 'emerald'
   | 'amber'
@@ -43,6 +44,7 @@ export type HeaderTitleColor =
 export const HEADER_TITLE_COLOR_HEX: Record<HeaderTitleColor, string | null> = {
   default: null,
   primary: '#6366F1',
+  indigo:  '#6366F1',
   rose:    '#E11D48',
   emerald: '#059669',
   amber:   '#D97706',
@@ -194,7 +196,7 @@ export const useAppearanceStore = create<AppearanceState>((set, get) => ({
 
   // ── New: full-theme accent ────────────────────────────────────────────────
   accentPreset: 'default',
-  accentHue: ACCENT_PRESETS.default, // 258 (violet)
+  accentHue: ACCENT_PRESETS.default, // 160 (민트, 1.5.0)
 
   setAccentPreset: (preset: AccentPresetKey) => {
     const hue = ACCENT_PRESETS[preset];

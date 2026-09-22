@@ -695,7 +695,7 @@ const ko = {
     color_mode_system: '시스템',
     accent_theme: '앱 색상 테마',
     accent_theme_help: '선택한 색상이 배경·버튼·탭바 등 앱 전체에 자연스럽게 적용됩니다.',
-    accent_default: '기본 (바이올렛)',
+    accent_default: '기본 (민트)',
     accent_indigo: '인디고',
     accent_rose: '로즈',
     accent_emerald: '에메랄드',

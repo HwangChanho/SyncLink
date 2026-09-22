@@ -677,7 +677,7 @@ const en = {
     color_mode_system: 'System',
     accent_theme: 'Accent theme',
     accent_theme_help: 'Your selected color is applied across the background, buttons, and tab bar.',
-    accent_default: 'Default (Violet)',
+    accent_default: 'Default (Mint)',
     accent_indigo: 'Indigo',
     accent_rose: 'Rose',
     accent_emerald: 'Emerald',
