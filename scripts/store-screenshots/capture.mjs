@@ -23,7 +23,8 @@ const require = createRequire('/Users/danielhwang/Desktop/Projects/syncday/syncd
 const { chromium } = require('playwright');
 const HERE = dirname(fileURLToPath(import.meta.url));
 
-const BASE = 'http://localhost:8088';
+// CAPTURE_BASE 로 덮어쓸 수 있다(이미 떠 있는 dev 웹 서버 포트를 재사용할 때)
+const BASE = process.env.CAPTURE_BASE ?? 'http://localhost:8088';
 
 /**
  * Viewports are CSS px; deviceScaleFactor multiplies to the store's required pixel size.
@@ -140,8 +141,12 @@ const DEV_ACCOUNT = { email: 'e2e-web-pro@synclink.test', password: e2ePassword(
 async function login(page) {
   await page.goto(`${BASE}/auth/login`, { waitUntil: 'load', timeout: 60000 });
   await page.waitForTimeout(12000);
-  await page.locator('[data-testid="login-dev-email"]').fill(DEV_ACCOUNT.email);
-  await page.locator('[data-testid="login-dev-password"]').fill(DEV_ACCOUNT.password);
+  // 🔴 fill() 은 RN TextInput 의 onChange 를 못 일으켜 로그인이 조용히 실패한 적이 있다(09-23)
+  //    → 클릭 후 한 글자씩 입력한다
+  for (const [id, v] of [['login-dev-email', DEV_ACCOUNT.email], ['login-dev-password', DEV_ACCOUNT.password]]) {
+    await page.locator(`[data-testid="${id}"]`).click();
+    await page.locator(`[data-testid="${id}"]`).pressSequentially(v);
+  }
   await page.locator('[data-testid="login-dev-submit"]').click();
   await page.waitForTimeout(9000);
   console.log(`· signed in as ${DEV_ACCOUNT.email} (url=${page.url()})`);
@@ -180,7 +185,8 @@ async function seedTodos(page) {
   for (const title of titles) {
     await page.locator('[data-testid="planner-fab-todo"]').click();
     await page.waitForTimeout(1400);
-    await page.locator('[data-testid="todo-create-title-input"]').fill(title);
+    await page.locator('[data-testid="todo-create-title-input"]').click();
+    await page.locator('[data-testid="todo-create-title-input"]').pressSequentially(title);
     await page.locator('[data-testid="todo-create-save"]').click();
     await page.waitForTimeout(2000);
   }
@@ -217,72 +223,33 @@ async function captureOnboarding(page, outDirs) {
  * Capture the D-day(상대일 일정) editor with a filled-in example.
  *
  * 1.4.4 store refresh: this is a real feature since 1.3.2 that no store shot ever showed.
- * It cannot be a plain SCREENS entry — the fields only exist once the toggle is on, so the
- * shot has to be driven: title → toggle → +N days → preset label, then scroll it into view.
+ * It cannot be a plain SCREENS entry — the preview only appears once the fields are filled.
  *
  * The example mirrors the in-app hint ("발급일·주문일에서 며칠 뒤"): 택배 3일 뒤 도착예상.
  * @param {import('playwright').Page} page
  * @param {string[]} outDirs
  */
 async function captureDday(page, outDirs) {
-  await page.goto(`${BASE}/event/create`, { waitUntil: 'load', timeout: 60000 });
+  // 1.5.0: 2026-09-02 부터 일정 종류를 먼저 고르고, 상대일은 전용 화면(/event/create-relative)이
+  // 됐다. 예전의 "상대일 일정" 토글·스테퍼는 없어져 옛 단계는 토글을 못 찾고 실패했다.
+  // 새 화면은 제목 · N일 뒤 · 라벨 세 칸이라 입력만 하면 미리보기(목표일 + D-day)가 뜬다.
+  await page.goto(`${BASE}/event/create-relative`, { waitUntil: 'load', timeout: 60000 });
   await page.waitForTimeout(14000);
 
-  await page.locator('[data-testid="event-create-title-input"]').fill('택배 도착');
-  await page.waitForTimeout(600);
-
-  // RN-web renders <Switch> as a checkbox input, and the section carries no testID.
-  // Walking up the DOM picks up an unrelated switch (the first one in that subtree is
-  // 종일, not this one), so match on geometry: the checkbox sharing the heading's row.
-  const toggled = await page.evaluate(() => {
-    const head = [...document.querySelectorAll('div,span')].find((e) =>
-      e.textContent?.trim().startsWith('상대일 일정') && e.getBoundingClientRect().height > 0);
-    if (!head) return false;
-    const hr = head.getBoundingClientRect();
-    const mid = hr.top + hr.height / 2;
-    const [nearest] = [...document.querySelectorAll('input[type="checkbox"]')]
-      .map((b) => {
-        const r = b.getBoundingClientRect();
-        return { b, d: Math.abs(r.top + r.height / 2 - mid) };
-      })
-      .sort((a, z) => a.d - z.d);
-    if (!nearest || nearest.d > 60) return false;
-    nearest.b.click();
-    return true;
-  });
-  if (!toggled) throw new Error('상대일 일정 토글을 찾지 못했습니다');
-  await page.waitForTimeout(1800);
-
-  // Stepper: bump the default 1일 up to 3일 to match the hint's 택배 example.
-  // The buttons render as plain text nodes, so pick the "+" on the "N일 뒤" row.
-  for (let i = 0; i < 2; i++) {
-    const bumped = await page.evaluate(() => {
-      const label = [...document.querySelectorAll('div,span')].find((e) =>
-        e.textContent?.trim() === 'N일 뒤' && e.getBoundingClientRect().height > 0);
-      if (!label) return false;
-      const lr = label.getBoundingClientRect();
-      const mid = lr.top + lr.height / 2;
-      const plus = [...document.querySelectorAll('div,span')]
-        .filter((e) => e.textContent?.trim() === '+' && e.getBoundingClientRect().height > 0)
-        .map((e) => {
-          const r = e.getBoundingClientRect();
-          return { e, d: Math.abs(r.top + r.height / 2 - mid) };
-        })
-        .sort((a, z) => a.d - z.d)[0];
-      if (!plus || plus.d > 60) return false;
-      plus.e.click();
-      return true;
-    });
-    if (!bumped) throw new Error('N일 뒤 스테퍼를 찾지 못했습니다');
-    await page.waitForTimeout(500);
-  }
-  await page.getByText('도착예상', { exact: true }).first().click();
+  // RN TextInput 은 fill() 로 onChange 가 안 일어날 수 있어 클릭 후 한 글자씩 입력한다
+  const type = async (locator, text) => {
+    await locator.click();
+    await page.keyboard.press('ControlOrMeta+A');
+    await locator.pressSequentially(text);
+  };
+  await type(page.locator('[data-testid="relative-title-input"]'), '택배 도착');
+  await type(page.locator('[data-testid="relative-offset-input"]'), '3');
+  // 라벨 칸은 testID 가 없어 placeholder 로 찾는다(i18n event.relative.label_placeholder)
+  await type(page.locator('input[placeholder="예: 도착예상"]'), '도착예상');
   await page.waitForTimeout(1200);
 
-  // The web build renders 기준일 as a native <input type="date">, which Chromium paints
-  // in US order (08/23/2026) regardless of the ko-KR locale. The app on a phone shows
-  // `toLocaleDateString('ko', …)` instead, so repaint it to match — render-only, the
-  // stored value is untouched. Same spirit as patchSpaceLabels.
+  // 웹의 기준일은 <input type="date"> 라 Chromium 이 미국식(09/23/2026)으로 그린다.
+  // 폰 앱은 한국식이므로 렌더만 바꿔 맞춘다(저장값은 그대로 — patchSpaceLabels 와 같은 취지).
   await page.evaluate(() => {
     const input = document.querySelector('input[type="date"]');
     if (!input) return;
@@ -296,28 +263,9 @@ async function captureDday(page, outDirs) {
     label.style.cssText = `font-size:16px;color:${cs.color};font-family:${cs.fontFamily};`;
     input.replaceWith(label);
   });
-
-  // The QA space is literally named "E2E Test Space" — test scaffolding has no place
-  // in a public listing, so reuse the same render-only relabeling as the other shots.
-  await patchSpaceLabels(page);
-
-  // The section sits below the fold on the create form; bring it up so the live
-  // "목표일: … (D-3)" preview is what the frame shows.
-  await page.evaluate(() => {
-    const el = [...document.querySelectorAll('div,span')].find((e) =>
-      e.textContent?.trim().startsWith('상대일 일정') && e.getBoundingClientRect().height > 0);
-    if (!el) return;
-    const scrollable = (node) => {
-      for (let n = node.parentElement; n; n = n.parentElement) {
-        const oy = getComputedStyle(n).overflowY;
-        if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight) return n;
-      }
-      return document.scrollingElement || document.documentElement;
-    };
-    const sc = scrollable(el);
-    sc.scrollTop = Math.max(0, sc.scrollTop + el.getBoundingClientRect().top - 220);
-  });
-  await page.waitForTimeout(1200);
+  // 입력 커서가 깜빡이는 채로 찍히지 않게 포커스를 뺀다
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.waitForTimeout(600);
 
   for (const dir of outDirs) {
     await page.screenshot({ path: resolve(HERE, 'shots', dir, 'dday.png') });
@@ -338,8 +286,9 @@ const browser = await chromium.launch();
 const page = await browser.newPage({
   viewport: { width: p.width, height: p.height },
   deviceScaleFactor: p.dsf,
-  // The app follows the system theme; the store frames are dark, so pin dark for consistency.
-  colorScheme: 'dark',
+  // The app follows the system theme; pin one for consistency.
+  // 1.5.0 「우리하루」: 스토어 프레임이 민트 파스텔이 되어 캡처도 라이트로 바꿨다(예전엔 어두운 프레임에 맞춰 dark).
+  colorScheme: 'light',
   locale: 'ko-KR',
   timezoneId: 'Asia/Seoul',
 });

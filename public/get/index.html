@@ -20,22 +20,23 @@
   <meta name="twitter:card" content="summary_large_image" />
 
   <style>
-    /* Palette mirrors the app's dark theme and the store screenshots, so the
-       install funnel looks like one continuous piece. accent = themePalette primary. */
+    /* Palette mirrors the store screenshots, so the install funnel looks like one
+       continuous piece. 1.5.0 「우리하루」: 어두운 테마 → 민트 파스텔.
+       accent = 앱 라이트 primary(민트 hue 160, 대비 보정), accent-soft = 아이콘 달력 띠. */
     :root {
-      --accent: #6C63FF;
-      --accent-soft: #8F88FF;
-      --fg: #ffffff;
-      --fg-dim: rgba(255, 255, 255, .66);
-      --fg-faint: rgba(255, 255, 255, .42);
-      --card: rgba(255, 255, 255, .05);
-      --hair: rgba(255, 255, 255, .12);
+      --accent: #2A8466;
+      --accent-soft: #6CCFAE;
+      --fg: #23413A;
+      --fg-dim: rgba(35, 65, 58, .74);
+      --fg-faint: rgba(35, 65, 58, .52);
+      --card: rgba(255, 255, 255, .72);
+      --hair: rgba(42, 132, 102, .16);
       --max: 1080px;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     /* Solid floor on <html> so no part of a long page can ever fall back to white
-       behind the light-on-dark text. */
-    html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; background: #050509; }
+       behind the text. */
+    html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; background: #CDEFE1; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard",
                    "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
@@ -50,9 +51,9 @@
     body::before {
       content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
       background:
-        radial-gradient(ellipse 120% 46% at 50% -8%, rgba(108, 99, 255, .34) 0%, transparent 62%),
-        radial-gradient(ellipse 90% 34% at 106% 58%, rgba(108, 99, 255, .16) 0%, transparent 60%),
-        linear-gradient(178deg, #14121f 0%, #0a0a12 44%, #050509 100%);
+        radial-gradient(ellipse 120% 46% at 50% -8%, rgba(255, 255, 255, .85) 0%, transparent 62%),
+        radial-gradient(ellipse 90% 34% at 106% 58%, rgba(108, 207, 174, .28) 0%, transparent 60%),
+        linear-gradient(178deg, #E4F8EF 0%, #CDEFE1 50%, #B3E8D4 100%);
     }
     .wrap { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
 
@@ -60,9 +61,8 @@
     .hero { text-align: center; padding: 76px 0 8px; }
     .tile {
       width: 108px; height: 108px; margin: 0 auto 26px; border-radius: 26px;
-      overflow: hidden; background: #000;
-      box-shadow: 0 14px 34px rgba(0, 0, 0, .55), 0 0 62px rgba(108, 99, 255, .38),
-                  inset 0 0 0 2px rgba(255, 255, 255, .14);
+      overflow: hidden;
+      box-shadow: 0 12px 30px rgba(47, 94, 80, .22), 0 0 62px rgba(108, 207, 174, .45);
     }
     .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
     h1 { font-size: clamp(38px, 8vw, 60px); font-weight: 800; letter-spacing: -.035em; line-height: 1.14; }
@@ -80,7 +80,7 @@
       box-shadow: inset 0 0 0 1px var(--hair);
       transition: transform .16s ease, background .16s ease, box-shadow .16s ease;
     }
-    .btn:hover { transform: translateY(-2px); background: rgba(255, 255, 255, .09); }
+    .btn:hover { transform: translateY(-2px); background: rgba(255, 255, 255, .92); }
     .btn:active { transform: translateY(0); }
     .btn svg { width: 26px; height: 26px; flex: none; }
     .btn .label { text-align: left; line-height: 1.25; }
@@ -88,11 +88,12 @@
     .btn .label strong { display: block; font-size: 17px; font-weight: 700; letter-spacing: -.02em; }
     /* The platform we detect gets the accent treatment so the right choice is obvious. */
     .btn.primary {
-      background: linear-gradient(140deg, var(--accent) 0%, #5a51e8 100%);
-      box-shadow: 0 12px 28px rgba(108, 99, 255, .34), inset 0 0 0 1px rgba(255, 255, 255, .2);
+      color: #fff;
+      background: linear-gradient(140deg, var(--accent) 0%, #237359 100%);
+      box-shadow: 0 12px 28px rgba(42, 132, 102, .3), inset 0 0 0 1px rgba(255, 255, 255, .2);
     }
     .btn.primary .label small { color: rgba(255, 255, 255, .78); }
-    .btn.primary:hover { background: linear-gradient(140deg, var(--accent-soft) 0%, #6259ee 100%); }
+    .btn.primary:hover { background: linear-gradient(140deg, #319A77 0%, var(--accent) 100%); }
     .btn-web { flex-basis: 100%; min-height: 52px; font-size: 15px; font-weight: 600; color: var(--fg-dim); }
     .btn-web:hover { color: var(--fg); }
 
@@ -105,8 +106,8 @@
     .shots::-webkit-scrollbar { display: none; }
     .shot { flex: none; width: 220px; scroll-snap-align: center; text-align: center; }
     .shot .frame {
-      border-radius: 26px; padding: 6px; background: linear-gradient(150deg, #3a3a46, #14141c);
-      box-shadow: 0 16px 36px rgba(0, 0, 0, .55), inset 0 0 0 1px rgba(255, 255, 255, .1);
+      border-radius: 26px; padding: 6px; background: #fff;
+      box-shadow: 0 14px 32px rgba(47, 94, 80, .2), inset 0 0 0 1px rgba(47, 94, 80, .08);
     }
     .shot img { display: block; width: 100%; border-radius: 21px; }
     .shot span { display: block; margin-top: 12px; font-size: 13.5px; color: var(--fg-faint); }
@@ -125,7 +126,7 @@
     .feat p { margin-top: 8px; font-size: 14.5px; color: var(--fg-dim); line-height: 1.62; }
 
     /* ---------- footer ---------- */
-    footer { margin-top: 66px; padding: 30px 0 46px; border-top: 1px solid rgba(255, 255, 255, .08); text-align: center; }
+    footer { margin-top: 66px; padding: 30px 0 46px; border-top: 1px solid var(--hair); text-align: center; }
     footer nav { display: flex; flex-wrap: wrap; gap: 8px 22px; justify-content: center; }
     footer a { color: var(--fg-dim); text-decoration: none; font-size: 14px; }
     footer a:hover { color: var(--fg); text-decoration: underline; }

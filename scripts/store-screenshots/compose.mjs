@@ -7,8 +7,10 @@
  * card, which is what LEAD asked for.
  *
  * Design system (derived from the app itself, so the store matches the product):
- *   accent  #6C63FF  = themePalette primary hue 244 rendered for dark mode
- *   canvas  near-black with an accent glow, mirroring the app's dark UI
+ *   1.5.0 「우리하루」: 어두운 캔버스 → **민트 파스텔**(아이콘 배경과 같은 계열).
+ *   accent  #2A8466  = themePalette 라이트 primary(민트 hue 160, 대비 보정 L34)
+ *   soft    #6CCFAE  = 아이콘 달력 띠(scripts/brand/icon-svg.mjs ICON_COLORS.band)
+ *   글꼴    제목·워드마크 = 주아, 부제 = 나눔스퀘어라운드(앱과 같은 파일, assets/fonts)
  *
  * Usage:
  *   node compose.mjs <profile> [frameIndex]     e.g. `node compose.mjs iphone65` or `... iphone65 0`
@@ -31,8 +33,15 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const LOGO = `${REPO}/images/UriharuLogo.png`;
 
 // --- Brand tokens ------------------------------------------------------------
-const ACCENT = '#6C63FF';
-const ACCENT_SOFT = '#8F88FF';
+const ACCENT = '#2A8466';
+const ACCENT_SOFT = '#6CCFAE';
+/** 본문 먹색 — 순수 검정보다 민트 배경과 어울리는 짙은 녹회색 */
+const INK = '#23413A';
+
+/** 앱과 같은 글꼴을 페이지에 심는다(setContent 페이지는 file:// 을 못 읽을 수 있어 data URI). */
+const fontFace = (family, file) =>
+  `@font-face{font-family:${family};src:url(data:font/ttf;base64,${readFileSync(`${REPO}/assets/fonts/${file}`).toString('base64')}) format('truetype');}`;
+const FONT_CSS = fontFace('UriTitle', 'Jua-Regular.ttf') + fontFace('UriBody', 'NanumSquareRoundB.ttf');
 
 /**
  * Device profiles.
@@ -201,43 +210,38 @@ const dataUri = (path) => `data:image/png;base64,${readFileSync(path).toString('
 function html(p, f, shot) {
   const isHero = f.kind === 'hero';
   return `<!doctype html><meta charset="utf-8"><style>
+  ${FONT_CSS}
   * { margin:0; padding:0; box-sizing:border-box; }
   html,body { width:${p.w}px; height:${p.h}px; overflow:hidden; }
   body {
     background:
-      radial-gradient(ellipse ${p.w * 1.1}px ${p.h * 0.5}px at 50% -6%, ${ACCENT}5c 0%, transparent 62%),
-      radial-gradient(ellipse ${p.w * 0.9}px ${p.h * 0.4}px at 108% 74%, ${ACCENT}2e 0%, transparent 60%),
-      linear-gradient(176deg, #14121f 0%, #0a0a12 46%, #050509 100%);
-    font-family: "Apple SD Gothic Neo", "Pretendard", -apple-system, "Helvetica Neue", sans-serif;
-    color:#fff; -webkit-font-smoothing:antialiased;
+      radial-gradient(ellipse ${p.w * 1.1}px ${p.h * 0.5}px at 50% -6%, #FFFFFFcc 0%, transparent 62%),
+      radial-gradient(ellipse ${p.w * 0.9}px ${p.h * 0.4}px at 108% 74%, ${ACCENT_SOFT}40 0%, transparent 60%),
+      linear-gradient(176deg, #E4F8EF 0%, #CDEFE1 50%, #B3E8D4 100%);
+    font-family: UriBody, "Apple SD Gothic Neo", -apple-system, sans-serif;
+    color:${INK}; -webkit-font-smoothing:antialiased;
     display:flex; flex-direction:column; align-items:center;
     position:relative;
   }
-  /* Hairline sheen along the top edge keeps the flat gradient from looking dull. */
-  body::before {
-    content:''; position:absolute; inset:0 0 auto 0; height:2px;
-    background:linear-gradient(90deg, transparent, ${ACCENT}aa 42%, ${ACCENT_SOFT}dd 50%, ${ACCENT}aa 58%, transparent);
-    opacity:.55;
-  }
   .copy { width:100%; padding:${p.titleTop}px ${p.pad}px 0; text-align:center; }
   h1 {
-    font-size:${p.titleSize}px; font-weight:800; line-height:1.2; letter-spacing:-.028em;
+    font-family: UriTitle, sans-serif; font-weight:normal;
+    font-size:${p.titleSize}px; line-height:1.25; letter-spacing:-.01em;
     white-space:pre-line; text-wrap:balance;
-    text-shadow:0 ${Math.round(p.titleSize * 0.06)}px ${Math.round(p.titleSize * 0.5)}px rgba(0,0,0,.55);
   }
   .sub {
     margin-top:${Math.round(p.subSize * 0.72)}px; font-size:${p.subSize}px; font-weight:500;
-    line-height:1.45; letter-spacing:-.012em; color:rgba(255,255,255,.66); white-space:pre-line;
+    line-height:1.45; letter-spacing:-.012em; color:rgba(35,65,58,.72); white-space:pre-line;
   }
   /* Device mock: bezel + screen. It deliberately runs past the bottom edge. */
   .device {
     position:absolute; top:${p.deviceTop}px; left:50%; transform:translateX(-50%);
     width:${p.deviceW}px; padding:${p.bezel}px; border-radius:${p.radius}px;
-    background:linear-gradient(150deg,#3a3a46 0%,#1b1b24 38%,#0e0e14 100%);
+    /* 귀여운 톤: 검은 베젤 대신 흰 베젤 + 민트빛 그림자 */
+    background:#FFFFFF;
     box-shadow:
-      0 ${Math.round(p.deviceW * 0.045)}px ${Math.round(p.deviceW * 0.12)}px rgba(0,0,0,.62),
-      0 0 ${Math.round(p.deviceW * 0.2)}px ${ACCENT}33,
-      inset 0 0 0 1px rgba(255,255,255,.10);
+      0 ${Math.round(p.deviceW * 0.04)}px ${Math.round(p.deviceW * 0.1)}px rgba(47,94,80,.22),
+      inset 0 0 0 1px rgba(47,94,80,.08);
   }
   .device img { display:block; width:100%; border-radius:${p.radius - p.bezel}px; }
   /* ---- hero card ---- */
@@ -255,23 +259,22 @@ function html(p, f, shot) {
   .halo::after  { width:${Math.round(p.logoTile * 2.34)}px; height:${Math.round(p.logoTile * 2.34)}px; opacity:.09; }
   .tile {
     width:${p.logoTile}px; height:${p.logoTile}px; border-radius:${p.logoRadius}px; overflow:hidden;
-    background:#000; position:relative;
+    position:relative;
     box-shadow:
-      0 ${Math.round(p.logoTile * 0.09)}px ${Math.round(p.logoTile * 0.22)}px rgba(0,0,0,.6),
-      0 0 ${Math.round(p.logoTile * 0.52)}px ${ACCENT}66,
-      inset 0 0 0 2px rgba(255,255,255,.14);
+      0 ${Math.round(p.logoTile * 0.08)}px ${Math.round(p.logoTile * 0.2)}px rgba(47,94,80,.25),
+      0 0 ${Math.round(p.logoTile * 0.5)}px ${ACCENT_SOFT}66;
   }
   .tile img { width:100%; height:100%; object-fit:cover; }
-  .wordmark { font-size:${Math.round(p.titleSize * 1.22)}px; font-weight:800; letter-spacing:-.035em; }
-  .tagline { font-size:${Math.round(p.subSize * 1.12)}px; font-weight:500; color:rgba(255,255,255,.72);
+  .wordmark { font-family: UriTitle, sans-serif; font-size:${Math.round(p.titleSize * 1.3)}px; font-weight:normal; letter-spacing:-.01em; color:${ACCENT}; }
+  .tagline { font-size:${Math.round(p.subSize * 1.12)}px; font-weight:500; color:rgba(35,65,58,.75);
              letter-spacing:-.012em; text-align:center; }
   .bullets { display:flex; gap:${Math.round(p.subSize * 0.7)}px; margin-top:${Math.round(p.subSize * 0.9)}px;
              flex-wrap:wrap; justify-content:center; }
   .bullets span {
-    font-size:${Math.round(p.subSize * 0.86)}px; font-weight:600; color:rgba(255,255,255,.9);
+    font-size:${Math.round(p.subSize * 0.86)}px; font-weight:600; color:${INK};
     padding:${Math.round(p.subSize * 0.42)}px ${Math.round(p.subSize * 0.85)}px;
-    border-radius:999px; background:rgba(255,255,255,.07);
-    box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);
+    border-radius:999px; background:rgba(255,255,255,.75);
+    box-shadow:inset 0 0 0 2px ${ACCENT_SOFT};
   }
 </style>
 ${
