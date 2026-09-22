@@ -25,10 +25,8 @@
 import { useState } from 'react';
 import {
   View,
-  Text,
   Pressable,
   Modal,
-  TextInput,
   StyleSheet,
   ScrollView,
   KeyboardAvoidingView,
@@ -40,6 +38,7 @@ import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { REMINDER_PRESETS, presetLabel } from '@/services/reminderService';
+import { Text, TextInput } from '@/components/common/AppText';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 

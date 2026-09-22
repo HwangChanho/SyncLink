@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import type { SpaceDetailStyles } from './spaceDetailStyles';
+import { Text } from '@/components/common/AppText';
 
 interface SectionCardProps {
   title: string;

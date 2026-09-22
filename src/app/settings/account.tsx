@@ -11,7 +11,6 @@
 import { useCallback, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
@@ -27,6 +26,7 @@ import * as authService from '@/services/authService';
 import { useAuthStore } from '@/stores/authStore';
 import { showAlert } from '@/lib/webAlert';
 import { logError } from '@/lib/errorLogger';
+import { Text } from '@/components/common/AppText';
 
 export default function AccountScreen() {
   const { t } = useTranslation();

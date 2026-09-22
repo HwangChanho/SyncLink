@@ -4,12 +4,13 @@
  * v1.2.1 — unread 메시지 badge 지원 (우상단 빨강 동그라미 + 숫자).
  */
 
-import { TouchableOpacity, View, Text, Image, StyleSheet } from 'react-native';
+import { TouchableOpacity, View, Image, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import type { SpaceSummary } from '@/types';
+import { Text } from '@/components/common/AppText';
 
 interface Props {
   space: SpaceSummary;

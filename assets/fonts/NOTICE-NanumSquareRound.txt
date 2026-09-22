@@ -1,0 +1,10 @@
+NanumSquareRound (나눔스퀘어라운드) R / B / EB
+
+Copyright (c) 2017 NAVER Corporation. All rights reserved.
+Font designed by Sandoll Communication.
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+The full license text is identical to OFL-Jua.txt in this directory (SIL OFL 1.1)
+and is also available at https://openfontlicense.org
+
+Source: https://hangeul.naver.com/font (via https://github.com/innks/NanumSquareRound)

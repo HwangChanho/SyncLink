@@ -10,7 +10,7 @@
  * Sprint 19 TASK-1903 — extracted from src/app/(tabs)/my.tsx.
  */
 
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { router } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
@@ -18,6 +18,7 @@ import { useAppearanceStore, type ColorSchemePreference } from '@/stores/appeara
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { makeMenuStyles } from './menuStyles';
+import { Text } from '@/components/common/AppText';
 
 export function SettingsSection() {
   const { t } = useTranslation();

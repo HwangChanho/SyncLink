@@ -9,7 +9,7 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { showAlert } from '@/lib/webAlert';
@@ -17,6 +17,7 @@ import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import type { Poll, PollOption } from '@/types';
+import { Text } from '@/components/common/AppText';
 
 interface Props {
   poll: Poll;

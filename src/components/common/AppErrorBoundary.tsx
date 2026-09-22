@@ -15,10 +15,11 @@
  */
 
 import { Component, type ReactNode } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
 import { logError } from '@/lib/errorLogger';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { Text } from '@/components/common/AppText';
 
 interface Props {
   children: ReactNode;

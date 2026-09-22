@@ -18,8 +18,6 @@ import { useState } from 'react';
 import {
   Modal,
   View,
-  Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
@@ -36,6 +34,7 @@ import { textStyles } from '@/constants/typography';
 import { showAlert } from '@/lib/webAlert';
 import * as spaceService from '@/services/spaceService';
 import type { Space } from '@/types';
+import { Text, TextInput } from '@/components/common/AppText';
 
 interface EditSpaceModalProps {
   visible: boolean;

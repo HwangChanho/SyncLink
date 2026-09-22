@@ -15,7 +15,6 @@ import {
   Modal,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,6 +27,7 @@ import { textStyles } from '@/constants/typography';
 import { useRewardedAd } from '@/hooks/useRewardedAd';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { useAuthStore } from '@/stores/authStore';
+import { Text } from '@/components/common/AppText';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

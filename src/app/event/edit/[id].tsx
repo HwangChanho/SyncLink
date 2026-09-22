@@ -15,8 +15,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useEventForm } from '@/hooks/useEventForm';
 import {
-  View, Text, TextInput, ScrollView, Switch, Pressable,
-  ActivityIndicator, Alert, StyleSheet, Platform, KeyboardAvoidingView,
+  View,
+  ScrollView,
+  Switch,
+  Pressable,
+  ActivityIndicator,
+  Alert,
+  StyleSheet,
+  Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -48,6 +55,7 @@ import { BodyParts } from '@/components/event/BodyParts';
 import { EventImagePicker } from '@/components/event/EventImagePicker';
 import { listEventImages, uploadEventImage, deleteEventImage } from '@/services/eventImageService';
 import { showAlert } from '@/lib/webAlert';
+import { Text, TextInput } from '@/components/common/AppText';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

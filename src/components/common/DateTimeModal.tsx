@@ -32,7 +32,11 @@
 
 import { useEffect, useState } from 'react';
 import {
-  View, Text, Pressable, Modal, StyleSheet, Platform,
+  View,
+  Pressable,
+  Modal,
+  StyleSheet,
+  Platform,
 } from 'react-native';
 import DateTimePicker, {
   type DateTimePickerEvent,
@@ -41,6 +45,7 @@ import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { Text } from '@/components/common/AppText';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 

@@ -32,8 +32,14 @@ import { useEventForm } from '@/hooks/useEventForm';
 import { useAdGate } from '@/hooks/useAdGate';
 import { useAuthStore } from '@/stores/authStore';
 import {
-  View, Text, TextInput, ScrollView, Switch, Pressable,
-  ActivityIndicator, StyleSheet, Platform, KeyboardAvoidingView,
+  View,
+  ScrollView,
+  Switch,
+  Pressable,
+  ActivityIndicator,
+  StyleSheet,
+  Platform,
+  KeyboardAvoidingView,
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -73,6 +79,7 @@ import { FreeTimeRecommendSheet } from '@/components/calendar/FreeTimeRecommendS
 import type { FreeSlot } from '@/types/freeTime';
 import { addDays } from '@/lib/relativeDate';
 import { trackFunnel } from '@/services/funnelService';
+import { Text, TextInput } from '@/components/common/AppText';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

@@ -20,13 +20,19 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import {
-  Modal, View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator,
+  Modal,
+  View,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors, type ColorTokens } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import type { NLParseResult } from '@/types';
+import { Text } from '@/components/common/AppText';
 
 interface Props {
   visible: boolean;

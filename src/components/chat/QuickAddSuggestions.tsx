@@ -14,7 +14,7 @@
  * uses, so the form lands with fields already filled.
  */
 import React, { useEffect, useState } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { View, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,6 +27,7 @@ import {
 } from '@/services/eventService';
 import { getBuiltinCategoryMap } from '@/services/categoryService';
 import { QUICK_ADD_TEMPLATES, type BuiltinSystemCategory } from '@/constants/eventTemplates';
+import { Text } from '@/components/common/AppText';
 
 export function QuickAddSuggestions() {
   const colors = useColors();

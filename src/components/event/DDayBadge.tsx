@@ -8,12 +8,13 @@
  *
  * Used by the home today-list and the desktop selected-day panel.
  */
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import type { ColorTokens } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { dDayBadge } from '@/lib/relativeDate';
+import { Text } from '@/components/common/AppText';
 
 interface Props {
   /** The event's target date (its start_at). D-day is computed vs. today. */

@@ -11,12 +11,13 @@
 
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal, Pressable, View, Text, StyleSheet } from 'react-native';
+import { Modal, Pressable, View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { trackFunnel } from '@/services/funnelService';
+import { Text } from '@/components/common/AppText';
 
 /** 시트에서 고를 수 있는 등록 방식. */
 export type CreateType = 'event' | 'workout' | 'dday' | 'relative';

@@ -19,8 +19,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,6 +38,7 @@ import {
 } from './TodoAttachmentSection';
 import { uploadPhoto, uploadVoice } from '@/services/todoAttachmentService';
 import { logError } from '@/lib/errorLogger';
+import { Text, TextInput } from '@/components/common/AppText';
 
 const PRIORITIES: TodoPriority[] = ['low', 'medium', 'high'];
 

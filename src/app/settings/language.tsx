@@ -8,7 +8,7 @@
  *   feature is findable without prior knowledge of the header glyph.
  */
 
-import { ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
+import { ScrollView, View, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -19,6 +19,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import type { SupportedLocale } from '@/lib/i18n';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { Text } from '@/components/common/AppText';
 
 type LanguageOption = {
   locale: SupportedLocale;

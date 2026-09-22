@@ -11,7 +11,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   Alert,
   ActivityIndicator,
@@ -26,6 +25,7 @@ import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { useAppLockStore } from '@/stores/appLockStore';
 import { isBiometricAvailable, authenticate } from '@/services/appLockService';
+import { Text } from '@/components/common/AppText';
 
 // ─── Component ────────────────────────────────────────────────────────────────
 

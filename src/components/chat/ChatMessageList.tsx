@@ -6,12 +6,13 @@
  */
 
 import React, { useEffect, useRef } from 'react';
-import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import type { ChatUiMessage } from '@/stores/chatStore';
 import { QuickAddSuggestions } from './QuickAddSuggestions';
+import { Text } from '@/components/common/AppText';
 
 interface Props {
   messages: ChatUiMessage[];

@@ -21,8 +21,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Pressable, StyleSheet,
-  Modal, TouchableOpacity, Text,
+  View,
+  Pressable,
+  StyleSheet,
+  Modal,
+  TouchableOpacity,
   Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -52,6 +55,7 @@ import { toDateKey, getViewRange, shiftDate } from '@/lib/calendarRange';
 // Build-81 — useFreeTimeOverlay 미사용 (free time 캘린더에서 제거). Space 화면 전용.
 import { useCalendarSwipe } from '@/hooks/useCalendarSwipe';
 import { useCategoryFilter } from '@/hooks/useCategoryFilter';
+import { Text } from '@/components/common/AppText';
 
 // ─── Component ────────────────────────────────────────────────────────────────
 

@@ -13,8 +13,15 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  View, Text, TextInput, Pressable, FlatList, StyleSheet, Image,
-  KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
+  View,
+  Pressable,
+  FlatList,
+  StyleSheet,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,6 +37,7 @@ import {
   subscribeToSpace, markSpaceAsRead, searchMessages,
   broadcastTyping, subscribeToTyping, type SpaceMessage,
 } from '@/services/spaceMessageService';
+import { Text, TextInput } from '@/components/common/AppText';
 
 export default function SpaceChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();

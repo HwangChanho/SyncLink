@@ -16,13 +16,14 @@
  *   <Tabs.Screen options={{ headerRight: () => <LanguageButton /> }} />
  */
 
-import { TouchableOpacity, ActionSheetIOS, Alert, Platform, StyleSheet, View, Text } from 'react-native';
+import { TouchableOpacity, ActionSheetIOS, Alert, Platform, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { useLanguage, type UseLanguageReturn } from '@/hooks/useLanguage';
 import type { SupportedLocale } from '@/lib/i18n';
 import { spacing } from '@/constants/spacing';
+import { Text } from '@/components/common/AppText';
 
 // ─── Language option config ────────────────────────────────────────────────────
 

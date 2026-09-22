@@ -13,8 +13,14 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  View, Text, ScrollView, Pressable, ActivityIndicator,
-  Alert, StyleSheet, TextInput, KeyboardAvoidingView, Platform,
+  View,
+  ScrollView,
+  Pressable,
+  ActivityIndicator,
+  Alert,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -45,6 +51,7 @@ import { useColors } from '@/hooks/useColors';
 import { useEventTranslation } from '@/hooks/useEventTranslation';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { Text, TextInput } from '@/components/common/AppText';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

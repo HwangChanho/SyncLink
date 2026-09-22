@@ -17,12 +17,13 @@
  */
 
 import React, { useCallback } from 'react';
-import { View, Image, Pressable, Text, StyleSheet, Alert } from 'react-native';
+import { View, Image, Pressable, StyleSheet, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { MAX_EVENT_IMAGES } from '@/services/eventImageService';
+import { Text } from '@/components/common/AppText';
 
 interface Props {
   /** 표시할 이미지 URI 목록 (로컬 file:// 또는 remote https:// 혼합). */

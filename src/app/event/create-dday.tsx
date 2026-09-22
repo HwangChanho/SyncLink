@@ -24,8 +24,12 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import {
-  View, Text, TextInput, Pressable, ScrollView,
-  StyleSheet, Platform, ActivityIndicator,
+  View,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -43,6 +47,7 @@ import { logError } from '@/lib/errorLogger';
 import { dDayBadge } from '@/lib/relativeDate';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { Text, TextInput } from '@/components/common/AppText';
 
 // ─── 알림 프리셋 ──────────────────────────────────────────────────────────────
 

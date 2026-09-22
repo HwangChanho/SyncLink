@@ -11,12 +11,13 @@
  *  - Slightly elevated + scaled so it reads as "in flight".
  */
 
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import type { DragState } from './useGridDragHandler';
 import { useColors } from '@/hooks/useColors';
 import { radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { Text } from '@/components/common/AppText';
 
 interface Props {
   drag: DragState;

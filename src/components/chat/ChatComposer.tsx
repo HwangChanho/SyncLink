@@ -13,7 +13,7 @@
  */
 
 import React, { useCallback, useState } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet, Alert, Image, ScrollView } from 'react-native';
+import { View, Pressable, StyleSheet, Alert, Image, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useColors } from '@/hooks/useColors';
@@ -29,6 +29,7 @@ import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { resolveImageMediaType } from '@/lib/imageMediaType';
 import { router } from 'expo-router';
+import { Text, TextInput } from '@/components/common/AppText';
 
 const MAX_LEN = 500;
 

@@ -9,12 +9,13 @@
  * non-interactive surface that just needs the visual chip.
  */
 
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import type { EventSummary } from '@/types';
 import { useColors } from '@/hooks/useColors';
 import { radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { contrastingTextColor } from '@/lib/colorContrast';
+import { Text } from '@/components/common/AppText';
 
 /** Smallest height that still renders legibly (1-line title). */
 const MIN_HEIGHT = 22;

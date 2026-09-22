@@ -18,7 +18,13 @@
 
 import { useState } from 'react';
 import {
-  View, Text, Pressable, Image, StyleSheet, ActionSheetIOS, Platform, Alert,
+  View,
+  Pressable,
+  Image,
+  StyleSheet,
+  ActionSheetIOS,
+  Platform,
+  Alert,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,6 +33,7 @@ import { useColors } from '@/hooks/useColors';
 import { useVoiceRecorder } from '@/hooks/useVoiceRecorder';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { Text } from '@/components/common/AppText';
 
 // Lazy-require expo-image-manipulator — release builds occasionally fail to
 // resolve the native binding at module-load time, which would crash the

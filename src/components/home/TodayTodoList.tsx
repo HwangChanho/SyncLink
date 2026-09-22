@@ -7,7 +7,7 @@
  * TASK-600 (Sprint 6): 다크모드 대응 — makeStyles(colors) 패턴으로 교체
  */
 
-import { View, Text, TouchableOpacity, StyleSheet, Vibration } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, Vibration } from 'react-native';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTodoStore } from '@/stores/todoStore';
@@ -16,6 +16,7 @@ import { useColors } from '@/hooks/useColors';
 import type { ColorTokens } from '@/hooks/useColors';
 import { spacing, radius, elevation } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { Text } from '@/components/common/AppText';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

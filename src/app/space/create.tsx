@@ -10,8 +10,6 @@
 import { useState } from 'react';
 import {
   View,
-  Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
@@ -31,6 +29,7 @@ import * as spaceService from '@/services/spaceService';
 import { useSpaceStore } from '@/stores/spaceStore';
 import type { SpaceType } from '@/types';
 import { logError } from '@/lib/errorLogger';
+import { Text, TextInput } from '@/components/common/AppText';
 
 // ─── Space type options ────────────────────────────────────────────────────────
 

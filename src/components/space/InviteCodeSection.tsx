@@ -31,7 +31,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
-  Text,
   TouchableOpacity,
   ActivityIndicator,
   Platform,
@@ -43,6 +42,7 @@ import type { useColors } from '@/hooks/useColors';
 import type { SpaceDetailStyles } from '@/components/space/spaceDetailStyles';
 import * as spaceService from '@/services/spaceService';
 import { showAlert } from '@/lib/webAlert';
+import { Text } from '@/components/common/AppText';
 
 // ─── 상수 ─────────────────────────────────────────────────────────────────────
 

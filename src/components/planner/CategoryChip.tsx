@@ -8,7 +8,7 @@
  * Sprint 14 TASK-1413
  */
 
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
@@ -16,6 +16,7 @@ import type { ColorTokens } from '@/hooks/useColors';
 import { radius, spacing } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import type { Category } from '@/types';
+import { Text } from '@/components/common/AppText';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 

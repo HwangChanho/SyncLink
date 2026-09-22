@@ -11,8 +11,15 @@
 
 import React, { useState } from 'react';
 import {
-  Modal, View, Text, TextInput, Pressable, ScrollView, Switch,
-  ActivityIndicator, Platform, StyleSheet, KeyboardAvoidingView,
+  Modal,
+  View,
+  Pressable,
+  ScrollView,
+  Switch,
+  ActivityIndicator,
+  Platform,
+  StyleSheet,
+  KeyboardAvoidingView,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +29,7 @@ import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import type { CreatePollInput, CreatePollOptionInput } from '@/types';
+import { Text, TextInput } from '@/components/common/AppText';
 
 interface Props {
   visible: boolean;

@@ -4,7 +4,7 @@
  * full generated list can be added in a later pass if legal asks.
  */
 
-import { ScrollView, View, Text, Pressable, StyleSheet, Linking } from 'react-native';
+import { ScrollView, View, Pressable, StyleSheet, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -13,6 +13,7 @@ import { useColors } from '@/hooks/useColors';
 import type { ColorTokens } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { Text } from '@/components/common/AppText';
 
 interface LicenseEntry {
   name: string;
@@ -48,6 +49,9 @@ const LICENSES: LicenseEntry[] = [
   { name: 'react-native-safe-area-context',         license: 'MIT' },
   { name: 'react-native-screens',                   license: 'MIT' },
   { name: 'Ionicons / @expo/vector-icons',          license: 'MIT' },
+  // 1.5.0 브랜드 글꼴 — OFL 은 번들 배포 시 저작권·라이선스 고지를 요구한다
+  { name: 'Jua (주아) — © 2018 The Jua Project Authors',  license: 'SIL OFL 1.1', url: 'https://fonts.google.com/specimen/Jua/license' },
+  { name: '나눔스퀘어라운드 — © 2017 NAVER Corporation', license: 'SIL OFL 1.1', url: 'https://hangeul.naver.com/font' },
   { name: 'react-native-markdown-display',          license: 'MIT' },
   { name: '@react-native-community/datetimepicker', license: 'MIT' },
   // ── i18n ─────────────────────────────────────────────────────────────

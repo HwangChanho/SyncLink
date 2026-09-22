@@ -11,7 +11,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { showAlert } from '@/lib/webAlert';
 import { useColors } from '@/hooks/useColors';
@@ -26,6 +26,7 @@ import { SectionCard } from './SectionCard';
 import { PollCard } from './PollCard';
 import { PollCreateModal } from './PollCreateModal';
 import type { SpaceDetailStyles } from './spaceDetailStyles';
+import { Text } from '@/components/common/AppText';
 
 interface Props {
   spaceId: string;

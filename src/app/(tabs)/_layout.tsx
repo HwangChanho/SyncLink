@@ -42,6 +42,7 @@ import { useColors } from '@/hooks/useColors';
 import { useResponsive } from '@/hooks/useResponsive';
 import { ResponsiveTabBar, SIDE_NAV_WIDTH } from '@/components/common/ResponsiveTabBar';
 import { componentHeight } from '@/constants/spacing';
+import { BRAND_FONT } from '@/constants/fonts';
 import { LanguageButton } from '@/components/common/LanguageButton';
 import {
   useAppearanceStore,
@@ -112,11 +113,15 @@ export default function TabLayout() {
         headerTintColor: headerFg,
         headerShadowVisible: false,
         // Larger, bolder top title with auto-contrast against the header bg.
+        // 1.5.0: 네비게이션 헤더는 react-navigation 자체 Text 라 AppText 글꼴이 안 닿는다
+        //        → 제목 글꼴(주아)을 직접 지정. 커스텀 글꼴은 굵기를 파일로 고르므로 fontWeight 는 뺀다.
         headerTitleStyle: {
           fontSize: 22,
-          fontWeight: '700',
+          fontFamily: BRAND_FONT.title,
           color: headerFg,
         },
+        // 하단 탭 라벨도 같은 이유로 본문 글꼴을 직접 지정한다
+        tabBarLabelStyle: { fontFamily: BRAND_FONT.bodyBold },
         // Pull the title block up against the top edge so we don't get
         // any baked-in vertical padding from the navigation header.
         headerTitleContainerStyle: {

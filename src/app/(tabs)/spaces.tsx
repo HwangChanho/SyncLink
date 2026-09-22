@@ -9,7 +9,6 @@
 import { useEffect, useState } from 'react';
 import {
   View,
-  Text,
   ScrollView,
   StyleSheet,
   ActivityIndicator,
@@ -29,6 +28,7 @@ import { textStyles } from '@/constants/typography';
 import { SpaceCard } from '@/components/space/SpaceCard';
 import { getUnreadCounts } from '@/services/spaceMessageService';
 import { AppErrorBoundary } from '@/components/common/AppErrorBoundary';
+import { Text } from '@/components/common/AppText';
 
 /**
  * Guest gate: Spaces (shared calendars) require an account. Browsing guests

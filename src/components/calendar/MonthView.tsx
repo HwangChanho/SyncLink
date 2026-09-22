@@ -18,7 +18,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable, Alert, ScrollView } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, Modal, Pressable, Alert, ScrollView } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { EventSummary } from '@/types';
 import { useColors } from '@/hooks/useColors';
@@ -38,6 +38,7 @@ import { UndoToast, useUndoToast } from './UndoToast';
 import { applyDelta } from '@/lib/calendarGeometry';
 import { deleteEvent } from '@/services/eventService';
 import { useEventStore } from '@/stores/eventStore';
+import { Text } from '@/components/common/AppText';
 
 /** Maximum bars to show per day cell before collapsing to "+N".
  *  v1.2.6 — 하이브리드 룰 (옵션 C): 1~5 그대로 표시 (행 동적 확장),

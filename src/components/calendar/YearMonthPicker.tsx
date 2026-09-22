@@ -20,7 +20,6 @@
 import {
   Modal,
   View,
-  Text,
   TouchableOpacity,
   FlatList,
   StyleSheet,
@@ -31,6 +30,7 @@ import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles, fontWeight } from '@/constants/typography';
+import { Text } from '@/components/common/AppText';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

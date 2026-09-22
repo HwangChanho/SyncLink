@@ -19,7 +19,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { EventSummary } from '@/types';
 import type { FreeSlot } from '@/types/freeTime';
@@ -37,6 +37,7 @@ import { useTranslatedTitles } from '@/hooks/useTranslatedTitles';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { computeEventLayout } from '@/lib/calendarLayout';
+import { Text } from '@/components/common/AppText';
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
 

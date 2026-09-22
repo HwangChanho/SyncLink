@@ -11,9 +11,7 @@
 import { useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -29,6 +27,7 @@ import { textStyles } from '@/constants/typography';
 import { updateProfile } from '@/services/authService';
 import { useAuthStore } from '@/stores/authStore';
 import { SUPPORTED_COUNTRIES, type CountryCode } from '@/services/holidayService';
+import { Text, TextInput } from '@/components/common/AppText';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

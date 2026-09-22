@@ -17,7 +17,11 @@
  */
 import { useState } from 'react';
 import {
-  View, Text, Switch, Pressable, TextInput, StyleSheet, Platform,
+  View,
+  Switch,
+  Pressable,
+  StyleSheet,
+  Platform,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
@@ -26,6 +30,7 @@ import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { DateTimeModal } from '@/components/common/DateTimeModal';
 import { addDays, dDayBadge } from '@/lib/relativeDate';
+import { Text, TextInput } from '@/components/common/AppText';
 
 interface Props {
   /** Whether relative-date mode is on. */

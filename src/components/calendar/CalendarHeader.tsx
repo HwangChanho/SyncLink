@@ -15,12 +15,13 @@
  * should pass `onYearMonthPress` instead.
  */
 
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles, fontWeight } from '@/constants/typography';
+import { Text } from '@/components/common/AppText';
 
 /**
  * NOTE — ISSUE-017 (2026-04-28):

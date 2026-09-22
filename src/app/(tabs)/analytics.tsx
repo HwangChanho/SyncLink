@@ -16,7 +16,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -52,6 +51,7 @@ import {
 } from '@/services/analyticsExtrasService';
 import { generateInsight, type InsightResult } from '@/services/insightsService';
 import i18n from '@/lib/i18n';
+import { Text } from '@/components/common/AppText';
 
 type Preset = 'week' | 'month' | 'quarter';
 

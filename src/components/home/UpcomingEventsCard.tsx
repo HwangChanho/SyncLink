@@ -6,7 +6,7 @@
  * navigates to its detail screen.
  */
 
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useTranslation } from 'react-i18next';
@@ -17,6 +17,7 @@ import { useColors } from '@/hooks/useColors';
 import type { ColorTokens } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { Text } from '@/components/common/AppText';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

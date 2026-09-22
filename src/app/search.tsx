@@ -11,8 +11,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
-  Text,
-  TextInput,
   TouchableOpacity,
   FlatList,
   StyleSheet,
@@ -31,6 +29,7 @@ import {
   searchEventsByTitle,
   type EventAutocompleteSuggestion,
 } from '@/services/eventService';
+import { Text, TextInput } from '@/components/common/AppText';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

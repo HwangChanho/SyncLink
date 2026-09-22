@@ -25,12 +25,13 @@
  */
 
 import { useEffect, useState } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { textStyles } from '@/constants/typography';
 import { supabase } from '@/lib/supabase';
+import { Text } from '@/components/common/AppText';
 
 export default function AuthCallbackScreen() {
   // Resolve active theme colors for dark mode support (TASK-700)

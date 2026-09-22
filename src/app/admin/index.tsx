@@ -16,13 +16,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   ActivityIndicator,
   RefreshControl,
   TouchableOpacity,
-  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BarChart } from 'react-native-chart-kit';
@@ -48,6 +46,7 @@ import {
   type SupportRequestRow,
   type SupportStatus,
 } from '@/services/adminService';
+import { Text, TextInput } from '@/components/common/AppText';
 
 type Days = 1 | 7 | 30;
 

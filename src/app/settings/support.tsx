@@ -12,9 +12,7 @@ import { useState } from 'react';
 import {
   ScrollView,
   View,
-  Text,
   Pressable,
-  TextInput,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
@@ -36,6 +34,7 @@ import {
   SUPPORT_MSG_MIN,
   type SupportKind,
 } from '@/services/supportService';
+import { Text, TextInput } from '@/components/common/AppText';
 
 export default function SupportScreen() {
   const colors = useColors();

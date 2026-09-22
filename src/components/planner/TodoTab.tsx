@@ -11,8 +11,11 @@
 
 import { memo, useMemo, useRef } from 'react';
 import {
-  View, Text, ScrollView,
-  TouchableOpacity, ActivityIndicator, Pressable,
+  View,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  Pressable,
 } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +24,7 @@ import { showAlert } from '@/lib/webAlert';
 import type { ColorTokens } from '@/hooks/useColors';
 import type { Todo, Category } from '@/types';
 import type { PlannerStyles } from './plannerStyles';
+import { Text } from '@/components/common/AppText';
 
 // ─── TodoRow ──────────────────────────────────────────────────────────────────
 

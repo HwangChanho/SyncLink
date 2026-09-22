@@ -19,13 +19,14 @@
  */
 
 import { useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, Image } from 'react-native';
+import { View, Pressable, StyleSheet, Image } from 'react-native';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { useColors } from '@/hooks/useColors';
 import type { WorkoutPartDb } from '@/types';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { WORKOUT_RESERVED_COLOR } from '@/components/event/ColorPicker';
+import { Text } from '@/components/common/AppText';
 
 // 누끼 처리 + alpha trim 된 silhouette PNG (268×632).
 const BODY_IMAGE = require('../../../assets/anatomy/body-silhouette.png');

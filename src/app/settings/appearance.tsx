@@ -15,7 +15,6 @@
 import {
   ScrollView,
   View,
-  Text,
   Pressable,
   StyleSheet,
 } from 'react-native';
@@ -34,6 +33,7 @@ import {
   type ColorSchemePreference,
 } from '@/stores/appearanceStore';
 import { buildPalette } from '@/lib/themePalette';
+import { Text } from '@/components/common/AppText';
 
 // ─── 액센트 프리셋 UI 정의 ────────────────────────────────────────────────────
 

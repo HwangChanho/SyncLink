@@ -15,7 +15,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, Pressable, Alert, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Pressable, Alert, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 // SDK54(expo-file-system 19)에서 readAsStringAsync/EncodingType 등 함수형 API가
@@ -29,6 +29,7 @@ import { textStyles } from '@/constants/typography';
 import { sendAssistantTurn } from '@/services/assistantChatService';
 import { useEventStore } from '@/stores/eventStore';
 import { resolveImageMediaType } from '@/lib/imageMediaType';
+import { Text } from '@/components/common/AppText';
 
 // v1.2.9 — LEAD: "다른 캘린더 사진으로 가져오기" 카드에 X 닫기 기능 추가.
 // 닫으면 영구 hidden (AsyncStorage key). 다시 보려면 설정 같은 데서 reset 필요.

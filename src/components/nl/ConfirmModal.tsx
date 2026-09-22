@@ -9,13 +9,14 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
+import { Modal, View, Pressable, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { EventPreviewCard } from './EventPreviewCard';
 import type { NLParseResult, SpaceSummary } from '@/types';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { Text } from '@/components/common/AppText';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

@@ -6,7 +6,7 @@
  * Tapping navigates to the full note detail screen.
  */
 
-import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
+import { TouchableOpacity, View, StyleSheet } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +14,7 @@ import type { Todo } from '@/types';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles, fontSize } from '@/constants/typography';
+import { Text } from '@/components/common/AppText';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 

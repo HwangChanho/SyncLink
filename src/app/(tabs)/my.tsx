@@ -12,11 +12,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  TextInput,
   ActivityIndicator,
 } from 'react-native';
 // v1.2.3 — expo-image 가 일부 빌드에서 mount 실패 → 표준 RN Image 로 fallback.
@@ -46,6 +44,7 @@ import { SettingsSection } from '@/components/my/SettingsSection';
 import { ServiceInfoSection } from '@/components/my/ServiceInfoSection';
 // Build-81 — AccountSection 은 settings/account 화면으로 이전. import 제거.
 import { DevDashboard } from '@/components/DevDashboard';
+import { Text, TextInput } from '@/components/common/AppText';
 
 // ─── Theme options are now built inside the component using i18n ───────────────
 

@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { ScrollView, View, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -19,6 +19,7 @@ import {
   getWorkoutPartStats, getRunningWeeklyStats,
   type WorkoutPartStat, type RunningStat,
 } from '@/services/fitnessStatsService';
+import { Text } from '@/components/common/AppText';
 
 const PART_LABELS_KO: Record<string, string> = {
   chest: '가슴', back: '등', shoulders: '어깨', arms: '팔', legs: '하체',

@@ -14,9 +14,14 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity,
-  StyleSheet, ActivityIndicator, Alert,
-  KeyboardAvoidingView, Platform, ScrollView,
+  View,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -29,6 +34,7 @@ import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { useTodoStore } from '@/stores/todoStore';
 import type { Todo } from '@/types';
+import { Text, TextInput } from '@/components/common/AppText';
 
 // ─── Component ────────────────────────────────────────────────────────────────
 

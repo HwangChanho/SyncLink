@@ -24,7 +24,7 @@
  */
 
 import { useEffect, useMemo, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -39,6 +39,7 @@ import { useColors } from '@/hooks/useColors';
 import type { ColorTokens } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { Text } from '@/components/common/AppText';
 
 /** Delay before the fully-completed card dismisses itself (ms) — long enough
  *  to register the "all done" state, short enough not to linger. */

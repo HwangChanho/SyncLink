@@ -17,7 +17,6 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import DateTimePicker, {
@@ -27,6 +26,7 @@ import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { radius, spacing } from '@/constants/spacing';
 import { textStyles, fontWeight } from '@/constants/typography';
+import { Text } from '@/components/common/AppText';
 
 interface WheelDatePickerProps {
   /** 모달 가시성. */

@@ -12,11 +12,12 @@
  */
 
 import { useCallback, useRef, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 
 import { useColors } from '@/hooks/useColors';
 import { radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { Text } from '@/components/common/AppText';
 
 /** How long the toast stays visible before auto-dismissing. */
 const UNDO_TOAST_DURATION_MS = 5_000;

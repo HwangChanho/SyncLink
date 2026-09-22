@@ -20,7 +20,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { SkeletonLines } from '@/components/common/Skeleton';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -30,6 +30,7 @@ import { textStyles } from '@/constants/typography';
 import { getWeeklyReview } from '@/services/aiService';
 import { supabase } from '@/lib/supabase';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
+import { Text } from '@/components/common/AppText';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

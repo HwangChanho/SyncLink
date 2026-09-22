@@ -6,7 +6,7 @@
  * callers can mount it unconditionally.
  */
 
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +14,7 @@ import { useColors } from '@/hooks/useColors';
 import { useAuthStore } from '@/stores/authStore';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { Text } from '@/components/common/AppText';
 
 export function LoginPromptBanner() {
   const { t } = useTranslation();

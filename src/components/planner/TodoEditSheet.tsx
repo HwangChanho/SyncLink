@@ -22,8 +22,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,6 +34,7 @@ import type { Category, Todo, TodoPriority, UpdateTodoInput } from '@/types';
 import { CategoryChip } from './CategoryChip';
 import { CategoryPickerSheet } from './CategoryPickerSheet';
 import { DateTimeModal } from '@/components/common/DateTimeModal';
+import { Text, TextInput } from '@/components/common/AppText';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 

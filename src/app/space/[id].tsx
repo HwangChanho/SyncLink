@@ -17,13 +17,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text,
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
   Share,
   Switch,
-  TextInput,
   Platform,
 } from 'react-native';
 // expo-image provides better caching and performance than React Native's Image (TASK-701)
@@ -52,6 +50,7 @@ import { useSpaceStore } from '@/stores/spaceStore';
 import { useAuthStore } from '@/stores/authStore';
 import { AppErrorBoundary } from '@/components/common/AppErrorBoundary';
 import type { Space, SpaceMember, Anniversary, FreeTimeSlot } from '@/types';
+import { Text, TextInput } from '@/components/common/AppText';
 
 // ─── Component ────────────────────────────────────────────────────────────────
 

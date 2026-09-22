@@ -25,7 +25,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
@@ -44,6 +43,7 @@ import type { ColorTokens } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { trackFunnel } from '@/services/funnelService';
+import { Text } from '@/components/common/AppText';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

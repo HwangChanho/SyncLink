@@ -17,9 +17,13 @@
 
 import { useState, useCallback, useRef } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity,
-  StyleSheet, ActivityIndicator,
-  KeyboardAvoidingView, Platform, ScrollView,
+  View,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
   Animated,
 } from 'react-native';
 import { showAlert } from '@/lib/webAlert';
@@ -33,6 +37,7 @@ import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { useTodoStore } from '@/stores/todoStore';
 import { logError } from '@/lib/errorLogger';
+import { Text, TextInput } from '@/components/common/AppText';
 
 export default function NoteNewScreen() {
   const { t } = useTranslation();

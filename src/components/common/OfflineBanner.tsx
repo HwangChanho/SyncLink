@@ -12,7 +12,7 @@
  * Sprint 15 TASK-1520.
  */
 
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -20,6 +20,7 @@ import { useColors } from '@/hooks/useColors';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { spacing } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { Text } from '@/components/common/AppText';
 
 export function OfflineBanner() {
   const { t } = useTranslation();

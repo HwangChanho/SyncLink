@@ -10,11 +10,12 @@
  * (docs/plans/2026-06-04-guest-entry-and-ui-redesign.md).
  */
 
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { Text } from '@/components/common/AppText';
 
 interface EmptyStateProps {
   /** Ionicons glyph shown in the badge above the title. */

@@ -9,7 +9,7 @@
  * Modeled on QuotaExceededSheet for visual consistency.
  */
 
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -18,6 +18,7 @@ import type { ColorTokens } from '@/hooks/useColors';
 import { radius, spacing } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { useLoginPromptStore } from '@/stores/loginPromptStore';
+import { Text } from '@/components/common/AppText';
 
 export function LoginPromptSheet() {
   const { t } = useTranslation();

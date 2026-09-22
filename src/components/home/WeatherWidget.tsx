@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -27,6 +27,7 @@ import {
   DEFAULT_LAT,
   DEFAULT_LON,
 } from '@/services/weatherService';
+import { Text } from '@/components/common/AppText';
 
 // ─── Component ────────────────────────────────────────────────────────────────
 

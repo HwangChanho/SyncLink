@@ -16,8 +16,16 @@
 
 import { useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react';
 import {
-  View, TextInput, Pressable, Text, ActivityIndicator, Image,
-  StyleSheet, Keyboard, Alert, Platform, ScrollView, AppState,
+  View,
+  Pressable,
+  ActivityIndicator,
+  Image,
+  StyleSheet,
+  Keyboard,
+  Alert,
+  Platform,
+  ScrollView,
+  AppState,
 } from 'react-native';
 import Animated, { useAnimatedKeyboard, useAnimatedStyle } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
@@ -49,6 +57,7 @@ import type { NLParseResult, EventSummary, SpaceSummary } from '@/types';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { Text, TextInput } from '@/components/common/AppText';
 
 /**
  * 웹에서 입력바 아래에 두는 여백(px).
@@ -299,8 +308,6 @@ export function NLInputBar({ onEventCreated }: Props) {
     })();
     return () => { cancelled = true; };
   }, [authUserId]);
-
-
 
   // ── Voice recognition setup ─────────────────────────────────────────────────
 

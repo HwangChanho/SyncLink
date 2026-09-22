@@ -8,7 +8,7 @@
  * Used by NLInputBar after a successful parse, before the user confirms.
  */
 
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import type { NLParseResult, Confidence, SpaceSummary } from '@/types';
@@ -16,6 +16,7 @@ import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { ColorPicker, WORKOUT_RESERVED_COLOR, RUNNING_RESERVED_COLOR } from '@/components/event/ColorPicker';
+import { Text } from '@/components/common/AppText';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

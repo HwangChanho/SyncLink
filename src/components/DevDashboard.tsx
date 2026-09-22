@@ -22,7 +22,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
@@ -33,6 +32,7 @@ import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { getUsageDashboard, getCostByFeatureArea } from '@/services/usageMetricsService';
 import type { UsageDashboard, UsagePeriodStats, FeatureAreaCost } from '@/services/usageMetricsService';
+import { Text } from '@/components/common/AppText';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

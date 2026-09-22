@@ -22,8 +22,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
-  TextInput,
-  Text,
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
@@ -39,6 +37,7 @@ import {
   searchPlaces,
   type PlaceSuggestion,
 } from '@/services/placesService';
+import { Text, TextInput } from '@/components/common/AppText';
 
 /**
  * Map our i18next locale → Google Places API `language` param.

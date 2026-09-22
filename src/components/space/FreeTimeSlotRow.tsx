@@ -10,11 +10,12 @@
  */
 
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, TouchableOpacity } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import type { FreeTimeSlot } from '@/types';
 import type { SpaceDetailStyles } from './spaceDetailStyles';
 import { useTranslation } from 'react-i18next';
+import { Text } from '@/components/common/AppText';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 

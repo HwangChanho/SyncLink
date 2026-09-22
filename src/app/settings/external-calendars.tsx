@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, View, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -20,6 +20,7 @@ import {
   syncGoogleCalendarNow,
   type GoogleConnectionStatus,
 } from '@/services/externalCalendarService';
+import { Text } from '@/components/common/AppText';
 
 export default function ExternalCalendarsScreen() {
   const colors = useColors();

@@ -19,8 +19,6 @@
 import { useState, useRef, useCallback } from 'react';
 import {
   View,
-  Text,
-  TextInput,
   TouchableOpacity,
   ScrollView,
   StyleSheet,
@@ -34,6 +32,7 @@ import { useColors } from '@/hooks/useColors';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles, fontSize } from '@/constants/typography';
+import { Text, TextInput } from '@/components/common/AppText';
 
 // ─── Markdown toolbar item ─────────────────────────────────────────────────
 

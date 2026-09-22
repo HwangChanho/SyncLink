@@ -13,8 +13,6 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   View,
-  Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
@@ -31,6 +29,7 @@ import { textStyles } from '@/constants/typography';
 import * as spaceService from '@/services/spaceService';
 import { useSpaceStore } from '@/stores/spaceStore';
 import { INVITE_CODE_LENGTH } from '@/constants/config';
+import { Text, TextInput } from '@/components/common/AppText';
 
 // 단일 진실 — generateCode (DB CHECK ^[A-Z0-9]{6}$) 와 동기화. Build 89:
 // 이전 자체 상수 8 이라 join 화면이 6자 코드를 거부 (LEAD 보고 "참여는 8자").

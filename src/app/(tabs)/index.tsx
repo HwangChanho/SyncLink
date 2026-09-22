@@ -27,7 +27,7 @@
  */
 
 import { useEffect } from 'react';
-import { ScrollView, StyleSheet, RefreshControl, Platform, Pressable, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, RefreshControl, Platform, Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useEventStore } from '@/stores/eventStore';
@@ -58,6 +58,7 @@ import { spacing } from '@/constants/spacing';
 import { desktopContentCentered } from '@/constants/webLayout';
 import { textStyles } from '@/constants/typography';
 import type { DateRange } from '@/types';
+import { Text } from '@/components/common/AppText';
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 

@@ -24,4 +24,27 @@ module.exports = {
     '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
     'no-console': ['warn', { allow: ['warn', 'error', 'info'] }],
   },
+  overrides: [
+    {
+      // 1.5.0 브랜드 글꼴: 텍스트는 공용 AppText 를 거쳐야 글꼴이 입혀진다.
+      // RN Text/TextInput 을 직접 쓰면 그 텍스트만 시스템 글꼴로 남는다.
+      // 타입 import(useRef<TextInput> 등)는 허용한다.
+      files: ['src/**/*.{ts,tsx}'],
+      rules: {
+        '@typescript-eslint/no-restricted-imports': [
+          'error',
+          {
+            paths: [
+              {
+                name: 'react-native',
+                importNames: ['Text', 'TextInput'],
+                message: '@/components/common/AppText 의 Text/TextInput 을 쓰세요(브랜드 글꼴 자동 적용).',
+                allowTypeImports: true,
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
 };

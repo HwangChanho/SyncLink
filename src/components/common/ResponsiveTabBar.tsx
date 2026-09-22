@@ -12,9 +12,10 @@
  */
 
 import { BottomTabBar, type BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { View, Pressable, Text, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
 import { useResponsive } from '@/hooks/useResponsive';
 import { useColors } from '@/hooks/useColors';
+import { Text } from '@/components/common/AppText';
 
 /** 데스크탑 사이드 네비 폭. (tabs)/_layout sceneStyle paddingLeft 와 동일해야 함. */
 export const SIDE_NAV_WIDTH = 240;

@@ -17,8 +17,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity,
-  ActivityIndicator, Alert,
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -31,6 +34,7 @@ import { textStyles } from '@/constants/typography';
 import * as spaceService from '@/services/spaceService';
 import { useSpaceStore } from '@/stores/spaceStore';
 import type { SpaceSummary } from '@/types';
+import { Text } from '@/components/common/AppText';
 
 // Space type labels are now built inside the component using i18n.
 

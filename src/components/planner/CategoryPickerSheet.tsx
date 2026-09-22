@@ -21,8 +21,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,6 +31,7 @@ import { radius, spacing } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import type { Category } from '@/types';
 import { createCategory, getCategories } from '@/services/categoryService';
+import { Text, TextInput } from '@/components/common/AppText';
 
 // ─── Color palette ────────────────────────────────────────────────────────────
 

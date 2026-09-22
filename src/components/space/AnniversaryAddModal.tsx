@@ -2,9 +2,7 @@ import React from 'react';
 import {
   Modal,
   View,
-  Text,
   TouchableOpacity,
-  TextInput,
   Switch,
   KeyboardAvoidingView,
   Platform,
@@ -13,6 +11,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import type { SpaceDetailStyles } from './spaceDetailStyles';
+import { Text, TextInput } from '@/components/common/AppText';
 
 interface AnniversaryAddModalProps {
   visible: boolean;

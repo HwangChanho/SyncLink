@@ -11,7 +11,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { subscribeToSharedEvents } from '@/services/eventRealtimeService';
@@ -21,6 +21,7 @@ import { useColors } from '@/hooks/useColors';
 import type { ColorTokens } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles, fontSize } from '@/constants/typography';
+import { Text } from '@/components/common/AppText';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

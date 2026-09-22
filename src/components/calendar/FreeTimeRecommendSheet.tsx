@@ -23,7 +23,6 @@ import {
   Modal,
   Pressable,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -39,6 +38,7 @@ import type { SupportedLocale } from '@/lib/activitySuggestions';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { Text } from '@/components/common/AppText';
 
 // ─── i18n 텍스트 ──────────────────────────────────────────────────────────────
 

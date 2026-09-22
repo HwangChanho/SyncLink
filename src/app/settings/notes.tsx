@@ -11,7 +11,6 @@
 import {
   ScrollView,
   View,
-  Text,
   Pressable,
   Switch,
   StyleSheet,
@@ -24,6 +23,7 @@ import { useColors, type ColorTokens } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { useNoteSettingsStore } from '@/stores/noteSettingsStore';
+import { Text } from '@/components/common/AppText';
 
 export default function NoteSettingsScreen() {
   const colors = useColors();

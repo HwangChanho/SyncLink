@@ -19,8 +19,10 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity,
-  KeyboardAvoidingView, Platform,
+  View,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -44,6 +46,7 @@ import { NotesTab } from '@/components/planner/NotesTab';
 import { AppErrorBoundary } from '@/components/common/AppErrorBoundary';
 import { logError } from '@/lib/errorLogger';
 import { PrioritySuggestionCard } from '@/components/planner/PrioritySuggestionCard';
+import { Text } from '@/components/common/AppText';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -97,7 +100,6 @@ function PlannerScreenInner() {
   const [todoView, setTodoView] = useState<'category' | 'date' | 'priority'>('category');
   /** TodoCreateSheet visibility — FAB on Todo tab opens it. */
   const [createSheetOpen, setCreateSheetOpen] = useState(false);
-
 
   // ── Load data on mount ───────────────────────────────────────────────────
 
@@ -158,7 +160,6 @@ function PlannerScreenInner() {
       }]);
     }
   }, [error, clearError, t]);
-
 
   // ── Toggle expand completed ──────────────────────────────────────────────
 

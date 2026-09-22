@@ -5,7 +5,7 @@
  * 변경 즉시 DB persist + authStore 갱신 (다음 캘린더 fetch 부터 새 공휴일 적용).
  */
 
-import { ScrollView, View, Text, Pressable, StyleSheet, Alert } from 'react-native';
+import { ScrollView, View, Pressable, StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -16,6 +16,7 @@ import { setUserCountry } from '@/services/userProfileService';
 import { SUPPORTED_COUNTRIES, type CountryCode } from '@/services/holidayService';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { Text } from '@/components/common/AppText';
 
 export default function CountrySettingsScreen() {
   const colors = useColors();

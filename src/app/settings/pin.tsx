@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, Alert, StyleSheet, Pressable } from 'react-native';
+import { View, Alert, StyleSheet, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +22,7 @@ import { textStyles } from '@/constants/typography';
 import { useAppLockStore } from '@/stores/appLockStore';
 import { clearPin, hasPin, setPin, verifyPin } from '@/services/pinLockService';
 import { PinPad } from '@/components/common/PinPad';
+import { Text } from '@/components/common/AppText';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

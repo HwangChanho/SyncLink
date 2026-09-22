@@ -11,8 +11,11 @@
 
 import { memo } from 'react';
 import {
-  View, Text, FlatList, Image,
-  ActivityIndicator, Pressable,
+  View,
+  FlatList,
+  Image,
+  ActivityIndicator,
+  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -24,6 +27,7 @@ import { useNoteSettingsStore } from '@/stores/noteSettingsStore';
 import type { ColorTokens } from '@/hooks/useColors';
 import type { Todo } from '@/types';
 import type { PlannerStyles } from './plannerStyles';
+import { Text } from '@/components/common/AppText';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

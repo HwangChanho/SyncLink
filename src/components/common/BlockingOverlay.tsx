@@ -8,11 +8,12 @@
  * 으로 show/hide 처리. _layout root 에 한 번만 마운트.
  */
 
-import { View, Text, ActivityIndicator, StyleSheet, Pressable, Platform } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Pressable, Platform } from 'react-native';
 import { useBlockingStore } from '@/stores/blockingStore';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { Text } from '@/components/common/AppText';
 
 export function BlockingOverlay() {
   const visible = useBlockingStore(s => s.visible);

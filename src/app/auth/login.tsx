@@ -5,8 +5,12 @@
 
 import { useRef, useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity,
-  ActivityIndicator, Platform, TextInput, KeyboardAvoidingView,
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+  Platform,
+  KeyboardAvoidingView,
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,6 +28,7 @@ import {
   signInWithApple,
   signInWithEmail,
 } from '@/services/authService';
+import { Text, TextInput } from '@/components/common/AppText';
 
 type Provider = 'google' | 'kakao' | 'apple' | 'dev';
 

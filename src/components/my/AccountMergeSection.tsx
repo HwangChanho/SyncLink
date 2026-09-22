@@ -21,8 +21,6 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -41,6 +39,7 @@ import type {
 } from '@/services/authService';
 import { showAlert } from '@/lib/webAlert';
 import { makeMenuStyles } from './menuStyles';
+import { Text, TextInput } from '@/components/common/AppText';
 
 /** 통합 로그인에서 노출할 B 로그인 방식 버튼. */
 const METHODS: { key: MergeLoginMethod; label: string; icon: keyof typeof Ionicons.glyphMap; iosOnly?: boolean }[] = [

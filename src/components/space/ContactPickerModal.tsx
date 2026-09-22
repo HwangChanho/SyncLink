@@ -22,8 +22,6 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Modal,
   View,
-  Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   FlatList,
@@ -45,6 +43,7 @@ import {
   type ContactRow,
   type ContactPermissionResult,
 } from '@/services/contactService';
+import { Text, TextInput } from '@/components/common/AppText';
 
 interface ContactPickerModalProps {
   visible:    boolean;

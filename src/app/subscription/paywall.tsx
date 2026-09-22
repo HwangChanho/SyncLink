@@ -19,7 +19,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
@@ -40,6 +39,7 @@ import {
   restorePurchases,
 } from '@/services/purchaseService';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
+import { Text } from '@/components/common/AppText';
 
 // Apple Guideline 3.1.2(c): paywall must show functional links to the EULA
 // and privacy policy. App Store reviewers reject otherwise. iTunes Standard

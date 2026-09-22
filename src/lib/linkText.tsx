@@ -9,10 +9,11 @@
  * Kept generic (not chat-specific) so notes / other surfaces can reuse it.
  */
 
-import { Text, Platform, Linking, type StyleProp, type TextStyle } from 'react-native';
+import { Platform, Linking, type StyleProp, type TextStyle } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { useTranslation } from 'react-i18next';
 import { showAlert } from '@/lib/webAlert';
+import { Text } from '@/components/common/AppText';
 
 /**
  * Matches http(s) URLs. Stops at whitespace and a few wrapping characters so a

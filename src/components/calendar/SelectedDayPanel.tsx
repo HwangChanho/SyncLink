@@ -8,7 +8,7 @@
  * 디자인은 홈의 TodayEventList row(컬러바 + 제목 + 시간 + 공유배지)와 톤을 맞춰
  * 앱 전반의 일정 표현을 일관되게 유지한다.
  */
-import { View, Text, ScrollView, Pressable, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, ScrollView, Pressable, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
@@ -18,6 +18,7 @@ import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { DDayBadge } from '@/components/event/DDayBadge';
 import type { EventSummary } from '@/types';
+import { Text } from '@/components/common/AppText';
 
 interface Props {
   /** 현재 선택된 날짜(월뷰에서 탭한 셀). */

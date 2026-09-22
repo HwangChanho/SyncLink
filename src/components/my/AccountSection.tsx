@@ -12,11 +12,12 @@
  * Sprint 19 TASK-1903 — extracted from src/app/(tabs)/my.tsx.
  */
 
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { textStyles } from '@/constants/typography';
 import { makeMenuStyles } from './menuStyles';
+import { Text } from '@/components/common/AppText';
 
 interface AccountSectionProps {
   /** Whether a sign-out request is currently in flight (shows spinner). */

@@ -13,9 +13,15 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, TextInput,
-  StyleSheet, ActivityIndicator, Alert, Modal,
-  KeyboardAvoidingView, Platform,
+  View,
+  FlatList,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  Alert,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -32,6 +38,7 @@ import { useColors } from '@/hooks/useColors';
 import type { ColorTokens } from '@/hooks/useColors';
 import { spacing, radius, componentHeight } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
+import { Text, TextInput } from '@/components/common/AppText';
 
 // ─── Preset colors for the color picker ──────────────────────────────────────
 

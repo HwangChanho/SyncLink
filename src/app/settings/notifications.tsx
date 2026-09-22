@@ -18,7 +18,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   Switch,
   ActivityIndicator,
@@ -47,6 +46,7 @@ import {
   type NotificationPreferences,
 } from '@/services/authService';
 import { useAuthStore } from '@/stores/authStore';
+import { Text } from '@/components/common/AppText';
 
 // ─── Toggle row config ────────────────────────────────────────────────────────
 

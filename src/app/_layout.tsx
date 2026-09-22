@@ -14,7 +14,7 @@ import '@/lib/i18n'; // initialize i18n before any component renders (synchronou
 import { initSentry } from '@/lib/sentry';
 import { LogBox } from 'react-native';
 import { useEffect, useRef, useState } from 'react';
-import { AppState, AppStateStatus, Platform, View, StyleSheet, Text, TouchableOpacity, ActivityIndicator, useWindowDimensions } from 'react-native';
+import { AppState, AppStateStatus, Platform, View, StyleSheet, TouchableOpacity, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -61,7 +61,9 @@ import { useAppearanceStore, initAppearanceStore } from '@/stores/appearanceStor
 import { useNoteSettingsStore } from '@/stores/noteSettingsStore';
 import { trackFunnel } from '@/services/funnelService';
 import { useFonts } from 'expo-font';
+import { BRAND_FONT, BRAND_FONT_ASSETS } from '@/constants/fonts';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
+import { Text } from '@/components/common/AppText';
 
 // E2E / DEV builds: suppress RevenueCat SDK configuration warnings that appear as
 // Console Error overlays and block Maestro test interactions.
@@ -418,10 +420,21 @@ export default function RootLayout() {
   // the font cache on first load and resolve instantly, so this adds no
   // perceivable cost. We block first render until they resolve so we never
   // flash the placeholder glyphs.
-  const [fontsLoaded] = useFonts({
+  //
+  // 1.5.0 브랜드 글꼴(주아·나눔스퀘어라운드, src/constants/fonts.ts):
+  //   - 네이티브: 앱에 들어 있는 로컬 파일이라 금방 끝난다 → 아이콘 글꼴과 함께 기다려
+  //     첫 화면이 시스템 글꼴로 번쩍였다 바뀌는 걸 막는다.
+  //   - 웹: 4개 합쳐 약 5MB 라 기다리면 첫 화면이 몇 초 멈춘다 → 기다리지 않고
+  //     별도 useFonts 로 뒤에서 받는다. 받기 전엔 대체 글꼴, 받으면 브라우저가 바꿔 그린다.
+  const isWeb = Platform.OS === 'web';
+  const [iconAndBrandLoaded, fontError] = useFonts({
     ...Ionicons.font,
     ...FontAwesome.font,
+    ...(isWeb ? {} : BRAND_FONT_ASSETS),
   });
+  useFonts(isWeb ? BRAND_FONT_ASSETS : {});
+  // 🔴 로딩이 실패해도 스플래시에서 멈추지 않게 한다 — 글꼴이 없으면 시스템 글꼴로 그려진다.
+  const fontsLoaded = iconAndBrandLoaded || fontError != null;
 
   const { setUser, setLoading, isAuthenticated } = useAuthStore();
   const setPlan = useSubscriptionStore((s) => s.setPlan);
@@ -843,7 +856,13 @@ export default function RootLayout() {
           screen flash before useAuthGuard's redirect lands.
         */}
         {(!routingReady || !fontsLoaded) && <AppSplash />}
-        <Stack screenOptions={{ headerShown: false }}>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            // 헤더를 켜는 화면(AI 비서 등)의 제목 — react-navigation 자체 Text 라 글꼴을 직접 준다
+            headerTitleStyle: { fontFamily: BRAND_FONT.bodyBold },
+          }}
+        >
           <Stack.Screen name="onboarding/index" />
           <Stack.Screen name="auth/login" />
           <Stack.Screen name="auth/callback" />
