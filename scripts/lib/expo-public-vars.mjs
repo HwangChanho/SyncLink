@@ -37,7 +37,7 @@ export const INTENTIONALLY_UNSET = {
 /**
  * **특정 플랫폼에서만 읽는** 변수 → 그 플랫폼 목록.
  *
- * 🔴 왜 필요한가(2026-09-23, 실제 IPA 첫 검사에서 발견): Metro 는 플랫폼별 번들을 만들 때
+ * 🔴 왜 필요한가(2026-09-23, 실제 IPA·aab 첫 검사에서 발견 — 양쪽 다 4건씩 오탐): Metro 는 플랫폼별 번들을 만들 때
  *    `Platform.OS === 'android'` 같은 분기를 **상수로 접어 죽은 코드를 지운다.** 그래서
  *    Android 전용 값은 iOS 번들에 원래 없다. 이걸 모르면 정상 IPA 를 «값 누락»으로 막는다
  *    (1.5.0 build 190 에서 4건 오탐 — 아래 4개).
@@ -60,6 +60,23 @@ export const PLATFORM_SCOPED = {
   EXPO_PUBLIC_ADMOB_REWARDED_ID_ANDROID: {
     platforms: ['android'],
     why: "adService.ts — Platform.OS === 'android' 분기에서만 읽는다",
+  },
+  // ── iOS 전용 — 1.5.0 vc36 aab 첫 검사에서 확인(2026-09-23) ──
+  EXPO_PUBLIC_ADMOB_APP_ID_IOS: {
+    platforms: ['ios'],
+    why: "adService.ts — Platform.OS === 'ios' 분기에서만 읽는다",
+  },
+  EXPO_PUBLIC_ADMOB_BANNER_ID_IOS: {
+    platforms: ['ios'],
+    why: "FreeBannerAd.tsx — Platform.OS === 'ios' 분기에서만 읽는다",
+  },
+  EXPO_PUBLIC_ADMOB_REWARDED_ID_IOS: {
+    platforms: ['ios'],
+    why: "adService.ts — Platform.OS === 'ios' 분기에서만 읽는다",
+  },
+  EXPO_PUBLIC_RC_API_KEY_IOS: {
+    platforms: ['ios'],
+    why: "purchaseService.ts 는 모듈 상단에서 읽지만 쓰는 곳이 Platform.OS === 'ios' 분기뿐이라 Android 번들에선 죽은 코드로 지워진다(_layout.tsx 도 iOS 분기)",
   },
   EXPO_PUBLIC_KAKAO_REST_API_KEY: {
     platforms: ['web'],
