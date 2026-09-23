@@ -26,6 +26,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { showAlert } from '@/lib/webAlert';
 import { useColors } from '@/hooks/useColors';
+import { usePickerThemeVariant } from '@/hooks/usePickerThemeVariant';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import type { CreatePollInput, CreatePollOptionInput } from '@/types';
@@ -58,6 +59,8 @@ const newKey = () => `opt-${++seq}`;
 export function PollCreateModal({ visible, onClose, onSubmit }: Props) {
   const { t, i18n } = useTranslation();
   const colors = useColors();
+  // OS 가 아니라 앱 테마를 따른다(usePickerThemeVariant 참고)
+  const pickerTheme = usePickerThemeVariant();
   const styles = makeStyles(colors);
 
   const [title, setTitle] = useState('');
@@ -215,6 +218,7 @@ export function PollCreateModal({ visible, onClose, onSubmit }: Props) {
             <DateTimePicker
               value={picking.startsAt}
               mode="datetime"
+              themeVariant={pickerTheme}
               onChange={(_e, date) => {
                 // Android 는 선택/취소 후 picker 를 직접 닫아야 한다.
                 if (Platform.OS !== 'ios') setPickerFor(null);

@@ -24,6 +24,7 @@ import DateTimePicker, {
 } from '@react-native-community/datetimepicker';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
+import { usePickerThemeVariant } from '@/hooks/usePickerThemeVariant';
 import { radius, spacing } from '@/constants/spacing';
 import { textStyles, fontWeight } from '@/constants/typography';
 import { Text } from '@/components/common/AppText';
@@ -48,6 +49,8 @@ export function WheelDatePicker({
   const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
+  // 앱 테마를 따른다 — 예전엔 "dark" 하드코딩이라 라이트 모드에서 흰 휠 글자가 안 보였다
+  const pickerTheme = usePickerThemeVariant();
 
   // Modal 이 열릴 때마다 currentDate 로 draft 초기화.
   const [draft, setDraft] = useState<Date>(currentDate);
@@ -107,11 +110,11 @@ export function WheelDatePicker({
                     fontSize:        18,
                     padding:         12,
                     borderRadius:    8,
-                    border:          '1px solid #444',
+                    border:          `1px solid ${colors.border}`,
                     background:      'transparent',
-                    color:           '#FFF',
+                    color:           colors.textPrimary,
                     width:           '100%',
-                    colorScheme:     'dark',
+                    colorScheme:     pickerTheme,
                   }}
                 />
               )
@@ -122,7 +125,7 @@ export function WheelDatePicker({
                   display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                   onChange={handleDateChange}
                   style={styles.picker}
-                  themeVariant="dark"
+                  themeVariant={pickerTheme}
                 />
               )}
           </View>

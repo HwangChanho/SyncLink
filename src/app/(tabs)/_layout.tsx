@@ -126,10 +126,15 @@ export default function TabLayout() {
         headerTitleStyle: {
           fontSize: 22,
           fontFamily: BRAND_FONT.title,
+          // 라이브러리 기본 헤더 굵기(600)가 남지 않게 — 탭 라벨 잘림과 같은 원인을 미리 막는다
+          fontWeight: 'normal',
           color: headerFg,
         },
-        // 하단 탭 라벨도 같은 이유로 본문 글꼴을 직접 지정한다
-        tabBarLabelStyle: { fontFamily: BRAND_FONT.bodyBold },
+        // 하단 탭 라벨도 같은 이유로 본문 글꼴을 직접 지정한다.
+        // 🔴 fontWeight: 'normal' 필수 — 라이브러리 기본 라벨 스타일(fonts.medium)이 굵기 500 을
+        //    남겨, iOS 실기에서 커스텀 글꼴 라벨이 "캘…" 처럼 잘렸다(LEAD 스크린샷 09-23, 1.5.0 build 190).
+        //    커스텀 글꼴은 굵기를 파일로 고르므로 굵기 값은 항상 normal 로 둔다(fonts.ts 참고).
+        tabBarLabelStyle: { fontFamily: BRAND_FONT.bodyBold, fontWeight: 'normal' },
         // Pull the title block up against the top edge so we don't get
         // any baked-in vertical padding from the navigation header.
         headerTitleContainerStyle: {

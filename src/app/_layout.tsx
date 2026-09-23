@@ -860,7 +860,8 @@ export default function RootLayout() {
           screenOptions={{
             headerShown: false,
             // 헤더를 켜는 화면(AI 비서 등)의 제목 — react-navigation 자체 Text 라 글꼴을 직접 준다
-            headerTitleStyle: { fontFamily: BRAND_FONT.bodyBold },
+            // fontWeight normal — 커스텀 글꼴에 굵기 값이 남으면 iOS 에서 잘린다((tabs)/_layout 참고)
+            headerTitleStyle: { fontFamily: BRAND_FONT.bodyBold, fontWeight: 'normal' },
           }}
         >
           <Stack.Screen name="onboarding/index" />

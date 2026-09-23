@@ -43,6 +43,7 @@ import DateTimePicker, {
 } from '@react-native-community/datetimepicker';
 import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
+import { usePickerThemeVariant } from '@/hooks/usePickerThemeVariant';
 import { spacing, radius } from '@/constants/spacing';
 import { textStyles } from '@/constants/typography';
 import { Text } from '@/components/common/AppText';
@@ -86,6 +87,8 @@ export function DateTimeModal({
 }: DateTimeModalProps) {
   const { t } = useTranslation();
   const colors = useColors();
+  // OS 가 아니라 앱 테마를 따른다(usePickerThemeVariant 참고)
+  const pickerTheme = usePickerThemeVariant();
   const styles = makeStyles(colors);
 
   /**
@@ -178,6 +181,7 @@ export function DateTimeModal({
               mode="date"
               display={Platform.OS === 'ios' ? 'inline' : 'default'}
               onChange={handleDateChange}
+              themeVariant={pickerTheme}
               // Only pass minimumDate when provided (exactOptionalPropertyTypes)
               {...(minimumDate ? { minimumDate } : {})}
               style={styles.datePicker}
@@ -200,6 +204,7 @@ export function DateTimeModal({
                 mode="time"
                 display={Platform.OS === 'ios' ? 'compact' : 'default'}
                 onChange={handleTimeChange}
+                themeVariant={pickerTheme}
                 style={styles.timePicker}
               />
             </View>
