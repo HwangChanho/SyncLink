@@ -5,6 +5,7 @@
  *   node scripts/appstore-screenshots.mjs                                  # 현황 (dry-run)
  *   node scripts/appstore-screenshots.mjs add <파일...> --write            # 편집 가능한 버전에 추가
  *   node scripts/appstore-screenshots.mjs order <파일명...> --write         # 그 순서대로 재배열
+ *   node scripts/appstore-screenshots.mjs replace <파일...> --write        # 세트 통째 교체(옛 것 삭제 → 순서대로 업로드)
  *   ... [--display APP_IPHONE_65] [--version 1.4.5]
  *
  * 왜 리포에 두는가: 이 업로드 흐름을 스크래치패드에 뒀다가 두 번 잃었다(asc-upload-shots.mjs).
@@ -175,8 +176,33 @@ if (cmd === 'add') {
     body: { data: ordered },
   });
   console.log(`  ✅ ${ordered.length}장 재배열`);
+} else if (cmd === 'replace') {
+  // 1.5.0 추가: 세트를 통째로 갈아끼운다(리브랜딩처럼 전 장이 바뀔 때).
+  // 새 버전은 이전 버전 스크린샷을 그대로 물려받는데, 세트당 10장 한도라 새 것을 먼저
+  // 올릴 수 없다 → 파일부터 전부 확인 → 옛 것 삭제 → 새 것을 순서대로 업로드 → 순서 고정.
+  // 도중에 실패해도 심사 전 버전이라 같은 명령을 다시 돌리면 복구된다.
+  if (files.length === 0) throw new Error('replace 할 파일이 없습니다');
+  if (files.length > MAX_PER_SET) throw new Error(`${files.length}장 — 한도 ${MAX_PER_SET} 초과`);
+  const paths = files.map((f) => path.resolve(f));
+  for (const p of paths) statSync(p); // 없는 파일이면 여기서 던진다(삭제 전에 멈춘다)
+  const old = await listShots(set.id);
+  for (const s of old) {
+    await api(`/v1/appScreenshots/${s.id}`, { method: 'DELETE' });
+  }
+  console.log(`  🗑  옛 ${old.length}장 삭제`);
+  const uploaded = [];
+  for (const p of paths) {
+    const r = await uploadOne(set.id, p);
+    uploaded.push({ type: 'appScreenshots', id: r.id });
+    console.log(`  ✅ ${r.fileName}`);
+  }
+  // 업로드 순서가 곧 노출 순서라는 보장이 문서에 없어 순서를 명시적으로 고정한다
+  await api(`/v1/appScreenshotSets/${set.id}/relationships/appScreenshots`, {
+    method: 'PATCH',
+    body: { data: uploaded },
+  });
 } else {
-  throw new Error('usage: appstore-screenshots.mjs (add|order) <파일...> --write');
+  throw new Error('usage: appstore-screenshots.mjs (add|order|replace) <파일...> --write');
 }
 
 // 되읽어 검증 — 조용히 실패하면 심사에 옛 스크린샷이 그대로 나간다.
