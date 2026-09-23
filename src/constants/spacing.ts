@@ -111,7 +111,9 @@ export const componentHeight = {
   buttonSm:      40,
   /** Large CTA button (e.g. Paywall subscribe button). */
   buttonLg:      56,
-  tabBar:        64,
+  // 1.5.0: 탭 글자를 빼고(아이콘만) 64 → 50. iOS 표준 탭바(49)와 비슷하다.
+  //        홈 인디케이터 여백(insets.bottom)은 (tabs)/_layout 에서 따로 더한다.
+  tabBar:        50,
   navHeader:     56,
   eventCard:     72,
   calendarCell:  60,
