@@ -46,7 +46,10 @@ export const HEADER_TITLE_COLOR_HEX: Record<HeaderTitleColor, string | null> = {
   primary: '#6366F1',
   indigo:  '#6366F1',
   rose:    '#E11D48',
-  emerald: '#059669',
+  // 1.5.0 LEAD 지시: 진한 에메랄드(#059669) → 브랜드 민트(아이콘 달력 띠 ICON_COLORS.band).
+  // 🔴 휘도 0.509 로 contrastingTextColor 경계(0.5) 바로 위 → 검정 글자(대비 11.2).
+  //    조금만 어둡게 바꿔도 흰 글자(1.9)로 뒤집혀 안 보인다 — 테스트가 잠근다.
+  emerald: '#6CCFAE',
   amber:   '#D97706',
   violet:  '#7C3AED',
 };
