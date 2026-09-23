@@ -1,5 +1,9 @@
 const ja = {
   common: {
+    // 1.5.0 OTA 업데이트 안내 배너(UpdateBanner)
+    update_available: 'アプリのアップデートがあります',
+    update_apply: '今すぐ適用',
+    update_later: 'あとで',
     more_options: "その他の設定",
     today_suggestions: "今日の提案",
     see_all: 'すべて表示',

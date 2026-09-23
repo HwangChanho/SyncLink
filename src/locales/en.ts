@@ -1,5 +1,9 @@
 const en = {
   common: {
+    // 1.5.0 OTA 업데이트 안내 배너(UpdateBanner)
+    update_available: 'An app update is available',
+    update_apply: 'Update now',
+    update_later: 'Later',
     more_options: "More options",
     today_suggestions: "Today's suggestions",
     see_all: 'See all',

@@ -4,6 +4,10 @@
  */
 const ko = {
   common: {
+    // 1.5.0 OTA 업데이트 안내 배너(UpdateBanner)
+    update_available: '앱 업데이트가 있습니다',
+    update_apply: '지금 적용',
+    update_later: '나중에',
     more_options: "더보기",
     today_suggestions: "오늘의 제안",
     see_all: '전체 보기',

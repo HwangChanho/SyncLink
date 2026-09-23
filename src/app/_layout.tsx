@@ -45,6 +45,7 @@ import { useWebPush } from '@/hooks/useWebPush';
 import { useWidgetSync } from '@/hooks/useWidgetSync';
 import { PinPad } from '@/components/common/PinPad';
 import { OfflineBanner } from '@/components/common/OfflineBanner';
+import { UpdateBanner } from '@/components/common/UpdateBanner';
 import { LoginPromptSheet } from '@/components/common/LoginPromptSheet';
 import { useLoginPromptStore } from '@/stores/loginPromptStore';
 import { AppSplash } from '@/components/common/AppSplash';
@@ -850,6 +851,8 @@ export default function RootLayout() {
           lock overlay so users still know they are offline while locked.
         */}
         <OfflineBanner />
+        {/* 1.5.0: OTA 새 업데이트를 받으면 "앱 업데이트가 있습니다" → 지금 적용(리로드) */}
+        <UpdateBanner />
         {/*
           Sprint 19 — auth + routing not yet settled. Render the splash on
           top of the Stack so the user never sees the default-route Home

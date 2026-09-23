@@ -1,5 +1,9 @@
 const zh = {
   common: {
+    // 1.5.0 OTA 업데이트 안내 배너(UpdateBanner)
+    update_available: '有可用的应用更新',
+    update_apply: '立即更新',
+    update_later: '稍后',
     more_options: "更多选项",
     today_suggestions: "今日建议",
     see_all: '查看全部',
