@@ -130,11 +130,10 @@ export default function TabLayout() {
           fontWeight: 'normal',
           color: headerFg,
         },
-        // 하단 탭 라벨도 같은 이유로 본문 글꼴을 직접 지정한다.
-        // 🔴 fontWeight: 'normal' 필수 — 라이브러리 기본 라벨 스타일(fonts.medium)이 굵기 500 을
-        //    남겨, iOS 실기에서 커스텀 글꼴 라벨이 "캘…" 처럼 잘렸다(LEAD 스크린샷 09-23, 1.5.0 build 190).
-        //    커스텀 글꼴은 굵기를 파일로 고르므로 굵기 값은 항상 normal 로 둔다(fonts.ts 참고).
-        tabBarLabelStyle: { fontFamily: BRAND_FONT.bodyBold, fontWeight: 'normal' },
+        // 1.5.0 LEAD 지시(09-23): 하단 탭바는 **아이콘만** — 글자를 모두 뺐다.
+        // 스크린리더 이름은 그대로 남는다(라이브러리가 title 로 "캘린더, tab, 1 of 5" 를 만든다).
+        // 웹 데스크탑 좌측 메뉴(ResponsiveTabBar)는 자기 글자를 따로 그려 영향 없다.
+        tabBarShowLabel: false,
         // Pull the title block up against the top edge so we don't get
         // any baked-in vertical padding from the navigation header.
         headerTitleContainerStyle: {
