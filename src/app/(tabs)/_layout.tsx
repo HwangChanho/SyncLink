@@ -43,6 +43,7 @@ import { useResponsive } from '@/hooks/useResponsive';
 import { ResponsiveTabBar, SIDE_NAV_WIDTH } from '@/components/common/ResponsiveTabBar';
 import { componentHeight } from '@/constants/spacing';
 import { BRAND_FONT } from '@/constants/fonts';
+import { useBrandFontsReady } from '@/lib/brandFontsReady';
 // 1.5.0: 탭을 고르는 순간 아이콘이 통 튄다(체크박스 완료와 같은 컴포넌트를 재사용)
 import { PopOnActivate } from '@/components/motion/PopOnActivate';
 import { markJustActivated } from '@/components/motion/activationRegistry';
@@ -77,6 +78,8 @@ export default function TabLayout() {
   // child screens (NLInputBar, FAB) sitting too close to the home bar on
   // newer devices — sprint-32 user feedback "홈바에 딱 붙어있음".
   const insets = useSafeAreaInsets();
+  // 브랜드 글꼴 준비 여부 — 헤더 제목 글꼴을 준비 후에만 지정한다(lib/brandFontsReady)
+  const brandFontsReady = useBrandFontsReady();
   // 웹 데스크탑(>=1024): 하단 탭바 → 좌측 사이드 네비 + 콘텐츠 우측 패딩. (2026-06-08 S1)
   const { isDesktop } = useResponsive();
 
@@ -125,7 +128,8 @@ export default function TabLayout() {
         //        → 제목 글꼴(주아)을 직접 지정. 커스텀 글꼴은 굵기를 파일로 고르므로 fontWeight 는 뺀다.
         headerTitleStyle: {
           fontSize: 22,
-          fontFamily: BRAND_FONT.title,
+          // 준비 전에는 지정하지 않는다 — 없는 글꼴로 잰 폭이 굳어 잘린다(lib/brandFontsReady)
+          fontFamily: brandFontsReady ? BRAND_FONT.title : undefined,
           // 라이브러리 기본 헤더 굵기(600)가 남지 않게 — 탭 라벨 잘림과 같은 원인을 미리 막는다
           fontWeight: 'normal',
           color: headerFg,

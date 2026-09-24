@@ -63,6 +63,7 @@ import { useNoteSettingsStore } from '@/stores/noteSettingsStore';
 import { trackFunnel } from '@/services/funnelService';
 import { useFonts } from 'expo-font';
 import { BRAND_FONT, BRAND_FONT_ASSETS } from '@/constants/fonts';
+import { markBrandFontsReady } from '@/lib/brandFontsReady';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
 import { Text } from '@/components/common/AppText';
 
@@ -433,9 +434,15 @@ export default function RootLayout() {
     ...FontAwesome.font,
     ...(isWeb ? {} : BRAND_FONT_ASSETS),
   });
-  useFonts(isWeb ? BRAND_FONT_ASSETS : {});
+  const [webBrandLoaded] = useFonts(isWeb ? BRAND_FONT_ASSETS : {});
   // 🔴 로딩이 실패해도 스플래시에서 멈추지 않게 한다 — 글꼴이 없으면 시스템 글꼴로 그려진다.
   const fontsLoaded = iconAndBrandLoaded || fontError != null;
+  // 브랜드 글꼴이 **실제로** 준비됐는가(실패는 제외). 준비 전에는 텍스트가 브랜드 글꼴을 쓰지 않는다 —
+  // 스플래시 아래에서 먼저 그려진 화면이 시스템 글꼴 폭으로 굳어 끝 글자가 잘렸다(lib/brandFontsReady).
+  const brandFontsReady = isWeb ? webBrandLoaded : iconAndBrandLoaded;
+  useEffect(() => {
+    if (brandFontsReady) markBrandFontsReady();
+  }, [brandFontsReady]);
 
   const { setUser, setLoading, isAuthenticated } = useAuthStore();
   const setPlan = useSubscriptionStore((s) => s.setPlan);
@@ -864,7 +871,10 @@ export default function RootLayout() {
             headerShown: false,
             // 헤더를 켜는 화면(AI 비서 등)의 제목 — react-navigation 자체 Text 라 글꼴을 직접 준다
             // fontWeight normal — 커스텀 글꼴에 굵기 값이 남으면 iOS 에서 잘린다((tabs)/_layout 참고)
-            headerTitleStyle: { fontFamily: BRAND_FONT.bodyBold, fontWeight: 'normal' },
+            // 준비 전에는 지정하지 않는다 — 없는 글꼴로 잰 폭이 굳어 잘린다(lib/brandFontsReady)
+            headerTitleStyle: brandFontsReady
+              ? { fontFamily: BRAND_FONT.bodyBold, fontWeight: 'normal' }
+              : undefined,
           }}
         >
           <Stack.Screen name="onboarding/index" />
