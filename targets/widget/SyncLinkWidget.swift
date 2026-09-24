@@ -470,7 +470,7 @@ private struct DayCell: View {
             .font(.system(size: 11, weight: .bold))
             .foregroundColor(.white)
             .frame(width: 16, height: 16)
-            .background(Circle().fill(Color.accentColor))
+            .background(Circle().fill(Color.brandMint))
         } else {
           Text("\(Calendar.current.component(.day, from: date))")
             .font(.system(size: 11, weight: inCurrentMonth ? .semibold : .regular))
@@ -602,7 +602,7 @@ private struct TodoRow: View {
   }
 
   private var iconColor: Color {
-    if todo.isDone { return .accentColor }
+    if todo.isDone { return .brandMint }
     return todo.overdue ? .red : .secondary
   }
 
@@ -704,6 +704,15 @@ private extension Color {
     let b = Double( v        & 0xff) / 255
     self = Color(red: r, green: g, blue: b)
   }
+}
+
+extension Color {
+  /// 우리하루 브랜드 민트(짙은 쪽) — 앱 라이트 테마 primary 와 같은 값(themePalette 대비 보정, L34).
+  /// 위에 흰 숫자가 올라가므로 흰색 대비 4.5 이상인 짙은 민트를 쓴다(밝은 #6CCFAE 는 1.9:1).
+  /// 🔴 Color.accentColor 를 쓰지 말 것 — 위젯 확장은 AccentColor 에셋이 빌드 설정
+  ///    (ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME)에 연결돼 있지 않아 시스템 파랑으로
+  ///    나왔다(1.5.0 스토어 위젯 캡처에서 발견). Android 위젯 WIDGET_COLORS.today 와 같은 값.
+  static let brandMint = Color(hex: "#2A8466")
 }
 
 // MARK: - Widget definition
