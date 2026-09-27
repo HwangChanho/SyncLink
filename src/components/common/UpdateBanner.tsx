@@ -8,6 +8,10 @@
  *    그리므로, 작성 중인 일정·할 일 입력이 사라질 수 있다.
  *
  * 루트 레이아웃에서 OfflineBanner 바로 아래에 그린다(같은 zIndex 계층).
+ *
+ * 크기(2026-09-27 LEAD «크기 키워줘»): 처음엔 글자 13·버튼 11·위아래 여백 8 로 작아 눈에 잘
+ *   안 띄었다 → 한 단계씩 키웠다(본문 15 굵게 · 버튼 13 · 아이콘 22 · 여백 12).
+ *   🔴 폭이 좁은 폰(375pt)에서도 한 줄에 들어가야 한다 — 더 키우면 문구가 두 줄로 꺾인다.
  */
 import { Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -38,7 +42,7 @@ export function UpdateBanner() {
         accessibilityRole="alert"
         testID="ota-update-banner"
       >
-        <Ionicons name="sparkles" size={18} color={colors.primary} />
+        <Ionicons name="sparkles" size={22} color={colors.primary} />
         <Text style={styles.text}>{t('common.update_available')}</Text>
         <Pressable onPress={dismiss} hitSlop={8} accessibilityRole="button" testID="ota-update-later">
           <Text style={styles.later}>{t('common.update_later')}</Text>
@@ -74,9 +78,9 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       alignItems: 'center',
       gap: spacing[2],
       marginTop: spacing[2],
-      paddingVertical: spacing[2],
-      paddingLeft: spacing[3],
-      paddingRight: spacing[2],
+      paddingVertical: spacing[3],
+      paddingLeft: spacing[4],
+      paddingRight: spacing[2.5],
       borderRadius: radius.full,
       backgroundColor: colors.surface,
       borderWidth: 1,
@@ -89,23 +93,24 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       elevation: 6,
     },
     text: {
-      ...textStyles.label,
+      ...textStyles.labelLg,
+      fontWeight: '600',
       flex: 1,
       color: colors.textPrimary,
     },
     later: {
-      ...textStyles.labelSm,
+      ...textStyles.label,
       color: colors.textSecondary,
       paddingHorizontal: spacing[1],
     },
     apply: {
       backgroundColor: colors.primary,
       borderRadius: radius.full,
-      paddingVertical: spacing[1] + 2,
-      paddingHorizontal: spacing[3],
+      paddingVertical: spacing[2],
+      paddingHorizontal: spacing[3.5],
     },
     applyText: {
-      ...textStyles.labelSm,
+      ...textStyles.label,
       // 흰색 하드코딩 금지 — 다크 primary 는 흰 글자와 3.0:1 뿐이다(작은 글자 기준 4.5 미달).
       // textInverse 는 라이트=흰색(4.5+) · 다크=어두운 글자(5.3) 로 양쪽 다 기준을 넘는다.
       color: colors.textInverse,
