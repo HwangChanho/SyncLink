@@ -1,8 +1,9 @@
 /**
- * otaUpdateService 테스트 — 1.5.0 OTA 업데이트 안내.
+ * otaUpdateService 테스트 — 1.5.0 OTA 업데이트(09-29 부터 배너 없이 조용히 적용).
  *
  * 잠그는 것:
- *   - 새 업데이트가 있으면 내려받고 true(→ 배너가 뜬다)
+ *   - 새 업데이트가 있으면 내려받고 true(→ 다음 적당한 복귀 때 적용)
+ *   - 적용 시점 판단: 백그라운드 1분 이상 비웠다가 돌아올 때만
  *   - 없거나 / 확인·다운로드가 실패하면 false — **예외를 밖으로 던지지 않는다**
  *     (업데이트 확인 실패가 앱 사용을 막으면 안 된다)
  *   - 업데이트가 꺼진 바이너리에서는 서버를 부르지도 않는다
@@ -29,6 +30,8 @@ import {
   applyOtaUpdate,
   canCheckOtaUpdate,
   fetchOtaUpdateIfAvailable,
+  RESUME_APPLY_MIN_BACKGROUND_MS,
+  shouldApplyOnResume,
 } from '@/services/otaUpdateService';
 
 describe('otaUpdateService', () => {
@@ -69,6 +72,12 @@ describe('otaUpdateService', () => {
   it('개발 빌드(__DEV__)에서는 확인하지 않는다', () => {
     g.__DEV__ = true;
     expect(canCheckOtaUpdate()).toBe(false);
+  });
+
+  it('복귀 적용 판단 — 백그라운드에 간 적 없으면 false, 1분 미만 false, 1분 이상 true', () => {
+    expect(shouldApplyOnResume(null, 10_000_000)).toBe(false);
+    expect(shouldApplyOnResume(0, RESUME_APPLY_MIN_BACKGROUND_MS - 1)).toBe(false);
+    expect(shouldApplyOnResume(0, RESUME_APPLY_MIN_BACKGROUND_MS)).toBe(true);
   });
 
   it('적용은 리로드를 부른다', async () => {
