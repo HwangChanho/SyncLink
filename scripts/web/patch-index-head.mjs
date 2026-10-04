@@ -32,6 +32,8 @@ const DESCRIPTION =
   '할 일과 일정을 말하듯 한 줄로. 커플·가족·팀과 함께 쓰는 공유 캘린더로 모임 날짜까지 정해요. iOS·Android·웹 어디서나.';
 /** 랜딩(/get/)과 같은 카드를 써서 어디서 공유되든 같은 그림이 뜨게 한다. */
 const OG_IMAGE = `${SITE}/get/og.png`;
+/** AdSense 게시자 ID — app-ads.txt·ads.txt 의 pub ID 와 같은 계정이다. 공개값(HTML 에 그대로 실린다). */
+const ADSENSE_CLIENT = 'ca-pub-2936938026486482';
 
 /** HTML 속성값에 그대로 넣기 위한 최소 이스케이프. */
 const attr = (s) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -45,6 +47,13 @@ const META = [
   `<meta property="og:image" content="${attr(OG_IMAGE)}" />`,
   `<meta property="og:url" content="${attr(SITE)}" />`,
   `<meta name="twitter:card" content="summary_large_image" />`,
+  // AdSense 로더 — 사이트 소유권 확인(AdSense «사이트 검토»)과 웹 배너(FreeBannerAd.web) 둘 다 이 스크립트가 필요하다.
+  // 로더만 싣고 자동 광고는 켜지 않는다: 자동 광고는 로그인·빈 화면에도 광고를 넣어 정책 위반 위험이 있다.
+  // 광고 자리는 FreeBannerAd.web 의 <ins> 하나뿐이다(무료 사용자, 홈·캘린더 입력바 아래).
+  `<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}" crossorigin="anonymous"></script>`,
+  // 못 채운 슬롯(승인 전·광고 없음)은 접는다 — 안 그러면 입력바 위에 빈 50px 띠가 남는다.
+  // data-ad-status 는 로더가 붙이는 속성이다(Google 공식 권장 패턴).
+  `<style>ins.adsbygoogle[data-ad-status="unfilled"]{display:none!important}</style>`,
 ].join('\n    ');
 
 const MARK_OPEN = '<!-- brand-head:start -->';
@@ -86,7 +95,8 @@ const after = readFileSync(FILE, 'utf8');
 const ok =
   after.includes(`<title>${TITLE}</title>`) &&
   after.includes('og:image') &&
+  after.includes(`adsbygoogle.js?client=${ADSENSE_CLIENT}`) &&
   after.includes('lang="ko"');
 console.log(`patch-index-head: ${FILE}`);
-console.log(`  title/description/OG/lang 주입 ${ok ? '✅' : '❌'} (${before.length} → ${after.length}바이트)`);
+console.log(`  title/description/OG/AdSense/lang 주입 ${ok ? '✅' : '❌'} (${before.length} → ${after.length}바이트)`);
 if (!ok) process.exit(1);

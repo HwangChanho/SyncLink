@@ -1,0 +1,5 @@
+# ads.txt — 우리하루 웹(synclink.pages.dev)의 광고 인벤토리를 Google AdSense 가 팔 수 있게 승인한다.
+# AdSense 가 사이트 승인·광고 게재 전에 https://synclink.pages.dev/ads.txt 를 크롤해 확인한다.
+# 🔴 파일이 없으면 Cloudflare SPA fallback 이 index.html 을 돌려줘 "ads.txt 없음"으로 판정된다(app-ads.txt 때 실제로 겪음).
+# 앱용 app-ads.txt 와 게시자 ID 가 같다(AdMob·AdSense 가 한 계정).
+google.com, pub-2936938026486482, DIRECT, f08c47fec0942fa0

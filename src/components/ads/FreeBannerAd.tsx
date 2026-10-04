@@ -4,6 +4,7 @@
  * 동작:
  *  - 사용자가 Pro 면 아무것도 렌더하지 않는다 (subscriptionStore.plan).
  *  - Web 또는 AdMob App ID 미설정이면 렌더하지 않는다 (silent no-op).
+ *    (웹 번들은 이 파일 대신 FreeBannerAd.web.tsx — AdSense 배너 — 를 쓴다.)
  *  - DEV 빌드는 SDK 의 TestIds.BANNER 를 사용해 실 노출 발생을 막는다.
  *
  * 의도:
