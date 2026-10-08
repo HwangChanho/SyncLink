@@ -171,7 +171,8 @@ struct Provider: TimelineProvider {
     completion(Timeline(entries: [entry], policy: .after(nextRefresh)))
   }
 
-  private func loadSnapshot() -> WidgetSnapshot {
+  /// fileprivate — 잠금화면 위젯의 LockScreenProvider 도 같은 스냅샷을 읽는다.
+  fileprivate func loadSnapshot() -> WidgetSnapshot {
     guard let defaults = UserDefaults(suiteName: WidgetConfig.appGroupSuite) else { return .empty }
 
     // v2 first (has `done`), v1 as fallback for the window between an app
@@ -742,14 +743,371 @@ struct SyncLinkCalendarWidget: Widget {
 
   var body: some WidgetConfiguration {
     StaticConfiguration(kind: kind, provider: Provider()) { entry in
-      LargeView(snapshot: entry.snapshot)
-        .padding(16)
+      CalendarWidgetEntryView(entry: entry)
     }
     .configurationDisplayName("달력")
     .description("이번 달 일정을 달력으로 한눈에.")
     // Large only — a 6×7 grid is unreadable at systemSmall, so we don't offer
     // the placement rather than degrading into something that isn't a calendar.
-    .supportedFamilies([.systemLarge])
+    // systemExtraLarge(iPad 전용, 2026-10-08 추가)는 달력 + 오늘 패널 — iPhone 갤러리엔 안 나온다.
+    .supportedFamilies([.systemLarge, .systemExtraLarge])
+  }
+}
+
+/// 달력형의 크기별 분기 — 큰 위젯은 기존 LargeView 그대로, 초대형만 새 화면.
+private struct CalendarWidgetEntryView: View {
+  let entry: SnapshotEntry
+  @Environment(\.widgetFamily) private var family
+
+  var body: some View {
+    switch family {
+    case .systemExtraLarge:
+      ExtraLargeCalendarView(snapshot: entry.snapshot)
+    default:
+      LargeView(snapshot: entry.snapshot)
+        .padding(16)
+    }
+  }
+}
+
+// MARK: - 초대형 (iPad 전용) — 왼쪽 월 달력 + 오른쪽 오늘 패널
+
+/**
+ * iPad 초대형(systemExtraLarge) 달력 위젯 — LEAD 결정(2026-10-08 «iPad 초대형 위젯»).
+ *
+ * 왜 이 모양인가: 초대형은 큰 위젯 두 개를 옆으로 붙인 크기다. 달력만 늘리면 칸이 가로로
+ * 길어질 뿐 빈 공간이 되므로, 왼쪽 절반엔 큰 위젯과 **같은 부품**(WeekdayHeader·MonthGrid)으로
+ * 같은 크기의 달력을 두고, 오른쪽 절반엔 오늘 일정과 할 일(체크 가능)을 둔다.
+ *
+ * 주의:
+ *   - 기존 kind(SyncLinkCalendarWidget)에 family 를 더한 것이라 이미 놓인 큰 위젯엔 영향이 없다.
+ *   - 할 일 체크는 TodoRow 를 그대로 쓰므로 iOS 17 미만에선 표시만 된다(다른 위젯과 같다).
+ */
+private struct ExtraLargeCalendarView: View {
+  let snapshot: WidgetSnapshot
+
+  var body: some View {
+    // 두 칸 모두 maxWidth: .infinity → 반반. iPad 초대형 폭의 절반 ≈ 큰 위젯 폭이라 달력 크기가 같아진다.
+    HStack(alignment: .top, spacing: 16) {
+      VStack(alignment: .leading, spacing: 8) {
+        Text(monthHeaderLabel())
+          .font(.system(size: 15, weight: .bold))
+        WeekdayHeader()
+        MonthGrid(events: snapshot.events)
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+      Divider()
+
+      TodayPanel(snapshot: snapshot)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+    .padding(16)
+  }
+}
+
+/// 초대형 오른쪽 패널 — 오늘 일정(시간순) + 오늘까지의 할 일.
+private struct TodayPanel: View {
+  let snapshot: WidgetSnapshot
+
+  /// 위젯 높이(큰 위젯과 같음) 안에 일정·할 일이 함께 들어가는 선. 넘치면 «+N» 으로 접는다.
+  private static let eventLimit = 4
+  private static let todoLimit = 3
+
+  var body: some View {
+    let todays = todayEvents(snapshot)
+    let events = Array(todays.prefix(Self.eventLimit))
+    let todos = Array(snapshot.todos.prefix(Self.todoLimit))
+    let moreTodos = max(0, snapshot.totals.todos - todos.count)
+
+    VStack(alignment: .leading, spacing: 6) {
+      HStack {
+        Text(todayLabel())
+          .font(.system(size: 15, weight: .bold))
+        Spacer(minLength: 0)
+        Text("우리하루")
+          .font(.system(size: 9, weight: .medium))
+          .foregroundColor(.secondary)
+      }
+
+      sectionTitle("일정", more: todays.count - events.count)
+      if events.isEmpty {
+        Text("오늘 일정 없음")
+          .font(.system(size: 11))
+          .foregroundColor(.secondary)
+      } else {
+        ForEach(events) { EventRow(event: $0, compact: false) }
+      }
+
+      Divider().padding(.vertical, 2)
+
+      sectionTitle("할 일", more: moreTodos)
+      if todos.isEmpty {
+        Text("오늘 할 일 없음")
+          .font(.system(size: 11))
+          .foregroundColor(.secondary)
+      } else {
+        ForEach(todos) { TodoRow(todo: $0) }
+      }
+
+      Spacer(minLength: 0)
+    }
+  }
+
+  /// 소제목 + 접힌 개수(«+N», 0 이면 숨김).
+  private func sectionTitle(_ title: String, more: Int) -> some View {
+    HStack {
+      Text(title)
+        .font(.system(size: 11, weight: .semibold))
+        .foregroundColor(.secondary)
+      Spacer(minLength: 0)
+      if more > 0 {
+        Text("+\(more)")
+          .font(.system(size: 10))
+          .foregroundColor(.secondary)
+      }
+    }
+  }
+}
+
+// MARK: - 잠금화면 (accessory, iOS 16+)
+
+/**
+ * 잠금화면 위젯 — LEAD 결정(2026-10-08 «잠금화면 위젯»).
+ *
+ * 세 크기:
+ *   - 원형(accessoryCircular): 남은 할 일 수.
+ *   - 직사각형(accessoryRectangular): 날짜 · 다음 일정 · 남은 할 일 수.
+ *   - 한 줄(accessoryInline, 시계 위): 다음 일정, 없으면 남은 할 일 수.
+ *
+ * 왜 Provider 를 따로 두나: «다음 일정»은 시간이 지나면 바뀐다. 홈 위젯처럼 30분마다만 다시
+ * 그리면 끝난 일정이 최대 30분 남는다. 그래서 오늘 남은 일정의 시작 1분 뒤와 자정에 entry 를
+ * 미리 깔아 둔다(데이터는 홈 위젯과 같은 스냅샷).
+ *
+ * 🔴 kind 문자열 "SyncLinkLockScreenWidget" 은 한 번 출시되면 바꾸면 안 된다(놓인 위젯이 깨진다).
+ * ⚠️ 뷰 안에서 Date() 를 쓰지 말 것 — WidgetKit 은 entry 를 미리 렌더하므로 entry.date 기준이어야 한다.
+ */
+struct LockScreenProvider: TimelineProvider {
+
+  func placeholder(in context: Context) -> SnapshotEntry {
+    SnapshotEntry(date: Date(), snapshot: WidgetSnapshot.empty)
+  }
+
+  func getSnapshot(in context: Context, completion: @escaping (SnapshotEntry) -> Void) {
+    completion(SnapshotEntry(date: Date(), snapshot: Provider().loadSnapshot()))
+  }
+
+  func getTimeline(in context: Context, completion: @escaping (Timeline<SnapshotEntry>) -> Void) {
+    let now = Date()
+    let snapshot = Provider().loadSnapshot()
+    let entries = Self.entryDates(from: now, snapshot: snapshot)
+      .map { SnapshotEntry(date: $0, snapshot: snapshot) }
+    // 홈 위젯과 같은 30분 기준 재로드 — 그 사이 일정이 바뀌면 앱이 reloadAllTimelines 를 부른다.
+    let nextRefresh = Calendar.current.date(byAdding: .minute, value: 30, to: now) ?? now.addingTimeInterval(1800)
+    completion(Timeline(entries: entries, policy: .after(nextRefresh)))
+  }
+
+  /// entry 를 깔 시각들: 지금 + 오늘 남은 시간 지정 일정의 «시작 1분 뒤» + 다음 자정.
+  ///
+  /// - Parameters:
+  ///   - now: 기준 시각
+  ///   - snapshot: 앱이 써 둔 스냅샷
+  /// - Returns: 오름차순·중복 없는 시각 목록(첫 값은 항상 now)
+  private static func entryDates(from now: Date, snapshot: WidgetSnapshot) -> [Date] {
+    let cal = Calendar.current
+    var dates: [Date] = [now]
+
+    // 1) 오늘 일정이 시작하고 1분 뒤 — 그 순간 «다음 일정»이 다음 것으로 넘어간다.
+    let todayKey = LockScreenClock.dateKey(now)
+    for event in snapshot.events where event.dateKey == todayKey {
+      guard
+        let hm = LockScreenClock.parseHM(event.startTime),
+        let start = cal.date(bySettingHour: hm.0, minute: hm.1, second: 0, of: now),
+        let flip = cal.date(byAdding: .minute, value: 1, to: start),
+        flip > now
+      else { continue }
+      dates.append(flip)
+    }
+
+    // 2) 다음 자정 — 날짜 표시와 «오늘»의 기준이 바뀐다.
+    if let midnight = cal.nextDate(after: now, matching: DateComponents(hour: 0, minute: 0), matchingPolicy: .nextTime) {
+      dates.append(midnight)
+    }
+
+    return Array(Set(dates)).sorted()
+  }
+}
+
+/// 잠금화면 위젯의 시각 계산 — 전부 entry.date 를 받아 계산한다(뷰 안 Date() 금지).
+private enum LockScreenClock {
+
+  /// 앱(JS)이 쓰는 dateKey 와 같은 형식. 기기 달력이 불기·일본력이어도 그레고리력으로 맞춘다.
+  private static func formatter(_ format: String) -> DateFormatter {
+    let f = DateFormatter()
+    f.calendar = Calendar(identifier: .gregorian)
+    f.locale = Locale(identifier: "en_US_POSIX")
+    f.dateFormat = format
+    return f
+  }
+
+  /// "yyyy-MM-dd"
+  static func dateKey(_ date: Date) -> String { formatter("yyyy-MM-dd").string(from: date) }
+
+  /// "HH:mm"(24시간) — 스냅샷의 startTime 과 같은 형식이라 문자열 비교로 순서를 가린다.
+  static func hm(_ date: Date) -> String { formatter("HH:mm").string(from: date) }
+
+  /// "M/d (E)" 한국어 — 예: 10/8 (수)
+  static func dayLabel(_ date: Date) -> String {
+    let f = DateFormatter()
+    f.locale = Locale(identifier: "ko_KR")
+    f.dateFormat = "M/d (E)"
+    return f.string(from: date)
+  }
+
+  /// "HH:mm" → (시, 분). 종일 일정("")이나 형식이 다르면 nil.
+  static func parseHM(_ text: String) -> (Int, Int)? {
+    let parts = text.split(separator: ":")
+    guard parts.count == 2, let h = Int(parts[0]), let m = Int(parts[1]) else { return nil }
+    return (h, m)
+  }
+}
+
+/// 잠금화면 세 크기가 함께 쓰는 값 — 다음 일정과 남은 할 일 수.
+private struct LockScreenSummary {
+  /// 아직 시작하지 않은(또는 이번 분에 시작하는) 오늘의 시간 지정 일정 중 가장 이른 것.
+  /// 없으면 오늘의 종일 일정. 둘 다 없으면 nil.
+  let nextEvent: WidgetEvent?
+  /// 체크로 끝낸 것(위젯에서 눌러 아직 동기화 전인 것 포함)을 뺀 할 일 수.
+  let remainingTodos: Int
+
+  init(snapshot: WidgetSnapshot, at date: Date) {
+    let todayKey = LockScreenClock.dateKey(date)
+    let nowHM = LockScreenClock.hm(date)
+    let todays = snapshot.events.filter { $0.dateKey == todayKey }
+
+    let upcomingTimed = todays
+      .filter { !$0.startTime.isEmpty && $0.startTime >= nowHM }
+      .sorted { $0.startTime < $1.startTime }
+    nextEvent = upcomingTimed.first ?? todays.first { $0.startTime.isEmpty }
+
+    // totals.todos 는 전체 개수(목록은 앞부분만 온다). 목록 안에서 체크된 것만 빼 준다.
+    let doneInList = snapshot.todos.filter { $0.isDone }.count
+    remainingTodos = max(0, snapshot.totals.todos - doneInList)
+  }
+
+  /// "14:00 팀 회의" / "종일 · 가족 여행"
+  static func eventText(_ event: WidgetEvent) -> String {
+    event.startTime.isEmpty ? "종일 · \(event.title)" : "\(event.startTime) \(event.title)"
+  }
+}
+
+private struct LockScreenEntryView: View {
+  let entry: SnapshotEntry
+  @Environment(\.widgetFamily) private var family
+
+  var body: some View {
+    let summary = LockScreenSummary(snapshot: entry.snapshot, at: entry.date)
+    switch family {
+    case .accessoryCircular:
+      LockCircularView(remaining: summary.remainingTodos)
+    case .accessoryInline:
+      LockInlineView(summary: summary)
+    default:
+      LockRectangularView(summary: summary, date: entry.date)
+    }
+  }
+}
+
+/// 원형 — 체크 아이콘 + 남은 할 일 수. 0 이면 체크 표시만(«다 끝냄»).
+private struct LockCircularView: View {
+  let remaining: Int
+
+  var body: some View {
+    ZStack {
+      AccessoryWidgetBackground()
+      VStack(spacing: 0) {
+        Image(systemName: remaining == 0 ? "checkmark" : "checklist")
+          .font(.system(size: remaining == 0 ? 20 : 12, weight: .semibold))
+          .widgetAccentable()
+        if remaining > 0 {
+          Text("\(remaining)")
+            .font(.system(size: 20, weight: .bold))
+            .minimumScaleFactor(0.6)
+        }
+      }
+    }
+    .accessibilityLabel(remaining == 0 ? "오늘 할 일 다 끝냄" : "남은 할 일 \(remaining)개")
+  }
+}
+
+/// 직사각형 — 1줄 날짜(강조색), 2줄 다음 일정, 3줄 남은 할 일.
+private struct LockRectangularView: View {
+  let summary: LockScreenSummary
+  let date: Date
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 1) {
+      Text("우리하루 · \(LockScreenClock.dayLabel(date))")
+        .font(.caption2.weight(.semibold))
+        .widgetAccentable()
+      if let event = summary.nextEvent {
+        Text(LockScreenSummary.eventText(event))
+          .font(.headline)
+          .lineLimit(1)
+      } else {
+        Text("남은 일정 없음")
+          .font(.headline)
+          .foregroundColor(.secondary)
+      }
+      Text(summary.remainingTodos == 0 ? "할 일 다 끝냄" : "할 일 \(summary.remainingTodos)개 남음")
+        .font(.caption)
+        .foregroundColor(.secondary)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+}
+
+/// 한 줄(시계 위) — 시스템이 글꼴·색을 정하므로 아이콘 + 짧은 글만 준다.
+private struct LockInlineView: View {
+  let summary: LockScreenSummary
+
+  var body: some View {
+    if let event = summary.nextEvent {
+      Label(LockScreenSummary.eventText(event), systemImage: "calendar")
+    } else if summary.remainingTodos > 0 {
+      Label("할 일 \(summary.remainingTodos)개 남음", systemImage: "checklist")
+    } else {
+      Label("오늘 일정 끝", systemImage: "checkmark")
+    }
+  }
+}
+
+private extension View {
+  /// iOS 17+ 는 배경을 containerBackground 로 넘겨야 잠금화면처럼 배경을 걷어내는 자리에서
+  /// 경고 문구 대신 내용이 나온다. 잠금화면은 배경이 없으므로 투명을 넘긴다(원형의 회색 원은
+  /// 뷰 안 AccessoryWidgetBackground 가 그린다 — iOS 16 과 모양을 맞추려고).
+  @ViewBuilder
+  func lockScreenContainerBackground() -> some View {
+    if #available(iOS 17.0, *) {
+      containerBackground(for: .widget) { Color.clear }
+    } else {
+      self
+    }
+  }
+}
+
+/// 잠금화면형 — 다음 일정과 남은 할 일 수.
+struct SyncLinkLockScreenWidget: Widget {
+  let kind = "SyncLinkLockScreenWidget"
+
+  var body: some WidgetConfiguration {
+    StaticConfiguration(kind: kind, provider: LockScreenProvider()) { entry in
+      LockScreenEntryView(entry: entry)
+        .lockScreenContainerBackground()
+    }
+    .configurationDisplayName("잠금화면")
+    .description("다음 일정과 남은 할 일을 잠금화면에서.")
+    .supportedFamilies([.accessoryCircular, .accessoryRectangular, .accessoryInline])
   }
 }
 
@@ -785,5 +1143,6 @@ struct SyncLinkWidgetBundle: WidgetBundle {
     SyncLinkWidget()
     SyncLinkCalendarWidget()
     SyncLinkCheckWidget()
+    SyncLinkLockScreenWidget()
   }
 }
