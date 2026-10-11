@@ -1105,7 +1105,9 @@ struct SyncLinkLockScreenWidget: Widget {
       LockScreenEntryView(entry: entry)
         .lockScreenContainerBackground()
     }
-    .configurationDisplayName("잠금화면")
+    // 갤러리 이름은 내용으로(옆 앱들도 «투여약»·«오늘 마감»·«날짜» 식). 위치명 «잠금화면»은 갤러리에서 중복이라 바꿨다.
+    // 표시용 문자열이라 바꿔도 놓인 위젯은 안 깨진다 — 깨지는 건 위의 kind 뿐.
+    .configurationDisplayName("오늘 요약")
     .description("다음 일정과 남은 할 일을 잠금화면에서.")
     .supportedFamilies([.accessoryCircular, .accessoryRectangular, .accessoryInline])
   }
