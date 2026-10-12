@@ -166,7 +166,11 @@ Deno.serve(async (req: Request) => {
   // 익명은 user_id 가 null 이라 사용자별로 못 센다 → IP 로 센다.
   // IP 는 진단 정보에 남기지 않고 여기서만 쓴다(개인정보 최소 수집).
   const since = new Date(Date.now() - WINDOW_MIN * 60_000).toISOString();
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  // 2026-10-13: cf-connecting-ip 를 먼저 본다 — 엣지(Cloudflare)가 덮어쓰는 값이라 클라이언트가 못 꾸민다.
+  //   x-forwarded-for 첫 값은 클라이언트가 보낸 헤더가 그대로 남을 수 있어 제한을 우회당한다. 없을 때만 예전처럼 쓴다.
+  const ip = req.headers.get('cf-connecting-ip')?.trim()
+    || req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+    || 'unknown';
   const rateQuery = admin
     .from('support_requests')
     .select('id', { count: 'exact', head: true })

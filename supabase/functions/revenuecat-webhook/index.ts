@@ -32,6 +32,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — _shared paths are resolved by supabase functions deploy.
 import { logToDb } from '../_shared/logger.ts';
+// @ts-ignore — _shared paths are resolved by supabase functions deploy.
+import { timingSafeEqual } from '../_shared/serviceAuth.ts';
 
 interface RcWebhookEvent {
   api_version?: string;
@@ -114,7 +116,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     await logToDb('revenuecat-webhook.config', new Error('REVENUECAT_WEBHOOK_SECRET not set'));
     return bad(500, { error: 'server misconfigured' });
   }
-  if (got !== expected) {
+  // 2026-10-13: 상수 시간 비교(응답 시간으로 시크릿 앞부분이 새지 않게) — serviceAuth 와 같은 함수.
+  if (!timingSafeEqual(got ?? '', expected)) {
     // Log so we can tell test events apart from genuine misconfiguration.
     // Stash only the prefix of the received header so the secret never
     // ends up in our database in plaintext.

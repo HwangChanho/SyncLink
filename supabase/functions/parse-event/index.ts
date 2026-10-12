@@ -565,6 +565,29 @@ Deno.serve(async (req: Request): Promise<Response> => {
       messages: [{ role: 'user', content: userContent as any }],
     });
 
+    // 3.5. 사용량 기록 — 🔴 AI 호출 **직후**에 한다(2026-10-13).
+    //   예전엔 응답 해석이 끝난 뒤에 기록해서, noEventFound 조기 반환·JSON 해석 실패 경로는
+    //   호출 비용을 내고도 행이 안 남았다 → enforceQuota(행 수로 셈)가 그 호출을 세지 못했다.
+    //   supabase-js insert 는 실패해도 throw 하지 않고 { error } 를 돌려주므로 error 를 직접 확인한다.
+    //   userId·adminClient 는 위(1·2.5단계)에서 이미 검증·생성한 것을 그대로 쓴다.
+    const inputTokens = message.usage?.input_tokens ?? 0;
+    const outputTokens = message.usage?.output_tokens ?? 0;
+    const tokensUsed = inputTokens + outputTokens;
+    {
+      // 모델별 가격 (USD / 1M tokens). Haiku 4.5: 0.80/4.00. Sonnet 4.6: 3.00/15.00.
+      const INPUT_COST  = (hasImage ? 3.00 : 0.80) / 1_000_000;
+      const OUTPUT_COST = (hasImage ? 15.00 : 4.00) / 1_000_000;
+      const { error: metricsError } = await adminClient.from('usage_metrics').insert({
+        user_id:       userId,
+        function_name: functionName,
+        model:         hasImage ? 'claude-sonnet-4-6' : 'claude-haiku-4-5',
+        input_tokens:  inputTokens,
+        output_tokens: outputTokens,
+        cost_usd:      inputTokens * INPUT_COST + outputTokens * OUTPUT_COST,
+      });
+      if (metricsError) console.error('[parse-event] usage_metrics insert failed:', metricsError.message);
+    }
+
     // 4. Extract JSON from response
     const rawContent = message.content[0];
     if (rawContent.type !== 'text') {
@@ -627,41 +650,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
-    // 5. Log usage metrics (non-blocking)
-    const inputTokens = message.usage?.input_tokens ?? 0;
-    const outputTokens = message.usage?.output_tokens ?? 0;
-    const tokensUsed = inputTokens + outputTokens;
-
-    try {
-      const authHeader = req.headers.get('Authorization') ?? '';
-      const jwt = authHeader.slice(7);
-      const supabaseUser = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-        { global: { headers: { Authorization: `Bearer ${jwt}` } } },
-      );
-      const { data: { user } } = await supabaseUser.auth.getUser();
-
-      if (user) {
-        const supabaseAdmin = createClient(
-          Deno.env.get('SUPABASE_URL') ?? '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-        );
-        // 모델별 가격 (USD / 1M tokens). Haiku 4.5: 0.80/4.00. Sonnet 4.6: 3.00/15.00.
-        const INPUT_COST  = (hasImage ? 3.00 : 0.80) / 1_000_000;
-        const OUTPUT_COST = (hasImage ? 15.00 : 4.00) / 1_000_000;
-        await supabaseAdmin.from('usage_metrics').insert({
-          user_id:       user.id,
-          function_name: functionName,
-          model:         hasImage ? 'claude-sonnet-4-6' : 'claude-haiku-4-5',
-          input_tokens:  inputTokens,
-          output_tokens: outputTokens,
-          cost_usd:      inputTokens * INPUT_COST + outputTokens * OUTPUT_COST,
-        });
-      }
-    } catch (metricsErr) {
-      console.error('[parse-event] usage_metrics insert failed:', metricsErr);
-    }
+    // 5. 사용량 기록은 3.5단계(AI 호출 직후)로 옮겼다.
 
     // Map AI result to NLParseResult shape (dates stay as ISO strings here;
     //    the client converts them to Date objects when needed)

@@ -40,7 +40,7 @@
  * @param b 비교 대상 2
  * @returns 완전히 같으면 true
  */
-function timingSafeEqual(a: string, b: string): boolean {
+export function timingSafeEqual(a: string, b: string): boolean {
   // 길이가 다르면 어차피 불일치지만, 여기서 바로 반환해도 새는 정보는
   // "길이가 다르다"뿐이라 안전하다. 길이가 같을 때만 상수 시간이 의미가 있다.
   if (a.length !== b.length) return false;

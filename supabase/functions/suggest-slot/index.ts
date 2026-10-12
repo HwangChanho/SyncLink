@@ -112,11 +112,23 @@ Deno.serve(async (req: Request) => {
   }
 
   // usage_metrics 기록
-  try {
-    await adminClient.from('usage_metrics').insert({
-      user_id: user.id, function_name: 'suggest-slot', tokens: tokensUsed,
+  // 🔴 2026-10-13: 예전엔 없는 열(tokens)로 넣고 NOT NULL 인 model 을 빠뜨려 매번 실패했다
+  //    (supabase-js 는 throw 하지 않아 catch 에도 안 잡힘) → 한도가 늘 0 으로 계산됐다.
+  //    실제 열에 맞춰 넣고 { error } 를 직접 확인한다. 실패해도 응답은 그대로(로그만).
+  {
+    const inputTokens  = response.usage?.input_tokens  ?? 0;
+    const outputTokens = response.usage?.output_tokens ?? 0;
+    // Haiku 4.5 가격 (USD / 1M tokens): 입력 0.80 · 출력 4.00 — 다른 함수들과 같은 값.
+    const { error: metricsError } = await adminClient.from('usage_metrics').insert({
+      user_id:       user.id,
+      function_name: 'suggest-slot',
+      model:         'claude-haiku-4-5',
+      input_tokens:  inputTokens,
+      output_tokens: outputTokens,
+      cost_usd:      (inputTokens * 0.80 + outputTokens * 4.00) / 1_000_000,
     });
-  } catch { /* best-effort */ }
+    if (metricsError) console.error('[suggest-slot] usage_metrics insert failed:', metricsError.message);
+  }
 
   return new Response(
     JSON.stringify({ alternatives: parsed.alternatives ?? [], tokensUsed } satisfies SuggestResponse),

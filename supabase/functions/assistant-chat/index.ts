@@ -638,6 +638,9 @@ Deno.serve(async (req: Request) => {
 
   const executed: ChatResponse['executed'] = [];
   let tokensUsed = 0;
+  // usage_metrics 기록용 — 입력·출력 토큰을 따로 누적한다(테이블에 tokens 합계 열은 없다).
+  let inputTokensTotal = 0;
+  let outputTokensTotal = 0;
 
   // v1.2.9 — 중복 mutation dedup map.
   // 모델이 같은 step 또는 다음 step 에서 같은 createEvent 를 또 부르는 케이스
@@ -678,6 +681,8 @@ Deno.serve(async (req: Request) => {
       messages,
     });
     tokensUsed += (response.usage?.input_tokens ?? 0) + (response.usage?.output_tokens ?? 0);
+    inputTokensTotal  += response.usage?.input_tokens ?? 0;
+    outputTokensTotal += response.usage?.output_tokens ?? 0;
 
     const toolUseBlocks = (response.content as Array<{ type: string }>).filter(
       (b) => b.type === 'tool_use',
@@ -730,6 +735,8 @@ Deno.serve(async (req: Request) => {
         messages,
       });
       tokensUsed += (wrapUp.usage?.input_tokens ?? 0) + (wrapUp.usage?.output_tokens ?? 0);
+      inputTokensTotal  += wrapUp.usage?.input_tokens ?? 0;
+      outputTokensTotal += wrapUp.usage?.output_tokens ?? 0;
       const wrapText = (wrapUp.content as Array<{ type: string; text?: string }>)
         .filter((b) => b.type === 'text')
         .map((b) => b.text ?? '').join('\n').trim();
@@ -773,15 +780,24 @@ Deno.serve(async (req: Request) => {
   };
 
   // usage_metrics 기록 (cost 추적, Phase 5 feature_area 포함).
-  try {
-    await adminClient.from('usage_metrics').insert({
-      user_id: user.id,
+  // 🔴 2026-10-13: 예전엔 없는 열(tokens)로 넣고 NOT NULL 인 model 을 빠뜨려 **매번 실패**했고,
+  //    supabase-js 는 실패를 throw 하지 않아 try/catch 로도 안 보였다 → enforceQuota(행 수로 셈)가
+  //    늘 0 을 봐서 한도가 걸리지 않았다. 실제 열에 맞춰 넣고 { error } 를 직접 확인한다.
+  //    기록 실패는 사용자 응답에 영향을 주지 않는다(로그만).
+  {
+    // Sonnet 4.6 가격 (USD / 1M tokens): 입력 3.00 · 출력 15.00 — parse-event 와 같은 값.
+    const INPUT_COST  = 3.00 / 1_000_000;
+    const OUTPUT_COST = 15.00 / 1_000_000;
+    const { error: metricsError } = await adminClient.from('usage_metrics').insert({
+      user_id:       user.id,
       function_name: 'assistant-chat',
-      tokens: tokensUsed,
-      feature_area: 'chat',
+      model:         'claude-sonnet-4-6',
+      input_tokens:  inputTokensTotal,
+      output_tokens: outputTokensTotal,
+      cost_usd:      inputTokensTotal * INPUT_COST + outputTokensTotal * OUTPUT_COST,
+      feature_area:  'chat',
     });
-  } catch {
-    // 기록 실패는 사용자 응답에 영향 안 줌.
+    if (metricsError) console.error('[assistant-chat] usage_metrics insert failed:', metricsError.message);
   }
 
   return new Response(JSON.stringify(responseBody), {
