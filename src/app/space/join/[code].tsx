@@ -6,7 +6,7 @@
  * Flow:
  *  1. Load space info via getSpaceByInviteCode(code)
  *  2. Show space name, type, and member count
- *  3. "참여하기" → spaceService.joinSpace(spaceId)
+ *  3. "참여하기" → spaceService.joinSpaceByInviteLink(code) (서버 RPC, 2026-10-13)
  *  4. On success → replace to /space/<spaceId>
  *  5. If already a member → navigate directly without re-joining
  *
@@ -86,21 +86,21 @@ export default function SpaceJoinPreviewScreen() {
   // ── Join action ───────────────────────────────────────────────────────────
 
   const handleJoin = useCallback(async () => {
-    if (!space) return;
+    if (!space || !code) return;
     setIsJoining(true);
     try {
-      // joinSpace is idempotent — safe if already a member
-      await spaceService.joinSpace(space.id);
+      // 2026-10-13: 서버 RPC 로 가입(코드·만료·한도 서버 검사). 이미 멤버면 오류 없이 그 Space id 를 돌려준다.
+      const spaceId = await spaceService.joinSpaceByInviteLink(code);
 
       // Update store and navigate to the space
       await fetchMySpaces();
-      setActiveSpaceId(space.id);
-      router.replace(`/space/${space.id}`);
+      setActiveSpaceId(spaceId);
+      router.replace(`/space/${spaceId}`);
     } catch (err) {
       Alert.alert(t('space.join_fail_title'), err instanceof Error ? err.message : t('space.join_error'));
       setIsJoining(false);
     }
-  }, [space, fetchMySpaces, setActiveSpaceId, t]);
+  }, [space, code, fetchMySpaces, setActiveSpaceId, t]);
 
   // ── Render states ─────────────────────────────────────────────────────────
 

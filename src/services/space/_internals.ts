@@ -6,6 +6,7 @@
  * Database 의 `Relationships` 필드 누락 (TS2769 회피) 도 한 곳에서 cast.
  */
 
+import { getRandomBytes } from 'expo-crypto';
 import { supabase } from '@/lib/supabase';
 import type {
   Space, SpaceSummary, SpaceMember, Anniversary,
@@ -31,12 +32,15 @@ export function serializeSupabaseError(err: unknown): Record<string, unknown> | 
  *
  * char set 이 [A-Z0-9] 의 부분집합이라 CHECK 제약과 호환 (O/0/I/1 도
  * regex 통과지만 사용자 가독성 위해 의도적으로 제외).
+ *
+ * 2026-10-13: Math.random(예측 가능) → expo-crypto 암호학적 난수.
+ * 256 은 32 의 배수라 `byte % 32` 에 치우침이 없다(문자 집합 크기를 바꾸면 이 성질을 다시 확인할 것).
  */
 export function generateCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
+  for (const byte of getRandomBytes(6)) {
+    code += chars[byte % chars.length];
   }
   return code;
 }

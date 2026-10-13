@@ -342,6 +342,8 @@ jest.mock('expo-secure-store', () => {
 // Deterministic hash: hex-encode the UTF-8 bytes of the input string.
 jest.mock('expo-crypto', () => ({
   getRandomBytesAsync: jest.fn((n) => Promise.resolve(new Uint8Array(n).fill(0xab))),
+  // 초대 코드 생성(space/_internals generateCode)용 동기 난수 — 문자셋 검사가 의미 있도록 진짜 난수를 쓴다.
+  getRandomBytes: jest.fn((n) => Uint8Array.from(require('crypto').randomBytes(n))),
   digestStringAsync: jest.fn((_alg, input) => {
     let hex = '';
     for (let i = 0; i < input.length; i++) {

@@ -14,6 +14,7 @@
  * 커버리지:
  *  createSpace          — 정상 흐름 (spaces + space_members INSERT), 미인증
  *  joinSpaceByInviteCode — 유효 코드 성공, 잘못된 코드, 이미 멤버, 커플 2인 초과
+ *                          (2026-10-13 서버 RPC 전환 — 검사는 서버가 하고, 앱은 오류 키를 문구로 바꾼다)
  *  leaveSpace            — 일반 탈퇴, 마지막 멤버 → Space 삭제, owner 소유권 이전
  *  regenerateInviteCode  — 6자리 코드 + O/0/I/1 제외 문자셋 검증
  *  getAnniversaries      — 조회 성공, DB 에러
@@ -265,43 +266,45 @@ describe('spaceService', () => {
 
   describe('joinSpaceByInviteCode', () => {
     /**
-     * joinSpaceByInviteCode 정상 흐름에서의 from() 호출 순서 (IDEA-016):
-     * 1. from('spaces')...single()             → spaceRow (초대 코드 조회)
-     * 2. from('space_members')...              → [] (현재 멤버 목록)
-     * 3. from('space_members').insert()        → { error: null } (멤버 추가)
-     * 4. from('spaces').update(uses_count+1)   → { error: null } (카운터 증가 — IDEA-016)
+     * 2026-10-13 서버 RPC 전환 후 호출 순서:
+     * 1. rpc('preview_space_by_invite_code')   → [미리보기 행] (인원수로 내 색 계산)
+     * 2. rpc('join_space_by_invite_code')      → Space id (만료·한도·정원·이미 멤버 검사 + 가입 + 사용 횟수 +1 을 서버가 한 번에)
      *    ── 내부에서 getSpaceById 호출 ──
-     * 5. from('spaces')...single()             → spaceRow
-     * 6. from('space_members')...order()       → [ownerMemberRow]
-     * 7. from('users')...in()                  → [userRow]
+     * 3. from('spaces')...single()             → spaceRow
+     * 4. from('space_members')...order()       → 멤버 목록
+     * 5. 프로필 조회                            → 유저 행
      */
-    function setupJoinSuccessMocks() {
-      // Build-90: spaces lookup 이 supabase.rpc('find_space_by_invite_code')
-      // 으로 변경 (RLS bypass). 첫 from() 호출 자리에 rpc mock.
-      (supabase.rpc as jest.Mock).mockResolvedValueOnce({ data: [mockSpaceRow], error: null });
-      (supabase.from as jest.Mock)
-        // 2. 현재 멤버 목록 (0명 - 새 그룹 space)
-        .mockReturnValueOnce(makeChain({ data: [], error: null }))
-        // 3. 멤버 추가 INSERT
-        .mockReturnValueOnce(makeChain({ data: null, error: null }))
-        // 4. IDEA-016: uses_count 카운터 증가 UPDATE
-        .mockReturnValueOnce(makeChain({ data: null, error: null }))
-        // 5. getSpaceById - space 정보
-        .mockReturnValueOnce(makeChain({ data: mockSpaceRow, error: null }))
-        // 6. getSpaceById - 멤버 목록
-        .mockReturnValueOnce(makeChain({ data: [mockOwnerMemberRow], error: null }))
-        // 7. getSpaceById - 유저 프로필
-        .mockReturnValueOnce(makeChain({ data: [mockUserRow], error: null }));
+
+    /**
+     * 미리보기 RPC 한 행 픽스처.
+     *
+     * @param row         - Space 행(id·이름·종류·표지를 가져온다)
+     * @param memberCount - 현재 인원수
+     */
+    function previewOf(row: SpaceRow, memberCount: number) {
+      return {
+        id: row.id, name: row.name, type: row.type,
+        member_count: memberCount, cover_image_url: row.cover_image_url,
+      };
     }
 
     it('정상 흐름: 유효한 초대 코드로 Space에 참여하고 Space 반환', async () => {
-      setupJoinSuccessMocks();
+      (supabase.rpc as jest.Mock)
+        .mockResolvedValueOnce({ data: [previewOf(mockSpaceRow, 0)], error: null })
+        .mockResolvedValueOnce({ data: mockSpaceRow.id, error: null });
+      (supabase.from as jest.Mock)
+        .mockReturnValueOnce(makeChain({ data: mockSpaceRow, error: null }))
+        .mockReturnValueOnce(makeChain({ data: [mockOwnerMemberRow], error: null }))
+        .mockReturnValueOnce(makeChain({ data: [mockUserRow], error: null }));
 
       const result = await joinSpaceByInviteCode('ABC123');
 
-      // rpc 1회 + from 6회 (멤버목록 + 멤버추가 + 카운터증가 + getSpaceById 3개)
-      expect(supabase.rpc).toHaveBeenCalledTimes(1);
-      expect(supabase.from).toHaveBeenCalledTimes(6);
+      // rpc 2회(미리보기·가입) + from 3회(getSpaceById) — 멤버 직접 INSERT·spaces UPDATE 없음
+      expect(supabase.rpc).toHaveBeenCalledTimes(2);
+      expect(supabase.rpc).toHaveBeenNthCalledWith(2, 'join_space_by_invite_code', {
+        p_code: 'ABC123', p_color: expect.any(String),
+      });
+      expect(supabase.from).toHaveBeenCalledTimes(3);
       expect(result.id).toBe('space-abc');
       expect(result.name).toBe('Test Space');
     });
@@ -315,12 +318,9 @@ describe('spaceService', () => {
     });
 
     it('이미 멤버: "이미 참여 중인 Space입니다." 에러 throw', async () => {
-      // 현재 유저가 이미 멤버인 경우
-      const existingMemberRow: SpaceMemberRow = { ...mockOwnerMemberRow, user_id: 'user-123' };
-
-      (supabase.rpc as jest.Mock).mockResolvedValueOnce({ data: [mockSpaceRow], error: null });
-      (supabase.from as jest.Mock)
-        .mockReturnValueOnce(makeChain({ data: [existingMemberRow], error: null }));
+      (supabase.rpc as jest.Mock)
+        .mockResolvedValueOnce({ data: [previewOf(mockSpaceRow, 1)], error: null })
+        .mockResolvedValueOnce({ data: null, error: { message: 'already_member' } });
 
       await expect(joinSpaceByInviteCode('ABC123')).rejects.toThrow(
         '이미 참여 중인 Space입니다.',
@@ -328,13 +328,9 @@ describe('spaceService', () => {
     });
 
     it('커플 Space 2인 초과: "커플 Space는 최대 2명까지" 에러 throw', async () => {
-      // 커플 타입 Space에 이미 2명이 있는 경우
-      const member1: SpaceMemberRow = { ...mockOwnerMemberRow, user_id: 'user-aaa' };
-      const member2: SpaceMemberRow = { ...mockMemberRow, user_id: 'user-bbb' };
-
-      (supabase.rpc as jest.Mock).mockResolvedValueOnce({ data: [mockCoupleSpaceRow], error: null });
-      (supabase.from as jest.Mock)
-        .mockReturnValueOnce(makeChain({ data: [member1, member2], error: null }));
+      (supabase.rpc as jest.Mock)
+        .mockResolvedValueOnce({ data: [previewOf(mockCoupleSpaceRow, 2)], error: null })
+        .mockResolvedValueOnce({ data: null, error: { message: 'couple_space_full' } });
 
       await expect(joinSpaceByInviteCode('CPL456')).rejects.toThrow(
         '커플 Space는 최대 2명까지 참여할 수 있습니다.',
@@ -342,9 +338,8 @@ describe('spaceService', () => {
     });
 
     it('커플 Space 정원 미달(1명): 2번째 멤버로 참여 성공', async () => {
-      // 커플 타입에 1명만 있을 때는 참여 가능
       const existingOwner: SpaceMemberRow = { ...mockOwnerMemberRow, user_id: 'user-xyz' };
-      // getSpaceById가 멤버 userId로 유저 프로필을 조회하므로 모든 멤버의 UserRow 필요
+      // getSpaceById 가 멤버 userId 로 프로필을 조회하므로 모든 멤버의 UserRow 필요
       const existingOwnerUserRow: UserRow = {
         ...mockUserRow,
         id: 'user-xyz',
@@ -353,19 +348,12 @@ describe('spaceService', () => {
       };
       const newMemberRow: SpaceMemberRow = { ...mockMemberRow, user_id: 'user-123' };
 
-      (supabase.rpc as jest.Mock).mockResolvedValueOnce({ data: [mockCoupleSpaceRow], error: null });
+      (supabase.rpc as jest.Mock)
+        .mockResolvedValueOnce({ data: [previewOf(mockCoupleSpaceRow, 1)], error: null })
+        .mockResolvedValueOnce({ data: mockCoupleSpaceRow.id, error: null });
       (supabase.from as jest.Mock)
-        // 현재 1명 (existingOwner)
-        .mockReturnValueOnce(makeChain({ data: [existingOwner], error: null }))
-        // INSERT 성공 (user-123이 가입)
-        .mockReturnValueOnce(makeChain({ data: null, error: null }))
-        // IDEA-016: uses_count 카운터 증가 UPDATE
-        .mockReturnValueOnce(makeChain({ data: null, error: null }))
-        // getSpaceById - space 조회
         .mockReturnValueOnce(makeChain({ data: mockCoupleSpaceRow, error: null }))
-        // getSpaceById - 멤버 목록 (2명)
         .mockReturnValueOnce(makeChain({ data: [existingOwner, newMemberRow], error: null }))
-        // getSpaceById - 유저 프로필 (2명 모두 포함)
         .mockReturnValueOnce(makeChain({ data: [existingOwnerUserRow, mockUserRow], error: null }));
 
       const result = await joinSpaceByInviteCode('CPL456');
