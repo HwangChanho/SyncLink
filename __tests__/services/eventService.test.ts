@@ -233,7 +233,7 @@ describe('eventService', () => {
      * getEventById from() 호출 순서:
      * 1. from('events')       → 단건 event row
      * 2. from('event_shares') → 공유된 space_id 목록
-     * 3. from('users')        → owner nickname
+     * 3. from('member_profiles') → owner nickname
      */
     function setupGetEventMocks(
       eventResult = { data: mockEventRow, error: null },
@@ -310,7 +310,7 @@ describe('eventService', () => {
      * ── getEventById 내부 ──
      * 2. from('events')       → 방금 생성된 event row
      * 3. from('event_shares') → 공유된 space_id 목록
-     * 4. from('users')        → owner nickname
+     * 4. from('member_profiles') → owner nickname
      */
     function setupCreateMocks() {
       (supabase.from as jest.Mock)
@@ -426,7 +426,7 @@ describe('eventService', () => {
      * ── getEventById 내부 ──
      * 2. from('events')       → event row
      * 3. from('event_shares') → shares
-     * 4. from('users')        → user
+     * 4. from('member_profiles') → owner nickname
      */
     function setupUpdateMocks() {
       (supabase.from as jest.Mock)
@@ -535,7 +535,7 @@ describe('eventService', () => {
    * ── getEventById 내부 (source 읽기) ──
    * 1. from('events')       → 원본 event row (user_id = 'user-456' ≠ 현재 유저)
    * 2. from('event_shares') → 공유된 space_id 목록
-   * 3. from('users')        → owner nickname
+   * 3. from('member_profiles') → owner nickname
    * ── forkSharedEvent 직접 ──
    * 4. from('events').insert().select().single() → 새 forked event row
    */
@@ -615,7 +615,7 @@ describe('eventService', () => {
    * findConflictingEvents from() 호출 순서 (충돌 후보가 있는 정상 흐름):
    * 1. from('event_shares') → space_id의 event_id 목록
    * 2. from('events')        → 시간 겹침 + id 필터된 이벤트 행
-   * 3. from('users')         → 충돌 이벤트 owner 닉네임 일괄 조회
+   * 3. from('member_profiles') → 충돌 이벤트 owner 닉네임 일괄 조회
    *
    * 충돌 후보가 없거나 결과가 비어있으면 1~2단계에서 조기 반환.
    */

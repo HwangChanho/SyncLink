@@ -10,7 +10,7 @@ import { getMemberColor } from '@/constants/colors';
 import type {
   Space, SpaceSummary, SpaceMember,
   CreateSpaceInput, UpdateSpaceInput,
-  SpaceRow, SpaceMemberRow, UserRow,
+  SpaceRow, SpaceMemberRow, UserRow, MemberProfileRow,
 } from '@/types';
 import {
   supa, generateCode, assertOwner, serializeSupabaseError,
@@ -71,12 +71,15 @@ export async function getSpaceById(spaceId: string): Promise<Space> {
   if (memberError) throw memberError;
 
   const userIds = (memberRows ?? []).map((m: SpaceMemberRow) => m.user_id);
+  // 2026-10-13: 다른 멤버의 users 행 전체(이메일·푸시 토큰 등) 대신 공개 프로필 뷰(migration 077)만 읽는다.
   const { data: userRows, error: userError } = await supa
-    .from('users').select('*').in('id', userIds) as { data: UserRow[] | null; error: Error | null };
+    .from('member_profiles').select('id, nickname, avatar_url').in('id', userIds) as {
+      data: MemberProfileRow[] | null; error: Error | null;
+    };
 
   if (userError) throw userError;
 
-  const userMap = new Map<string, UserRow>();
+  const userMap = new Map<string, MemberProfileRow>();
   for (const u of userRows ?? []) userMap.set(u.id, u);
 
   const members: SpaceMember[] = (memberRows ?? []).map((row: SpaceMemberRow) => {

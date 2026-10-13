@@ -252,8 +252,9 @@ export async function getEventsInRange(range: DateRange): Promise<EventSummary[]
   }
 
   // Build-94 — owner nickname 도 함께 — 캘린더 셀에 "누가 등록" 표시.
+  // 2026-10-13: users 대신 공개 프로필 뷰(migration 077)에서 읽는다.
   const { data: ownerProfiles } = await supa
-    .from('users')
+    .from('member_profiles')
     .select('id, nickname')
     .in('id', ownerIds) as {
       data: { id: string; nickname: string | null }[] | null;
@@ -456,9 +457,9 @@ export async function getEventById(eventId: string): Promise<Event> {
       error: Error | null;
     };
 
-  // Fetch owner's nickname
+  // Fetch owner's nickname — 2026-10-13: users 대신 공개 프로필 뷰(migration 077)
   const { data: ownerRow } = await supa
-    .from('users')
+    .from('member_profiles')
     .select('nickname')
     .eq('id', row.user_id)
     .single() as { data: { nickname: string } | null; error: Error | null };
@@ -896,9 +897,10 @@ export async function findConflictingEvents(
     if (!rows || rows.length === 0) return [];
 
     // ─── 3. Resolve owner nicknames in one batch ──────────────────────────
+    // 2026-10-13: users 대신 공개 프로필 뷰(migration 077)에서 읽는다.
     const ownerIds = [...new Set(rows.map(r => r.user_id))];
     const { data: ownerRows } = await supa
-      .from('users')
+      .from('member_profiles')
       .select('id, nickname')
       .in('id', ownerIds) as {
         data: { id: string; nickname: string }[] | null;

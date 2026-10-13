@@ -44,6 +44,7 @@ jest.mock('@/lib/supabase', () => {
     delete:      jest.fn(),
     eq:          jest.fn(),
     order:       jest.fn(),
+    in:          jest.fn(),
     single:      jest.fn(),
     maybeSingle: jest.fn(),
   };
@@ -113,6 +114,8 @@ function setupChain() {
   mockChain.order.mockReturnValue(mockChain);
   mockChain.single.mockReturnValue(mockChain);
   mockChain.maybeSingle.mockReturnValue(mockChain);
+  // getComments 의 작성자 프로필 일괄 조회(member_profiles … .in()) 기본값 — 프로필 없음
+  mockChain.in.mockResolvedValue({ data: [], error: null });
 
   mockFrom.mockReturnValue(mockChain);
 }
@@ -140,6 +143,9 @@ const commentRow: EventCommentRow & {
   updated_at: '2026-04-20T09:00:00.000Z',
   users:      { nickname: '테스트유저', avatar_url: null },
 };
+
+/** getComments 용 — 댓글 행에는 조인 없이 열만, 작성자 프로필은 member_profiles 뷰에서 따로 온다. */
+const { users: commentAuthor, ...plainCommentRow } = commentRow;
 
 // ─── 테스트 스위트 ────────────────────────────────────────────────────────────
 
@@ -325,29 +331,35 @@ describe('eventInteractionService', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('getComments', () => {
-    it('eventId 기준 event_comments 조회 후 도메인 변환', async () => {
-      mockChain.order.mockResolvedValueOnce({ data: [commentRow], error: null });
+    it('eventId 기준 event_comments 조회 → 작성자는 member_profiles 뷰에서 일괄 조회', async () => {
+      mockChain.order.mockResolvedValueOnce({ data: [plainCommentRow], error: null });
+      mockChain.in.mockResolvedValueOnce({ data: [{ id: 'user-123', ...commentAuthor }], error: null });
 
       const comments = await getComments('event-abc');
 
-      expect(mockFrom).toHaveBeenCalledWith('event_comments');
+      expect(mockFrom).toHaveBeenNthCalledWith(1, 'event_comments');
+      // users 직접 조인 대신 공개 프로필 뷰 — 2026-10-13
+      expect(mockFrom).toHaveBeenNthCalledWith(2, 'member_profiles');
+      expect(mockChain.in).toHaveBeenCalledWith('id', ['user-123']);
       expect(comments[0].id).toBe('comment-1');
       expect(comments[0].authorNickname).toBe('테스트유저');
       expect(comments[0].createdAt).toBeInstanceOf(Date);
     });
 
-    it('users join이 null인 경우 authorNickname = 알 수 없음', async () => {
-      mockChain.order.mockResolvedValueOnce({ data: [{ ...commentRow, users: null }], error: null });
+    it('작성자 프로필이 없으면 authorNickname = 알 수 없음', async () => {
+      mockChain.order.mockResolvedValueOnce({ data: [plainCommentRow], error: null });
+      // in() 기본값 = 빈 배열 (setupChain)
 
       const [comment] = await getComments('event-abc');
 
       expect(comment.authorNickname).toBe('알 수 없음');
     });
 
-    it('데이터 없으면 빈 배열', async () => {
+    it('데이터 없으면 빈 배열 — 프로필 조회도 하지 않는다', async () => {
       mockChain.order.mockResolvedValueOnce({ data: null, error: null });
 
       expect(await getComments('event-abc')).toEqual([]);
+      expect(mockFrom).not.toHaveBeenCalledWith('member_profiles');
     });
 
     it('DB 에러 시 throw', async () => {

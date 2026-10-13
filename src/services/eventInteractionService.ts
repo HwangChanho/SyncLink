@@ -25,7 +25,7 @@
 import { supabase, getCurrentUserId } from '@/lib/supabase';
 import type {
   EventReaction, EventComment, ReactionEmoji, ReactionSummary,
-  EventReactionRow, EventCommentRow,
+  EventReactionRow, EventCommentRow, MemberProfileRow,
 } from '@/types';
 
 // Workaround: supabase-js v2 Relationships type limitation.
@@ -178,21 +178,31 @@ export async function toggleReaction(eventId: string, emoji: ReactionEmoji): Pro
  * @returns Array of EventComment objects, oldest first
  */
 export async function getComments(eventId: string): Promise<EventComment[]> {
-  // Fetch comments with author info via a join on users table.
-  // supabase-js v2 join syntax uses select('*, users(nickname, avatar_url)').
+  // 2026-10-13: 작성자 정보를 users 조인 대신 공개 프로필 뷰(member_profiles, migration 077)에서 따로 읽는다.
+  //   - 다른 멤버의 users 행 직접 읽기를 나중에 막아도 닉네임·아바타가 계속 보이게 하려는 것.
+  //   - 뷰는 외래키 관계가 없어 select 안에 끼워 넣을 수 없으므로 두 번에 나눠 읽는다.
   const { data, error } = await supa
     .from('event_comments')
-    .select('*, users(nickname, avatar_url)')
+    .select('*')
     .eq('event_id', eventId)
     .order('created_at') as {
-      data: (EventCommentRow & {
-        users?: { nickname?: string; avatar_url?: string | null } | null;
-      })[] | null;
+      data: EventCommentRow[] | null;
       error: Error | null;
     };
 
   if (error) throw error;
-  return (data ?? []).map(toComment);
+  const rows = data ?? [];
+  if (rows.length === 0) return [];
+
+  // 작성자 프로필 일괄 조회 — 실패해도 댓글은 보여 준다(작성자는 '알 수 없음' 으로 표시).
+  const authorIds = [...new Set(rows.map(r => r.user_id))];
+  const { data: profiles } = await supa
+    .from('member_profiles')
+    .select('id, nickname, avatar_url')
+    .in('id', authorIds) as { data: MemberProfileRow[] | null; error: Error | null };
+  const profileById = new Map((profiles ?? []).map(p => [p.id, p]));
+
+  return rows.map(row => toComment({ ...row, users: profileById.get(row.user_id) ?? null }));
 }
 
 /**

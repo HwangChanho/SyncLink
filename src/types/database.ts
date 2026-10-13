@@ -40,6 +40,13 @@ export type NotificationSettings = {
 export type UserInsert = Omit<UserRow, 'created_at' | 'updated_at'>;
 export type UserUpdate = Partial<Omit<UserRow, 'id' | 'created_at'>>;
 
+/**
+ * `member_profiles` 뷰의 한 행 (migration 077, 2026-10-13).
+ * 나 + 같은 Space 멤버의 공개 프로필만 담는다 — 다른 사람 정보는 users 대신 이 뷰로 읽는다.
+ * (users 행에는 이메일·푸시 토큰 같은 본인 전용 열이 있다)
+ */
+export type MemberProfileRow = Pick<UserRow, 'id' | 'nickname' | 'avatar_url'>;
+
 // ─── SPACES ───────────────────────────────────────────────────────────────────
 
 /** Space type: 'couple' limits membership to 2, 'group' allows N members. */

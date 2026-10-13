@@ -10,7 +10,7 @@ import { getRandomBytes } from 'expo-crypto';
 import { supabase } from '@/lib/supabase';
 import type {
   Space, SpaceSummary, SpaceMember, Anniversary,
-  SpaceRow, SpaceMemberRow, UserRow, AnniversaryRow,
+  SpaceRow, SpaceMemberRow, MemberProfileRow, AnniversaryRow,
 } from '@/types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -89,8 +89,11 @@ export async function assertOwner(spaceId: string, userId: string): Promise<void
   if (membership.role !== 'owner') throw new Error('Space 관리자만 이 작업을 수행할 수 있습니다.');
 }
 
-/** DB row → 도메인 타입 매핑들. */
-export function toSpaceMember(memberRow: SpaceMemberRow, userRow: UserRow): SpaceMember {
+/**
+ * DB row → 도메인 타입 매핑들.
+ * toSpaceMember 의 userRow 는 공개 프로필 열(id·nickname·avatar_url)만 쓴다 — users 전체 행도, member_profiles 뷰 행도 받는다.
+ */
+export function toSpaceMember(memberRow: SpaceMemberRow, userRow: MemberProfileRow): SpaceMember {
   return {
     userId: memberRow.user_id,
     nickname: userRow.nickname,

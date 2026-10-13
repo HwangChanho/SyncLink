@@ -8,7 +8,7 @@
 // Database row types (for service layer only)
 export type {
   Database,
-  UserRow, UserInsert, UserUpdate,
+  UserRow, UserInsert, UserUpdate, MemberProfileRow,
   SpaceRow, SpaceInsert, SpaceUpdate,
   SpaceTypeDb, SpaceMemberRoleDb, SpaceMemberRow,
   EventRow, EventInsert, EventUpdate, EventKindDb,

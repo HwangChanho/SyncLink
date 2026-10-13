@@ -5,7 +5,7 @@
 
 import { getCurrentUserId } from '@/lib/supabase';
 import { logError } from '@/lib/errorLogger';
-import type { SpaceMember, SpaceMemberRow, UserRow } from '@/types';
+import type { SpaceMember, SpaceMemberRow, MemberProfileRow } from '@/types';
 import {
   supa, assertOwner, serializeSupabaseError, toSpaceMember,
 } from './_internals';
@@ -190,9 +190,10 @@ export async function updateMemberColor(
     throw updateError ?? new Error('색상 업데이트에 실패했습니다.');
   }
 
+  // 2026-10-13: 다른 멤버의 색을 바꾼 경우에도 공개 프로필 뷰(migration 077)만 읽는다.
   const { data: userRow, error: userError } = await supa
-    .from('users').select('*').eq('id', targetUserId).single() as {
-      data: UserRow | null; error: Error | null;
+    .from('member_profiles').select('id, nickname, avatar_url').eq('id', targetUserId).single() as {
+      data: MemberProfileRow | null; error: Error | null;
     };
 
   if (userError || !userRow) throw userError ?? new Error('사용자 정보를 가져오지 못했습니다.');
