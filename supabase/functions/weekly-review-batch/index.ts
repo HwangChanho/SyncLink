@@ -21,6 +21,7 @@ import Anthropic from 'npm:@anthropic-ai/sdk';
 import { createClient } from 'npm:@supabase/supabase-js';
 // @ts-ignore — Deno 는 배포 시점에 상대 경로를 해석한다.
 import { requireSharedSecret } from '../_shared/serviceAuth.ts';
+import { expoAuthHeader } from '../_shared/expoPush.ts';
 
 interface WeeklyReviewRow {
   user_id: string;
@@ -149,7 +150,8 @@ async function runBatch(
       for (const chunk of chunks) {
         await fetch('https://exp.host/--/api/v2/push/send', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          // Expo 푸시 인증 헤더(강화 보안 대비) — EXPO_ACCESS_TOKEN 이 있을 때만 붙는다.
+          headers: { 'Content-Type': 'application/json', ...expoAuthHeader() },
           body: JSON.stringify(chunk),
         });
       }

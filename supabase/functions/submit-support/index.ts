@@ -18,6 +18,7 @@
 
 // @ts-expect-error: Deno remote import — tsc cannot resolve but runtime can.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { expoAuthHeader } from '../_shared/expoPush.ts';
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -98,6 +99,8 @@ async function notifyAdmins(
       'Content-Type': 'application/json',
       Accept: 'application/json',
       'Accept-Encoding': 'gzip, deflate',
+      // Expo 푸시 인증 헤더(강화 보안 대비) — EXPO_ACCESS_TOKEN 이 있을 때만 붙는다.
+      ...expoAuthHeader(),
     },
     body: JSON.stringify(
       tokens.map((to: string) => ({
