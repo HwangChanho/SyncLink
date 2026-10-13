@@ -2,8 +2,11 @@
  * analyze-image — v1.2.1 메신저 이미지 자동 태그.
  *
  * 입력: { messageId: string }
- *   서버가 직접 DB 에서 image_url 을 읽고 Claude Vision 으로 1–3개 한국어
+ *   서버가 메시지의 사진을 Storage 에서 직접 내려받아 Claude Vision 으로 1–3개 한국어
  *   태그 생성 후 space_messages.tags 에 저장.
+ *   (2026-10-13) 사진은 image_url 이 아니라 앱의 업로드 경로 규칙
+ *   space-images/<보낸 사람 id>/messages/<메시지 id>.jpg 에서 service_role 로 받는다
+ *   — 버킷을 비공개로 바꿔도(3-C) 동작하고, 메시지에 적힌 주소와 무관하게 «보낸 사람 본인 폴더의 그 메시지 사진»만 읽는다.
  *
  * Cost guard:
  *   - 모델: Claude Haiku 4.5 (가장 저렴)
@@ -20,72 +23,11 @@ const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const MODEL = 'claude-haiku-4-5';
 const MAX_TOKENS = 80;
 // v1.2.7 — DAILY_CAP 제거 (_shared/quota.ts 의 'analyze-image' 한도 사용).
-/** 받아 올 이미지 최대 크기(바이트). Anthropic 이미지 한 장 상한(5MB)과 같게 둔다. */
+/** 받아 올 이미지 최대 크기(바이트). Anthropic 이미지 한 장 상한(5MB)과 같게 둔다(버킷 업로드 상한도 5MB). */
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
-/**
- * image_url 이 «우리 Supabase Storage 객체 주소»인지 확인한다.
- *
- * 왜: image_url 은 메시지 작성자가 넣는 값이라, 검사 없이 서버가 fetch 하면 임의 주소로
- *     요청을 보내게 된다. 앱은 space-images 버킷의 getPublicUrl 값만 넣는다
- *     (src/services/spaceMessageService.ts) — 공개(/object/public/)·서명(/object/sign/) 주소 모두
- *     /storage/v1/object/ 아래이므로 그 경로만 허용한다.
- *
- * @param raw        - 메시지에 저장된 image_url
- * @param supabaseUrl - 이 프로젝트의 SUPABASE_URL
- * @returns 허용되는 주소면 정규화된 URL 문자열, 아니면 null
- * 주의: URL 생성자가 `..` 경로를 정규화한 **뒤에** 비교하므로 경로 우회가 통하지 않는다.
- *       호스트는 문자열 접두사가 아니라 origin 전체 일치로 본다(`…supabase.co.evil.com` 차단).
- */
-function toAllowedStorageUrl(raw: string, supabaseUrl: string): string | null {
-  try {
-    const u = new URL(raw);
-    const base = new URL(supabaseUrl);
-    if (u.origin !== base.origin) return null;
-    if (!u.pathname.startsWith('/storage/v1/object/')) return null;
-    return u.toString();
-  } catch {
-    return null;
-  }
-}
-
-/**
- * 응답 본문을 최대 maxBytes 까지만 읽는다. 넘으면 null(읽기 중단).
- *
- * @param resp     - fetch 응답
- * @param maxBytes - 허용 최대 바이트
- * @returns 본문 바이트 또는 null(상한 초과)
- * 주의: Content-Length 는 없거나 거짓일 수 있어 실제로 읽은 양으로 판단한다.
- */
-async function readBodyCapped(resp: Response, maxBytes: number): Promise<Uint8Array | null> {
-  const declared = Number(resp.headers.get('Content-Length') ?? '');
-  if (Number.isFinite(declared) && declared > maxBytes) {
-    await resp.body?.cancel();
-    return null;
-  }
-  if (!resp.body) return new Uint8Array(0);
-  const reader = resp.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > maxBytes) {
-      await reader.cancel();
-      return null;
-    }
-    chunks.push(value);
-  }
-  // 조각들을 한 버퍼로 합친다.
-  const out = new Uint8Array(total);
-  let offset = 0;
-  for (const c of chunks) {
-    out.set(c, offset);
-    offset += c.byteLength;
-  }
-  return out;
-}
+/** 대화 사진 버킷 — 앱 spaceMessageService.sendImageMessage 와 같은 이름. */
+const SPACE_IMAGES_BUCKET = 'space-images';
 
 interface Body {
   messageId?: string;
@@ -146,18 +88,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   // Claude Vision 호출. URL 직접 입력은 Anthropic API 가 지원하지 않으므로
   // image 를 base64 로 변환 후 inline.
-  // 2026-10-13: 우리 Storage 주소만 받고, 리다이렉트는 따라가지 않으며, 크기 상한을 둔다.
-  const imageUrl = toAllowedStorageUrl(msg.image_url, supabaseUrl);
-  if (!imageUrl) return json({ error: 'unsupported image url' }, 400);
-  const imgResp = await fetch(imageUrl, { redirect: 'error' });
-  if (!imgResp.ok) return json({ error: 'image fetch failed' }, 502);
-  const imgBuf = await readBodyCapped(imgResp, MAX_IMAGE_BYTES);
-  if (!imgBuf) return json({ error: 'image too large' }, 413);
+  // 2026-10-13: 공개 URL fetch → 업로드 경로 규칙으로 Storage 에서 직접 다운로드.
+  //   경로를 서버가 만들므로(보낸 사람 = 호출자, 위에서 확인) 다른 사람의 파일을 읽을 수 없다.
+  const imagePath = `${msg.sender_id}/messages/${msg.id}.jpg`;
+  const { data: imgBlob, error: dlErr } = await admin.storage.from(SPACE_IMAGES_BUCKET).download(imagePath);
+  if (dlErr || !imgBlob) return json({ error: 'image fetch failed' }, 502);
+  if (imgBlob.size > MAX_IMAGE_BYTES) return json({ error: 'image too large' }, 413);
+  const imgBuf = new Uint8Array(await imgBlob.arrayBuffer());
   // base64 인코딩 — Deno 표준 라이브러리.
   let bin = '';
   for (let i = 0; i < imgBuf.byteLength; i += 1) bin += String.fromCharCode(imgBuf[i]);
   const base64 = btoa(bin);
-  const mediaType = imgResp.headers.get('Content-Type') ?? 'image/jpeg';
+  // 저장된 Content-Type(버킷이 jpeg·png·webp 만 허용). 비어 있으면 앱이 올리는 jpeg 로 본다.
+  const mediaType = imgBlob.type || 'image/jpeg';
 
   const anthropicResp = await fetch(ANTHROPIC_API_URL, {
     method: 'POST',

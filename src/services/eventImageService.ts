@@ -6,6 +6,7 @@
  *  2) Supabase Storage `event-images` bucket 에 `{userId}/{eventId}/{position}.jpg` 경로로 업로드
  *  3) public URL 을 event_images 테이블에 INSERT
  *  4) 일정 상세 / 편집 화면에서 url 로 표시
+ *     (2026-10-13) listEventImages 는 url 을 표시용 서명 URL 로 바꿔 돌려준다 — photoDisplayUrlService 참고.
  *
  * RLS:
  *  - INSERT/DELETE: owner only (event.user_id = auth.uid)
@@ -21,6 +22,7 @@
 
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { supabase, getCurrentUserId } from '@/lib/supabase';
+import { toDisplayPhotoUrls } from '@/services/photoDisplayUrlService';
 
 /** 최대 첨부 개수 — UI 가드 + DB position unique 와 함께 작동. */
 export const MAX_EVENT_IMAGES = 5;
@@ -34,6 +36,10 @@ const JPEG_QUALITY = 0.8;
 export interface EventImage {
   id:        string;
   eventId:   string;
+  /**
+   * 표시용 URL. listEventImages 결과는 서명 URL(1시간 만료)일 수 있다 → DB 에 다시 저장하지 말 것.
+   * 삭제는 url 이 아니라 eventId·position 으로 경로를 재구성한다(deleteEventImage).
+   */
   url:       string;
   position:  number;
   createdAt: Date;
@@ -60,6 +66,7 @@ function toEventImage(row: EventImageRow): EventImage {
 
 /**
  * 특정 event 의 이미지 목록을 position 오름차순으로 조회.
+ * url 은 표시용 서명 URL 로 바꿔 돌려준다(서명 실패 시 저장된 공개 URL 그대로).
  */
 export async function listEventImages(eventId: string): Promise<EventImage[]> {
   const { data, error } = await supabase
@@ -68,7 +75,11 @@ export async function listEventImages(eventId: string): Promise<EventImage[]> {
     .eq('event_id', eventId)
     .order('position', { ascending: true });
   if (error) throw error;
-  return (data ?? []).map((r) => toEventImage(r as EventImageRow));
+  const images = (data ?? []).map((r) => toEventImage(r as EventImageRow));
+
+  // 2026-10-13: 사진 버킷 비공개 전환(3-C) 준비 — 표시는 서명 URL 로.
+  const displayUrls = await toDisplayPhotoUrls(images.map((img) => img.url));
+  return images.map((img, i) => ({ ...img, url: displayUrls[i] ?? img.url }));
 }
 
 /**

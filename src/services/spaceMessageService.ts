@@ -12,16 +12,21 @@
  *  - delete(message_id) → owner 만 (RLS 가 검증)
  *
  * Realtime: subscribeToSpace(space_id, onNew, onDelete) → cleanup 콜백 반환.
+ *
+ * 사진 표시(2026-10-13): DB 의 image_url 은 공개 URL 그대로 두고(옛 앱 호환), 이 서비스가 돌려주는
+ * SpaceMessage.imageUrl 만 표시용 서명 URL 로 바꾼다 — photoDisplayUrlService 참고. 서명 실패 시 공개 URL 그대로.
  */
 
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { supabase, getCurrentUserId } from '@/lib/supabase';
+import { toDisplayPhotoUrl, toDisplayPhotoUrls } from '@/services/photoDisplayUrlService';
 
 export interface SpaceMessage {
   id:        string;
   spaceId:   string;
   senderId:  string;
   body:      string | null;
+  /** 표시용 URL — 서명 URL(1시간 만료)일 수 있으니 DB 에 다시 저장하지 말 것. */
   imageUrl:  string | null;
   /** v1.2.1 — AI 자동 태그 1–3개 (한국어). null = 미분석. */
   tags:      string[] | null;
@@ -50,6 +55,17 @@ function toMessage(row: SpaceMessageRow): SpaceMessage {
   };
 }
 
+/**
+ * 메시지 하나의 imageUrl 을 표시용 서명 URL 로 바꾼다. 사진 없는 메시지는 그대로 돌려준다.
+ *
+ * @param msg - toMessage 결과(imageUrl = 저장된 공개 URL)
+ * @returns imageUrl 만 바뀐 새 객체(서명 실패 시 원래 URL)
+ */
+async function withDisplayImageUrl(msg: SpaceMessage): Promise<SpaceMessage> {
+  if (!msg.imageUrl) return msg;
+  return { ...msg, imageUrl: await toDisplayPhotoUrl(msg.imageUrl) };
+}
+
 /** 최근 메시지 목록 (newest first). 메시지 화면은 inverted FlatList 권장. */
 export async function listMessages(spaceId: string, limit: number = 50): Promise<SpaceMessage[]> {
   const { data, error } = await supabase
@@ -59,7 +75,11 @@ export async function listMessages(spaceId: string, limit: number = 50): Promise
     .order('created_at', { ascending: false })
     .limit(limit);
   if (error) throw error;
-  return (data ?? []).map((r) => toMessage(r as SpaceMessageRow));
+  const messages = (data ?? []).map((r) => toMessage(r as SpaceMessageRow));
+
+  // 사진 메시지의 URL 을 한 번에 서명 (2026-10-13)
+  const displayUrls = await toDisplayPhotoUrls(messages.map((m) => m.imageUrl));
+  return messages.map((m, i) => ({ ...m, imageUrl: displayUrls[i] ?? m.imageUrl }));
 }
 
 /** 텍스트 메시지 전송. */
@@ -115,7 +135,7 @@ export async function sendImageMessage(spaceId: string, localUri: string): Promi
   // v1.2.1 — AI 자동 태그 (백그라운드, 실패해도 메시지 전송엔 영향 X).
   void analyzeImageMessage(msg.id).catch(() => { /* silent fail */ });
 
-  return msg;
+  return withDisplayImageUrl(msg);
 }
 
 /**
@@ -160,7 +180,8 @@ export function subscribeToSpace(
       'postgres_changes' as any,
       { event: 'INSERT', schema: 'public', table: 'space_messages', filter: `space_id=eq.${spaceId}` },
       (payload: any) => {
-        onInsert(toMessage(payload.new as SpaceMessageRow));
+        // 사진 메시지는 표시용 URL 로 바꾼 뒤 전달(비동기). 사진 없는 메시지는 바로 전달된다.
+        void withDisplayImageUrl(toMessage(payload.new as SpaceMessageRow)).then(onInsert);
       },
     )
     .on(
@@ -174,8 +195,8 @@ export function subscribeToSpace(
       'postgres_changes' as any,
       { event: 'UPDATE', schema: 'public', table: 'space_messages', filter: `space_id=eq.${spaceId}` },
       (payload: any) => {
-        // v1.2.1 — AI 분석 결과 tags 컬럼 갱신 등.
-        if (onUpdate) onUpdate(toMessage(payload.new as SpaceMessageRow));
+        // v1.2.1 — AI 분석 결과 tags 컬럼 갱신 등. 사진 URL 은 INSERT 와 같이 표시용으로 바꿔 전달.
+        if (onUpdate) void withDisplayImageUrl(toMessage(payload.new as SpaceMessageRow)).then(onUpdate);
       },
     )
     .subscribe();
