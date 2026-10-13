@@ -3,7 +3,8 @@
  *
  * 왜:
  *  - 지금까지 세션(액세스·리프레시 토큰)은 AsyncStorage(암호화 없는 앱 파일)에 있었다.
- *    기기 백업에 그대로 실리고, 파일에 접근할 수 있으면 그대로 읽힌다.
+ *    앱 파일에 접근할 수 있으면 그대로 읽히고, Android 는 기기 백업(allowBackup 기본 허용)에도 실릴 수 있다.
+ *    (iOS AsyncStorage 는 라이브러리 기본값으로 iCloud 백업에서 빠진다 — RCTAsyncStorageExcludeFromBackup)
  *  - 여기서는 SecureStore(iOS Keychain · Android Keystore 암호화)에 둔다.
  *    접근성은 «첫 잠금 해제 이후 · 이 기기에서만» — 잠긴 상태의 백그라운드 갱신도 읽을 수 있고,
  *    백업으로 다른 기기에 옮겨지지 않는다.
