@@ -68,6 +68,8 @@ jest.mock('@/lib/supabase', () => ({
       signInWithIdToken: jest.fn(),
       signInWithOAuth: jest.fn(),
       signInWithPassword: jest.fn(),
+      // 2026-10-13 (보안 3-B5): kakao-auth 새 형식(1회용 토큰)으로 세션을 만들 때 쓴다
+      verifyOtp: jest.fn(),
       exchangeCodeForSession: jest.fn(),
       getSession: jest.fn(),
       refreshSession: jest.fn(),
@@ -396,12 +398,13 @@ describe('authService', () => {
    *
    *   kakaoNativeLogin() -> accessToken
    *     -> POST kakao-auth Edge Function (서버가 카카오에 토큰을 검증)
-   *     -> { email, password } -> supabase.auth.signInWithPassword
+   *     -> { tokenHash } -> supabase.auth.verifyOtp          (2026-10-13~, 본문 v:2)
+   *     -> { email, password } -> supabase.auth.signInWithPassword (옛 서버 응답 호환)
    *
    * 웹 플랫폼만 옛 리다이렉트 경로를 유지한다(authService.web.test.ts 참조).
    *
-   * 커버리지: 정상 흐름 / 사용자 취소 / Edge 에러 / Edge 응답 불완전 /
-   *          JSON 파싱 실패 / signInWithPassword 실패 / session=null
+   * 커버리지: 정상 흐름(tokenHash) / 옛 응답 호환 / verifyOtp 실패 / 사용자 취소 /
+   *          Edge 에러 / Edge 응답 불완전 / JSON 파싱 실패 / signInWithPassword 실패 / session=null
    */
   describe('signInWithKakao', () => {
     /** Edge Function 이 돌려주는 정상 자격 픽스처 */
@@ -424,9 +427,13 @@ describe('authService', () => {
       fetchMock.mockResolvedValue({ ok, status, json: jest.fn().mockResolvedValue(body) });
     }
 
-    it('정상 흐름: 네이티브 로그인 → accessToken 을 Edge 에 전달 → signInWithPassword', async () => {
-      mockEdgeResponse(OK_BODY);
-      (supabase.auth.signInWithPassword as jest.Mock).mockResolvedValue({
+    /**
+     * 정상 흐름 (2026-10-13 보안 3-B5 이후): 서버가 1회용 토큰(tokenHash)을 돌려주면
+     * verifyOtp 로 세션을 만든다 — 비밀번호를 주고받지 않는다.
+     */
+    it('정상 흐름: 네이티브 로그인 → accessToken+v:2 를 Edge 에 전달 → tokenHash 로 verifyOtp', async () => {
+      mockEdgeResponse({ tokenHash: 'one-time-hash' });
+      (supabase.auth.verifyOtp as jest.Mock).mockResolvedValue({
         data: { session: mockSession },
         error: null,
       });
@@ -439,17 +446,47 @@ describe('authService', () => {
 
       // 🔴 accessToken 만 서버로 보낸다. 클라이언트가 email 을 만들어 보내면
       //    남의 계정을 가져갈 수 있으므로 검증은 반드시 서버가 한다.
+      //    v:2 = «1회용 토큰으로 달라»는 표시(없으면 서버가 옛 형식으로 답한다).
       expect(fetchMock).toHaveBeenCalledTimes(1);
       const [url, init] = fetchMock.mock.calls[0];
       expect(url).toBe('https://test.supabase.co/functions/v1/kakao-auth');
       expect(init.method).toBe('POST');
-      expect(JSON.parse(init.body)).toEqual({ accessToken: 'kakao-access-token' });
+      expect(JSON.parse(init.body)).toEqual({ accessToken: 'kakao-access-token', v: 2 });
       expect(init.headers.apikey).toBe('test-anon-key');
 
-      // Edge 가 돌려준 자격으로만 세션을 만든다.
-      expect(supabase.auth.signInWithPassword).toHaveBeenCalledWith(OK_BODY);
+      // Edge 가 돌려준 1회용 토큰으로만 세션을 만든다 — 비밀번호 로그인은 쓰지 않는다.
+      expect(supabase.auth.verifyOtp).toHaveBeenCalledWith({ token_hash: 'one-time-hash', type: 'email' });
+      expect(supabase.auth.signInWithPassword).not.toHaveBeenCalled();
       expect(result.session.userId).toBe('user-123');
       expect(result.user).toEqual(mockUserRow);
+    });
+
+    /**
+     * 옛 서버 호환: kakao-auth 가 아직 새 형식을 모르는 상태(배포 전)라 email·password 로 답해도
+     * 로그인은 된다. 서버 배포 순서가 어긋나도 앱이 깨지지 않게 하는 안전장치.
+     */
+    it('옛 서버 응답(email·password) 호환: signInWithPassword 로 세션 생성', async () => {
+      mockEdgeResponse(OK_BODY);
+      (supabase.auth.signInWithPassword as jest.Mock).mockResolvedValue({
+        data: { session: mockSession },
+        error: null,
+      });
+
+      const result = await signInWithKakao();
+
+      expect(supabase.auth.signInWithPassword).toHaveBeenCalledWith(OK_BODY);
+      expect(supabase.auth.verifyOtp).not.toHaveBeenCalled();
+      expect(result.session.userId).toBe('user-123');
+    });
+
+    it('verifyOtp 실패(토큰 만료·재사용): 에러 그대로 throw', async () => {
+      mockEdgeResponse({ tokenHash: 'used-hash' });
+      (supabase.auth.verifyOtp as jest.Mock).mockResolvedValue({
+        data: { session: null },
+        error: new Error('Token has expired or is invalid'),
+      });
+
+      await expect(signInWithKakao()).rejects.toThrow('Token has expired or is invalid');
     });
 
     /**

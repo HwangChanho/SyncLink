@@ -92,6 +92,8 @@ jest.mock('@/lib/supabase', () => ({
       signInWithOAuth: jest.fn(),
       signInWithIdToken: jest.fn(),
       signInWithPassword: jest.fn(),
+      // 2026-10-13 (보안 3-B5): 웹 카카오 콜백이 1회용 토큰으로 세션을 만들 때 쓴다
+      verifyOtp: jest.fn(),
       exchangeCodeForSession: jest.fn(),
       getSession: jest.fn(),
       refreshSession: jest.fn(),
@@ -101,6 +103,12 @@ jest.mock('@/lib/supabase', () => ({
     },
     from: jest.fn(),
   },
+}));
+
+// errorLogger — 카카오 확인값 불일치를 기록하는지가 검증 대상이라 mock 한다(실제 기록 호출도 막는다).
+jest.mock('@/lib/errorLogger', () => ({
+  logError:         jest.fn().mockResolvedValue(undefined),
+  serializePgError: jest.fn((e: unknown) => ({ message: String(e) })),
 }));
 
 // fetch mock — kakao-auth Edge Function 호출용
@@ -114,10 +122,12 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
+import { logError } from '@/lib/errorLogger';
 import {
   signInWithGoogle,
   signInWithApple,
   signInWithKakao,
+  completeKakaoWebSignIn,
 } from '@/services/authService';
 
 // ─── 타입 헬퍼 ────────────────────────────────────────────────────────────────
@@ -251,8 +261,21 @@ describe('authService (Platform.OS = "web")', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('signInWithKakao (web)', () => {
+    /** 이 탭의 sessionStorage 대역 — 로그인 시작 때 확인값을 두고 콜백에서 대조한다. */
+    let store: Map<string, string>;
+
     beforeEach(() => {
       fetchMock.mockReset();
+      store = new Map();
+      (globalThis as Record<string, unknown>).sessionStorage = {
+        getItem:    (k: string) => store.get(k) ?? null,
+        setItem:    (k: string, v: string) => { store.set(k, v); },
+        removeItem: (k: string) => { store.delete(k); },
+      };
+    });
+
+    afterEach(() => {
+      delete (globalThis as Record<string, unknown>).sessionStorage;
     });
 
     /**
@@ -273,13 +296,27 @@ describe('authService (Platform.OS = "web")', () => {
       expect(assignedUrl).toContain(
         `redirect_uri=${encodeURIComponent('https://test.supabase.co/functions/v1/kakao-auth')}`,
       );
-      // state = web 복귀 URL
-      expect(assignedUrl).toContain(
-        `state=${encodeURIComponent(`${TEST_ORIGIN}/auth/callback`)}`,
-      );
+      // state = web 복귀 URL + v=2(1회용 토큰으로 달라) + n(이 탭의 확인값, 16바이트 16진수)
+      const state = new URL(assignedUrl).searchParams.get('state') ?? '';
+      const match = state.match(/^(.+)\?v=2&n=([0-9a-f]{32})$/);
+      expect(match?.[1]).toBe(`${TEST_ORIGIN}/auth/callback`);
+      // 같은 확인값이 이 탭의 sessionStorage 에 있어야 콜백에서 대조할 수 있다
+      expect([...store.values()]).toEqual([match?.[2]]);
 
       // Supabase 내장 Kakao 프로바이더는 더 이상 사용하지 않는다
       expect(supabase.auth.signInWithOAuth).not.toHaveBeenCalled();
+    });
+
+    it('로그인할 때마다 확인값이 새로 만들어진다', async () => {
+      const loc = (globalThis as Record<string, unknown>).location as { assign: jest.Mock };
+
+      await signInWithKakao();
+      await signInWithKakao();
+
+      const nonces = loc.assign.mock.calls.map(
+        ([u]: [string]) => new URL(new URL(u).searchParams.get('state') ?? '').searchParams.get('n'),
+      );
+      expect(nonces[0]).not.toBe(nonces[1]);
     });
 
     it('origin 미설정 시 Linking.createURL 폴백 사용', async () => {
@@ -291,6 +328,50 @@ describe('authService (Platform.OS = "web")', () => {
 
       expect(Linking.createURL).toHaveBeenCalledWith('/auth/callback');
       expect(loc.assign).toHaveBeenCalled();
+    });
+
+    /**
+     * completeKakaoWebSignIn — /auth/callback 이 부르는 마무리 단계.
+     * 🔴 이 탭이 시작한 로그인(저장된 확인값 = 복귀 주소의 n)일 때만 토큰을 쓴다.
+     *    다른 곳에서 만들어진 복귀 주소로는 로그인되지 않아야 한다.
+     */
+    describe('completeKakaoWebSignIn', () => {
+      const KEY = 'synclink.kakaoWebNonce';
+
+      it('확인값 일치 → verifyOtp 로 세션 생성, 확인값은 지운다', async () => {
+        store.set(KEY, 'abc123');
+        (supabase.auth.verifyOtp as jest.Mock).mockResolvedValue({ data: {}, error: null });
+
+        await completeKakaoWebSignIn('hash-1', 'abc123');
+
+        expect(supabase.auth.verifyOtp).toHaveBeenCalledWith({ token_hash: 'hash-1', type: 'email' });
+        expect(store.has(KEY)).toBe(false);
+      });
+
+      it.each([
+        ['확인값 불일치', 'abc123', 'other'],
+        ['이 탭에 시작 기록 없음', null, 'abc123'],
+        ['복귀 주소에 n 없음', 'abc123', null],
+      ])('%s → 거절, verifyOtp 미호출, 확인값 지움, 기록 남김', async (_label, saved, given) => {
+        if (saved) store.set(KEY, saved);
+
+        await expect(completeKakaoWebSignIn('hash-1', given)).rejects.toThrow('카카오 로그인을 다시 시작해 주세요.');
+
+        expect(supabase.auth.verifyOtp).not.toHaveBeenCalled();
+        expect(store.has(KEY)).toBe(false);
+        expect(logError).toHaveBeenCalledWith(
+          expect.objectContaining({ context: 'auth.kakao.web-nonce-mismatch' }),
+        );
+      });
+
+      it('토큰 만료·재사용 → verifyOtp 오류 그대로 throw', async () => {
+        store.set(KEY, 'abc123');
+        (supabase.auth.verifyOtp as jest.Mock).mockResolvedValue({
+          data: {}, error: new Error('Token has expired or is invalid'),
+        });
+
+        await expect(completeKakaoWebSignIn('hash-1', 'abc123')).rejects.toThrow('Token has expired or is invalid');
+      });
     });
   });
 });

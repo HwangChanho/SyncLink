@@ -18,6 +18,15 @@
  *      redirect and returns control to the app. The app then calls
  *      signInWithPassword(email, password) to mint a real Supabase session.
  *
+ * ## v=2 — 1회용 로그인 토큰 (2026-10-13, 보안 3-B5)
+ *   새 앱은 신호를 보낸다: POST 본문 `v: 2` / GET 은 복귀 주소(state)의 쿼리 `v=2`.
+ *   그러면 비밀번호를 건드리지 않고 1회용 로그인 토큰(magiclink token_hash — 1회 사용·만료 있음)을 돌려준다
+ *   → 앱은 verifyOtp({ token_hash, type: 'email' }) 로 세션을 만든다.
+ *   효과: 카카오 로그인이 그 사용자의 다른 기기 세션을 끊지 않는다(관리자 API 로 비밀번호를 바꾸면 전 세션이 끊긴다)
+ *         · 브라우저 기록에 남는 값이 1회용이다 · 거의 동시 로그인 두 번이 서로를 무효로 만들지 않는다.
+ *   GET 은 복귀 주소의 기존 쿼리(웹의 1회용 확인값 n 등)를 보존하고 token_hash 를 덧붙인다.
+ *   신호가 없는 옛 앱은 위 1~5 그대로(응답 형식 변경 없음).
+ *
  * Deployment: `supabase functions deploy kakao-auth`
  */
 
@@ -123,12 +132,21 @@ serve(async (req: Request): Promise<Response> => {
       return new Response('invalid state', { status: 400, headers: CORS_HEADERS });
     }
 
+    // v=2(새 앱) 이면 1회용 토큰으로 응답하고, 복귀 주소의 기존 쿼리를 보존하며 파라미터를 덧붙인다.
+    // 옛 앱(신호 없음)은 예전 문자열 그대로 만든다(응답 형식을 한 글자도 바꾸지 않기 위해).
+    const wantsOtp = returnToWantsOtp(returnTo);
+    const back = (params: Record<string, string>): Response => htmlRedirect(
+      wantsOtp
+        ? withQueryParams(returnTo, params)
+        : `${returnTo}?${Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')}`,
+    );
+
     // Kakao may redirect with ?error= if user denies the consent prompt.
     if (errorParam) {
-      return htmlRedirect(`${returnTo}?error=${encodeURIComponent(errorParam)}`);
+      return back({ error: errorParam });
     }
     if (!code) {
-      return htmlRedirect(`${returnTo}?error=no_code`);
+      return back({ error: 'no_code' });
     }
 
     try {
@@ -138,16 +156,17 @@ serve(async (req: Request): Promise<Response> => {
       // (redirect_uri mismatch). Using the public canonical URL avoids this.
       const selfUrl = 'https://uhubhqcymxajdonmkthm.supabase.co/functions/v1/kakao-auth';
       console.log('[kakao-auth] token exchange redirect_uri:', selfUrl, 'incoming origin:', url.origin);
-      const { email, password } = await exchangeCode(code, selfUrl);
-      return htmlRedirect(
-        `${returnTo}?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`,
-      );
+      const cred = await exchangeCode(code, selfUrl, wantsOtp ? 'otp' : 'password');
+      // v=2 는 email 을 싣지 않는다(verifyOtp 에 필요 없음 — 브라우저 기록에 남는 값을 줄인다).
+      return back('tokenHash' in cred
+        ? { token_hash: cred.tokenHash }
+        : { email: cred.email, password: cred.password });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'unknown error';
       // GET 플로우 최상위 catch — exchangeCode 안에서 세분화된 context로 이미 기록됐을 수 있지만
       // 그렇지 않은 예외(JSON 파싱 오류 등)도 모두 잡기 위해 한 번 더 기록
       await logToDb('kakao-auth.unexpected', err, { flow: 'GET', code: !!code });
-      return htmlRedirect(`${returnTo}?error=${encodeURIComponent(message)}`);
+      return back({ error: message });
     }
   }
 
@@ -162,19 +181,19 @@ serve(async (req: Request): Promise<Response> => {
   if (req.method === 'POST') {
     try {
       const body = (await req.json().catch(() => null)) as
-        | { accessToken?: string; code?: string; redirect_uri?: string }
+        | { accessToken?: string; code?: string; redirect_uri?: string; v?: number }
         | null;
+      // v=2(새 앱) → { tokenHash } / 옛 앱 → { email, password } (머리 주석 참고)
+      const issue: CredentialKind = body?.v === 2 ? 'otp' : 'password';
 
       if (body?.accessToken) {
-        const { email, password } = await provisionFromAccessToken(body.accessToken);
-        return jsonResponse({ email, password }, 200);
+        return jsonResponse(toJsonCredential(await provisionFromAccessToken(body.accessToken, issue)), 200);
       }
 
       if (!body?.code || !body?.redirect_uri) {
         return jsonResponse({ error: 'accessToken or (code and redirect_uri) required' }, 400);
       }
-      const { email, password } = await exchangeCode(body.code, body.redirect_uri);
-      return jsonResponse({ email, password }, 200);
+      return jsonResponse(toJsonCredential(await exchangeCode(body.code, body.redirect_uri, issue)), 200);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'unknown error';
       await logToDb('kakao-auth.unexpected', err, { flow: 'POST' });
@@ -187,10 +206,19 @@ serve(async (req: Request): Promise<Response> => {
 
 // ─── Core exchange logic (shared by GET and POST) ─────────────────────────────
 
+/**
+ * 카카오 인가 코드 → access token 교환 후 provisionFromAccessToken 으로 넘긴다.
+ *
+ * @param code        - 카카오 인가 코드
+ * @param redirectUri - 인가 요청 때 쓴 redirect_uri(같아야 교환된다)
+ * @param issue       - 돌려줄 자격 종류('password' = 옛 앱 · 'otp' = 1회용 토큰)
+ * @returns 로그인 자격
+ */
 async function exchangeCode(
   code: string,
   redirectUri: string,
-): Promise<{ email: string; password: string }> {
+  issue: CredentialKind,
+): Promise<KakaoCredential> {
   const kakaoRestApiKey = Deno.env.get('KAKAO_REST_API_KEY');
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -226,7 +254,7 @@ async function exchangeCode(
   const tokens = (await tokenRes.json()) as KakaoTokenResponse;
 
   // 2~3 단계는 access token 만 있으면 되므로 분리해 네이티브 경로와 공유한다.
-  return provisionFromAccessToken(tokens.access_token);
+  return provisionFromAccessToken(tokens.access_token, issue);
 }
 
 /**
@@ -244,18 +272,25 @@ async function exchangeCode(
  *      그 이메일로 이미 다른 계정이 있으면 **합치지 않고 거절**한다 — 다른 계정의 비밀번호를
  *      카카오 로그인이 덮어쓰지 않게 한다.
  *
- * ## 비밀번호
+ * ## 돌려주는 자격 (issue)
+ *   - 'otp'(v=2 새 앱): 비밀번호를 건드리지 않고 1회용 로그인 토큰(magiclink token_hash)을 만든다.
+ *     새 계정도 비밀번호 없이 만든다(카카오 계정은 비밀번호 로그인을 쓰지 않는다).
+ *   - 'password'(옛 앱): 아래 «비밀번호» 그대로.
+ *
+ * ## 비밀번호 (issue = 'password')
  *   로그인마다 새로 만드는 무작위 값이다. 호출부(authService.ts)는 받은 즉시 signInWithPassword 로
  *   세션을 만들고 버린다. 로그인마다 바뀌므로 한 번 새어 나간 값이 오래 유효하지 않다.
  *   ⚠️ 같은 사용자가 거의 동시에 두 번 로그인하면 먼저 받은 비밀번호가 무효가 될 수 있다(재시도로 해결).
  *
  * @param accessToken 카카오 access token. 서버가 카카오에 직접 물어 검증한다.
- * @returns Supabase `signInWithPassword` 에 쓸 email/password
- * @throws 다른 앱 토큰 · 프로필 조회 실패 · 이메일 충돌 · 계정 생성/갱신 실패
+ * @param issue       돌려줄 자격 종류(위 «돌려주는 자격»)
+ * @returns 'password' → { email, password } (signInWithPassword 용) / 'otp' → { email, tokenHash } (verifyOtp 용)
+ * @throws 다른 앱 토큰 · 프로필 조회 실패 · 이메일 충돌 · 계정 생성/갱신 실패 · 1회용 토큰 발급 실패
  */
 async function provisionFromAccessToken(
   accessToken: string,
-): Promise<{ email: string; password: string }> {
+  issue: CredentialKind,
+): Promise<KakaoCredential> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
@@ -317,7 +352,8 @@ async function provisionFromAccessToken(
     kakaoUser.properties?.profile_image ??
     null;
 
-  const password = randomPassword();
+  // 옛 앱 경로에서만 비밀번호를 만든다(v=2 는 비밀번호를 건드리지 않는다).
+  const password = issue === 'password' ? randomPassword() : null;
   const userMetadata = {
     provider: 'kakao',
     kakao_id: kakaoId,
@@ -340,9 +376,9 @@ async function provisionFromAccessToken(
   const account = linked ?? legacy;
 
   if (account) {
-    // 기존 카카오 계정 — 이번 로그인용 비밀번호로 바꾸고, kakao_id 를 서버 전용 칸에도 적는다.
+    // 기존 카카오 계정 — kakao_id 를 서버 전용 칸에도 적고, 옛 앱 경로면 이번 로그인용 비밀번호로 바꾼다.
     const { error } = await admin.auth.admin.updateUserById(account.id, {
-      password,
+      ...(password ? { password } : {}),
       app_metadata: { ...(account.app_metadata ?? {}), kakao_id: kakaoId },
       user_metadata: { ...(account.user_metadata ?? {}), ...userMetadata },
     });
@@ -353,7 +389,7 @@ async function provisionFromAccessToken(
       });
       throw wrapped;
     }
-    return { email: account.email, password };
+    return issueCredential(admin, account.email, password);
   }
 
   // 새 계정. 같은 이메일의 다른 계정이 있으면 합치지 않는다.
@@ -366,7 +402,7 @@ async function provisionFromAccessToken(
 
   const { error } = await admin.auth.admin.createUser({
     email,
-    password,
+    ...(password ? { password } : {}),
     email_confirm: true,
     app_metadata: { kakao_id: kakaoId },
     user_metadata: userMetadata,
@@ -379,7 +415,46 @@ async function provisionFromAccessToken(
     throw wrapped;
   }
 
-  return { email, password };
+  return issueCredential(admin, email, password);
+}
+
+/** 돌려줄 자격 종류 — 'password' = 옛 앱(무작위 비밀번호) · 'otp' = 새 앱(1회용 로그인 토큰). */
+type CredentialKind = 'password' | 'otp';
+
+/** 로그인 자격. tokenHash 가 있으면 verifyOtp, 아니면 signInWithPassword 용. */
+type KakaoCredential = { email: string; password: string } | { email: string; tokenHash: string };
+
+/**
+ * 계정 준비가 끝난 뒤 앱에 돌려줄 자격을 만든다.
+ *
+ * @param admin    - service_role 클라이언트
+ * @param email    - 로그인할 계정의 이메일
+ * @param password - 옛 앱 경로에서 방금 설정한 비밀번호. null 이면 1회용 토큰을 발급한다.
+ * @returns 자격
+ * @throws 1회용 토큰 발급 실패 (메일은 보내지 않는다 — generateLink 는 링크 값만 만든다)
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function issueCredential(admin: any, email: string, password: string | null): Promise<KakaoCredential> {
+  if (password) return { email, password };
+
+  const { data, error } = await admin.auth.admin.generateLink({ type: 'magiclink', email });
+  const tokenHash = data?.properties?.hashed_token as string | undefined;
+  if (error || !tokenHash) {
+    const err = new Error(`generateLink: ${error?.message ?? 'no hashed_token'}`);
+    await logToDb('kakao-auth.generate-link', err, {});
+    throw err;
+  }
+  return { email, tokenHash };
+}
+
+/**
+ * POST 응답 본문. 1회용 토큰이면 tokenHash 만 싣는다(email 은 verifyOtp 에 필요 없다).
+ *
+ * @param cred - issueCredential 결과
+ * @returns JSON 으로 보낼 객체
+ */
+function toJsonCredential(cred: KakaoCredential): Record<string, string> {
+  return 'tokenHash' in cred ? { tokenHash: cred.tokenHash } : { email: cred.email, password: cred.password };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -449,6 +524,33 @@ function isAllowedReturnTo(returnTo: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * 복귀 주소에 새 앱 신호(쿼리 v=2)가 있는지.
+ *
+ * @param returnTo - 허용 목록 검사를 통과한 복귀 주소
+ * @returns v=2 면 true
+ */
+function returnToWantsOtp(returnTo: string): boolean {
+  try {
+    return new URL(returnTo).searchParams.get('v') === '2';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 복귀 주소의 기존 쿼리를 보존한 채 파라미터를 덧붙인다(`?` 가 두 번 붙지 않게).
+ *
+ * @param returnTo - 복귀 주소(쿼리가 있을 수 있다)
+ * @param params   - 덧붙일 키·값
+ * @returns 완성된 주소
+ */
+function withQueryParams(returnTo: string, params: Record<string, string>): string {
+  const u = new URL(returnTo);
+  for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
+  return u.toString();
 }
 
 /**

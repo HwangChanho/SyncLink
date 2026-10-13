@@ -13,11 +13,18 @@
  * On native (iOS/Android), this route is never used — deep links are handled
  * by Kakao's expo-web-browser + exchangeCodeForSession in authService.ts.
  *
+ * 2026-10-13 (보안 3-B5) — URL 에 실린 자격은 «이 탭이 시작한 로그인»의 것만 받는다:
+ *  - 카카오: ?token_hash=…&n=… — n 이 로그인 시작 때 이 탭에 둔 확인값과 같을 때만(completeKakaoWebSignIn).
+ *    예전의 ?email=…&password=… 은 더 받지 않는다(누가 만든 링크든 그 계정으로 로그인됐다).
+ *  - PKCE ?code= 는 그대로 — 교환에 이 브라우저의 code_verifier 가 필요해 원래 시작한 쪽에서만 성공한다.
+ *  - #access_token 수동 setSession 은 제거 — 우리 OAuth 는 전부 PKCE 이고, supabase-js 도 PKCE 모드에서는
+ *    해시 토큰을 거절한다. 이 분기만이 남이 만든 토큰을 그대로 받아들이던 곳이었다.
+ *
  * Implementation: TASK-204 (Sprint 2)
  *
  * NOTE for DEV (TASK-204):
  * - Use `supabase.auth.exchangeCodeForSession(url)` for PKCE code flow
- * - Use `supabase.auth.setSession({ access_token, refresh_token })` for implicit flow
+ * - (2026-10-13 제거) implicit flow 의 setSession — 위 «보안 3-B5» 참고
  * - After setting the session, redirect into the app:
  *   - 2026-08-28 UX 단순화로 신규/기존 구분 없이 '/(tabs)' 로 보낸다.
  *     (이전에는 신규 사용자만 '/auth/onboarding' 닉네임 입력을 거쳤다)
@@ -31,6 +38,7 @@ import { useTranslation } from 'react-i18next';
 import { useColors } from '@/hooks/useColors';
 import { textStyles } from '@/constants/typography';
 import { supabase } from '@/lib/supabase';
+import { completeKakaoWebSignIn } from '@/services/authService';
 import { Text } from '@/components/common/AppText';
 
 export default function AuthCallbackScreen() {
@@ -75,15 +83,12 @@ export default function AuthCallbackScreen() {
 
     // Parse the URL once and try each known flow in priority order:
     //   1. ?error=...                   → kakao-auth Edge Function reported failure
-    //   2. ?email=...&password=...      → kakao-auth derived credentials (web Kakao path)
+    //   2. ?token_hash=...&n=...        → kakao-auth 1회용 토큰 (web Kakao path, 2026-10-13)
     //   3. ?code=...                    → PKCE (Google / Apple via Supabase OAuth)
-    //   4. #access_token=...&refresh_token=...  → implicit (legacy)
-    let errorParam:    string | null = null;
-    let emailParam:    string | null = null;
-    let passwordParam: string | null = null;
-    let code:          string | null = null;
-    let accessToken:   string | null = null;
-    let refreshToken:  string | null = null;
+    let errorParam:     string | null = null;
+    let tokenHashParam: string | null = null;
+    let nonceParam:     string | null = null;
+    let code:           string | null = null;
 
     try {
       const questionIdx = href.indexOf('?');
@@ -91,16 +96,10 @@ export default function AuthCallbackScreen() {
       if (questionIdx !== -1) {
         const query = href.slice(questionIdx + 1, hashIdx > questionIdx ? hashIdx : undefined);
         const params = new URLSearchParams(query);
-        errorParam    = params.get('error');
-        emailParam    = params.get('email');
-        passwordParam = params.get('password');
-        code          = params.get('code');
-      }
-      if (hashIdx !== -1) {
-        const fragment = href.slice(hashIdx + 1);
-        const params = new URLSearchParams(fragment);
-        accessToken  = params.get('access_token');
-        refreshToken = params.get('refresh_token');
+        errorParam     = params.get('error');
+        tokenHashParam = params.get('token_hash');
+        nonceParam     = params.get('n');
+        code           = params.get('code');
       }
     } catch {
       throw new Error(t('auth.callback.parse_error'));
@@ -110,18 +109,16 @@ export default function AuthCallbackScreen() {
       throw new Error(decodeURIComponent(errorParam));
     }
 
-    if (emailParam && passwordParam) {
-      // Web Kakao: kakao-auth Edge Function HTML-redirected here with
-      // derived credentials. Sign in immediately, then scrub the URL so
-      // the password isn't left in browser history.
-      const { error } = await supabase.auth.signInWithPassword({
-        email: emailParam,
-        password: passwordParam,
-      });
-      if (error) throw error;
-      const replace = (globalThis as WebLocation).history?.replaceState;
-      if (replace) {
-        try { replace.call((globalThis as WebLocation).history, {}, '', '/auth/callback'); } catch { /* non-fatal */ }
+    if (tokenHashParam) {
+      // Web Kakao: 이 탭이 시작한 로그인인지 확인값(n)을 대조한 뒤 1회용 토큰으로 세션 생성.
+      // 성공·실패와 무관하게 URL 은 지운다(1회용이라 다시 쓸 수 없지만 기록에 남길 이유도 없다).
+      try {
+        await completeKakaoWebSignIn(tokenHashParam, nonceParam);
+      } finally {
+        const scrub = (globalThis as WebLocation).history?.replaceState;
+        if (scrub) {
+          try { scrub.call((globalThis as WebLocation).history, {}, '', '/auth/callback'); } catch { /* non-fatal */ }
+        }
       }
     } else if (code) {
       // PKCE: Google / Apple via Supabase OAuth.
@@ -131,17 +128,6 @@ export default function AuthCallbackScreen() {
       // 그 경우 이미 세션이 생겼는지 확인해, 있으면 성공으로 간주한다
       // (자동/수동 중 하나만 성공하면 로그인 완료).
       const { error } = await supabase.auth.exchangeCodeForSession(href);
-      if (error) {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) throw error;
-      }
-    } else if (accessToken && refreshToken) {
-      // Implicit. 마찬가지로 detectSessionInUrl 이 #access_token 을 이미 처리했을
-      // 수 있으므로, setSession 실패 시 세션 존재를 확인해 성공으로 간주한다.
-      const { error } = await supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      });
       if (error) {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw error;

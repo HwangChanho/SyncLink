@@ -21,6 +21,7 @@ import { login as kakaoNativeLogin } from '@react-native-kakao/user';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import { getRandomBytes } from 'expo-crypto';
 // 앱 매니페스트(assets/app.config)에 박힌 플러그인 설정을 런타임에 읽기 위해 사용.
 // Kakao 네이티브 앱키를 env 없이도 얻는 폴백 경로다 — resolveKakaoNativeAppKey 참고.
 import Constants from 'expo-constants';
@@ -252,6 +253,12 @@ export async function signInWithGoogle(): Promise<SignInResult> {
  *  5. supabase.auth.signInWithPassword({ email, password }) to create a session.
  *  6. buildSignInResult → { session, user, isNewUser }.
  *
+ * 2026-10-13 (보안 3-B5): 앱은 kakao-auth 에 v=2 신호를 보내고 1회용 로그인 토큰을 받아
+ *  verifyOtp 로 세션을 만든다(signInWithKakaoCredential). 서버가 옛 형식(email·password)으로
+ *  답하면 그대로 signInWithPassword — 서버 배포 전후 어느 쪽에서도 동작한다.
+ *  웹은 이 탭이 로그인을 시작했다는 1회용 확인값(n)을 sessionStorage 에 두고, /auth/callback 이
+ *  그 값이 일치할 때만 토큰을 받아들인다(completeKakaoWebSignIn) — 남이 만든 링크로 로그인되지 않게.
+ *
  * Environment variables:
  *  - EXPO_PUBLIC_KAKAO_REST_API_KEY — REST API key from Kakao Developer Console
  *  - EXPO_PUBLIC_SUPABASE_URL       — base URL for invoking the Edge Function
@@ -269,28 +276,29 @@ export async function signInWithKakao(): Promise<SignInResult> {
   // WebBrowser.openAuthSessionAsync — popup-based OAuth from Kakao breaks under
   // cross-origin/popup-blocker rules in Safari and Chrome strict mode, and the
   // session would be lost when the popup closes. The /auth/callback route then
-  // finalises the sign-in by reading the email/password params Edge delivered.
+  // finalises the sign-in with the one-time token_hash Edge delivered (2026-10-13, 보안 3-B5).
   if (Platform.OS === 'web') {
     const origin = (globalThis as typeof globalThis & { location?: { origin?: string } })
       .location?.origin;
     const appReturn = origin ? `${origin}/auth/callback` : Linking.createURL('/auth/callback');
+    // v=2 → 1회용 토큰으로 응답 · n → 이 탭이 시작한 로그인인지 콜백에서 대조할 확인값
+    const nonce = startKakaoWebNonce();
     const win = (globalThis as typeof globalThis & { location?: { assign: (u: string) => void } });
-    win.location?.assign(buildKakaoAuthUrl(appReturn));
+    win.location?.assign(buildKakaoAuthUrl(`${appReturn}?v=2&n=${nonce}`));
     // The page is leaving — nothing else to do here.
     return {} as SignInResult;
   }
 
-  // Native: 클라이언트 무관한 Kakao 자격(email/password)을 획득해 전역 세션을 생성.
+  // Native: 클라이언트 무관한 Kakao 자격(1회용 토큰 또는 옛 email/password)을 획득해 전역 세션을 생성.
   // (acquireKakaoCredentials 은 통합 로그인의 B 계정 로그인에서도 재사용된다.)
-  const { email, password } = await acquireKakaoCredentials();
+  const credential = await acquireKakaoCredentials();
 
-  // ── Exchange the derived credentials for a real Supabase session ────────
-  // The password is never stored anywhere on the client — signInWithPassword
-  // hands us session tokens that replace it.
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  // ── Exchange the credential for a real Supabase session ────────
+  // 자격은 어디에도 저장하지 않는다 — 세션 토큰으로 바로 바꾸고 버린다.
+  const { data, error } = await signInWithKakaoCredential(supabase, credential);
   if (error) {
-    // signInWithPassword 실패 → Edge Function이 생성한 유저와 derive된 패스워드 불일치 등
-    await logError({ context: 'auth.kakao.signin-password', error });
+    // 1회용 토큰 만료·재사용 / 옛 경로의 비밀번호 불일치 등
+    await logError({ context: `auth.kakao.signin-${credential.kind}`, error });
     throw error;
   }
   if (!data.session) {
@@ -659,8 +667,8 @@ export async function loginSecondaryAccount(
       break;
     }
     case 'kakao': {
-      const { email, password } = await acquireKakaoCredentials();
-      const { data, error } = await ephemeral.auth.signInWithPassword({ email, password });
+      const credential = await acquireKakaoCredentials();
+      const { data, error } = await signInWithKakaoCredential(ephemeral, credential);
       if (error) throw error;
       session = data.session;
       break;
@@ -906,10 +914,101 @@ function isKakaoUserCancel(error: unknown): boolean {
 }
 
 /**
- * Kakao 네이티브 자격(email/password) 획득. WebBrowser 로 Kakao 동의 → Edge 가
- * appReturn?email=..&password=.. 로 되돌려보낸 값을 추출 (클라이언트 무관).
+ * kakao-auth 가 돌려주는 로그인 자격.
+ *  - otp      : 새 형식(v=2) — 1회용 로그인 토큰. verifyOtp 로 세션을 만든다(비밀번호·다른 기기 세션 무변경).
+ *  - password : 옛 형식 — 서버가 v=2 를 모르는 경우(배포 전)의 호환 경로.
  */
-async function acquireKakaoCredentials(): Promise<{ email: string; password: string }> {
+type KakaoCredential =
+  | { kind: 'otp'; tokenHash: string }
+  | { kind: 'password'; email: string; password: string };
+
+/**
+ * kakao-auth 응답 값(JSON 본문 또는 복귀 주소 쿼리)에서 자격을 꺼낸다.
+ *
+ * @param tokenHash - 새 형식 토큰 (없으면 null)
+ * @param email     - 옛 형식 이메일 (없으면 null)
+ * @param password  - 옛 형식 비밀번호 (없으면 null)
+ * @returns 자격, 둘 다 없으면 null
+ */
+function toKakaoCredential(
+  tokenHash: string | null | undefined,
+  email: string | null | undefined,
+  password: string | null | undefined,
+): KakaoCredential | null {
+  if (tokenHash) return { kind: 'otp', tokenHash };
+  if (email && password) return { kind: 'password', email, password };
+  return null;
+}
+
+/**
+ * 카카오 자격으로 주어진 클라이언트에 세션을 만든다.
+ *
+ * @param client     - 전역 supabase 또는 통합 로그인용 임시 클라이언트
+ * @param credential - acquireKakaoCredentials 결과
+ * @returns supabase-js 의 { data: { session, user }, error }
+ * 주의: 1회용 토큰은 한 번만 쓸 수 있다 — 실패 후 같은 값으로 재시도하지 말 것(카카오 로그인부터 다시).
+ */
+function signInWithKakaoCredential(client: SupabaseClient, credential: KakaoCredential) {
+  return credential.kind === 'otp'
+    ? client.auth.verifyOtp({ token_hash: credential.tokenHash, type: 'email' })
+    : client.auth.signInWithPassword({ email: credential.email, password: credential.password });
+}
+
+/** 웹 카카오 로그인 확인값을 두는 sessionStorage 키(탭 단위 — 로그인을 시작한 탭에만 남는다). */
+const KAKAO_WEB_NONCE_KEY = 'synclink.kakaoWebNonce';
+
+/**
+ * 웹 카카오 로그인 시작 — 1회용 확인값을 만들어 이 탭의 sessionStorage 에 둔다.
+ *
+ * @returns 복귀 주소에 실어 보낼 확인값(16바이트 난수의 16진수)
+ */
+function startKakaoWebNonce(): string {
+  const nonce = Array.from(getRandomBytes(16), (b) => b.toString(16).padStart(2, '0')).join('');
+  try {
+    (globalThis as typeof globalThis & { sessionStorage?: Storage }).sessionStorage?.setItem(KAKAO_WEB_NONCE_KEY, nonce);
+  } catch {
+    // 저장소가 막힌 브라우저 — 콜백에서 대조가 실패해 로그인이 안 된다(안전한 쪽으로 실패).
+  }
+  return nonce;
+}
+
+/**
+ * 웹 /auth/callback 에서 카카오 1회용 토큰으로 로그인을 마친다.
+ *
+ * 이 탭이 시작한 로그인(sessionStorage 의 확인값 = 복귀 주소의 n)일 때만 토큰을 쓴다.
+ * 확인값은 성공·실패와 관계없이 한 번 읽으면 지운다.
+ *
+ * @param tokenHash - 복귀 주소의 token_hash
+ * @param nonce     - 복귀 주소의 n
+ * @throws 확인값 불일치(이 탭이 시작하지 않은 로그인) · 토큰 만료/재사용
+ */
+export async function completeKakaoWebSignIn(tokenHash: string, nonce: string | null): Promise<void> {
+  let expected: string | null = null;
+  try {
+    const store = (globalThis as typeof globalThis & { sessionStorage?: Storage }).sessionStorage;
+    expected = store?.getItem(KAKAO_WEB_NONCE_KEY) ?? null;
+    store?.removeItem(KAKAO_WEB_NONCE_KEY);
+  } catch {
+    expected = null;
+  }
+  if (!expected || !nonce || expected !== nonce) {
+    const err = new Error('카카오 로그인을 다시 시작해 주세요.');
+    void logError({ context: 'auth.kakao.web-nonce-mismatch', error: err, details: { hasExpected: !!expected, hasNonce: !!nonce } });
+    throw err;
+  }
+  const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'email' });
+  if (error) {
+    void logError({ context: 'auth.kakao.signin-otp', error });
+    throw error;
+  }
+}
+
+/**
+ * Kakao 자격 획득.
+ *  - 네이티브: 카카오 SDK access token → kakao-auth POST(v=2) → 1회용 토큰(서버가 옛 버전이면 email/password).
+ *  - 웹(통합 로그인 B 계정): WebBrowser 로 Kakao 동의 → Edge 가 appReturn?v=2&token_hash=.. 로 되돌려보낸 값을 추출.
+ */
+async function acquireKakaoCredentials(): Promise<KakaoCredential> {
   // ── 네이티브: Kakao SDK (2026-08-15~) ──────────────────────────────────────
   // 카카오톡이 깔려 있으면 앱으로 넘어가 인증하고, 없으면 SDK 가 카카오계정 로그인으로
   // 알아서 폴백한다. 종전 웹뷰 방식은 성공률 0% 였다(계정 비밀번호를 요구해서).
@@ -950,29 +1049,32 @@ async function acquireKakaoCredentials(): Promise<{ email: string; password: str
     const res = await fetch(`${SUPABASE_URL}/functions/v1/kakao-auth`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY },
-      body: JSON.stringify({ accessToken }),
+      // v: 2 → 1회용 로그인 토큰으로 응답(서버 머리 주석 참고)
+      body: JSON.stringify({ accessToken, v: 2 }),
     });
     const payload = (await res.json().catch(() => null)) as
-      | { email?: string; password?: string; error?: string }
+      | { tokenHash?: string; email?: string; password?: string; error?: string }
       | null;
 
-    if (!res.ok || !payload?.email || !payload?.password) {
+    const credential = res.ok ? toKakaoCredential(payload?.tokenHash, payload?.email, payload?.password) : null;
+    if (!credential) {
       const err = new Error(payload?.error ?? 'Kakao 로그인 응답이 올바르지 않습니다.');
       await logError({
         context: 'auth.kakao.native-exchange',
         error:   err,
-        details: { status: res.status, hasEmail: !!payload?.email },
+        details: { status: res.status, hasTokenHash: !!payload?.tokenHash, hasEmail: !!payload?.email },
       });
       throw err;
     }
-    return { email: payload.email, password: payload.password };
+    return credential;
   }
 
   // ── 웹: 기존 WebBrowser 경로 유지 ──────────────────────────────────────────
   // (웹에서는 signInWithKakao 가 window.location.assign 으로 먼저 빠지므로 여기까지
   //  오지 않지만, 통합 로그인의 B 계정 로그인 등 다른 호출부를 위해 남겨 둔다.)
   const appReturn = Linking.createURL('/auth/callback');
-  const authUrl = buildKakaoAuthUrl(appReturn);
+  // 복귀 주소(state)에만 v=2 를 싣는다. openAuthSessionAsync 의 대기 주소는 쿼리 없는 appReturn 그대로.
+  const authUrl = buildKakaoAuthUrl(`${appReturn}${appReturn.includes('?') ? '&' : '?'}v=2`);
 
   const result = await WebBrowser.openAuthSessionAsync(authUrl, appReturn, { showInRecents: false });
   if (result.type !== 'success') {
@@ -998,18 +1100,21 @@ async function acquireKakaoCredentials(): Promise<{ email: string; password: str
     await logError({ context: 'auth.kakao.edge-error', error: err, details: { errParam } });
     throw err;
   }
-  const email = extractQueryParam(result.url, 'email');
-  const password = extractQueryParam(result.url, 'password');
-  if (!email || !password) {
+  const credential = toKakaoCredential(
+    extractQueryParam(result.url, 'token_hash'),
+    extractQueryParam(result.url, 'email'),
+    extractQueryParam(result.url, 'password'),
+  );
+  if (!credential) {
     const err = new Error('Kakao 로그인 응답이 올바르지 않습니다.');
     await logError({
       context: 'auth.kakao.malformed-response',
       error:   err,
-      details: { hasEmail: !!email, hasPassword: !!password },
+      details: { hasTokenHash: !!extractQueryParam(result.url, 'token_hash'), hasEmail: !!extractQueryParam(result.url, 'email') },
     });
     throw err;
   }
-  return { email, password };
+  return credential;
 }
 
 /**
