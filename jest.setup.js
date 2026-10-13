@@ -335,6 +335,8 @@ jest.mock('expo-secure-store', () => {
     getItemAsync: jest.fn((key) => Promise.resolve(store.get(key) ?? null)),
     setItemAsync: jest.fn((key, value) => { store.set(key, value); return Promise.resolve(); }),
     deleteItemAsync: jest.fn((key) => { store.delete(key); return Promise.resolve(); }),
+    // 접근성 상수(실제 값은 숫자) — secureSessionStorage 가 어떤 접근성으로 저장하는지 검증할 수 있게 둔다.
+    AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 'AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY',
   };
 });
 

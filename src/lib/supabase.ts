@@ -15,7 +15,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureSessionStorage } from '@/lib/secureSessionStorage';
 import { Platform } from 'react-native';
 import type { Database } from '@/types';
 
@@ -24,7 +24,8 @@ import type { Database } from '@/types';
  *
  * LEAD 2026-04-28: 새 창/탭에서도 같은 세션 공유.
  *
- * - React Native (iOS/Android): AsyncStorage (per-app local storage).
+ * - React Native (iOS/Android): SecureStore 분할 저장(secureSessionStorage) — 2026-10-13 보안 3-B4.
+ *   예전엔 AsyncStorage(암호화 없음)였고, 첫 읽기 때 그 세션을 옮긴 뒤 원본을 지운다(로그인 유지).
  * - Web: window.localStorage 직접 사용.
  *   - 같은 origin 모든 탭/창이 즉시 같은 세션 공유.
  *   - storage event 로 한 탭에서 로그아웃 시 다른 탭도 즉시 갱신.
@@ -44,7 +45,7 @@ const sessionStorage = Platform.OS === 'web' && typeof window !== 'undefined'
         return Promise.resolve();
       },
     }
-  : AsyncStorage;
+  : secureSessionStorage;
 
 // Validate required environment variables at startup
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -82,7 +83,7 @@ export const SUPABASE_ANON_KEY = supabaseAnonKey ?? '';
 
 export const supabase = createClient<Database>(supabaseUrl ?? '', supabaseAnonKey ?? '', {
   auth: {
-    // Native: AsyncStorage / Web: localStorage (위 sessionStorage 어댑터)
+    // Native: SecureStore(secureSessionStorage) / Web: localStorage (위 sessionStorage 어댑터)
     storage: sessionStorage,
     // Automatically refresh the session token
     autoRefreshToken: true,
