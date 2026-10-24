@@ -130,7 +130,7 @@ export default function CreateWorkoutScreen() {
   }, [title, startAt, kind, parts, distanceKm, paceMin, paceSec, isSaving, upsertEvent, colors.primary, router, showToast, t]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom', 'left', 'right']}>
       <View style={styles.header}>
         <Pressable style={styles.headerButton} onPress={() => router.back()}>
           <Text style={styles.headerCancel}>{t('common.cancel')}</Text>

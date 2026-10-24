@@ -55,7 +55,7 @@ export default function FitnessStatsScreen() {
   const maxKm        = Math.max(1, ...runStats.map((r) => r.totalKm));
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.back}>
           <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />

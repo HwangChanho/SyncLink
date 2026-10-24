@@ -413,7 +413,7 @@ export default function EventDetailScreen() {
     : event.description;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
       {/* ── Header bar ── */}
       <View style={styles.headerBar}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>

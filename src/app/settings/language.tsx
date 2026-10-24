@@ -41,7 +41,7 @@ export default function LanguageSettingsScreen() {
   const { currentLanguage, changeLanguage } = useLanguage();
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <Pressable
           style={styles.back}

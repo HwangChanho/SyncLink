@@ -30,7 +30,7 @@ export function GuestGate({ description, icon = 'lock-closed-outline', testID }:
   const router = useRouter();
 
   return (
-    <SafeAreaView style={[styles.fill, { backgroundColor: colors.background }]} edges={['bottom']}>
+    <SafeAreaView style={[styles.fill, { backgroundColor: colors.background }]} edges={['bottom', 'left', 'right']}>
       <EmptyState
         icon={icon}
         title={t('auth.guest.gate_title')}

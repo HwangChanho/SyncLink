@@ -188,7 +188,7 @@ export default function CreateDDayScreen() {
   const dday = dDayBadge(target);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom', 'left', 'right']}>
       {/* 헤더 */}
       <View style={styles.header}>
         <Pressable style={styles.headerButton} onPress={() => router.back()}>

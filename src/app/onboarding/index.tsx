@@ -163,7 +163,7 @@ export default function OnboardingScreen() {
   // ── Render ──────────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom', 'left', 'right']}>
 
       {/* Skip button — visible on all pages except the last */}
       {!isLastPage && (

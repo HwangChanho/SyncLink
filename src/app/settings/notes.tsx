@@ -34,7 +34,7 @@ export default function NoteSettingsScreen() {
   const setShowYoutubeThumbnails = useNoteSettingsStore((s) => s.setShowYoutubeThumbnails);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       {/* ── 헤더 ── */}
       <View style={styles.header}>
         <Pressable style={styles.back} onPress={() => router.back()}>

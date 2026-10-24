@@ -79,7 +79,7 @@ function SpacesScreenContent() {
   const isEmpty = !isLoading && spaces.length === 0;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,

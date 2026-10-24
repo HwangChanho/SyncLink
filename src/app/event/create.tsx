@@ -812,7 +812,7 @@ export default function EventCreateScreen() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
       {/* Header */}
       <View style={styles.headerBar}>
         <Pressable style={styles.headerButton} onPress={() => router.back()}>

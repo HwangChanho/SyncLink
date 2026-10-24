@@ -60,7 +60,7 @@ export default function ChatScreen() {
   }, [prefill, pushUser, pushAssistant, setLoading, getOutgoing]);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom', 'left', 'right']}>
       <Stack.Screen
         options={{
           title: 'AI 비서',

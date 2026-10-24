@@ -24,7 +24,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -70,6 +70,9 @@ function PlannerScreenInner() {
   const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
+  // FAB 는 SafeAreaView 의 직계 absolute 자식이라 부모 패딩(좌우 inset)을 무시한다 → 오른쪽 inset 만큼 직접 비킨다.
+  // iPhone Duo(27.1 SDK)는 오른쪽 가장자리에 세로 상태 표시줄 띠가 있다. 일반 폰 세로에선 0 이라 변화 없음.
+  const insets = useSafeAreaInsets();
   // 데스크탑 웹: 화면 본문(header+content) 적정폭(880) 중앙 정렬. (웹 반응형 S2)
   const { isDesktop } = useResponsive();
 
@@ -322,7 +325,8 @@ function PlannerScreenInner() {
       {/* 1.5.0: 누르면 말랑하게 줄었다 돌아오는 FAB(PressableScale). testID 는 안쪽 Pressable 로 전달된다 */}
       <PressableScale
         testID={activeTab === 'notes' ? 'planner-fab-notes' : 'planner-fab-todo'}
-        style={styles.fab}
+        // marginRight: Yoga 는 끝 쪽 inset(right)에서 margin 을 함께 빼므로 기준 위치(spacing[5])를 중복하지 않고 띠만큼 안쪽으로 옮긴다
+        style={[styles.fab, { marginRight: insets.right }]}
         onPress={() => {
           if (activeTab === 'notes') {
             router.push('/note/new');

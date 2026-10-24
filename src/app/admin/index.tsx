@@ -214,7 +214,7 @@ export default function AdminDashboard() {
 
   // ─── 4) 대시보드 본문 ──────────────────────────────────────────────────
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}

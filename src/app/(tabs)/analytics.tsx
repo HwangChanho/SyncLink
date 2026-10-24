@@ -231,7 +231,7 @@ function AnalyticsScreenContent() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
+    <SafeAreaView style={styles.safe} edges={['bottom', 'left', 'right']}>
       <ScrollView
         contentContainerStyle={[
           styles.content,
@@ -510,7 +510,7 @@ function AnalyticsPaywallView({
   ];
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
+    <SafeAreaView style={styles.safe} edges={['bottom', 'left', 'right']}>
       <ScrollView
         contentContainerStyle={[
           styles.paywallContent,

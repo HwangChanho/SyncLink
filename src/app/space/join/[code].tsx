@@ -23,7 +23,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -44,6 +44,9 @@ export default function SpaceJoinPreviewScreen() {
   const { t } = useTranslation();
   const colors = useColors();
   const styles = makeStyles(colors);
+  // 하단 버튼 바는 SafeAreaView 의 직계 absolute 자식이라 부모의 좌우 패딩을 무시한다 → 좌우 inset 을 직접 적용.
+  // iPhone Duo(27.1 SDK)의 오른쪽 상태 표시줄 띠 대응. 일반 폰 세로에선 0 이라 변화 없음.
+  const insets = useSafeAreaInsets();
 
   /** Space type labels loaded from i18n. */
   const SPACE_TYPE_LABELS: Record<string, string> = {
@@ -131,7 +134,7 @@ export default function SpaceJoinPreviewScreen() {
   const typeLabel = SPACE_TYPE_LABELS[space.type] ?? space.type;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom', 'left', 'right']}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
@@ -173,7 +176,7 @@ export default function SpaceJoinPreviewScreen() {
       </Text>
 
       {/* Action buttons */}
-      <View style={styles.actions}>
+      <View style={[styles.actions, { left: insets.left, right: insets.right }]}>
         <TouchableOpacity
           style={[styles.joinBtn, isJoining && styles.btnDisabled]}
           onPress={handleJoin}

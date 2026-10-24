@@ -77,7 +77,7 @@ export default function AppearanceSettingsScreen() {
   const setColorScheme  = useAppearanceStore((s) => s.setColorScheme);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       {/* ── 헤더 ── */}
       <View style={styles.header}>
         <Pressable style={styles.back} onPress={() => router.back()}>

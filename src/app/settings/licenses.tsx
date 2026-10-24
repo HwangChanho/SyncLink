@@ -91,7 +91,7 @@ export default function LicensesScreen() {
   const { t } = useTranslation();
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <Pressable style={styles.back} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />

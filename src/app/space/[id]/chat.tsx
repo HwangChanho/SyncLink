@@ -223,7 +223,7 @@ export default function SpaceChatScreen() {
   }, [myId, handleLongPress, styles]);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.back}>
           <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />

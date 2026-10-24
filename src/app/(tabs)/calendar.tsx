@@ -408,7 +408,7 @@ export default function CalendarScreen() {
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={[]}>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <View style={styles.container}>
         {/*
           Build-50 follow-up — single overflow menu (⋯) replaces the
