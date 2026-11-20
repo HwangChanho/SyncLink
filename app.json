@@ -53,6 +53,7 @@
       "playStoreUrl": "https://play.google.com/store/apps/details?id=io.synclink.app",
       "googleServicesFile": "./google-services.json",
       "versionCode": 36,
+      "allowBackup": false,
       "softwareKeyboardLayoutMode": "resize",
       "intentFilters": [
         {
