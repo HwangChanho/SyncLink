@@ -2,7 +2,7 @@
   "expo": {
     "name": "SyncLink",
     "slug": "synclink",
-    "version": "1.5.1",
+    "version": "1.5.2",
     "orientation": "portrait",
     "icon": "./images/UriharuLogo.png",
     "scheme": "synclink",
@@ -21,7 +21,7 @@
       "appleTeamId": "QUVU2PY6PG",
       "appStoreUrl": "https://apps.apple.com/kr/app/id6763083903",
       "newArchEnabled": true,
-      "buildNumber": "191",
+      "buildNumber": "192",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.io.synclink.app.widget"
