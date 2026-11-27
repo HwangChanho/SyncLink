@@ -188,11 +188,13 @@ const mockUserRow: UserRow = {
  * @param resolvedValue - single()이 resolve할 { data, error } 값
  * @returns single mock 함수 (추가 assertion에 사용 가능)
  */
-function setupFromMock(resolvedValue: { data: unknown; error: unknown }) {
+function setupFromMock(resolvedValue: { data: unknown; error: unknown; status?: number }) {
   const singleMock = jest.fn().mockResolvedValue(resolvedValue);
   (supabase.from as jest.Mock).mockReturnValue({
     select: jest.fn().mockReturnThis(),
     eq: jest.fn().mockReturnThis(),
+    // 2026-11-27: getUserProfile 이 시간 초과용 AbortSignal 을 체인에 건다
+    abortSignal: jest.fn().mockReturnThis(),
     update: jest.fn().mockReturnThis(),
     single: singleMock,
   });
@@ -906,32 +908,58 @@ describe('authService', () => {
   // getUserProfile
   // ══════════════════════════════════════════════════════════════════════════
 
+  // 2026-11-27: 반환값이 UserRow|null → ProfileLookup(found/missing/unreachable) 로 바뀌었다.
+  // 연결 실패를 «없음» 과 섞으면 로그인한 사용자가 서버 장애 때 게스트로 떨어진다.
   describe('getUserProfile', () => {
-    it('정상 흐름: userId로 UserRow 반환', async () => {
-      setupFromMock({ data: mockUserRow, error: null });
+    it('정상 흐름: userId로 조회해 found + UserRow 반환', async () => {
+      setupFromMock({ data: mockUserRow, error: null, status: 200 });
 
       const result = await getUserProfile('user-123');
 
       // from('users')에 올바른 테이블명 전달 검증
       expect(supabase.from).toHaveBeenCalledWith('users');
-      expect(result).toEqual(mockUserRow);
+      expect(result).toEqual({ kind: 'found', row: mockUserRow });
     });
 
-    it('사용자 없음: data=null → null 반환 (에러 throw 없음)', async () => {
-      setupFromMock({ data: null, error: null });
+    it('사용자 없음(.single() 0행 = 406): missing (에러 throw 없음)', async () => {
+      setupFromMock({ data: null, error: { code: 'PGRST116' }, status: 406 });
 
       const result = await getUserProfile('nonexistent-user-id');
 
-      expect(result).toBeNull();
+      expect(result).toEqual({ kind: 'missing' });
     });
 
-    it('DB 에러: null 반환 (에러를 throw하지 않음)', async () => {
-      setupFromMock({ data: null, error: new Error('DB connection error') });
+    it('연결 실패(상태 0): unreachable (에러 throw 없음)', async () => {
+      setupFromMock({ data: null, error: { message: 'TypeError: Network request failed' }, status: 0 });
 
       const result = await getUserProfile('user-123');
 
-      // getUserProfile은 에러를 throw하지 않고 null을 반환
-      expect(result).toBeNull();
+      expect(result).toEqual({ kind: 'unreachable' });
+    });
+
+    it('응답이 없으면 시간 초과로 요청을 중단하고 unreachable', async () => {
+      // 체인에 걸린 signal 을 붙잡아, 중단(abort)될 때만 응답이 끝나는 «멈춘 서버» 를 흉내 낸다.
+      let captured: AbortSignal | undefined;
+      const chain = {
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        abortSignal: jest.fn(function (this: unknown, signal: AbortSignal) {
+          captured = signal;
+          return this;
+        }),
+        single: jest.fn(() => new Promise((resolve) => {
+          captured?.addEventListener('abort', () => resolve({
+            data: null, error: { message: 'AbortError: Aborted' }, status: 0,
+          }));
+        })),
+      };
+      (supabase.from as jest.Mock).mockReturnValue(chain);
+
+      // 시간 제한을 10ms 로 줘서 실제 타이머로 빨리 끝낸다.
+      const result = await getUserProfile('user-123', 10);
+
+      expect(captured?.aborted).toBe(true);
+      expect(result).toEqual({ kind: 'unreachable' });
     });
   });
 

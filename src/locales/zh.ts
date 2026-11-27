@@ -792,6 +792,10 @@ const zh = {
   offline: {
     banner: '当前处于离线状态',
     retry: '重试',
+    // 2026-11-27: 부팅 때 서버에 닿지 않으면 로딩 화면에 띄우는 안내(BootConnectionNotice)
+    serverTitle: '服务器连接不稳定',
+    serverBody: '请稍后再试。',
+    serverRetry: '再试一次',
   },
 
   paywall: {

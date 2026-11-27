@@ -16,12 +16,16 @@
  * Sprint 19.
  */
 
+import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { Skeleton } from './Skeleton';
 import { spacing } from '@/constants/spacing';
 
-export function AppSplash() {
+/**
+ * @param children - 스켈레톤 아래에 덧붙일 내용(2026-11-27: 서버 연결 안내 카드). 없으면 스켈레톤만.
+ */
+export function AppSplash({ children }: { children?: ReactNode }) {
   const colors = useColors();
 
   return (
@@ -37,6 +41,7 @@ export function AppSplash() {
       <View style={styles.block}>
         <Skeleton width="100%" height={120} radius={12} />
       </View>
+      {children}
     </View>
   );
 }

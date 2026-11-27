@@ -32,6 +32,7 @@ import { createClient, type Session, type SupabaseClient } from '@supabase/supab
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase';
 import { logError } from '@/lib/errorLogger';
 import { captureMessage } from '@/lib/sentry';
+import { classifyProfileResponse, PROFILE_FETCH_TIMEOUT_MS, type ProfileLookup } from '@/lib/bootConnection';
 import type { UserRow } from '@/types';
 
 // ─── Notification preferences types ──────────────────────────────────────────
@@ -1187,20 +1188,44 @@ export function onAuthStateChange(
 }
 
 /**
- * Fetch the full UserRow for a given user ID from public.users.
- * Used after onAuthStateChange fires to hydrate the auth store.
+ * public.users 에서 한 사용자의 프로필(UserRow)을 받아 온다.
+ * onAuthStateChange 직후 인증 스토어를 채울 때 쓴다(부팅 로딩 화면이 이 결과를 기다린다).
  *
- * @returns UserRow or null if not found (shouldn't happen with handle_new_user trigger)
+ * 2026-11-27 변경(LEAD 결정 «연결 안내 + 다시 시도»):
+ *   - 반환값을 `UserRow | null` → ProfileLookup(found / missing / unreachable) 으로 바꿨다.
+ *     예전엔 연결 실패도 null(=프로필 없음)이라, 서버 장애(11-25) 때 로그인한 사용자가
+ *     게스트처럼 보였다. 이제 호출부가 «서버에 닿지 않음» 을 따로 처리한다.
+ *   - 시간 제한을 건다. Android 는 요청 시간 제한이 없어(OkHttp 0 = 무제한) 서버가 대답하지
+ *     않으면 로딩 화면이 끝나지 않았다. 제한을 넘기면 요청을 중단(abort)하고 'unreachable'.
+ *     postgrest-js 는 중단된 요청을 재시도하지 않고 `status: 0` 으로 돌려준다(2.103.3 기준).
+ *
+ * @param userId    - 조회할 사용자 ID(auth.users.id 와 같다)
+ * @param timeoutMs - 요청 시간 제한(ms). 기본 PROFILE_FETCH_TIMEOUT_MS. 테스트에서 짧게 준다.
+ * @returns found(행) / missing(서버는 대답했지만 행 없음·4xx) / unreachable(연결 실패·시간 초과·5xx)
+ *
+ * ⚠️ 던지지 않는다 — 판정은 classifyProfileResponse(src/lib/bootConnection.ts) 한 곳에서만 한다.
  */
-export async function getUserProfile(userId: string): Promise<UserRow | null> {
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', userId)
-    .single();
-
-  if (error || !data) return null;
-  return data;
+export async function getUserProfile(
+  userId: string,
+  timeoutMs: number = PROFILE_FETCH_TIMEOUT_MS,
+): Promise<ProfileLookup<UserRow>> {
+  // 1) 시간 제한 — 넘기면 진행 중인 요청(재시도 대기 포함)을 중단한다
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    // 2) 조회 — .single() 은 0행이면 406(PGRST116) 오류로 돌아온다
+    const res = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .abortSignal(controller.signal)
+      .single();
+    // 3) 판정 — 상태 0·5xx 만 'unreachable', 나머지 오류는 기존처럼 'missing'
+    return classifyProfileResponse<UserRow>(res);
+  } finally {
+    // 응답이 먼저 오면 타이머를 지워, 끝난 요청에 abort 가 늦게 걸리지 않게 한다
+    clearTimeout(timer);
+  }
 }
 
 /**

@@ -49,6 +49,9 @@ import { OtaAutoUpdater } from '@/components/common/OtaAutoUpdater';
 import { LoginPromptSheet } from '@/components/common/LoginPromptSheet';
 import { useLoginPromptStore } from '@/stores/loginPromptStore';
 import { AppSplash } from '@/components/common/AppSplash';
+import { BootConnectionNotice } from '@/components/common/BootConnectionNotice';
+import { useBootConnectionNotice } from '@/hooks/useBootConnectionNotice';
+import { reloadApp } from '@/services/appReloadService';
 // Sprint 14 TASK-1402/1406 — AdMob SDK initialization after ATT consent.
 import { initAdMob } from '@/services/adService';
 // 인앱 리뷰 노출 판단용 — 앱 실행 횟수를 센다(시트는 여기서 띄우지 않는다).
@@ -444,8 +447,12 @@ export default function RootLayout() {
     if (brandFontsReady) markBrandFontsReady();
   }, [brandFontsReady]);
 
-  const { setUser, setLoading, isAuthenticated } = useAuthStore();
+  const { setUser, setLoading, isAuthenticated, isLoading } = useAuthStore();
   const setPlan = useSubscriptionStore((s) => s.setPlan);
+  // 2026-11-27: 부팅이 서버 때문에 멈추면(10초 초과 또는 프로필 조회가 서버에 닿지 않음)
+  // 로딩 화면에 연결 안내 + [다시 시도] 를 띄운다. reportUnreachable 은 참조가 고정이라
+  // 아래 인증 구독 effect 의존성에 넣어도 다시 구독되지 않는다.
+  const { visible: bootNoticeVisible, reportUnreachable } = useBootConnectionNotice(isLoading);
   const router = useRouter();
 
   // App lock state. `isEnabled` and `lock` are not referenced here because
@@ -610,9 +617,15 @@ export default function RootLayout() {
       // 멈춤과 동일 메커니즘.
       useLoginPromptStore.getState().close();
       if (session) {
-        const userRow = await getUserProfile(session.userId);
-        if (userRow) {
-          setUser(userRow); // also sets isLoading = false
+        const lookup = await getUserProfile(session.userId);
+        if (lookup.kind === 'found') {
+          setUser(lookup.row); // also sets isLoading = false
+        } else if (lookup.kind === 'unreachable') {
+          // 2026-11-27: 서버에 닿지 않음(연결 실패·시간 초과·5xx) — 로딩을 끝내지 않는다.
+          // 끝내면 로그인한 사람이 게스트로 떨어진다(11-25 장애 때 실제로 그랬다).
+          // 부팅 중이면 로딩 화면에 연결 안내 + [다시 시도] 가 바로 뜬다.
+          // 부팅 뒤(토큰 갱신 등으로 다시 불린 경우)엔 아무것도 바꾸지 않는다 — 지금 화면 유지.
+          reportUnreachable();
         } else {
           // Profile not found (shouldn't happen with handle_new_user trigger)
           setLoading(false);
@@ -630,7 +643,7 @@ export default function RootLayout() {
     });
 
     return unsubscribe;
-  }, [setUser, setLoading]);
+  }, [setUser, setLoading, reportUnreachable]);
 
   // TASK-800: Initialize RevenueCat and sync Pro status after user authenticates.
   // Non-critical: errors are logged but do not crash the app.
@@ -865,7 +878,12 @@ export default function RootLayout() {
           top of the Stack so the user never sees the default-route Home
           screen flash before useAuthGuard's redirect lands.
         */}
-        {(!routingReady || !fontsLoaded) && <AppSplash />}
+        {(!routingReady || !fontsLoaded) && (
+          <AppSplash>
+            {/* 2026-11-27: 서버 연결 안내 — 부팅이 끝나면 로딩 화면과 함께 사라진다 */}
+            {bootNoticeVisible && <BootConnectionNotice onRetry={() => { void reloadApp(); }} />}
+          </AppSplash>
+        )}
         <Stack
           screenOptions={{
             headerShown: false,

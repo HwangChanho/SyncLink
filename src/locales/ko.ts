@@ -812,6 +812,10 @@ const ko = {
   offline: {
     banner: '오프라인 상태입니다',
     retry: '재시도',
+    // 2026-11-27: 부팅 때 서버에 닿지 않으면 로딩 화면에 띄우는 안내(BootConnectionNotice)
+    serverTitle: '서버 연결이 원활하지 않아요',
+    serverBody: '잠시 후 다시 시도해 주세요.',
+    serverRetry: '다시 시도',
   },
 
   paywall: {

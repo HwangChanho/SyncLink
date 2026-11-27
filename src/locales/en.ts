@@ -793,6 +793,10 @@ const en = {
   offline: {
     banner: 'You are offline',
     retry: 'Retry',
+    // 2026-11-27: 부팅 때 서버에 닿지 않으면 로딩 화면에 띄우는 안내(BootConnectionNotice)
+    serverTitle: 'Having trouble reaching the server',
+    serverBody: 'Please try again in a moment.',
+    serverRetry: 'Try again',
   },
 
   paywall: {
